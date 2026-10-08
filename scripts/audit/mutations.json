@@ -467,7 +467,7 @@
       "critical": false,
       "severity": "high",
       "file": "src/notion/sync.ts",
-      "old": "    if (budget?.expired() === true) {\n      deferred += 1\n      continue\n    }",
+      "old": "    if (budget?.expired() === true || transientInARow >= MAX_CONSECUTIVE_TRANSIENT) {\n      deferred += 1\n      continue\n    }",
       "new": "",
       "invariant": "a Notion sync run stops reading when its budget is spent, so it cannot outlive the host's wall-clock limit and be retried into the same crawl",
       "expect": "tests/notion/sync-handler.test.ts"
@@ -487,8 +487,8 @@
       "critical": false,
       "severity": "medium",
       "file": "src/handlers/notion-sync.ts",
-      "old": "        const shared = await listShared(client)\n        for (const project of attached) {",
-      "new": "        const shared = await listShared(client)\n        for (const project of attached) {\n          await listShared(client)",
+      "old": "        for (const project of attached) {\n          if (budget.expired()) {\n            result.deferred += shared.length",
+      "new": "        for (const project of attached) {\n          await listSharedWithin(client, { expired: () => false })\n          if (budget.expired()) {\n            result.deferred += shared.length",
       "invariant": "the workspace is listed once per run, not once per attached project",
       "expect": "tests/notion/sync-handler.test.ts"
     },

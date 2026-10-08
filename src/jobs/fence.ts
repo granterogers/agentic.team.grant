@@ -48,7 +48,17 @@ export interface Claimed {
   readonly claimGen?: number
   /** Set by a renewal that found the job gone from us, so the next write refuses without a round trip. */
   lost?: boolean
+  /**
+   * Renewals that FAILED (the database did not answer, or answered too late) since the last one that worked.
+   * Information only, never a verdict: a failed renewal does not say the lease was lost, and a later one that succeeds
+   * extends it again as long as nobody has reclaimed the job (`app.renew_lease` matches on holder and claim, not on
+   * expiry). Whether the job is still ours is asked of the database at write time (`assertHeld`), where the answer is real.
+   */
+  renewFailures?: number
 }
+
+/** A renewal that has not answered in this long is counted as failed, so one hung query cannot silence every later one. */
+export const RENEW_TIMEOUT_MS = 20_000
 
 const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
 
@@ -87,30 +97,69 @@ export const assertHeld = async (db: SqlExecutor, job: Claimed): Promise<void> =
  * Renew the lease every `everyMs` while the handler works. Returns the function that stops it.
  * A renewal that finds the job is no longer held marks the job lost, so the next write refuses at once.
  */
-export const startHeartbeat = (db: SqlExecutor, job: Claimed, everyMs = 60_000): (() => void) => {
+export const startHeartbeat = (
+  db: SqlExecutor,
+  job: Claimed,
+  everyMs = 60_000,
+  options: { renewTimeoutMs?: number; warn?: (message: string) => void } = {},
+): (() => void) => {
   const worker = job.leasedBy
   if (worker === undefined) return () => undefined
+  const renewTimeoutMs = options.renewTimeoutMs ?? RENEW_TIMEOUT_MS
+  // Said once per run of failures, never per tick, and never allowed to throw into the handler.
+  const warn =
+    options.warn ??
+    ((message: string) => {
+      console.warn(message)
+    })
   let stopped = false
   let busy = false
   const timer = setInterval(() => {
     if (stopped || busy) return
     busy = true
-    db.execute(
+    const renewal = db.execute(
       `select app.renew_lease(${lit(job.jobId)}::uuid, ${lit(worker)}, ${String(job.attempt)}${
         job.claimGen === undefined ? '' : `, ${String(job.claimGen)}`
       }) as held`,
     )
+    // A query the database never answers would leave `busy` set for ever and the lease to lapse with no renewal even
+    // attempted. After this long it counts as a failure and the next tick tries again; the abandoned one is ignored.
+    renewal.catch(() => undefined)
+    let clock: ReturnType<typeof setTimeout> | undefined
+    const tooLate = new Promise<never>((_, reject) => {
+      clock = setTimeout(() => {
+        reject(new Error('the lease renewal did not answer'))
+      }, renewTimeoutMs)
+    })
+    Promise.race([renewal, tooLate])
       .then(({ rows }) => {
+        job.renewFailures = 0
         if ((rows[0] as { held?: boolean } | undefined)?.held === false) job.lost = true
       })
       .catch((error: unknown) => {
+        const message = String((error as Error).message)
         // A schema from before 0620 has no renewal: stop trying, and run as it always did.
-        if (/does not exist|42883/i.test(String((error as Error).message))) {
+        if (/does not exist|42883/i.test(message)) {
           stopped = true
           clearInterval(timer)
+          return
+        }
+        job.renewFailures = (job.renewFailures ?? 0) + 1
+        // The first failure is a blip; the second in a row is a pattern worth one line. The lease is five minutes and
+        // this runs every minute, so the job is a few missed beats from lapsing and somebody reading logs should see why.
+        if (job.renewFailures === 2) {
+          try {
+            warn(
+              `job ${job.jobId} attempt ${String(job.attempt)}: lease renewal failing (${message.replace(/\s+/g, ' ').slice(0, 120)}); ` +
+                'the lease lapses if renewals keep failing',
+            )
+          } catch {
+            /* A log line must never reach the handler. */
+          }
         }
       })
       .finally(() => {
+        clearTimeout(clock)
         busy = false
       })
   }, everyMs)

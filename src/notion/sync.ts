@@ -27,6 +27,7 @@ import { officeOf, type RetrievalOffice } from '../knowledge/office.ts'
 import type { NotionClient } from './api.ts'
 import { NotionApiError } from './api.ts'
 import { type NotionBlock, type RenderedBlock, renderBlocks, titleOf } from './content.ts'
+import { isDatabaseLinkFailure } from './infra.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const nul = (v: string | null): string => (v === null ? 'null' : lit(v))
@@ -84,6 +85,21 @@ export interface SyncOptions {
   /** The workspace listing, read once per run by a caller that syncs several projects. Read here when absent. */
   readonly shared?: readonly NotionObject[]
   readonly budget?: RunBudget
+  /**
+   * The most time ONE page may take. A page that needs more than a run can give it can never be read, and with
+   * progress held only in the documents it would sit first in the queue for ever and starve every page behind it. It is
+   * reported as too large for one pass and the run goes on to the next.
+   */
+  readonly pageBudgetMs?: number
+  /** Milliseconds; a test passes its own. */
+  readonly clock?: () => number
+}
+
+/** Notion failing this many pages in a row (timeouts, 429s, 5xx) means Notion is unwell: stop and try next time. */
+export const MAX_CONSECUTIVE_TRANSIENT = 3
+
+const guardOf = (budget: RunBudget | undefined) => (): void => {
+  if (budget?.expired() === true) throw new RunBudgetExceeded()
 }
 
 export const fingerprintContent = async (content: string): Promise<string> => {
@@ -93,10 +109,38 @@ export const fingerprintContent = async (content: string): Promise<string> => {
     .join('')
 }
 
+/**
+ * The workspace listing under a budget. A listing the budget cut short is returned as far as it got and says so: the
+ * pages it did reach are read as usual, and the report says the list was partial rather than presenting a prefix of the
+ * workspace as all of it.
+ */
+export async function listSharedWithin(
+  notion: NotionClient,
+  budget: RunBudget,
+): Promise<{ readonly objects: readonly NotionObject[]; readonly complete: boolean }> {
+  const found: NotionObject[] = []
+  try {
+    await collectShared(notion, found, guardOf(budget))
+  } catch (error) {
+    if (error instanceof RunBudgetExceeded) return { objects: found, complete: false }
+    throw error
+  }
+  return { objects: found, complete: true }
+}
+
 /** Everything the integration has been given access to. */
 export async function listShared(notion: NotionClient): Promise<readonly NotionObject[]> {
   const found: NotionObject[] = []
-  for await (const raw of notion.paginate('/search', {})) {
+  await collectShared(notion, found)
+  return found
+}
+
+async function collectShared(
+  notion: NotionClient,
+  found: NotionObject[],
+  beforeRequest?: () => void,
+): Promise<void> {
+  for await (const raw of notion.paginate('/search', {}, 'POST', beforeRequest)) {
     // From 2025-09-03 a queryable collection comes back as `data_source`
     // rather than `database`; a database is now the container that holds one
     // or more of them. Both are accepted so a workspace part-way through
@@ -110,7 +154,6 @@ export async function listShared(notion: NotionClient): Promise<readonly NotionO
       url: typeof raw.url === 'string' ? raw.url : null,
     })
   }
-  return found
 }
 
 /**
@@ -143,7 +186,14 @@ export async function fetchBlocks(
 ): Promise<readonly RenderedBlock[]> {
   if (depth > MAX_BLOCK_DEPTH) return []
   const out: RenderedBlock[] = []
-  for await (const raw of notion.paginate(`/blocks/${blockId}/children`, {}, 'GET')) {
+  // Before EVERY request, the cursor pages of a long flat page included: the budget used to be asked only before a
+  // child fetch, so a page of a few thousand blocks and no nesting ran as long as Notion kept answering.
+  for await (const raw of notion.paginate(
+    `/blocks/${blockId}/children`,
+    {},
+    'GET',
+    guardOf(budget),
+  )) {
     const block = raw as NotionBlock
     out.push({ block, depth })
     if (
@@ -170,7 +220,12 @@ export async function pageText(
     // `/data_sources/:id/query`, not `/databases/:id/query`. The id search
     // returns at this version IS a data source id, and asking the databases
     // endpoint for it is a 404 — confirmed live before changing this.
-    for await (const raw of notion.paginate(`/data_sources/${object.id}/query`, {})) {
+    for await (const raw of notion.paginate(
+      `/data_sources/${object.id}/query`,
+      {},
+      'POST',
+      guardOf(budget),
+    )) {
       const title = titleOf(raw)
       if (title !== '') rows.push(`- ${title}`)
     }
@@ -186,6 +241,13 @@ export async function pageText(
  * already proves the text. Pages only. A database is never skipped, because adding a row does not move the database's
  * own edit time and its document is a list of its rows. A page with no stored edit time (one the office wrote itself) is
  * never in the set, so it is read and fingerprinted exactly as before.
+ *
+ * Scoped to the OFFICE and deliberately not to the project. A Notion page is ONE document per office (the unique key is
+ * office, connector, parent, ref), filed under whichever project read it first, and every attached project is offered
+ * the same shared pages. A page another project of this office already holds at the same edit time is therefore
+ * already read for this office: reading it again could only find the same fingerprint and write nothing, which is what
+ * the previous behaviour did after spending the requests. Scoping this by project would multiply the reads by the number
+ * of attached projects for no change in the data.
  */
 export async function unchangedSinceRead(
   db: SqlExecutor,
@@ -224,14 +286,41 @@ export async function upsertDocument(
   const fingerprint = await fingerprintContent(content)
 
   const existing = await db.execute(`
-    select content_fingerprint from public.documents
+    select content_fingerprint, title from public.documents
      where office_id = ${officeOfProject(projectId)}
        and connector = ${lit(CONNECTOR)}
        and external_parent_ref = ${lit(object.object)}
        and external_ref = ${lit(object.id)}
   `)
   const known = existing.rows.length > 0
-  if (known && String(existing.rows[0]?.content_fingerprint) === fingerprint) return 'unchanged'
+  if (known && String(existing.rows[0]?.content_fingerprint) === fingerprint) {
+    /*
+      The text is the same. Two things can still have moved, and an early return that records neither loses both.
+
+      THE TITLE. A page renamed in Notion has the same body, so the old return said "unchanged" and the document kept
+      its old name for ever: a change that was never missed by the reader but never made either.
+
+      THE EDIT TIME. `unchangedSinceRead` skips a page only while its stored edit time equals Notion's. A page edited
+      without changing its text (a reorder, a comment, a block replaced by an identical one) kept the OLD stored time,
+      so it never became skippable again and cost a full block-tree read on every run, for ever. Stored now, whether or
+      not the text moved, and only when it differs.
+    */
+    const stored = String(existing.rows[0]?.title ?? '')
+    const renamed = object.title !== '' && stored !== object.title
+    if (renamed || (object.object === 'page' && object.lastEdited !== null)) {
+      await db.execute(`
+        update public.documents
+           set ${renamed ? `title = ${lit(object.title)},` : ''}
+               remote_updated_at = coalesce(${nul(object.lastEdited)}::timestamptz, remote_updated_at)
+         where office_id = ${officeOfProject(projectId)}
+           and connector = ${lit(CONNECTOR)}
+           and external_parent_ref = ${lit(object.object)}
+           and external_ref = ${lit(object.id)}
+           and (${renamed ? 'true' : 'false'} or remote_updated_at is distinct from ${nul(object.lastEdited)}::timestamptz)
+      `)
+    }
+    return renamed ? 'changed' : 'unchanged'
+  }
 
   /*
     A page we wrote is not new material.
@@ -282,7 +371,8 @@ export async function upsertDocument(
           -- new material on the next sync.
           mirrors_document_id = coalesce(public.documents.mirrors_document_id,
                                          excluded.mirrors_document_id)
-      -- The key is still global (connector, parent, ref): a page another office holds is never overwritten or moved.
+      -- The key is per office since 0862 (office, connector, parent, ref), so another office's row is not even a
+      -- conflict; the guard stays as the second line, and one row exists per page per office.
       where public.documents.office_id = excluded.office_id
     returning document_id
   `)
@@ -381,6 +471,8 @@ export async function syncNotion(
   let changed = 0
   let unchanged = 0
   let deferred = 0
+  let transientInARow = 0
+  const clock = options.clock ?? Date.now
   const skipped: string[] = []
 
   /*
@@ -409,12 +501,18 @@ export async function syncNotion(
       unchanged += 1
       continue
     }
-    if (budget?.expired() === true) {
+    if (budget?.expired() === true || transientInARow >= MAX_CONSECUTIVE_TRANSIENT) {
       deferred += 1
       continue
     }
+    const startedPage = clock()
+    const pageCap = options.pageBudgetMs
+    const pageBudget: RunBudget | undefined =
+      pageCap === undefined
+        ? budget
+        : { expired: () => budget?.expired() === true || clock() - startedPage >= pageCap }
     try {
-      const content = await pageText(notion, object, budget)
+      const content = await pageText(notion, object, pageBudget)
       if (content.trim() === '') {
         // An empty page is not a document. Storing one would put a row in the
         // corpus that can never match a search and always counts as synced.
@@ -422,18 +520,38 @@ export async function syncNotion(
         continue
       }
       const outcome = await upsertDocument(db, projectId, object, content)
+      transientInARow = 0
       if (outcome === 'added') added += 1
       else if (outcome === 'changed') changed += 1
       else unchanged += 1
     } catch (error) {
+      const label = object.title === '' ? object.id : object.title
       // Ran out of time inside this page: it is deferred, not skipped, so it is read again and the report says why.
       if (error instanceof RunBudgetExceeded) {
-        deferred += 1
+        if (budget?.expired() === true) deferred += 1
+        // The RUN had time and this one page used up its own share: it can never fit, so say so rather than queueing
+        // it first for ever. The rest of the pass carries on.
+        else skipped.push(`${label}: too large to read in one pass`)
         continue
       }
-      const reason =
-        error instanceof NotionApiError ? error.code : (error as Error).message.slice(0, 60)
-      skipped.push(`${object.title === '' ? object.id : object.title}: ${reason}`)
+      if (error instanceof NotionApiError) {
+        // The token stopped working part-way: that is the whole sync's problem, not this page's, and the handler
+        // reports it once as such.
+        if (error.kind === 'auth') throw error
+        // Notion timing out, rate limiting or failing is not a property of the page. It is read again next time, and
+        // a run of such failures means Notion is unwell, so the rest wait too instead of spending the budget on it.
+        if (error.kind === 'transient') {
+          deferred += 1
+          transientInARow += 1
+          continue
+        }
+        skipped.push(`${label}: ${error.code}`)
+        continue
+      }
+      // The database link, not the page. Every remaining page would fail the same way, and recording each as
+      // "left out: <driver text>" tells Grant about pages that are fine. The run ends and the job says what it was.
+      if (isDatabaseLinkFailure(error)) throw error
+      skipped.push(`${label}: ${(error as Error).message.slice(0, 60)}`)
     }
   }
 

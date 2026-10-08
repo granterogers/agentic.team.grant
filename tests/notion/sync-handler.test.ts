@@ -32,6 +32,8 @@ interface Cfg {
   known?: Set<string>
   /** the fingerprint a known document holds (default: one that matches nothing) */
   fingerprint?: string
+  /** the title a known document holds */
+  title?: string
   /** pages already held, each with the edit time (epoch ms) it was read at */
   stored?: { id: string; ms: number }[]
 }
@@ -61,10 +63,13 @@ const executor = (cfg: Cfg = {}) => {
         }
       if (/select external_ref from public\.documents/.test(sql))
         return { rows: (cfg.stored ?? []).map((s) => ({ external_ref: s.id })) }
-      if (/select content_fingerprint from public\.documents/.test(sql)) {
+      if (/select content_fingerprint, title from public\.documents/.test(sql)) {
         const id = [...(cfg.known ?? [])].find((k) => sql.includes(`'${k}'`))
         return {
-          rows: id === undefined ? [] : [{ content_fingerprint: cfg.fingerprint ?? 'stale' }],
+          rows:
+            id === undefined
+              ? []
+              : [{ content_fingerprint: cfg.fingerprint ?? 'stale', title: cfg.title ?? 'Notes' }],
         }
       }
       if (/insert into public\.documents/.test(sql)) return { rows: [{ document_id: 'd' }] }
