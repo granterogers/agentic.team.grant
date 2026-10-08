@@ -7,9 +7,14 @@
 > device): dictation with a real microphone in Chrome and Safari (`docs/ux/dictation-manual-test-2026-10-08.md`), touch pinch, and the live public Sample.
 > New suites: `verify:canvas`, `verify:canvas-extremes`, `verify:chat-dock`, `verify:sample-look`, `verify:canvas-devices` (two real browsers),
 > `verify:canvas-session`, `verify:dictation-fallback`, `tests/studio/canvas-sync.test.ts` (53 adversarial two/three-device cases), `scripts/isolated/layout-isolation.ts`.
-> Third session: notes from two devices now merge without loss (strict compare-and-swap is #442). Grant authorised the isolated preview deploy: **https://team-hq-ux-review.vercel.app**
-> (project `team-hq-ux-review` only, built from `0e7b493`, bytes verified against the commit; `verify:preview-live` 24/24). It shows the SIGNED-OUT entry only: it has no `config.js`, so the
-> canvas is not reachable on it. The public Sample capture was stopped: `sample:public-ui` also attempts a New project write as the guest, which is wider than the approval; needs a fresh yes.
+> Third session: notes from two devices now merge without loss; the race that remains is #442 (strict compare-and-swap, a backend change, OPEN, not part of this branch). **An isolated preview
+> exists: https://team-hq-ux-review.vercel.app** (Vercel project `team-hq-ux-review` only; deployment `dpl_G6UeHTbBxVFd75bBFzSaXJCHfem3`, built from `32d09d7` plus the generated public `config.js`).
+> **Production is unchanged**: nothing merged, no production deploy, no migration, no edge-function, allow-list or policy change. The preview is NOT yet usable by a person: it reaches the real gateway for
+> reads, but the production `signin` function allows only the production page origin, so nobody can sign in or open the Sample from it (blocker and the one-line narrow authorisation needed: the log, section B).
+> The deployed application is verified by `npm run verify:preview-app` (41 passed, 0 failed, 3 not applicable, 0 environmental) against a stand-in gateway, with 12 evidence images in
+> `docs/ux/preview-evidence-2026-10-08/`; `verify:preview-live` (signed-out page only) is NOT workspace evidence, and the earlier "24/24" was a weaker rewritten set than the first run's 12/24 (reconciled in the log).
+> The public Sample capture is still not done: `sample:public-ui --no-write-attempt` exists, but its only write (a guest session) still sits behind the writes guard and needs Grant's clear yes.
+> The verbatim original specification is now stored: `docs/spec/team-hq-ux-overhaul-2026-10-08-verbatim.md` (byte-checked against the session transcript).
 >
 > ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
 >

@@ -76,4 +76,8 @@ for (const c of checks) {
   console.log(`${c.ok ? 'ok  ' : 'FAIL'}  ${c.name}${c.detail === '' ? '' : ` - ${c.detail}`}`)
 }
 console.log(`\n${String(checks.length - failed)}/${String(checks.length)} passed`)
+/* Said plainly so a pass count is never read as more than it is: the workspace is exercised by preview-app.ts, not here. */
+console.log(
+  'not asserted here (not applicable to a signed-out page): the canvas, menu, board, chat, settings. See scripts/verify/preview-app.ts.',
+)
 process.exit(failed === 0 ? 0 : 1)

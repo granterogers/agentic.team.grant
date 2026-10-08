@@ -7,8 +7,9 @@ Stored per CLAUDE.md ("persist a requirements document the moment it arrives"). 
 > **Fidelity note (honest).** This is a requirement-by-requirement record of the master prompt, in
 > the order sent, with every requirement, acceptance criterion and named example retained. It is NOT
 > a byte-for-byte copy: connective prose is condensed. CLAUDE.md says never to condense a
-> requirements document; the full original text is in the build session's transcript only. If Grant
-> re-sends it, replace this file with the verbatim text.
+> requirements document. **The verbatim original has since been recovered from the build session's
+> transcript and is stored, checked byte-for-byte, at `team-hq-ux-overhaul-2026-10-08-verbatim.md`
+> (9 October 2026): that file is the requirement; this one stays as the working record.**
 
 ## 1. Operating instructions (summary of binding terms, verbatim where quoted)
 
