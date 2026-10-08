@@ -208,7 +208,130 @@ export const customPut = async (slug, rec) => {
     h: rec.h,
     tone: rec.tone,
     name: rec.name,
+    rev: rec.rev ?? null,
   })
+}
+
+/*
+  THE OFFICE'S COPY (#445, migration 1024). The picture is also stored in the office, one per project, so a second device can
+  draw it; this browser's database is then only a cache keyed by the office's revision. The adapter is given by the page and is
+  optional: with none (an office that predates the migration, a Sample visitor, offline) a picture stays in this browser alone,
+  exactly as before, and the person is told so.
+
+    put(slug, blob)  -> { rev }                the office stored it
+    get(slug)        -> { rev, url } | null    a signed link to the office's copy, or nothing
+    del(slug)        -> anything               the office removed it
+*/
+let remoteAdapter = null
+const REMOTE_WAIT_MS = 15_000
+export const useRemote = (a) => {
+  remoteAdapter = a !== null && typeof a === 'object' && typeof a.put === 'function' ? a : null
+}
+
+/**
+ * Keep a picture here and, when the office can, there. Never throws because the office would not: the answer says what
+ * happened ('saved' everywhere, or 'local' with the reason) so the picker can say it in words.
+ */
+export const customKeep = async (slug, rec) => {
+  let rev = null
+  let remote = 'local'
+  let reason = ''
+  /* This browser's copy first and at once: the picture is never lost or held up because the office is slow. */
+  await customPut(slug, { ...rec, rev: null })
+  if (remoteAdapter !== null) {
+    try {
+      const r = await Promise.race([
+        remoteAdapter.put(slug, rec.blob),
+        new Promise((_, no) => setTimeout(() => no(new Error('the office did not answer in time')), REMOTE_WAIT_MS)),
+      ])
+      if (r !== null && typeof r === 'object' && typeof r.rev === 'string' && r.rev !== '') {
+        rev = r.rev
+        remote = 'saved'
+      } else reason = 'the office did not say it had stored it'
+    } catch (e) {
+      reason = e instanceof Error ? e.message : 'the office could not store it'
+    }
+  } else reason = 'this office does not keep pictures yet'
+  if (rev !== null) await customPut(slug, { ...rec, rev })
+  return { rev, remote, reason }
+}
+
+/** Take the office's copy into this browser. Resolves the info the painter uses, or null (nothing there, offline, damaged). */
+const customPull = async (slug) => {
+  if (remoteAdapter === null || typeof remoteAdapter.get !== 'function') return null
+  let meta
+  try {
+    meta = await remoteAdapter.get(slug)
+  } catch {
+    return null
+  }
+  if (meta === null || typeof meta !== 'object' || typeof meta.url !== 'string') return null
+  let blob
+  try {
+    const r = await fetch(meta.url)
+    if (!r.ok) return null
+    blob = await r.blob()
+  } catch {
+    return null
+  }
+  if (!/^image\/(jpeg|png|webp|avif)$/.test(blob.type)) return null
+  let seen
+  try {
+    seen = await describe(blob)
+  } catch {
+    return null
+  }
+  try {
+    await customPut(slug, { blob, ...seen, name: '', rev: typeof meta.rev === 'string' ? meta.rev : null })
+  } catch {
+    return null
+  }
+  return mine.get(slug) ?? null
+}
+
+/** Remove a picture here and, when the office has one, there. Resolves false when the office could not remove its copy. */
+export const customRemove = async (slug) => {
+  await customDelete(slug)
+  return remoteRemove(slug)
+}
+
+/** Ask the office to delete its copy (waits a bounded time). True when there is nothing to delete or it was deleted. */
+export const remoteRemove = async (slug) => {
+  if (remoteAdapter === null || typeof remoteAdapter.del !== 'function') return true
+  try {
+    await Promise.race([
+      remoteAdapter.del(slug),
+      new Promise((_, no) => setTimeout(() => no(new Error('slow')), REMOTE_WAIT_MS)),
+    ])
+    return true
+  } catch {
+    return false
+  }
+}
+
+const toneOf = (r, g, b) => {
+  const lin = (c) => {
+    const x = c / 255
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b) < 0.18 ? 'dark' : 'light'
+}
+
+/** The size and tone of a picture the office returned (it is already modest, so it is not shrunk again). */
+const describe = async (blob) => {
+  const bitmap = await createImageBitmap(blob)
+  try {
+    const one = document.createElement('canvas')
+    one.width = 1
+    one.height = 1
+    const ctx = one.getContext('2d')
+    if (ctx === null) throw new Error('no canvas')
+    ctx.drawImage(bitmap, 0, 0, 1, 1)
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+    return { w: bitmap.width, h: bitmap.height, tone: toneOf(r, g, b) }
+  } finally {
+    bitmap.close?.()
+  }
 }
 
 /** Load a project's picture into memory (and make its address available to the painter). Resolves null when there is none. */
@@ -227,6 +350,7 @@ export const customLoad = async (slug) => {
     h: rec.h,
     tone: rec.tone,
     name: rec.name,
+    rev: rec.rev ?? null,
   }
   mine.set(slug, info)
   return info
@@ -255,10 +379,19 @@ export const release = async () => {
 export const hydrate = async (board, slug) => {
   const bg = grid.bgOf(slug)
   if (bg === null || bg.id !== 'custom') return ''
-  const info = await customLoad(slug)
+  let info = await customLoad(slug)
+  /*
+    The office's copy is fetched when this browser has none, or holds a different revision than the one the project names
+    (a picture changed on another device). A browser that already holds the named revision asks the office for nothing.
+  */
+  const named = typeof bg.rev === 'string' && bg.rev !== ''
+  if (remoteAdapter !== null && (info === null || (named && info.rev !== bg.rev))) {
+    const got = await customPull(slug)
+    if (got !== null) info = got
+  }
   if (info === null) {
     paint(board, null)
-    return 'This background is a picture from another device. It is not stored here, so the default is shown.'
+    return 'This background is a picture the office does not hold a copy of, and this browser has none, so the default is shown.'
   }
   /* The board may have been replaced while the picture loaded. */
   const live = document.querySelector(`[data-bc-board="${slug}"]`)
@@ -385,11 +518,7 @@ export const optimise = async (file) => {
     const octx = one.getContext('2d')
     octx.drawImage(canvas, 0, 0, 1, 1)
     const [r, g, bl] = octx.getImageData(0, 0, 1, 1).data
-    const lin = (c) => {
-      const x = c / 255
-      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
-    }
-    const tone = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(bl) < 0.18 ? 'dark' : 'light'
+    const tone = toneOf(r, g, bl)
     const encode = (type, q) => new Promise((res) => canvas.toBlob(res, type, q))
     let blob = await encode('image/webp', 0.84)
     if (blob === null || blob.type !== 'image/webp') blob = await encode('image/jpeg', 0.86)

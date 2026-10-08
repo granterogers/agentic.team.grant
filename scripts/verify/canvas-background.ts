@@ -446,10 +446,81 @@ await page.goto(url(pathC), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('[data-bc-board]')
 await page.waitForTimeout(1200)
 const missing = await board(page)
-check('a project whose picture is not on this device falls back to the default and says why', missing.bg === null && /another device/.test(missing.why ?? ''), JSON.stringify(missing.why))
+check('a project whose picture is held nowhere this browser can reach falls back to the default and says why', missing.bg === null && /default is shown/.test(missing.why ?? ''), JSON.stringify(missing.why))
 await openLook(page)
-check('and the picker says it too', /another device/.test(await say(page)), await say(page))
+check('and the picker says it too', /default is shown/.test(await say(page)), await say(page))
 await closeLook(page)
+
+/* ---- 5b. the office's copy (#445, migration 1024): another device draws a picture this browser never held ---- */
+await page.goto(url(pathC), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('[data-bc-board]')
+const remoteRun = (await page.evaluate(
+  `(async (slug) => {
+  const bd = await import('/bc/backdrop.js')
+  const grid = await import('/bc/layout.js')
+  const png = (w, h, c) => new Promise((res) => { const k = document.createElement('canvas'); k.width = w; k.height = h; const x = k.getContext('2d'); x.fillStyle = c; x.fillRect(0, 0, w, h); k.toBlob(res, 'image/png') })
+  const idb = () => new Promise((res) => { const r = indexedDB.open('bc.backdrops'); r.onsuccess = () => { const t = r.result.transaction('images', 'readonly'); const q = t.objectStore('images').getAll(); q.onsuccess = () => { r.result.close(); res(q.result) } } })
+  const wipe = () => new Promise((res) => { const r = indexedDB.open('bc.backdrops'); r.onsuccess = () => { const t = r.result.transaction('images', 'readwrite'); t.objectStore('images').clear(); t.oncomplete = () => { r.result.close(); res(true) } } })
+  const office = { blob: null, rev: null, puts: 0, gets: 0, dels: 0, fail: false }
+  bd.useRemote({
+    put: async (s, blob) => { if (office.fail) throw new Error('the office would not take it'); office.puts += 1; office.blob = blob; office.rev = 'r' + String(office.puts); return { rev: office.rev } },
+    get: async () => { office.gets += 1; return office.blob === null ? null : { rev: office.rev, url: URL.createObjectURL(office.blob) } },
+    del: async () => { office.dels += 1; office.blob = null; return {} },
+  })
+  const out = {}
+  const ref = (rev, at) => grid.cleanBg({ id: 'custom', mode: 'tile', scale: 1, intensity: 1, tint: 0, at, rev })
+  const board = () => document.querySelector('[data-bc-board]')
+  const b1 = await png(240, 120, '#336699')
+  const kept = await bd.customKeep(slug, { blob: b1, w: 240, h: 120, tone: 'dark', name: 'one' })
+  out.kept = kept
+  out.cachedRev = (await idb())[0]?.rev ?? null
+  grid.setBg(slug, ref(kept.rev, 1000))
+  out.referenceRev = grid.bgOf(slug)?.rev ?? null
+  /* another device: nothing in this browser, the office holds the picture */
+  await bd.release(); await wipe()
+  out.warnA = await bd.hydrate(board(), slug)
+  out.getsA = office.gets
+  out.heldA = (await idb()).length
+  out.revA = bd.customInfo(slug)?.rev ?? null
+  out.paintedA = board()?.getAttribute('data-bg') ?? null
+  /* the same device again: it already holds the named revision, so the office is not asked */
+  await bd.hydrate(board(), slug)
+  out.getsB = office.gets
+  /* the picture is changed on another device: the project now names a newer revision */
+  const b2 = await png(300, 150, '#aa5533')
+  office.puts += 1; office.blob = b2; office.rev = 'r' + String(office.puts)
+  grid.setBg(slug, ref(office.rev, 2000))
+  await bd.hydrate(board(), slug)
+  out.getsC = office.gets
+  out.revC = bd.customInfo(slug)?.rev ?? null
+  out.sizeC = bd.customInfo(slug)?.w ?? null
+  /* the office will not take a picture: it is still kept here, and the answer says why */
+  office.fail = true
+  const refused = await bd.customKeep(slug, { blob: b1, w: 240, h: 120, tone: 'dark', name: 'two' })
+  out.refused = refused
+  out.heldR = (await idb()).length
+  office.fail = false
+  /* remove: both copies go */
+  out.removedOk = await bd.customRemove(slug)
+  out.dels = office.dels
+  out.heldAfterRemove = (await idb()).length
+  /* an office with no adapter at all, and a browser with nothing: the old sentence, the default */
+  bd.useRemote(null)
+  grid.setBg(slug, ref('r9', 3000))
+  await bd.release(); await wipe()
+  out.warnNone = await bd.hydrate(board(), slug)
+  out.paintedNone = board()?.getAttribute('data-bg') ?? null
+  return out
+})(${JSON.stringify(slugC)})`,
+)) as any
+check('keeping a picture stores it here AND in the office, and the browser records the office revision', remoteRun.kept.remote === 'saved' && remoteRun.kept.rev === 'r1' && remoteRun.cachedRev === 'r1', JSON.stringify(remoteRun.kept))
+check('the project reference carries the revision (a short word, no bytes, no link)', remoteRun.referenceRev === 'r1')
+check('a browser with no copy fetches the office’s picture, stores it, and draws it (no warning)', remoteRun.warnA === '' && remoteRun.getsA === 1 && remoteRun.heldA === 1 && remoteRun.revA === 'r1' && remoteRun.paintedA === 'custom', JSON.stringify({ warn: remoteRun.warnA, gets: remoteRun.getsA, held: remoteRun.heldA }))
+check('a browser that already holds the named revision does not ask the office again', remoteRun.getsB === 1, `${String(remoteRun.getsB)} request(s)`)
+check('when the project names a newer revision the browser fetches the new picture once', remoteRun.getsC === 2 && remoteRun.revC === 'r2' && remoteRun.sizeC === 300, JSON.stringify({ gets: remoteRun.getsC, rev: remoteRun.revC, w: remoteRun.sizeC }))
+check('if the office will not take a picture it is still kept in this browser, and the answer says why', remoteRun.refused.remote === 'local' && /would not take it/.test(remoteRun.refused.reason) && remoteRun.heldR === 1, JSON.stringify(remoteRun.refused))
+check('removing deletes this browser’s copy and asks the office to delete its own', remoteRun.removedOk === true && remoteRun.dels === 1 && remoteRun.heldAfterRemove === 0)
+check('with no office copy and no local one the default is shown and the person is told', /default is shown/.test(remoteRun.warnNone) && remoteRun.paintedNone === null, JSON.stringify(remoteRun.warnNone))
 
 /* ---- 6. isolation: signing out removes every choice and picture from the browser ---- */
 await page.goto(url(pathA), { waitUntil: 'domcontentloaded' })
@@ -612,8 +683,8 @@ for (const scheme of ['light', 'dark'] as const) {
   await m.ctx.close()
 }
 
-rec('storage authorisation and cross-tenant refusal on a server', 'n/a', 'custom pictures are kept only in the browser (no server storage is used), so there is no server object to authorise; isolation is by browser profile and sign-out, asserted above')
-rec('a custom picture on a second device', 'n/a', 'needs a per-person image store on the gateway (backend dependency in the issue); the device without it says so and shows the default')
+rec('storage authorisation and cross-tenant refusal on a server', 'n/a', 'proved against the REAL gateway on the isolated replica, not here: scripts/isolated/background-storage.ts (49 checks incl. sabotage); this page proves browser-side isolation by profile and sign-out')
+rec('a custom picture on a real second device with the live gateway', 'n/a', 'the page-side flow is driven above against a stand-in office (fetch, cache by revision, replace, refuse, remove); the migration and gateway are not deployed, so a real cross-device run is pending approval')
 
 await browser.close()
 server.close()

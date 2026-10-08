@@ -463,7 +463,7 @@ export const cleanBg = (raw) => {
   if (raw === null || typeof raw !== 'object') return null
   const id = typeof raw.id === 'string' ? raw.id : ''
   if (!BG_ID.test(id)) return null
-  return {
+  const out = {
     id,
     mode: BG_MODES.includes(raw.mode) ? raw.mode : 'tile',
     scale: Math.round(num(raw.scale, 0.5, 2, 1) * 100) / 100,
@@ -471,6 +471,9 @@ export const cleanBg = (raw) => {
     tint: Math.round(num(raw.tint, 0, 0.6, 0) * 100) / 100,
     at: Number.isFinite(raw.at) ? raw.at : 0,
   }
+  /* The office's revision of a custom picture (#445): a short word, never bytes or a link. Older pages drop it harmlessly. */
+  if (id === 'custom' && typeof raw.rev === 'string' && /^[0-9a-z]{1,16}$/.test(raw.rev)) out.rev = raw.rev
+  return out
 }
 /** The newer of two choices; on the same instant `mineWins` decides, and otherwise the same copy wins on every device. */
 export const mergeBg = (a, b, mineWins = false) => {

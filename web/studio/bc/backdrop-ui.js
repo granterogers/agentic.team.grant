@@ -245,20 +245,34 @@ const previewCustom = (p, out, url) => {
 
 const apply = async (root, p) => {
   if (pending === null) return
+  if (busy) return
   const slug = p.slug
+  /* The sheet may be closed (which clears the preview) while the office is answering: keep our own handle on what is applied. */
+  const choice = pending
   try {
-    if (pending.custom) {
-      await bd.customPut(slug, pending.custom)
-      grid.setBg(slug, pending.bg)
+    let note = 'Saved for this project.'
+    if (choice.custom) {
+      /* Kept here, and in the office when it can, so another device can draw it; the reference carries the office's revision. */
+      busy = true
+      said = 'Saving…'
+      redraw(root, p)
+      const kept = await bd.customKeep(slug, choice.custom)
+      grid.setBg(slug, kept.rev === null ? choice.bg : grid.cleanBg({ ...choice.bg, rev: kept.rev }))
+      note =
+        kept.remote === 'saved'
+          ? 'Saved for this project, and kept in your office so your other devices show it too.'
+          : `Saved in this browser only (${kept.reason}), so another device will show the default.`
     } else {
-      grid.setBg(slug, pending.bg)
+      grid.setBg(slug, choice.bg)
     }
-    if (pending.url) URL.revokeObjectURL(pending.url)
-    pending = null
-    said = 'Saved for this project.'
+    if (choice.url) URL.revokeObjectURL(choice.url)
+    if (pending === choice) pending = null
+    said = note
     bd.paint(boardOf(slug), grid.bgOf(slug), slug)
   } catch (e) {
     said = e instanceof Error ? e.message : 'That could not be saved.'
+  } finally {
+    busy = false
   }
   document.getElementById('viewer')?.classList.remove('bd-preview')
   redraw(root, p)
@@ -267,12 +281,18 @@ const apply = async (root, p) => {
 const remove = async (root, p) => {
   const slug = p.slug
   try {
+    /* This browser first, and the board returns to the default at once; the office's copy is removed after, with a bounded wait. */
     await bd.customDelete(slug)
     if (grid.bgOf(slug)?.id === 'custom') grid.setBg(slug, { id: 'default', ...bd.defaultsFor('default') })
     if (pending?.url) URL.revokeObjectURL(pending.url)
     pending = null
     said = 'Your picture was removed.'
     bd.paint(boardOf(slug), grid.bgOf(slug), slug)
+    redraw(root, p)
+    if (!(await bd.remoteRemove(slug))) {
+      said =
+        'Your picture was removed from this browser. The office could not be reached to remove its copy; it is no longer used.'
+    }
   } catch (e) {
     said = e instanceof Error ? e.message : 'That could not be removed.'
   }

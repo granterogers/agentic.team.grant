@@ -37,6 +37,7 @@ import * as bcSession from './session.js'
 import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
 import * as backdropUi from './bc/backdrop-ui.js'
+import * as backdropStore from './bc/backdrop.js'
 import * as bcDocOrder from './bc/docorder.js'
 import * as bcWire from './bc/wire.js'
 import * as bcJump from './bc/jump.js'
@@ -14241,6 +14242,28 @@ bcGrid.persistence({
     }
     draw()
   },
+})
+
+/*
+  A project's own background picture is also kept in the office (migration 1024, #445). A Sample visitor never uploads (the
+  gateway refuses it), so its picture stays in this browser; an office without the migration answers "unknown action", and
+  the picker says the picture is kept in this browser only.
+*/
+const blobBase64 = (blob) =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result).split(',')[1] ?? '')
+    r.onerror = () => reject(new Error('That picture could not be read.'))
+    r.readAsDataURL(blob)
+  })
+backdropStore.useRemote({
+  put: async (slug, blob) => {
+    if (bcSession.isSample()) throw new Error('a sample office does not keep pictures')
+    return act('project_background_put', { p_slug: slug, p_base64: await blobBase64(blob) })
+  },
+  get: (slug) => (bcSession.isSample() ? null : read('project_background', undefined, { slug })),
+  del: (slug) =>
+    bcSession.isSample() ? null : act('project_background_delete', { p_slug: slug }),
 })
 
 bcSession.adopt()
