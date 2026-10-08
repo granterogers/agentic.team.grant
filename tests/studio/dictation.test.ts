@@ -268,7 +268,7 @@ describe('join', () => {
 
 describe('a recogniser that never starts (its service is unreachable)', () => {
   class MuteRec extends FakeRec {
-    start() {
+    override start() {
       this.started = true // the engine accepted the call and then said nothing at all
     }
   }

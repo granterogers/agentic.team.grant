@@ -495,29 +495,9 @@ const voiceNote = (getScope, projectOf = () => ctx.state.project) => {
 const pageNote = voiceNote(() => document.querySelector('#root [data-bc-sayform]'))
 
 /*
-  THE DOCK GETS THE VOICE NOTE TOO. "Chat with Team" opens the dock, so for
-  most people the dock IS Team Chat - and it had no microphone at all; the
-  voice note lived only on the separate Chat page. The dock is the studio's
-  (app.js paintDock), repainted on every render, so the listener sits on the
-  persistent #dock element and is attached once, and paintDock carries the
-  live microphone and panel across each repaint.
+  The dock's microphone is live dictation now (bc/dockdictate.js, 8 October 2026): the record-upload-transcribe voice note
+  this file wired onto the dock was replaced by it. The Chat page keeps its own voice note (pageNote above).
 */
-const dockNote = voiceNote(
-  () => document.getElementById('dock'),
-  /* The dock files a message under the project it SHOWS - the open one, or
-     Unnamed on the portfolio (#149) - and a voice note must go to the same
-     thread as a typed line, so it reads the dock's own choice. */
-  () => document.querySelector('#dock [data-dockform]')?.dataset.bcNoteproject || ctx.state.project,
-)
-export const wireDockNote = (dock) => {
-  if (dock !== null && dock !== undefined && dock.dataset.bcNoteWired !== '1') {
-    dock.dataset.bcNoteWired = '1'
-    dock.addEventListener('click', (e) => {
-      void dockNote.press(e)
-    })
-  }
-  dockNote.resync()
-}
 
 /*
   Whether the reader is at the end of the thread is REMEMBERED on every

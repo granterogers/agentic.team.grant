@@ -251,20 +251,25 @@ const rowsIn = async (id: string): Promise<number> =>
        }
        return seen`),
   )) as number
-const small = await rowsIn('documents')
-await page.locator('[data-mod="documents"]').first().hover()
+/*
+  The activity module: the default arrangement (content-led since 8 October 2026) gives the documents module enough room
+  to preview everything it holds, so it can no longer show "more" when grown. Activity still has events below the fold.
+*/
+const SUBJECT = 'activity'
+const small = await rowsIn(SUBJECT)
+await page.locator(`[data-mod="${SUBJECT}"]`).first().hover()
 await page.waitForTimeout(100)
-const g = await page.locator('[data-mod="documents"] [data-bc-resize]').first().boundingBox()
+const g = await page.locator(`[data-mod="${SUBJECT}"] [data-bc-resize]`).first().boundingBox()
 if (g === null) throw new Error('no grip')
 await drag({ x: g.x + g.width / 2, y: g.y + g.height / 2 }, { x: g.x + 260, y: g.y + 260 })
-const big = await rowsIn('documents')
+const big = await rowsIn(SUBJECT)
 check(
   'making a module bigger shows more of its content, not more whitespace',
   big > small,
   `${String(small)} rows visible before, ${String(big)} after`,
 )
 const spare = (await page.evaluate(
-  inPage(`const el = document.querySelector('[data-mod="documents"] .bcmodbody')
+  inPage(`const el = document.querySelector('[data-mod="${SUBJECT}"] .bcmodbody')
      return Math.round(((el.clientHeight - el.scrollHeight) / el.clientHeight) * 100)`),
 )) as number
 check(
