@@ -310,7 +310,7 @@ for (const m of ['slow', 'refusing', 'unreachable'] as const) {
   */
   check(`${m}: the shell is still drawn`, (await page.locator('.bctop').count()) === 1)
   check(`${m}: the main surface is still there`, (await page.locator('.bcmain').count()) === 1)
-  check(`${m}: Jump still opens`, await page.locator('[data-bc-jump]').first().isEnabled())
+  check(`${m}: the project menu still opens`, await page.locator('[data-bc-menu]').first().isEnabled())
   check(`${m}: nothing was thrown`, thrown.length === 0, thrown.join(' | '))
   await ctx.close()
 }

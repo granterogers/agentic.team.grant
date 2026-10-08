@@ -40,8 +40,8 @@
 [data-experience='basecamp'] .bccal2btn--icon { width: 30px; padding: 0; font-size: 18px; line-height: 1; }
 [data-experience='basecamp'] .bccal2btn--seg { border: 0; border-radius: 0; min-height: 28px; }
 [data-experience='basecamp'] .bccal2btn--seg.is-on { background: color-mix(in srgb, var(--bc-accent) 24%, transparent); color: var(--bc-text-strong); }
-[data-experience='basecamp'] .bccal2btn--primary { background: var(--bc-accent); color: var(--bc-on-accent, #0b151b); border-color: transparent; font-weight: 600; }
-[data-experience='basecamp'] .bccal2btn--primary:hover { background: color-mix(in srgb, var(--bc-accent) 86%, white); color: var(--bc-on-accent, #0b151b); }
+[data-experience='basecamp'] .bccal2btn--primary { background: var(--bc-accent); color: var(--bc-accent-ink); border-color: transparent; font-weight: 600; }
+[data-experience='basecamp'] .bccal2btn--primary:hover { background: color-mix(in srgb, var(--bc-accent) 86%, white); color: var(--bc-accent-ink); }
 [data-experience='basecamp'] .bccal2btn--small { min-height: 28px; padding: 0 9px; }
 [data-experience='basecamp'] .bccal2btn--danger { color: var(--bc-danger, #f0907e); }
 [data-experience='basecamp'] .bccal2scope select {
@@ -72,12 +72,12 @@
 [data-experience='basecamp'] .bccal2dow { padding: 4px 6px; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bc-text-muted); border-right: 1px solid color-mix(in srgb, var(--bc-text-muted) 20%, transparent); }
 [data-experience='basecamp'] .bccal2cell { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 2px; border-right: 1px solid color-mix(in srgb, var(--bc-text-muted) 20%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--bc-text-muted) 20%, transparent); overflow: hidden; }
 [data-experience='basecamp'] .bccal2cell.is-out { background: color-mix(in srgb, var(--bc-canvas) 40%, transparent); }
-[data-experience='basecamp'] .bccal2cell.is-out .bccal2num { color: color-mix(in srgb, var(--bc-text-muted) 60%, transparent); }
+[data-experience='basecamp'] .bccal2cell.is-out .bccal2num { color: var(--bc-text-muted); font-weight: 400; }
 [data-experience='basecamp'] .bccal2cell.is-sel { background: color-mix(in srgb, var(--bc-accent) 10%, transparent); }
 [data-experience='basecamp'] .bccal2num { appearance: none; align-self: flex-end; min-width: 24px; height: 22px; padding: 0 5px; border: 0; border-radius: 999px; background: transparent; color: var(--bc-text); font: 500 12.5px/22px var(--bc-font); cursor: pointer; }
 [data-experience='basecamp'] .bccal2num:hover,
 [data-experience='basecamp'] .bccal2num:focus-visible { background: color-mix(in srgb, var(--bc-text) 14%, transparent); }
-[data-experience='basecamp'] .bccal2cell.is-today .bccal2num { background: var(--bc-accent); color: var(--bc-on-accent, #0b151b); font-weight: 700; }
+[data-experience='basecamp'] .bccal2cell.is-today .bccal2num { background: var(--bc-accent); color: var(--bc-accent-ink); font-weight: 700; }
 [data-experience='basecamp'] .bccal2chips { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow: hidden; }
 
 /* chips: a coloured edge says where an event came from; the words stay the words */
@@ -104,7 +104,7 @@
 [data-experience='basecamp'] .bccal2chip--google:hover { background: color-mix(in srgb, #e8a04a 28%, transparent); }
 [data-experience='basecamp'] .bccal2chip--task { border-left-color: var(--bc-text-muted); background: color-mix(in srgb, var(--bc-text-muted) 14%, transparent); }
 [data-experience='basecamp'] .bccal2tick { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border: 1.5px solid var(--bc-text-muted); border-radius: 2px; vertical-align: -1px; }
-[data-experience='basecamp'] .bccal2t { margin-right: 5px; color: var(--bc-text-muted); font-variant-numeric: tabular-nums; }
+[data-experience='basecamp'] .bccal2t { margin-right: 5px; color: var(--bc-text); font-variant-numeric: tabular-nums; }
 [data-experience='basecamp'] .bccal2more { appearance: none; border: 0; background: transparent; padding: 0 6px; color: var(--bc-text-muted); font: 12px/1.5 var(--bc-font); text-align: left; cursor: pointer; }
 [data-experience='basecamp'] .bccal2more:hover { color: var(--bc-text-strong); text-decoration: underline; }
 
@@ -127,7 +127,7 @@
 [data-experience='basecamp'] .bccal2dayhead { appearance: none; display: flex; align-items: baseline; justify-content: center; gap: 6px; padding: 5px 4px; border: 0; background: transparent; color: var(--bc-text-muted); font: 500 12.5px/1 var(--bc-font); cursor: pointer; }
 [data-experience='basecamp'] .bccal2dns { display: none; }
 [data-experience='basecamp'] .bccal2dd { display: inline-grid; place-items: center; min-width: 26px; height: 26px; border-radius: 999px; font-size: 15px; color: var(--bc-text-strong); }
-[data-experience='basecamp'] .bccal2dayhead.is-today .bccal2dd { background: var(--bc-accent); color: var(--bc-on-accent, #0b151b); font-weight: 700; }
+[data-experience='basecamp'] .bccal2dayhead.is-today .bccal2dd { background: var(--bc-accent); color: var(--bc-accent-ink); font-weight: 700; }
 [data-experience='basecamp'] .bccal2adcell { min-height: 22px; padding: 2px; border-left: 1px solid color-mix(in srgb, var(--bc-text-muted) 16%, transparent); display: flex; flex-direction: column; gap: 2px; }
 [data-experience='basecamp'] .bccal2scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; border-top: 1px solid color-mix(in srgb, var(--bc-text-muted) 20%, transparent); scrollbar-width: thin; }
 [data-experience='basecamp'] .bccal2body { position: relative; display: grid; grid-template-columns: 44px repeat(var(--cols), minmax(0, 1fr)); height: calc(var(--hour) * 24); }

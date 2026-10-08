@@ -272,3 +272,19 @@
 @media (pointer: coarse) {
   [data-experience='basecamp'] .iconcats .seg { padding: 8px 12px; }
 }
+
+/* Stage colours (card table columns): AA on the light surface, and the original lighter set kept for the dark scheme. */
+[data-experience='basecamp'] .bcminiboard,
+[data-experience='basecamp'] .bcboard {
+  --stage-todo: #566370;
+  --stage-doing: #1f5f9e;
+  --stage-blocked: #a4472a;
+  --stage-done: #23704c;
+}
+[data-experience='basecamp'][data-scheme='dark'] .bcminiboard,
+[data-experience='basecamp'][data-scheme='dark'] .bcboard {
+  --stage-todo: #95a1ad;
+  --stage-doing: #6ab3fd;
+  --stage-blocked: #ef8f6b;
+  --stage-done: #63c295;
+}

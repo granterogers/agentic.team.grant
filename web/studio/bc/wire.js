@@ -43,12 +43,14 @@ import { wireStage } from './stage.js'
 import * as contacts from './contacts.js'
 import * as todos from './todos.js'
 import * as docorder from './docorder.js'
+import * as jump from './jump.js'
 import * as menu from './menu.js'
 import * as account from './account.js'
 
 let ctx = null
 export const mount = (c) => {
   ctx = c
+  c.jumpRefresh = jump.refresh
   /*
     ONE key listener for the whole experience, on the document, attached once.
 
@@ -66,6 +68,7 @@ export const mount = (c) => {
   })
   document.addEventListener('keydown', (e) => {
     if (ctx.state.experience !== 'basecamp') return
+    jump.onKey(e)
     if (e.key === 'Escape' && menu.isOpen()) {
       menu.setOpen(false)
       c.render()

@@ -62,7 +62,8 @@ const slug = (await page.evaluate(
   inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
      return el === null ? '' : (el.dataset.bcGo ?? '')`),
 )) as string
-await page.locator(`[data-bc-go="${slug}"]`).first().click()
+await page.locator('[data-bc-menu]').click()
+await page.locator(`.bcmenupanel [data-bc-go="${slug}"]`).first().click()
 await page.waitForSelector('.bcpanes')
 await page.waitForTimeout(400)
 check('a project opens from the portfolio', here() === slug, here())
@@ -203,7 +204,8 @@ check(
 /* --- 4. only then does Back leave the project --------------------------- */
 await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(400)
-await page.locator(`[data-bc-go="${slug}"]`).first().click()
+await page.locator('[data-bc-menu]').click()
+await page.locator(`.bcmenupanel [data-bc-go="${slug}"]`).first().click()
 await page.waitForSelector('.bcpanes')
 await page.waitForTimeout(400)
 await page

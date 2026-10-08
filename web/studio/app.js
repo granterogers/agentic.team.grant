@@ -38,6 +38,7 @@ import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
 import * as bcDocOrder from './bc/docorder.js'
 import * as bcWire from './bc/wire.js'
+import * as bcJump from './bc/jump.js'
 import * as bcGrip from './bc/dockgrip.js'
 import * as bcDictate from './bc/dockdictate.js'
 import * as plane from './plane.js'
@@ -14118,6 +14119,7 @@ const bcContext = {
   },
 }
 bc.mount(bcContext)
+bcJump.mount(bcContext)
 bcWire.mount(bcContext)
 /*
   WHICH MESSAGES HAVE A RECORDING, learned once.

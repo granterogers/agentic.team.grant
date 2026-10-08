@@ -216,15 +216,16 @@ for (const id of ALL) {
       sizeTrouble = `${id} at ${s.name} collapsed to ${String(me.w)}x${String(me.h)}`
       break
     }
-    if (me.x + me.w > 1600 + 2) {
-      sizeTrouble = `${id} at ${s.name} ran off the right of the stage (${String(me.x + me.w)})`
+    /* The canvas is infinite (8 October 2026), so there is no stage edge to run off; a module still has a largest size. */
+    if (me.w > 6000 + 2 || me.h > 6000 + 2) {
+      sizeTrouble = `${id} at ${s.name} grew past the largest allowed size (${String(me.w)}x${String(me.h)})`
       break
     }
   }
   if (sizeTrouble !== '') break
 }
 check(
-  'every module resizes through four sizes without collapsing or leaving the stage',
+  'every module resizes through four sizes without collapsing or passing the largest allowed size',
   sizeTrouble === '',
   sizeTrouble,
 )

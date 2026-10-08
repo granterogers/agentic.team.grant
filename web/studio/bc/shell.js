@@ -342,11 +342,6 @@ const menuPanel = () => {
     ${item(at('/search'), 'Search')}
     ${item(at('/tasks'), 'My Tasks')}
     ${item(at('/activity'), 'Activity')}
-    ${
-      state().view === 'project'
-        ? `<button type="button" role="menuitem" class="bcmenuitem" data-bc-dock><span class="bcmenuname">Chat with team</span></button>`
-        : ''
-    }
   </div>`
 }
 
