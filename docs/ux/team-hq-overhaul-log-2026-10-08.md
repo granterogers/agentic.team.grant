@@ -79,8 +79,9 @@ reset key was stale, `bc.layout.` vs `bc.stage.`, so earlier presses leaked into
 `basecamp-routes` 61 · `-keyboard` 25 · `-touch` 28 · `-states` 80 · `-preservation` 26 · `-torture` 30 · `-back` 20 · `-home` 46 ·
 `-affordance` 16 · `style-ui` 9 · `phone-header-local` · `ux-motion` 34 · `ux-a11y` 28/28 light and 28/28 dark · `layout-isolation` 16 (replica).
 Baseline-failing suites (unchanged, confirmed at `b8ffe44` last session): `verify:wired`, `palette`, `basecamp-chat/drive/failures/livevoice/look/
-measure/project-turn/settings/stale-answer/voice*`, `calendar-ui`, `docs-ui`, `review`, `style-adopt-ui`. `check:icons` and any production-classed suite
-were not run (the production gate refused; no flag was set).
+measure/project-turn/settings/stale-answer/voice*`, `calendar-ui`, `docs-ui`, `review`, `style-adopt-ui`. `check:icons`, `verify:ui`, `verify:hq` and any other production-classed suite
+were not run (the production gate refused `verify:ui`; no flag was set). `npm run lint` over the whole repository fails in files this branch does not
+touch (`scripts/audit`, `scripts/leak-witness.ts`, `scripts/isolated/witness-independence.ts` and others); every file this branch changed is clean under `biome ci`.
 
 ## The 72 states
 
