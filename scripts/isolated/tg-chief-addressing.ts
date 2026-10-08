@@ -456,23 +456,32 @@ part(
   )
 }
 {
-  // A semantic neighbour: a question the roster gives to ONE specialist is answered by that specialist in her own name,
-  // through the chief's bot, and nobody else is convened.
+  // SELECTIVE DELEGATION (owner decision, 7 October 2026). A routine question that names a subject one specialist knows
+  // about is still Claire's to answer on Telegram: no roster, no subject lookup, no semantic reading (so no model call
+  // beyond the answer itself), no child, and the answer comes back through the chief's bot to the same chat.
   await quiet()
   await scopeChat(proj)
   const from = tgCalls.length
+  const m = model.mark()
   const t = await say('How is the venue hire going?')
   await settle(t.job)
   const lead = await leadOf(t.job)
+  const d = await decisionOf(t.job)
   const out = sent(from)
   check(
-    "a question the roster hands to one specialist is answered by that specialist, no child, and still comes back through the chief's bot to the same chat",
-    lead.recipient_agent !== 'chief-of-staff' &&
+    "a routine question about a specialist's subject is answered by the chief herself: no child, a tree of one, and it comes back through the chief's bot to the same chat",
+    lead.recipient_agent === 'chief-of-staff' &&
       (await treeSize(t.job)) === 1 &&
       out.length === 1 &&
       out[0]?.token === CHIEF_TOKEN &&
       out[0]?.chat === CHAT,
     `${String(lead.recipient_agent)} ${out.map((o) => o.token).join(',')}`,
+  )
+  check(
+    'and it cost no routing model call: the semantic reading of the subject was never asked, and the reason says it was routine',
+    model.since(m, 'other').length === 0 &&
+      /routine request on Telegram/.test(String(d.roster_reason)),
+    `other calls=${String(model.since(m, 'other').length)} reason=${String(d.roster_reason).slice(0, 70)}`,
   )
 }
 

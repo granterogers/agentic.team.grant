@@ -156,3 +156,95 @@ describe('#26 — a selection Grant made himself', () => {
     expect(who.alsoConvened).toEqual([])
   })
 })
+
+describe('selective delegation on Telegram (owner decision, 7 October 2026)', () => {
+  const watch = (): { spy: SqlExecutor; asked: string[] } => {
+    const asked: string[] = []
+    return {
+      asked,
+      spy: {
+        kind: 'fake',
+        execute: (sql: string): Promise<SqlResult> => {
+          asked.push(sql)
+          return db.execute(sql)
+        },
+      },
+    }
+  }
+  const lookedUpSubjects = (asked: string[]): boolean =>
+    asked.some((s) => s.includes('who_knows_about'))
+
+  it('a routine request typed to the chief on Telegram is hers: nobody convened, no subject lookup', async () => {
+    const { spy, asked } = watch()
+    const who = await speaker(
+      spy,
+      'chief-of-staff',
+      'how is the venue hire going?',
+      null,
+      null,
+      [],
+      null,
+      false,
+      false,
+      'telegram',
+    )
+    expect(who.slug).toBe('chief-of-staff')
+    expect(who.convened).toEqual([])
+    expect(who.alsoConvened).toEqual([])
+    expect(who.reason).toContain('routine request on Telegram')
+    expect(lookedUpSubjects(asked)).toBe(false)
+  })
+
+  it('an explicit request for the team on Telegram still reaches the roster', async () => {
+    const { spy, asked } = watch()
+    const who = await speaker(
+      spy,
+      'chief-of-staff',
+      'ask the team how the venue hire is going',
+      null,
+      null,
+      [],
+      null,
+      false,
+      false,
+      'telegram',
+    )
+    expect(who.reason).not.toContain('routine request on Telegram')
+    expect(lookedUpSubjects(asked)).toBe(true)
+  })
+
+  it('the same routine words on the dashboard still go through the roster (control: only Telegram is selective)', async () => {
+    const { spy, asked } = watch()
+    const who = await speaker(
+      spy,
+      null,
+      'how is the venue hire going?',
+      null,
+      null,
+      [],
+      null,
+      false,
+      false,
+      'teamhq',
+    )
+    expect(who.reason).not.toContain('routine request on Telegram')
+    expect(lookedUpSubjects(asked)).toBe(true)
+  })
+
+  it('a specialist whose bot he opened on Telegram still answers directly (selective delegation never overrides an address)', async () => {
+    const who = await speaker(
+      db,
+      'finance-director',
+      'how is the venue hire going?',
+      null,
+      null,
+      [],
+      null,
+      false,
+      false,
+      'telegram',
+    )
+    expect(who.slug).toBe('finance-director')
+    expect(who.reason).toContain('addressed directly')
+  })
+})

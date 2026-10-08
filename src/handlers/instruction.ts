@@ -97,6 +97,7 @@ import { clauses, split } from '../agents/clauses.ts'
 import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import { bodyHoldsDraft } from '../agents/consequence.ts'
 import type { Correction } from '../agents/correction.ts'
+import { delegationScope, namesColleagueInFrame } from '../agents/delegation-scope.ts'
 import { cleanDictation } from '../agents/dictation.ts'
 import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
 import { entitled as allEntitled, noneEntitled } from '../agents/entitled.ts'
@@ -862,6 +863,8 @@ export async function speaker(
    * directly: a specialist whose bot he opened still answers. Default false.
    */
   settledInCode = false,
+  /** The door the turn came through. Only `telegram` is routed selectively (see below); null and every other door as before. */
+  channel: string | null = null,
 ): Promise<Speaker> {
   const direct = addressedDirectly({ addressedTo, alsoAddressed, handedOff })
   if (settledInCode && !direct) {
@@ -1020,6 +1023,52 @@ export async function speaker(
   const asks = parts.map((c) => c.text)
   const perAsk = asks.length === 1 ? 3 : 1
 
+  const colleagues = await db
+    .execute(`select slug, coalesce(name, '') as name from public.staff where active`)
+    .then((r) => r.rows as { slug: string; name: string }[])
+    .catch(() => [] as { slug: string; name: string }[])
+  const namedHere = asks.map((t) => namedColleague(t, colleagues))
+
+  /*
+    SELECTIVE DELEGATION ON TELEGRAM (owner decision, 7 October 2026).
+
+    Typed to the chief's bot and not addressed to anybody else, a routine request is Claire's to answer: no subject lookup,
+    no semantic reading, no child job. The team is convened when he asks for it by name or by role, or when the work is
+    plainly more than one person's quick answer (`delegation-scope.ts`). Only Telegram: the dashboard and Slack keep the
+    roster they had, because their routing was measured and nothing here is evidence about them.
+  */
+  if (channel === 'telegram') {
+    const scope = delegationScope({
+      instruction,
+      classification: classified,
+      asks: asks.length,
+      namesAColleague:
+        namedHere.some((n) => n !== null) ||
+        namesColleagueInFrame(
+          instruction,
+          colleagues.map((c) => c.name),
+        ),
+    })
+    if (scope === 'routine') {
+      const { rows: chiefRows } = await db.execute(`
+        select slug, name, title, communication_style, responsibilities
+          from public.staff where slug = 'chief-of-staff' and active
+      `)
+      const c = chiefRows[0] as
+        | Omit<Speaker, 'reason' | 'alsoConvened' | 'convened' | 'handoff'>
+        | undefined
+      if (c !== undefined)
+        return {
+          ...c,
+          reason:
+            'routine request on Telegram: the chief of staff answers it herself, nobody is convened',
+          alsoConvened: [],
+          convened: [],
+          handoff: null,
+        }
+    }
+  }
+
   // Nothing to look up. `withoutNegated` can empty a message that was entirely
   // a withdrawal, and an empty VALUES list is a syntax error rather than an
   // empty answer.
@@ -1050,11 +1099,6 @@ export async function speaker(
     so the per-clause handoff below turns "get Emma to X and then have Daniel
     do Y" into Emma first, Daniel with her result.
   */
-  const colleagues = await db
-    .execute(`select slug, coalesce(name, '') as name from public.staff where active`)
-    .then((r) => r.rows as { slug: string; name: string }[])
-    .catch(() => [] as { slug: string; name: string }[])
-  const namedHere = asks.map((t) => namedColleague(t, colleagues))
   // A clause that only asks for the finding of the one before it belongs to whoever that one was given to (#408).
   const named = namedHere.map((n, i) => {
     if (n !== null || i === 0) return n
@@ -2709,6 +2753,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         job.jobId,
         isBranch,
         settledInCode,
+        typeof payload.origin_channel === 'string' ? payload.origin_channel : null,
       )
 
       /*

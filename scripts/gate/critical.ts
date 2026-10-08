@@ -256,8 +256,8 @@ export const CRITICAL: readonly Proof[] = [
   ),
   p(
     'tg-chief-addressing',
-    30,
-    "Telegram addressing with the production bot shape (the chief's bot the only one enabled, slug chief-of-staff): a message to the chief's bot is routed and can convene the team, one answer back through the same bot to the same chat; a message to a specialist's bot stays directly addressed with nobody else convened; approvals, retries, duplicates and another office",
+    35,
+    "Telegram addressing with the production bot shape (the chief's bot the only one enabled, slug chief-of-staff), selective delegation: a routine message to the chief's bot is hers alone (no roster, no routing model call, no child), an explicit request for the team or named colleagues convenes them, one answer back through the same bot to the same chat; a message to a specialist's bot stays directly addressed with nobody else convened; approvals, retries, duplicates and another office",
   ),
 
   // ---- reminders, state changes and delivery redrive (7 October implementation run) ----------------------------------

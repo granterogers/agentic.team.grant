@@ -351,6 +351,26 @@
       "new": "if (false) {",
       "invariant": "a reminder or personal task typed to the chief stays with the chief and costs no roster or model call",
       "expect": "tests/handlers/speaker.test.ts"
+    },
+    {
+      "id": "M28",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "if (scope === 'routine') {",
+      "new": "if (false) {",
+      "invariant": "a routine request typed to the chief on Telegram is hers: no subject lookup, no convened specialist, no roster model call (selective delegation)",
+      "expect": "tests/handlers/speaker.test.ts"
+    },
+    {
+      "id": "M28b",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/delegation-scope.ts",
+      "old": "  if (ASKS_FOR_TEAM.some((re) => re.test(input.instruction))) return 'team'",
+      "new": "  if (false) return 'team'",
+      "invariant": "an explicit request for the team on Telegram is never answered as a routine one: he asked for who, and the office never overrides it",
+      "expect": "tests/agents/delegation-scope.test.ts"
     }
   ]
 }
