@@ -1,3 +1,13 @@
+> ## 2026-10-10 - #442 AND #445 IMPLEMENTED AND PROVED ON THE REPLICA; NOT APPLIED, NOT DEPLOYED (branch `claude/confident-cori-ql21nl`)
+>
+> **Revisioned layout saves (#442)**: migration 1023 (a revision from one sequence by trigger, optional `p_expected_rev`, `hq_dashboard_layout_get`), gateway section `layout`, compare-and-swap with bounded
+> retry and automatic fallback in `layout.js`. **Custom background pictures across devices (#445)**: migration 1024 (`hq_upload_target` takes `project_background` + `p_slug`), gateway actions
+> `project_background_put`/`_delete` and section `project_background`, per-office key, header-sniffed, quotas, signed links, orphan sweep, page keeps local first then the office. ADR-0070. Proofs:
+> `scripts/isolated/layout-cas.ts` 21/21, `scripts/isolated/background-storage.ts` 49/49 (cross-tenant write and read refused, sabotage turns it red), `verify:canvas-background` 81/0/2, `tests/studio/canvas-cas.test.ts` 7.
+> **Production is unchanged.** To ship: `docs/ux/deploy-442-445.md` (three narrow approvals: apply 1023+1024 with `migrate:one`, `deploy:hq-api`, `deploy:hq-page`; rollback SQL in `docs/ux/rollback/`, rehearsed). The
+> intermittent "did not open" loads were diagnosed: 502 `text/plain` with no `x-vercel-id` on static files (the build sandbox's proxy), zero page errors, local 12/12 (`verify:load-reliability`); the real gap (a blank page when a
+> script does not arrive) now shows a notice with Reload (`verify:boot-recovery`). Preview https://team-hq-ux-review.vercel.app redeployed from `7e4de031a49f`. Issues #442 and #445 stay OPEN until the live steps are done.
+>
 > ## 2026-10-08/09 - TEAM HQ INFINITE-CANVAS OVERHAUL (#439, branch `claude/confident-cori-ql21nl`, NOT merged, NOT deployed to production; isolated preview live)
 >
 > Hamburger menu instead of Home/Jump To, an infinite pan/zoom canvas with a dotted grid, per-project arrangement saved per person, Post-it plus, a

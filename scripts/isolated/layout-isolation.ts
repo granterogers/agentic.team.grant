@@ -162,7 +162,7 @@ try {
   const def = String(
     (
       await q(
-        `select pg_get_functiondef('app.hq_dashboard_layout_set(uuid,text,jsonb,text)'::regprocedure) d`,
+        `select pg_get_functiondef('app.hq_dashboard_layout_set(uuid,text,jsonb,text,bigint)'::regprocedure) d`,
       )
     )[0]?.d,
   )

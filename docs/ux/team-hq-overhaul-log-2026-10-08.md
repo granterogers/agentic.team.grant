@@ -305,7 +305,49 @@ presses again and prints what the page said. Local: `verify:canvas-background` 7
 
 **Real-device acceptance:** `docs/ux/iphone-acceptance-2026-10-09.md` (where the dictation microphone is, and the separate voice-call microphone). Outstanding and NOT claimed: real-microphone dictation (Chrome, Safari, iPhone, Android) and real touch.
 
+## Sixth session (10 October): #442 and #445 implemented and proved on the replica, loading failures diagnosed
+
+Grant's final directive: finish unattended, implement #442 and #445, diagnose the intermittent loads, do not apply a migration or deploy a modified production gateway. **Nothing in production changed this session.**
+The preview was redeployed (`deploy:ux-review`, isolated project only) from the clean pushed commit `7e4de031a49f`; served md5 of `index.html`, `app.js`, `bc/layout.js`, `bc/backdrop.js`, `bc/backdrop-ui.js` equal the tree.
+
+**#442 (revisioned saves), implemented, replica-proved, NOT applied.** Migration 1023, ADR-0070, `docs/ux/deploy-442-445.md`. The issue's compare-and-swap was checked against the real architecture and changed in three ways: the revision
+comes from one sequence assigned by a trigger (a per-row counter has the ABA problem after a reset), saves of one arrangement are serialised by an advisory lock (a missing row cannot be locked, so two first saves would both win),
+and a new `layout` gateway section replaces reading the whole studio payload. `p_expected_rev` is optional (null is the old behaviour). Page: read, fold, save naming the revision, refused saves fold the returned copy and retry (6 per round,
+then exponential backoff to 60 s, never dropped), notes are stamped in office time, and a gateway/database without the feature is detected on first use and the previous merge-and-check loop runs. Proof: `scripts/isolated/layout-cas.ts` 21/21
+(twelve connections save one revision at once: exactly one wins; twelve devices read-merge-swap-retry: all twelve notes survive, at most 12 tries each; ABA; other person/project/surface isolated; removing the comparison gives 12 winners),
+`tests/studio/canvas-cas.test.ts` 7, `canvas-sync.test.ts` 53 unchanged and green, `layout-isolation.ts` 16/16 (its sabotage control now names the five-argument writer). One real defect found by the bounded-retry test: a permanently
+refusing office was asked 84 times in 20 s; fixed with backoff.
+
+**#445 (custom picture across devices), implemented, replica-proved, NOT applied/deployed.** Migration 1024 (`hq_upload_target` takes `project_background` and `p_slug`), gateway actions `project_background_put`/`_delete` and section
+`project_background`, `src/backgrounds/project-background.ts`. Per-office key `<office>/backgrounds/<project>.<ext>`, header-sniffed (SVG/HTML refused), 3 MB, 4096 px, 16 MP, 12 per office, one-hour signed link only after the in-office check,
+fail-safe orphan sweep. Page: local first, office second (15 s cap), cache keyed by `rev`, plain wording when browser-only. Proof: `scripts/isolated/background-storage.ts` 49/49 through the REAL gateway (the edge emulator now keeps
+`<office>/backgrounds/` objects so list/delete are observable): cross-tenant write refused with zero storage writes and the same answer as a missing project, cross-tenant read answers `null`, a Sample visitor and the machine key refused, a
+client-supplied office/owner/project id ignored, 13 bad bodies refused, path-shaped slugs write nothing, quota, replace, remove, sweep; sabotage (office predicate removed) makes the cross-tenant write and read succeed. Page side:
+`verify:canvas-background` 81 passed, 0 failed, 2 n/a, including the fetch/cache/replace/refuse/remove flow against an in-page stand-in office. Two defects found by that suite and fixed: Apply waited on the office before saving locally
+(a slow office froze the picker); and the old "another device" wording assertion was a wording lock.
+
+**Rollback artefacts, rehearsed:** `docs/ux/rollback/1023-rollback.sql`, `1024-rollback.sql` (arrangement row survived, old signature returned, forward re-applied). The full migration chain replays with 1023 and 1024 on a fresh replica.
+
+**Intermittent loading, diagnosed with evidence, not retried away.** `scripts/verify/load-reliability.ts` (cold context, sign-in, board, place a note, reload, check it returned). Local page: 12/12, board median 670 ms, zero page errors, zero failed
+requests. Deployed preview: 10/12 ok; the two others (and a 10-second stall in a third) were **502 `text/plain` responses with no `x-vercel-id` on `/signout.js` and `/net.js`, and stylesheets answered as `text/plain`**, i.e. the build sandbox's
+proxy cutting and relabelling a transfer (CLAUDE.md records the same signature), with **zero page errors and zero product failures**. So the Sample "did not open" and "canvas did not restore" reports were environmental, not a layout-restore or
+session defect (restore was 22/22 whenever the files arrived). The sign-in 503s seen earlier against production are the platform's (health API UNHEALTHY at the time; not re-run, no production contact authorised this session).
+One REAL product gap was found by the evidence: when a script fails to arrive the person got a blank page and no way to know why. `index.html` now says so after 8 s post-load or 20 s from start, names the failed files (including the
+dependency, from resource timing), and offers Reload: no retry loop, nothing hidden; `scripts/verify/boot-recovery.ts` 6/6 with a healthy-start control and a slow-start case.
+
+**Final UI review (focused).** `verify:preview-app` on the deployed copy 41 passed, 0 failed, 3 n/a: sign-in boundary, pan/zoom, drag/resize, default layouts, save/restore, Post-its, dock resize, dictation fallback, themes, four device sizes
+and no overflow. `verify:canvas-background` covers picker, upload, preview, Apply, Cancel, Remove, keyboard and phone. The live Sample was not re-driven (it contacts production sign-in; not authorised this session).
+
+**Gates run, and what was not.** `tsc` clean; `biome ci` on every touched file (the repo's `// biome-ignore-all format` convention on harnesses; the two pre-existing `useOptionalChain` warnings in `hq-api` are not mine); `vitest` for
+`tests/studio` 269, `tests/backgrounds` 9, `tests/safety` 61, `tests/deploy` + `tests/gateway` + `tests/architecture` + `tests/ownership` green; `check:templates`, `check:secrets`, `check:migrations` (799 files), `check:pressable` pass; `smoke` passes.
+**Not run, because the guard correctly refuses them without a production flag:** `check:gateway-wrappers`, `check:callers`, `check:consumed`, `check:capabilities` (they read production). The new gateway entries are covered by `check:pressable` and by the replica proofs.
+
+**Not verifiable here:** real-device dictation and touch pinch, a real second device against the live gateway (neither migration is applied), the live Sample after this commit.
+
 ## Process slips (disclosed)
+
+Session 6: every repository edit went through Edit or Write. Two scratch scripts were created with a shell heredoc under the gitignored `.out/` to inspect the replica (deleted, never committed), and one no-op `python3` heredoc printed a
+sentence and touched no file. `biome` was used to PRINT formatted output (`--stdin-file-path`) and the result transcribed with Write, as the rule asks; formatter hunks in `hq-api/index.ts` were applied by hand.
 
 Session 5: no repository edit was made with a shell redirect, heredoc or `sed`; scratch Python scripts were used for image montages and to render textures in the scratchpad only (the importer script itself was edited with Edit). One `sed -i ... /dev/null` was not repeated.
 

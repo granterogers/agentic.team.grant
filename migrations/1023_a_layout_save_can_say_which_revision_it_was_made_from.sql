@@ -48,7 +48,7 @@ begin
   return new;
 end
 $f$;
-revoke all on function app.dashboard_layouts_rev() from public, anon, authenticated;
+revoke all on function app.dashboard_layouts_rev() from public, anon, authenticated, service_role;
 
 drop trigger if exists dashboard_layouts_rev on public.dashboard_layouts;
 create trigger dashboard_layouts_rev before insert or update on public.dashboard_layouts
@@ -120,7 +120,7 @@ create function public.hq_dashboard_layout_set(
  set search_path to 'public', 'pg_catalog'
 as $f$ select app.hq_dashboard_layout_set(p_office, p_slug, p_panels, p_surface, p_expected_rev) $f$;
 
-revoke all on function app.hq_dashboard_layout_set(uuid, text, jsonb, text, bigint) from public, anon, authenticated;
+revoke all on function app.hq_dashboard_layout_set(uuid, text, jsonb, text, bigint) from public, anon, authenticated, service_role;
 revoke all on function public.hq_dashboard_layout_set(uuid, text, jsonb, text, bigint) from public, anon, authenticated;
 grant execute on function public.hq_dashboard_layout_set(uuid, text, jsonb, text, bigint) to service_role;
 
@@ -162,7 +162,7 @@ create function public.hq_dashboard_layout_get(p_office uuid, p_slug text, p_sur
  set search_path to 'public', 'pg_catalog'
 as $f$ select app.hq_dashboard_layout_get(p_office, p_slug, p_surface) $f$;
 
-revoke all on function app.hq_dashboard_layout_get(uuid, text, text) from public, anon, authenticated;
+revoke all on function app.hq_dashboard_layout_get(uuid, text, text) from public, anon, authenticated, service_role;
 revoke all on function public.hq_dashboard_layout_get(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.hq_dashboard_layout_get(uuid, text, text) to service_role;
 
