@@ -5714,8 +5714,21 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         writingFile,
         reading,
       ].some((x) => x !== null)
+      /*
+        A CONVENED TEAM IS THE WORK (#441, found with a real model).
+
+        When this turn has already handed the request to colleagues, their findings and the one synthesis ARE the answer.
+        Letting the planner also start its own pursuit of the same request put a second voice in the conversation: a plan
+        say-back instead of the hand-off note, and afterwards a message repeating the project's sources verbatim, after the
+        synthesis it was meant to precede.
+
+        Only for a request that asks for FINDINGS and nothing to be changed (`answersByFindings`, every clause). A request
+        that also asks for tasks, a draft or any other change still plans: the team does the reading and the plan holds the
+        steps that write, each parked for a yes where it must be. A request that convened nobody always plans.
+      */
+      const teamIsTheWork = branchesStarted.length > 0 && requests.every(answersByFindings)
       const pursuing =
-        actedAlready || isBranch || requests.length === 0
+        actedAlready || isBranch || teamIsTheWork || requests.length === 0
           ? null
           : await planAndPursue(deps.db, deps.router, job, goalAsHeSaidIt, askedForAnother).catch(
               async (error: unknown) => {

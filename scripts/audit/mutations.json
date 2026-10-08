@@ -473,6 +473,26 @@
       "expect": "tests/handlers/findings-do-not-widen-permission.test.ts"
     },
     {
+      "id": "M39",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "actedAlready || isBranch || teamIsTheWork || requests.length === 0",
+      "new": "actedAlready || isBranch || requests.length === 0",
+      "invariant": "a request whose team has been convened is not also pursued by the planner: no plan say-back in place of the hand-off note, no source dump after the synthesis",
+      "expect": "tests/handlers/team-is-the-work.test.ts"
+    },
+    {
+      "id": "M40",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/handlers/instruction.ts",
+      "old": "const teamIsTheWork = branchesStarted.length > 0 && requests.every(answersByFindings)",
+      "new": "const teamIsTheWork = branchesStarted.length > 0",
+      "invariant": "only a findings-only request is left to its team: a request that also asks for tasks or a draft still plans, and its outward steps still park for a yes",
+      "expect": "tests/handlers/team-is-the-work.test.ts"
+    },
+    {
       "id": "M29",
       "critical": false,
       "severity": "high",

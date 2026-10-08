@@ -95,6 +95,21 @@ const roleOf = (system: string): string => {
   if (/^You are \w+, .* on a small team\./.test(system)) return 'answer'
   return 'other'
 }
+/** When true the scripted planner returns a real two-step plan, as a real model does for "find X and Y and recommend". */
+let planOn = false
+const PLAN = JSON.stringify({
+  goal: 'a recommendation on the venue',
+  steps: [
+    { id: 's1', capability: 'notebook.read', why: 'find the notes', needs: [], audience: 'office' },
+    {
+      id: 's2',
+      capability: 'notebook.read',
+      why: 'find the budget',
+      needs: ['s1'],
+      audience: 'office',
+    },
+  ],
+})
 const LEAD_FINDING = 'From a risk view the contract has no cap on the cancellation fee.'
 const SYNTH =
   'Together they find the deposit is the main exposure. Recommendation: negotiate a cap before paying.'
@@ -120,7 +135,9 @@ const scriptedFetch = (async (_url: string, init: { body: string }): Promise<Res
           ? SYNTH
           : role === 'answer'
             ? LEAD_FINDING
-            : '{}'
+            : role === 'plan' && planOn
+              ? PLAN
+              : '{}'
   return new Response(
     JSON.stringify({
       model: body.model,
@@ -608,6 +625,55 @@ part(
       (await count(
         `select count(*)::int as n from public.branch_groups where parent_job_id = ${lit(root)}::uuid`,
       )) === 1,
+  )
+}
+
+part(
+  'O6',
+  'a convened team is the work: the planner is not ALSO allowed to start its own pursuit and dump the sources after the answer (#441, found with a real model)',
+)
+{
+  await quiet()
+  await scopeChat()
+  const from = tgCalls.length
+  planOn = true
+  const root = await send('telegram', `${ASK} (planned)`)
+  await settle(root)
+  await settle(root)
+  planOn = false
+  const out = delivered(from)
+  const dels = await deliveriesOf(root)
+  const pursues = await count(
+    `select count(*)::int as n from public.jobs where correlation_id = ${corr(root)} and kind = 'office.pursue'`,
+  )
+  check(
+    'with a team convened and the planner returning a plan, NO pursuit job is started for the same request',
+    pursues === 0,
+    `${String(pursues)} office.pursue job(s)`,
+  )
+  check(
+    'so what reaches him is the lead reply then the ONE synthesis, and nothing after it (no source dump, no second hand-off)',
+    out.length === 2 &&
+      /asked 2 colleagues/.test(out[0]?.text ?? '') &&
+      (out[1]?.text ?? '').includes('Recommendation') &&
+      dels.every((d) => d.kind !== 'office.pursue'),
+    out.map((o) => o.text.slice(0, 40)).join(' | '),
+  )
+  // The control: a lone request with NO team still plans (the fix must not switch planning off).
+  await quiet()
+  await scopeChat()
+  planOn = true
+  const lone = await send(
+    'telegram',
+    'Find the venue notes and the budget notes and list them for me. (planned alone)',
+  )
+  await settle(lone)
+  planOn = false
+  check(
+    'control: the same planner output on a request that convened nobody DOES still plan and pursue',
+    (await count(
+      `select count(*)::int as n from public.jobs where correlation_id = ${corr(lone)} and kind = 'office.pursue'`,
+    )) >= 1,
   )
 }
 

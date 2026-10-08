@@ -267,7 +267,7 @@ export const CRITICAL: readonly Proof[] = [
   ),
   p(
     'message-ordering',
-    14,
+    17,
     "a delegated request's lifecycle is an ordering invariant held by state, under real concurrency: the synthesis waits for the lead's reply, a retrying lead send is not overtaken, a stuck lead cannot hold the answer for ever and its late reply is suppressed as superseded, many workers deliver each once",
   ),
 
