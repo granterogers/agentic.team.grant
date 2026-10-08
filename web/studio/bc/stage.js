@@ -839,6 +839,10 @@ export const wireStage = (root, ctx) => {
         text.dataset.bcNoteText = id
       }
     })
+    el.querySelector('[data-bc-note-add]').addEventListener('click', (e) => {
+      e.stopPropagation()
+      makeNote({ near: el.dataset.bcNoteId })
+    })
     el.querySelector('[data-bc-note-del]').addEventListener('click', () => {
       // Taken off the page at once, and given back for a few seconds: a note is somebody's writing, and one stray press
       // on a 20px control must not be the end of it.
@@ -856,17 +860,24 @@ export const wireStage = (root, ctx) => {
   }
   for (const el of stageEl.querySelectorAll('.bcpostit')) wireNote(el)
 
-  for (const nb of dock.querySelectorAll('[data-bc-newnote]'))
-    nb.addEventListener('click', () => {
-    const n = grid.addPostit(slug)
+  /* A new note: from the plus on a note (beside it), or from the empty canvas's chip (middle of what is on screen). */
+  const makeNote = (opts) => {
+    const n = grid.addPostit(slug, opts)
     const tpl = document.createElement('template')
     tpl.innerHTML = note(n).trim()
     const el = tpl.content.firstElementChild
     el.classList.add('bcpostit--new')
     stageEl.insertBefore(el, guides)
     wireNote(el)
+    stageEl.querySelector('.bcnoteempty')?.remove()
     el.querySelector('.bcpostittext').focus()
-  })
+  }
+  for (const nb of stageEl.querySelectorAll('[data-bc-newnote]')) {
+    nb.addEventListener('click', () => {
+      const w = grid.toWorld(view, board.clientWidth / 2, board.clientHeight / 2)
+      makeNote({ at: { x: w.x - grid.POSTIT_DEFAULT.w / 2, y: w.y - grid.POSTIT_DEFAULT.h / 2 } })
+    })
+  }
 
   fit()
   /*

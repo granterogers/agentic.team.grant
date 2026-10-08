@@ -128,3 +128,36 @@ describe('the stored view', () => {
     expect(L.postits('alpha').length).toBeGreaterThan(0)
   })
 })
+
+describe('where a new note goes', () => {
+  const origin = { x: 100, y: 100, w: 210, h: 190 }
+  it('goes to the right of the note it came from when that is free', () => {
+    expect(L.spotNear(origin, [origin])).toEqual({ x: 326, y: 100 })
+  })
+  it('goes below when the right is taken, and never overlaps anything', () => {
+    const right = { x: 326, y: 100, w: 210, h: 190 }
+    const spot = L.spotNear(origin, [origin, right])
+    expect(spot).toEqual({ x: 100, y: 306 })
+    const taken = [
+      origin,
+      right,
+      { x: 100, y: 306, w: 210, h: 190 },
+      { x: -126, y: 100, w: 210, h: 190 },
+      { x: 100, y: -106, w: 210, h: 190 },
+    ]
+    const fallback = L.spotNear(origin, taken)
+    const r = { ...fallback, w: 210, h: 190 }
+    for (const t of taken) {
+      const apart = r.x >= t.x + t.w || t.x >= r.x + r.w || r.y >= t.y + t.h || t.y >= r.y + r.h
+      expect(apart).toBe(true)
+    }
+  })
+  it('adds beside a given note, panned far from the origin', () => {
+    L.setView('n', { zoom: 0.4, x: -9000, y: 4000 })
+    const a = L.addPostit('n', { at: { x: 12000, y: -800 } })
+    const b = L.addPostit('n', { near: a.id })
+    expect(a.x).toBe(12000)
+    expect(b.x).toBe(12000 + 210 + 16)
+    expect(L.postits('n').map((n: { id: string }) => n.id)).toContain(b.id)
+  })
+})

@@ -548,9 +548,6 @@ const dock = (p) => {
     `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor"
       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
   return `<div class="bcdock" role="toolbar" aria-label="Workspace">
-    <button type="button" class="bcdockbtn" data-bc-newnote title="Pull out a new note">
-      ${ic('<path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/>')}<span>Note</span>
-    </button>
     <button type="button" class="bcdockbtn" data-bc-tidy title="Lightly tidy the arrangement">
       ${ic('<path d="M4 6h7M4 12h16M13 18h7"/>')}<span>Tidy</span>
     </button>
@@ -596,6 +593,10 @@ const offChips = (p) => {
 export const note = (n) => `<div class="bcpostit" data-bc-note-id="${esc(n.id)}"
     style="left:${String(n.x)}px;top:${String(n.y)}px;width:${String(n.w)}px;height:${String(n.h)}px;z-index:${String(n.z ?? 1)}">
     <div class="bcpostitbar" data-bc-note-grip tabindex="0" role="group" aria-label="Note handle: Alt and the arrow keys move this note, Alt Shift and the arrow keys resize it" aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown">
+      <button type="button" class="bcpostitplus" data-bc-note-add="${esc(n.id)}" aria-label="Add another note next to this one" title="Add another note">
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor"
+          stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
       <button type="button" class="bcpostitx" data-bc-note-del="${esc(n.id)}" aria-label="Remove this note" title="Remove this note">
         <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor"
           stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -772,7 +773,7 @@ export const compositionC = (p) => {
           .map((n) => note(n))
           .join('')}
         <div class="bcguides" aria-hidden="true"></div>
-        <button type="button" class="bcdockbtn bcphoneonly" data-bc-newnote>+ Note</button>
+        ${grid.postits(p.slug).length === 0 ? '<button type="button" class="bcdockbtn bcnoteempty" data-bc-newnote title="Pull out a note">+ Note</button>' : ''}
       </div>
     </div>
     </div>

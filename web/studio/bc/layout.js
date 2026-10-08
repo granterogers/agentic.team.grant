@@ -914,22 +914,44 @@ export const postits = (slug) => {
   return d.postits.map((n) => clampRect(n))
 }
 
-export const addPostit = (slug) => {
+/**
+ * Where a new note goes: beside the one it was made from (right, then below, left, above) at the first spot that
+ * covers nothing, and failing that diagonally down and right of it. Pure, so it is decidable without a browser.
+ */
+export const spotNear = (origin, taken, size = POSTIT_DEFAULT, gap = 16) => {
+  const hits = (r) => taken.some((t) => crossing(r, t))
+  const tries = [
+    { x: origin.x + origin.w + gap, y: origin.y },
+    { x: origin.x, y: origin.y + origin.h + gap },
+    { x: origin.x - size.w - gap, y: origin.y },
+    { x: origin.x, y: origin.y - size.h - gap },
+  ]
+  for (const t of tries) {
+    const r = { ...t, ...size }
+    if (!hits(r)) return t
+  }
+  for (let i = 1; i < 40; i += 1) {
+    const r = { x: origin.x + 24 * i, y: origin.y + 24 * i, ...size }
+    if (!hits(r)) return { x: r.x, y: r.y }
+  }
+  return { x: origin.x + 24, y: origin.y + 24 }
+}
+
+/**
+ * Add a note. With `near` (a note's id) it is placed beside that note; with `at` ({x, y} in world pixels) it is put
+ * there, which is how the empty-canvas button drops one in the middle of what is on screen.
+ */
+export const addPostit = (slug, { near, at } = {}) => {
   const d = doc(slug)
   const z = topZ(d) + 1
   const offset = (d.postits.length % 6) * 22
-  const n = clampRect(
-    {
-      id: newId(),
-      x: stage.w - POSTIT_DEFAULT.w - 24 - offset,
-      y: 24 + offset,
-      ...POSTIT_DEFAULT,
-      z,
-      text: '',
-      at: Date.now(),
-    },
-    stage,
-  )
+  const all = postits(slug)
+  const origin = near === undefined ? undefined : all.find((n) => n.id === near)
+  let pos
+  if (origin !== undefined) pos = spotNear(origin, [...layout(slug), ...all])
+  else if (at !== undefined) pos = { x: Math.round(at.x), y: Math.round(at.y) }
+  else pos = { x: stage.w - POSTIT_DEFAULT.w - 24 - offset, y: 24 + offset }
+  const n = clampRect({ id: newId(), ...pos, ...POSTIT_DEFAULT, z, text: '', at: Date.now() })
   commit(slug, { ...d, postits: [...d.postits, n], seeded: true })
   return n
 }

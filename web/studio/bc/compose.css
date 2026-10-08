@@ -4248,3 +4248,28 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
 @media (max-width: 860px) {
   [data-experience='basecamp'] .bcpanes { overflow: visible; touch-action: auto; cursor: auto; background-image: none; }
 }
+
+/* Post-it plus (8 October 2026): the only way to make another note, on the note itself. */
+[data-experience='basecamp'] .bcpostitplus {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 18px;
+  margin-right: auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #5a4a00;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 140ms ease;
+}
+[data-experience='basecamp'] .bcpostit:hover .bcpostitplus,
+[data-experience='basecamp'] .bcpostit:focus-within .bcpostitplus { opacity: 0.85; }
+[data-experience='basecamp'] .bcpostitplus:hover { background: rgb(0 0 0 / 10%); opacity: 1; }
+[data-experience='basecamp'] .bcpostitplus:focus-visible { outline: 2px solid #5a4a00; opacity: 1; }
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcpostitplus { opacity: 0.85; width: 44px; height: 20px; }
+}
+[data-experience='basecamp'] .bcnoteempty { position: absolute; left: 12px; bottom: 12px; z-index: 3; }
