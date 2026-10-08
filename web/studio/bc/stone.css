@@ -423,7 +423,7 @@
 .bdthumb:hover { border-color: var(--ink-2, #666); }
 .bdthumb:focus-visible { outline: 2px solid var(--accent, #3b6ea5); outline-offset: 2px; }
 .bdthumb.on { border-color: var(--accent, #3b6ea5); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #3b6ea5) 35%, transparent); color: var(--ink, inherit); }
-.bdface { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 7px; background: var(--sunken, #ddd); }
+.bdface { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 7px; background: var(--sunken, #ddd); box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.4); }
 .bdface--plain { background: repeating-linear-gradient(45deg, var(--sunken, #ddd) 0 6px, transparent 6px 12px); }
 .bdname { overflow-wrap: anywhere; }
 .bdrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

@@ -205,7 +205,73 @@ create), or approve a narrowed capture with that step skipped. The fixture proof
 4. The preview exists (B). Dark captures at 390, 768 and 1920 were regenerated and the previously unviewed states (hamburger, zoomed, panned, note, chat) read cleanly; overlapping modules in
    later states are the matrix's own earlier move step, not a layout fault.
 
+## Fourth session (9 October): the preview is signed-in usable, the Canvas Background Library (#445)
+
+### Priority A: sign-in on the preview (a production configuration change Grant authorised, exactly one origin)
+- **What it was.** The allow-list is the function secret `SIGNIN_ALLOWED_ORIGIN` (read by `supabase/functions/signin/index.ts`), not code. It gates `begin`
+  (the Telegram-approved bearer hand-off), `refresh`, the Sample visitor action, and which pages a magic link may redirect to. Adding the preview origin therefore
+  lets pages served from `https://team-hq-ux-review.vercel.app` (a Vercel project of Grant's own: static files, no secret, no function) ask for sessions: that is the decision taken.
+- **Inspected first.** Probed the live list read-only (OPTIONS): `ai-team-hq.vercel.app` and the Basecamp alias allowed, nothing else, no wildcard; stranger origin and no origin both 403. Redirect
+  matching is prefix-by-allowed-origin (lines 152 and 256), so the new origin is also a valid redirect target and nothing wider. No CSRF, cookie or session restriction exists in the function (bearer in the body).
+- **Change.** `scripts/deploy/signin-origin.ts` (`npm run deploy:signin-origin`, gated like every deploy, listed in `docs/testing/production-access.json` and `docs/production-access-guard.md`) sets
+  ONLY that one secret, from `scripts/deploy/lib/signin-origins.ts` (also now used by `deploy:signin`, so a future full deploy keeps it). It does not touch the function code, `HQ_API_TOKEN`, any other
+  function, the database, the vault, RLS or the other function's allow-list. The Management API secrets endpoint upserts by name; only secret NAMES and timestamps were read (never values).
+- **Rollback artifacts.** Before: `SIGNIN_ALLOWED_ORIGIN@2026-10-05T13:42:15.396Z` (value = the two original origins, which is also `SIGNIN_PAGE_ORIGINS_BEFORE`).
+  `npm run deploy:signin-origin -- --rollback` restores exactly that. Provenance printed by the script: `ships 5b6555c46a2c (claude/confident-cori-ql21nl), tree clean where it ships, commit pushed`.
+- **Applied and verified by behaviour** (7/7): all three origins allowed; stranger 403; no origin 403; no wildcard; a bogus refresh token from the new origin is an ordinary no (`ok:false`), never a session.
+  `voice-token` was NOT changed: its allow-list is a different secret and the live voice call is not part of what a Sample visitor can use; request it separately if the voice call is wanted on the preview.
+- **Result, on the real deployed preview against the REAL gateway (`npm run verify:preview-sample`, 38/38 on its last run):** pressing Explore signs the visitor in from the preview origin; the Sample's projects are read
+  through the real gateway; the hamburger lists them; a project board opens; the wheel zooms the live canvas; How this project looks and Document Style (real data) open and fit; the background picker previews and keeps a choice
+  across a reload; no real-office text appears; and **no POST reached the gateway** (every POST to `hq-api` was aborted in the browser and counted: zero). Desktop light, desktop dark, phone. One earlier run of this suite
+  timed out waiting for the Sample bar (cause not established, no Vercel error recorded); the next run passed. A product defect was found by this run and fixed: a Sample visitor's Reset view asked the gateway to reset a layout
+  (a write the visitor is refused); the page now never sends layout writes for a Sample visitor (`app.js`, persistence save and reset).
+
+### Priority C: the narrowed public Sample capture
+Not run as `sample:public-ui --page=https://ai-team-hq.vercel.app --no-write-attempt` in this session. The same safe sign-in flow was exercised instead, on the preview (above), by a suite that makes any gateway write impossible
+rather than hoped against. The production page `ai-team-hq.vercel.app` is still the pre-overhaul studio (the branch is not merged), so a capture of it would not show the redesign; `--no-write-attempt` remains available
+and unrun. Comparison of the live Sample with the isolated fixture (`verify:sample-look`): same composition (Sample strip, compact description, look sheet within the window, no overflow at 1440, 768, 390); the live data adds
+real documents, tasks, contacts and activity, all of which drew without clipping; no frontend defect was found in the comparison beyond the one fixed above.
+
+### Priority B: the Canvas Background Library (#445; ADR-0069; `docs/ux/canvas-backgrounds.md`)
+- **Built.** A Canvas Background field at the top of How this project looks: 15 thumbnails (the default microcement, the 8 supplied textures, Plain and 5 colours), plus one for the person's own picture once there is one, lazy-loaded thumbnails (nothing full-size is fetched when the picker opens),
+  Upload background, Tile / Cover / Fit / Centre, Scale, Opacity and Shade, Apply and Cancel, Restore the default, Remove my picture. Choosing a thumbnail previews it on the real board straight away (the sheet steps to the corner and stops
+  dimming); closing the sheet, Cancel, or choosing another sheet restores what the project had. Per project; stored as a small reference in the existing workspace document (never bytes); the newer choice wins between devices and
+  notes are untouched; a project that never chose keeps the microcement exactly. Keyboard (Enter on a thumbnail, focus kept), roles and names, a one-row scroller and a sticky Apply on a phone, no hover-only controls, no animation.
+- **Anchoring (decided):** tiling materials world-anchored (same variables as the grid; mirrored 2x2 tiles so there is no seam), photographs viewport-anchored; the chrome and the colour scheme are separate.
+- **Supplied textures: imported.** Eight images from Grant's `textures.zip` (1672x941 PNG), processed by `npm run textures:import` into 2048x1152 mirrored WebP tiles (92 to 650 KB) and 192px thumbnails; the originals are not committed, their SHA-1 is.
+  Ids: slate, walnut, brushed-aluminium, warm-microcement, linen, leather, paper, speckled-stone. They were named for what they are (the brief's "oak" and "travertine" are a walnut and a speckled light stone). Licence line: generated by Grant with ChatGPT
+  image generation and supplied for use here (nothing else is claimed). Re-running the import skips them (verified).
+- **Custom upload: local only, by decision.** No per-person image store exists on the gateway (the private `files` bucket has one contact-photograph action), and adding one is an `hq-api` action plus a migration, which was not authorised.
+  A picture is header-checked before decoding (type by bytes; SVG refused; 15 MB, 40 megapixels, 12,000px), decoded at reduced size, re-encoded to WebP at most 2560px and 3 MB, and kept in IndexedDB (`bc.backdrops`) only; sign-out deletes it.
+  It does not appear on another device (that device says so and draws the default). The dependency is written up on #445.
+- **Verification (local Chromium, no network): `npm run verify:canvas-background`, 65 passed, 0 failed, 2 not applicable (of 67),** plus `tests/studio/canvas-background.test.ts` (26) and the existing 227 studio tests (253 in all, including the 53 synchronisation tests).
+  Covered: all eight textures preview with their image decoded on the real board; Cancel and close restore exactly; Apply stores a 100-byte reference with no image data and leaves notes, positions and view untouched; reload; three projects with different
+  backgrounds; zoom and pan keep the texture on the grid's origin at tile x zoom with no stretch and no reload; the tile edges mirror (mean difference 2.99/255); scale and opacity change what is drawn; the dots keep contrast on every material;
+  upload previews, applies, shrinks to 2560x1440 (14 KB), survives a reload; refused: not an image, SVG, 60,000px bomb, empty, 16 MB, truncated JPEG, lying header; a storage failure is reported and changes nothing; remove; the missing-picture fallback and its sentence;
+  sign-out removes every choice and the database; a different browser starts with the default; keyboard; phone. A sabotage (reversing the merge) turned 4 unit checks red.
+  Not applicable: server-side storage authorisation and cross-tenant refusal (no server storage is used), and a custom picture on a second device.
+- **Not verified:** the picker and materials on a real iPhone or Android; AVIF decoding (no AVIF fixture could be made here); a high-DPI screen's appearance of the half-size tiling; a hand-judged "does it feel premium" beyond the captures
+  (`docs/ux/backgrounds-evidence-2026-10-09/`, 19 JPEGs, which include the live Sample).
+
+### Test accounting, this session (real gateway and stand-in reported separately)
+| suite | target | result |
+|---|---|---|
+| `verify:preview-sample` | REAL gateway, deployed preview, Sample visitor | 38/38 (one earlier run did not complete, see above) |
+| `verify:preview-app` | deployed preview, STAND-IN gateway | 41 passed, 0 failed, 3 n/a, 0 environmental |
+| `verify:canvas-background` | local page | 65 passed, 0 failed, 2 n/a |
+| `canvas-background.test.ts` | unit | 26/26; all `tests/studio` 253/253 |
+| `verify:canvas`, `canvas-extremes`, `canvas-session`, `canvas-devices`, `chat-dock`, `dictation-fallback`, `sample-look` | local | all green (ALL GREEN, 21/21, 20/20, 7/7, ALL GREEN, 13/13, 20/20) |
+| `tests/safety` | unit | 61/61 |
+| `deploy:signin-origin` probes | REAL production function | 7/7 |
+
+### Still open
+Strict compare-and-swap (#442); a per-person image store for custom backgrounds on every device (#445, backend); `voice-token` origin if the live call is wanted on the preview; real-microphone dictation and real touch on real devices;
+AVIF fixture; the preview serves the branch, production is unchanged.
+
 ## Process slips (disclosed)
+
+Session 4: three Python heredoc edits to repository files (one to add a biome-ignore line to the harness, one to apply a deliberate sabotage to `layout.js` for a control and restore it from a copy, one scratch montage script), and two `sed -i ... /dev/null` reflex
+commands that changed nothing. Every other repository edit went through Edit or Write; the repository file the sabotage touched was restored byte-for-byte from `cp` and the suite re-run.
 
 Session 1: python heredocs, `cat >>` and one `sed -i` for file edits. Session 2: one Python heredoc used to edit `web/studio/app.js` (read back, then covered by
 tests), two scratch heredocs for throwaway probes (deleted), `cat >> stone.css` and `cat >> canvas-view.test.ts` appends, and two reflexive `sed -i ... /dev/null`

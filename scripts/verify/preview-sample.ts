@@ -168,6 +168,37 @@ const run = async (
   )) as string | null
   check(`${tag}: and it is still there after a reload`, kept === 'slate', String(kept))
   await page.screenshot({ path: `${OUT}/${tag}-7-background-applied.png` })
+  /* Document Style with the real office's answer (a read): the heading names the project and the form is drawn and fits. */
+  await page.locator('[data-bc-pagemenu]').click({ force: true })
+  await page.locator('[data-bc-style]').first().click({ force: true })
+  await page.waitForSelector('.bcstyh', { timeout: 20000 }).catch(() => null)
+  await page.waitForTimeout(600)
+  const sty = (await page.evaluate(() => {
+    const h = document.querySelector('.bcstyh')
+    let s = h
+    while (s?.parentElement && s.getBoundingClientRect().height < 150) s = s.parentElement
+    const r = s?.getBoundingClientRect()
+    return r
+      ? {
+          w: r.width,
+          h: r.height,
+          vw: window.innerWidth,
+          vh: window.innerHeight,
+          title: h?.textContent,
+        }
+      : null
+  })) as { w: number; h: number; vw: number; vh: number; title: string } | null
+  await page.screenshot({ path: `${OUT}/${tag}-8-document-style.png` })
+  check(
+    `${tag}: Document Style opens on real data, is drawn and fits`,
+    sty !== null &&
+      /Document style for/.test(sty.title) &&
+      sty.w > 100 &&
+      sty.w <= sty.vw &&
+      sty.h <= sty.vh,
+    JSON.stringify(sty),
+  )
+  await page.keyboard.press('Escape')
   check(
     `${tag}: no write reached the gateway (any POST was aborted and counted)`,
     posts.length === 0,

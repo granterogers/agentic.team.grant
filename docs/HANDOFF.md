@@ -1,4 +1,4 @@
-> ## 2026-10-08 - TEAM HQ INFINITE-CANVAS OVERHAUL (#439, branch `claude/confident-cori-ql21nl`, NOT merged, NOT deployed, no preview)
+> ## 2026-10-08/09 - TEAM HQ INFINITE-CANVAS OVERHAUL (#439, branch `claude/confident-cori-ql21nl`, NOT merged, NOT deployed to production; isolated preview live)
 >
 > Hamburger menu instead of Home/Jump To, an infinite pan/zoom canvas with a dotted grid, per-project arrangement saved per person, Post-it plus, a
 > compact resizable chat dock, live dictation, light stone theme (dark by choice), simplified Document Style and Project Settings, a content-led default
@@ -8,13 +8,14 @@
 > New suites: `verify:canvas`, `verify:canvas-extremes`, `verify:chat-dock`, `verify:sample-look`, `verify:canvas-devices` (two real browsers),
 > `verify:canvas-session`, `verify:dictation-fallback`, `tests/studio/canvas-sync.test.ts` (53 adversarial two/three-device cases), `scripts/isolated/layout-isolation.ts`.
 > Third session: notes from two devices now merge without loss; the race that remains is #442 (strict compare-and-swap, a backend change, OPEN, not part of this branch). **An isolated preview
-> exists: https://team-hq-ux-review.vercel.app** (Vercel project `team-hq-ux-review` only; deployment `dpl_G6UeHTbBxVFd75bBFzSaXJCHfem3`, built from `32d09d7` plus the generated public `config.js`).
-> **Production is unchanged**: nothing merged, no production deploy, no migration, no edge-function, allow-list or policy change. The preview is NOT yet usable by a person: it reaches the real gateway for
-> reads, but the production `signin` function allows only the production page origin, so nobody can sign in or open the Sample from it (blocker and the one-line narrow authorisation needed: the log, section B).
-> The deployed application is verified by `npm run verify:preview-app` (41 passed, 0 failed, 3 not applicable, 0 environmental) against a stand-in gateway, with 12 evidence images in
-> `docs/ux/preview-evidence-2026-10-08/`; `verify:preview-live` (signed-out page only) is NOT workspace evidence, and the earlier "24/24" was a weaker rewritten set than the first run's 12/24 (reconciled in the log).
-> The public Sample capture is still not done: `sample:public-ui --no-write-attempt` exists, but its only write (a guest session) still sits behind the writes guard and needs Grant's clear yes.
-> The verbatim original specification is now stored: `docs/spec/team-hq-ux-overhaul-2026-10-08-verbatim.md` (byte-checked against the session transcript).
+> exists: https://team-hq-ux-review.vercel.app** (Vercel project `team-hq-ux-review` only, built from the branch plus the generated public `config.js`; the deployed commit is printed by `deploy:ux-review` and recorded in the log).
+> **Production code, database, RLS and policy are unchanged.** One production CONFIGURATION change was made on Grant's explicit instruction (9 October): the origin `https://team-hq-ux-review.vercel.app` was added to the `signin`
+> function's allow-list (`npm run deploy:signin-origin`, one secret, rollback: `-- --rollback`, details and 7/7 probes in the log's fourth session). `voice-token` was not changed. **A person can now open the Sample from the preview**
+> ("Explore the Sample Office") and use the redesigned workspace; the real-gateway suite is `npm run verify:preview-sample` (38/38 on its last run, every gateway write aborted and counted: zero), the stand-in suite is
+> `npm run verify:preview-app` (41 passed, 0 failed, 3 n/a). `verify:preview-live` (signed-out page only) is not workspace evidence (the earlier "24/24" was a weaker rewritten set; reconciled in the log).
+> **Canvas Background Library (#445, ADR-0069, `docs/ux/canvas-backgrounds.md`):** pick a material per project inside How this project looks (8 supplied textures imported, plain colours, upload your own picture), preview before Apply,
+> stored as a small reference in the workspace document. A custom picture is kept in the browser only (no per-person image store exists on the gateway; backend dependency recorded on #445). `npm run verify:canvas-background` (65 passed, 0 failed, 2 n/a).
+> Not merged to main, not deployed to production. Still open: #442; real-device dictation and touch; custom pictures on other devices (backend). The verbatim original specification is `docs/spec/team-hq-ux-overhaul-2026-10-08-verbatim.md`.
 >
 > ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
 >
