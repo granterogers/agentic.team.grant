@@ -55,8 +55,14 @@ const session = async (w: number, h: number, scheme: 'light' | 'dark') => {
     if (await page.waitForSelector('[data-bc-sample-start]', { timeout: 20000 }).then(() => true).catch(() => false)) break
     if (attempt === 2) throw new Error('the entry did not appear')
   }
-  await page.locator('[data-bc-sample-start]').first().click()
-  await page.waitForSelector('.bcsamplebar', { timeout: 60000 })
+  /* The sign-in function sometimes answers slowly or says it is busy: say what the page said, press again (a person would). */
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.locator('[data-bc-sample-start]').first().click()
+    if (await page.waitForSelector('.bcsamplebar', { timeout: 30000 }).then(() => true).catch(() => false)) break
+    const said = ((await page.evaluate(() => document.body.innerText)) as string).replace(/\s+/g, ' ').slice(-220)
+    console.log(`  note: the Sample did not open after press ${String(attempt + 1)}; the page said: ${said}`)
+    if (attempt === 2) throw new Error('the Sample did not open after three presses')
+  }
   await page.waitForFunction("(document.body.innerText || '').length > 50", undefined, { timeout: 30000 })
   await page.click('[data-bc-menu]')
   await page.locator('.bcmenulist .bcmenuitem', { hasText: 'Riverside' }).first().click()
