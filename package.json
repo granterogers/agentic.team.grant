@@ -304,6 +304,7 @@
     "verify:phone-header": "tsx scripts/verify/phone-header-local.ts",
     "verify:canvas": "tsx scripts/verify/canvas-local.ts",
     "verify:chat-dock": "tsx scripts/verify/chat-local.ts",
+    "verify:sample-look": "tsx scripts/verify/sample-look.ts",
     "verify:file-text-corpus": "tsx scripts/verify/file-text-corpus.ts",
     "verify:file-text-docx": "tsx scripts/verify/file-text-docx.ts",
     "verify:slack-card": "tsx scripts/p5/slack-link-card.ts",

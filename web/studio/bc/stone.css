@@ -283,10 +283,19 @@
 }
 [data-experience='basecamp'][data-scheme='dark'] .bcminiboard,
 [data-experience='basecamp'][data-scheme='dark'] .bcboard {
-  --stage-todo: #95a1ad;
+  --stage-todo: #adb8c2;
   --stage-doing: #6ab3fd;
   --stage-blocked: #ef8f6b;
   --stage-done: #63c295;
+}
+@media (prefers-color-scheme: dark) {
+  [data-experience='basecamp']:not([data-scheme='light']):not([data-scheme='dark']) .bcminiboard,
+  [data-experience='basecamp']:not([data-scheme='light']):not([data-scheme='dark']) .bcboard {
+    --stage-todo: #adb8c2;
+    --stage-doing: #6ab3fd;
+    --stage-blocked: #ef8f6b;
+    --stage-done: #63c295;
+  }
 }
 [data-experience='basecamp'] .bcmain h1:not(.bcvh) { font: 750 26px/1.2 var(--bc-font); margin: 6px 0 8px; }
 @media (max-width: 860px) {

@@ -9,7 +9,11 @@
 import '../../src/safety/arm.ts'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
+import { seedAppearance } from './seed-appearance.ts'
 import { serveStudio } from './serve-studio.ts'
+
+/** SCHEME=dark writes the dark leg to .out/ux/qa-dark/. */
+const SCHEME = process.env.SCHEME === 'dark' ? 'dark' : 'light'
 
 declare const document: any
 declare const window: any
@@ -30,7 +34,7 @@ const FAKE = `
 const errors: string[] = []
 for (const sz of sizes) {
   const [w = 1440, h = 900] = sz.split('x').map(Number)
-  const dir = `.out/ux/qa/${sz}`
+  const dir = `.out/ux/qa${SCHEME === 'dark' ? '-dark' : ''}/${sz}`
   await mkdir(dir, { recursive: true })
   const touch = w < 600
   const ctx = await browser.newContext({
@@ -39,6 +43,7 @@ for (const sz of sizes) {
     isMobile: touch,
   })
   await ctx.addInitScript(FAKE)
+  await ctx.addInitScript(seedAppearance(SCHEME))
   const page = await ctx.newPage()
   page.on('pageerror', (e) => errors.push(`${sz}: ${e.message}`))
   const shot = async (n: string, name: string): Promise<void> => {
