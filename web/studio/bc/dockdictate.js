@@ -53,6 +53,8 @@ export const wire = (dock) => {
     return
   }
   paint()
+  /* A disabled button's title is invisible on a phone, so say why it is off where it can be read. */
+  if (!dictate.supported()) speak(dictate.why(), true)
   cur.btn.addEventListener('click', () => {
     if (dictate.active()) {
       dictate.stop()

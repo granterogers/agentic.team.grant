@@ -136,7 +136,9 @@
 .bcstywide { margin: 8px 0; }
 .bcstyfrom { font-size: 12px; color: var(--bc-accent); margin-left: 4px; }
 .bcstyerr { color: var(--bc-danger); font-size: 13px; margin: 6px 0; }
-.bcstyacts { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+.bcstyacts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+/* A button label never breaks inside a word ("Clos / e" on a phone): the row wraps instead. */
+.bcstyacts .bccal2btn { white-space: nowrap; }
 .bcstyscope { display: inline-flex; margin-bottom: 4px; }
 
 [data-experience='basecamp'] .bcwebsrc { margin-top: 26px; }

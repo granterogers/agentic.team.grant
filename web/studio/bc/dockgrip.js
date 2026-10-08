@@ -21,7 +21,13 @@ const MAX_FRACTION = 0.7
 const MAX_ABS = 760
 
 export const clamp = (w, viewport = globalThis.innerWidth ?? 1440) =>
-  Math.round(Math.max(MIN, Math.min(MAX_ABS, viewport * MAX_FRACTION, Number.isFinite(w) ? w : DEFAULT)))
+  /* On a tablet the page beside the chat must stay usable: at 70% of 768px it was 230px wide and its header collapsed. */
+  Math.round(
+    Math.max(
+      MIN,
+      Math.min(MAX_ABS, viewport * (viewport < 1100 ? 0.55 : MAX_FRACTION), Number.isFinite(w) ? w : DEFAULT),
+    ),
+  )
 
 const stored = () => {
   try {

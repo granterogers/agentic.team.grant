@@ -303,3 +303,36 @@ describe('a recogniser that never starts (its service is unreachable)', () => {
     expect(timers.length).toBe(0)
   })
 })
+
+describe('an engine that refuses to start', () => {
+  class ThrowRec extends FakeRec {
+    override start() {
+      throw new Error('InvalidStateError')
+    }
+  }
+  it('never claims the microphone is open, and says it could not start', () => {
+    const d = D.createDictation({ Recognition: ThrowRec })
+    expect(d.start(box())).toBe(false)
+    expect(d.state()).toBe('error')
+    expect(d.reason()).toMatch(/could not start/i)
+    expect(d.active()).toBe(false)
+  })
+
+  it('reports a browser without the API as unsupported and refuses to start', () => {
+    const d = D.createDictation({ Recognition: null })
+    expect(d.supported()).toBe(false)
+    expect(d.start(box())).toBe(false)
+    expect(d.state()).toBe('idle')
+    expect(d.active()).toBe(false)
+  })
+
+  it('a dictation service that is switched off stops with the sentence for it', () => {
+    FakeRec.all = []
+    const d = D.createDictation({ Recognition: FakeRec })
+    d.start(box())
+    ;(FakeRec.all.at(-1) as FakeRec).fail('service-not-allowed')
+    expect(d.state()).toBe('error')
+    expect(d.reason()).toMatch(/switched off/i)
+    expect(d.active()).toBe(false)
+  })
+})
