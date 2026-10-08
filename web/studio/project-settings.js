@@ -43,20 +43,15 @@
 import { CREW } from './data.js'
 import { act, attempt, canWrite, read, say, sure } from './office.js'
 
-/** The four panes, in the order you need them. */
+/*
+  The panes. 8 October 2026, Grant: remove the Team tab (the main Team section stays) and the Project tab; keep
+  Automations and Labels. Nothing the Project tab did is lost: its rename, export and archive controls moved to a
+  fold at the foot of this page (projectFold, below), and How it looks was already in the project menu, which is why
+  that block is no longer drawn twice.
+*/
 export const PANES = [
-  { id: 'people', name: 'Team' },
   { id: 'automations', name: 'Automations' },
   { id: 'labels', name: 'Labels' },
-  /*
-    "Project", not "This project".
-
-    Four tabs at 390px: `.subnav` scrolls rather than overflowing the page, so
-    nothing breaks — and the fourth was cut off with no affordance, which is
-    #108's shape and a control a person cannot see is a control they do not
-    have. Two words shorter and all four fit.
-  */
-  { id: 'project', name: 'Project' },
 ]
 
 /*
@@ -224,80 +219,6 @@ export function forget(p) {
 const portrait = (m) =>
   CREW.find((c) => c.slug === m.slug || c.staffSlug === m.slug || c.name === m.name)
 
-/*
-  A roster, not eight cards.
-
-  The first draft was a column of identical rounded rectangles, which §14 names
-  outright — "endless rectangular cards", "repetitive grids" — and it read as a
-  list of agents rather than as a team, which is the exact distinction #36 draws
-  in its own problem statement.
-
-  So: a hairline-ruled roster with faces, the way a call sheet is set out. The
-  people are the visual rhythm; the rules are a whisper. Someone taken off keeps
-  their row and loses their ink, so putting them back is not a hunt.
-*/
-function peoplePane(p, state) {
-  const team = state.team ?? []
-  return `
-    <p class="t-lead setlead">Who works on ${esc(p.name)}, and what they are told here.
-      Everyone is on a project until you say otherwise — this records the
-      exceptions, not the roster.</p>
-    <div class="setroster">
-      ${team
-        .map((m) => {
-          const c = portrait(m)
-          return `
-        <div class="setrow ${m.on ? '' : 'away'}" data-saidwrap>
-          <span class="setface face ${esc(c?.hue ?? '')}"
-            style="--hue:oklch(0.62 0.14 ${String(c?.tone ?? 150)})"
-            aria-hidden="true">${esc((m.name ?? '?')[0])}${
-              c?.face ? `<img src="${esc(c.face)}" alt="" loading="lazy">` : ''
-            }</span>
-          <span class="setwho">
-            <b>${esc(m.name)}</b>
-            <span class="t-meta">${esc(m.title)}</span>
-          </span>
-          <span class="setswitch">
-            ${
-              m.fixed
-                ? `<span class="t-meta setfixed" title="${esc(m.why_fixed ?? '')}">Always on</span>`
-                : canWrite()
-                  ? `<button class="btn small ${m.on ? 'quiet' : ''}"
-                       data-set-staff="${esc(m.slug)}" data-on="${m.on ? 'off' : 'on'}"
-                       data-name="${esc(m.name)}">${m.on ? 'Take off' : 'Put on'}</button>`
-                  : `<span class="t-meta">${m.on ? 'On' : 'Off'}</span>`
-            }
-          </span>
-          <!--
-            The local brief sits UNDER the person, spanning the row, because it
-            is a paragraph and a paragraph beside a portrait is a column four
-            words wide. On the same row as the switch because they are one
-            decision about one person; a separate Agent configuration screen
-            would mean finding two places to say one thing.
-
-            No backticks in this comment. Template literal.
-          -->
-          <span class="setnote">
-            ${
-              m.on
-                ? canWrite()
-                  ? `<textarea data-brief-for="${esc(m.slug)}" rows="2"
-                       placeholder="Anything ${esc(String(m.name ?? '').split(' ')[0])} should know on this project — left blank, they work as usual"
-                       aria-label="What ${esc(m.name)} is told on this project">${esc(m.instruction ?? '')}</textarea>
-                     <button class="btn small quiet" data-save-brief="${esc(m.slug)}">Save</button>`
-                  : (m.instruction ?? '') !== ''
-                    ? `<span class="setbriefread">${esc(m.instruction)}</span>`
-                    : ''
-                : `<span class="t-meta">Not convened for work here. Everything they have
-                     already done stays.</span>`
-            }
-            <span class="t-meta" data-said></span>
-          </span>
-        </div>`
-        })
-        .join('')}
-    </div>`
-}
 
 // ---------------------------------------------------------------------------
 // What runs by itself
@@ -603,31 +524,6 @@ function projectPane(p) {
         <span class="t-meta" data-said></span>
       </div>
 
-      <!--
-        HOW IT LOOKS, WHERE SOMEBODY WOULD LOOK FOR IT.
-
-        The picker has always existed and has only ever had ONE door: an item
-        in the three-dot menu. This is the screen called Project Settings, and
-        it said nothing about the colour, the mark or the picture - so a person
-        who came here to change how their project looks found Export, Archive
-        and a signpost to somewhere else. A control nobody can find is a
-        control they do not have, which is the argument this experience already
-        made about the three-dot button itself.
-
-        The same picker, not a second one. One implementation, two doors, which
-        is what the contact labels above already do and for the same reason.
-      -->
-      <div class="setblock">
-        <span class="t-label">How it looks</span>
-        <p class="t-meta">The colour, the mark and the picture on
-          ${esc(p.name)} — everywhere it appears. It belongs to this project
-          alone; every other project keeps its own.</p>
-        ${
-          canWrite()
-            ? `<button class="btn" data-open-look="${esc(p.slug)}">How ${esc(p.name)} looks</button>`
-            : `<span class="t-meta">Read-only — no token in this browser.</span>`
-        }
-      </div>
 
       <div class="setblock">
         <span class="t-label">Elsewhere</span>
@@ -645,17 +541,13 @@ function projectPane(p) {
 
 export function section(p, pane, people) {
   const state = held.get(p.slug) ?? { team: [], automations: [], loading: true }
-  const which = PANES.some((x) => x.id === pane) ? pane : 'people'
+  const which = PANES.some((x) => x.id === pane) ? pane : 'automations'
 
   const body = state.loading
     ? `<p class="t-meta setnone">Reading the office…</p>`
-    : which === 'automations'
-      ? automationsPane(p, state)
-      : which === 'labels'
-        ? labelsPane(p, people)
-        : which === 'project'
-          ? projectPane(p)
-          : peoplePane(p, state)
+    : which === 'labels'
+      ? labelsPane(p, people)
+      : automationsPane(p, state)
 
   return `<div class="tabbody">
     <div class="subnav" role="tablist" aria-label="Settings for this project">
@@ -665,7 +557,16 @@ export function section(p, pane, people) {
       ).join('')}
     </div>
     ${body}
+    ${projectFold(p)}
   </div>`
+}
+
+/** Rename, export and archive: what the Project tab held, kept reachable without a tab of its own. */
+function projectFold(p) {
+  return `<details class="setfold">
+    <summary>Name, export and archive</summary>
+    ${projectPane(p)}
+  </details>`
 }
 
 // ---------------------------------------------------------------------------

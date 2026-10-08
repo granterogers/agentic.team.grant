@@ -345,7 +345,7 @@ const state = {
   // Which of AI Team's four you are looking at.
   sub: 'board',
   // Which pane of the project's own Settings is open (#36).
-  setpane: 'people',
+  setpane: 'automations',
   // Which card on the project map is open in its side panel (#25).
   mapPick: null,
   /*
