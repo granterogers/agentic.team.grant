@@ -58,6 +58,32 @@ export interface SyncOutcome {
   readonly changed: number
   readonly unchanged: number
   readonly skipped: readonly string[]
+  /** Pages the run ran out of time before reading. Nothing is lost: the next run starts with them. */
+  readonly deferred: number
+}
+
+/**
+ * How long a run may keep reading. The edge worker is killed at a wall-clock limit and only declines to START a job
+ * past its own deadline, so a job that outlives the limit dies mid-run, its lease lapses, and recovery retries the same
+ * crawl until the attempts are spent ("recovery: 5 attempts exhausted while in running"). A run that stops itself,
+ * says what it left, and is continued by the next one cannot be killed that way.
+ */
+export interface RunBudget {
+  readonly expired: () => boolean
+}
+
+/** Thrown from inside a page read when the budget runs out, so a single enormous page cannot hold the run past it. */
+export class RunBudgetExceeded extends Error {
+  constructor() {
+    super('the run budget was spent')
+    this.name = 'RunBudgetExceeded'
+  }
+}
+
+export interface SyncOptions {
+  /** The workspace listing, read once per run by a caller that syncs several projects. Read here when absent. */
+  readonly shared?: readonly NotionObject[]
+  readonly budget?: RunBudget
 }
 
 export const fingerprintContent = async (content: string): Promise<string> => {
@@ -113,6 +139,7 @@ export async function fetchBlocks(
   notion: NotionClient,
   blockId: string,
   depth = 0,
+  budget?: RunBudget,
 ): Promise<readonly RenderedBlock[]> {
   if (depth > MAX_BLOCK_DEPTH) return []
   const out: RenderedBlock[] = []
@@ -124,14 +151,20 @@ export async function fetchBlocks(
       typeof block.id === 'string' &&
       !IS_ITS_OWN_DOCUMENT.has(String(block.type))
     ) {
-      out.push(...(await fetchBlocks(notion, block.id, depth + 1)))
+      // Checked BEFORE the next request, never after a reply: a page whose reads all finished is kept, not thrown away.
+      if (budget?.expired() === true) throw new RunBudgetExceeded()
+      out.push(...(await fetchBlocks(notion, block.id, depth + 1, budget)))
     }
   }
   return out
 }
 
 /** The text of one page. A database contributes its title and its rows' titles. */
-export async function pageText(notion: NotionClient, object: NotionObject): Promise<string> {
+export async function pageText(
+  notion: NotionClient,
+  object: NotionObject,
+  budget?: RunBudget,
+): Promise<string> {
   if (object.object === 'database') {
     const rows: string[] = []
     // `/data_sources/:id/query`, not `/databases/:id/query`. The id search
@@ -143,7 +176,42 @@ export async function pageText(notion: NotionClient, object: NotionObject): Prom
     }
     return rows.length === 0 ? '' : `# ${object.title}\n\n${rows.join('\n')}`
   }
-  return renderBlocks(await fetchBlocks(notion, object.id))
+  return renderBlocks(await fetchBlocks(notion, object.id, 0, budget))
+}
+
+/**
+ * The pages this office already holds whose stored edit time still equals the one Notion reports now, by Notion id.
+ *
+ * A page is not read again while Notion says it has not been edited since it was read: the previous run's fingerprint
+ * already proves the text. Pages only. A database is never skipped, because adding a row does not move the database's
+ * own edit time and its document is a list of its rows. A page with no stored edit time (one the office wrote itself) is
+ * never in the set, so it is read and fingerprinted exactly as before.
+ */
+export async function unchangedSinceRead(
+  db: SqlExecutor,
+  projectId: string,
+  shared: readonly NotionObject[],
+): Promise<ReadonlySet<string>> {
+  const held = await db.execute(`
+    select external_ref, (extract(epoch from remote_updated_at) * 1000)::bigint as ms
+      from public.documents
+     where office_id = ${officeOfProject(projectId)}
+       and connector = ${lit(CONNECTOR)}
+       and external_parent_ref = 'page'
+       and external_ref is not null
+       and remote_updated_at is not null
+       and content is not null
+  `)
+  const at = new Map<string, number>()
+  for (const r of held.rows) at.set(String(r.external_ref), Number(r.ms))
+  const same = new Set<string>()
+  for (const o of shared) {
+    if (o.object !== 'page' || o.lastEdited === null) continue
+    const stored = at.get(o.id)
+    const now = Date.parse(o.lastEdited)
+    if (stored !== undefined && Number.isFinite(now) && stored === now) same.add(o.id)
+  }
+  return same
 }
 
 /** Upsert one Notion object as a document, reporting whether it changed. */
@@ -303,22 +371,50 @@ export async function syncNotion(
   office: RetrievalOffice,
   notion: NotionClient,
   projectId: string,
+  options: SyncOptions = {},
 ): Promise<SyncOutcome> {
-  const shared = await listShared(notion)
+  const shared = options.shared ?? (await listShared(notion))
+  const budget = options.budget
   const containers = await containerRefs(db, office, projectId)
+  const fresh = await unchangedSinceRead(db, projectId, shared)
   let added = 0
   let changed = 0
   let unchanged = 0
+  let deferred = 0
   const skipped: string[] = []
 
-  for (const object of shared) {
+  /*
+    Pages never read come first, then the rest, so a run that is cut short has spent its time on the work nobody has
+    seen. The order within each group is Notion's own, which is stable, so a continuation resumes rather than restarts.
+  */
+  const held = new Set<string>()
+  const heldRows = await db.execute(`
+    select external_ref from public.documents
+     where office_id = ${officeOfProject(projectId)} and connector = ${lit(CONNECTOR)} and external_ref is not null
+  `)
+  for (const r of heldRows.rows) held.add(String(r.external_ref))
+  const ordered = [
+    ...shared.filter((o) => !held.has(o.id)),
+    ...shared.filter((o) => held.has(o.id)),
+  ]
+
+  for (const object of ordered) {
     // #19. The attachment itself, not a document in it.
     if (containers.has(object.id)) {
       skipped.push(`${object.title === '' ? object.id : object.title}: container`)
       continue
     }
+    // Not edited since it was read: the stored fingerprint already proves the text, so no request is spent on it.
+    if (fresh.has(object.id)) {
+      unchanged += 1
+      continue
+    }
+    if (budget?.expired() === true) {
+      deferred += 1
+      continue
+    }
     try {
-      const content = await pageText(notion, object)
+      const content = await pageText(notion, object, budget)
       if (content.trim() === '') {
         // An empty page is not a document. Storing one would put a row in the
         // corpus that can never match a search and always counts as synced.
@@ -330,11 +426,16 @@ export async function syncNotion(
       else if (outcome === 'changed') changed += 1
       else unchanged += 1
     } catch (error) {
+      // Ran out of time inside this page: it is deferred, not skipped, so it is read again and the report says why.
+      if (error instanceof RunBudgetExceeded) {
+        deferred += 1
+        continue
+      }
       const reason =
         error instanceof NotionApiError ? error.code : (error as Error).message.slice(0, 60)
       skipped.push(`${object.title === '' ? object.id : object.title}: ${reason}`)
     }
   }
 
-  return { shared: shared.length, added, changed, unchanged, skipped }
+  return { shared: shared.length, added, changed, unchanged, skipped, deferred }
 }

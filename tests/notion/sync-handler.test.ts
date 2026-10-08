@@ -32,6 +32,8 @@ interface Cfg {
   known?: Set<string>
   /** the fingerprint a known document holds (default: one that matches nothing) */
   fingerprint?: string
+  /** pages already held, each with the edit time (epoch ms) it was read at */
+  stored?: { id: string; ms: number }[]
 }
 const executor = (cfg: Cfg = {}) => {
   const seen: string[] = []
@@ -52,6 +54,13 @@ const executor = (cfg: Cfg = {}) => {
       if (/project_attachments/.test(sql))
         return { rows: cfg.projects ?? [{ id: 'p1', name: 'Legacy Coaching Course' }] }
       if (/app\.container_refs/.test(sql)) return { rows: [] }
+      // The edit time each page already held was read at (unchangedSinceRead), and which ids are held at all.
+      if (/extract\(epoch from remote_updated_at\)/.test(sql))
+        return {
+          rows: (cfg.stored ?? []).map((s) => ({ external_ref: s.id, ms: s.ms })),
+        }
+      if (/select external_ref from public\.documents/.test(sql))
+        return { rows: (cfg.stored ?? []).map((s) => ({ external_ref: s.id })) }
       if (/select content_fingerprint from public\.documents/.test(sql)) {
         const id = [...(cfg.known ?? [])].find((k) => sql.includes(`'${k}'`))
         return {
@@ -378,5 +387,150 @@ describe('the provenance claim is made AFTER the model is spent (the 18 Septembe
     expect(spentModel).toBe(false)
     expect(out.path).toBe('deterministic_retrieval')
     expect(out.announce).toBe(false)
+  })
+})
+
+describe('a run is bounded and resumable (the "5 attempts exhausted while in running" class)', () => {
+  const EDITED = Date.parse('2026-10-01T00:00:00.000Z')
+  const many = (n: number) =>
+    Array.from({ length: n }, (_, i) => page(`pg${String(i)}`, `Page ${String(i)}`))
+  const blockRoutes = (n: number): Record<string, Route> =>
+    Object.fromEntries(
+      Array.from({ length: n }, (_, i) => [
+        `/blocks/pg${String(i)}/children`,
+        blocks(`text ${String(i)}`),
+      ]),
+    )
+  const runWith = async (
+    cfg: Cfg,
+    options: Parameters<typeof notionSyncHandler>[2],
+  ): Promise<HandlerOutput> => {
+    const ctx = executor(cfg)
+    return await notionSyncHandler(ctx.db, null, options).handle(job, ctx.db)
+  }
+
+  it('lists the workspace ONCE for all attached projects, not once per project', async () => {
+    const n = notion({
+      '/search': () => json(200, { results: many(2), has_more: false }),
+      ...blockRoutes(2),
+    })
+    await runWith(
+      {
+        projects: [
+          { id: 'p1', name: 'One' },
+          { id: 'p2', name: 'Two' },
+          { id: 'p3', name: 'Three' },
+        ],
+      },
+      undefined,
+    )
+    expect(n.requests.filter((r) => r.path === '/search')).toHaveLength(1)
+  })
+
+  it('a page Notion says is unedited since it was read costs no request at all', async () => {
+    const n = notion({
+      '/search': () => json(200, { results: many(3), has_more: false }),
+      ...blockRoutes(3),
+    })
+    const out = await runWith(
+      {
+        stored: [
+          { id: 'pg0', ms: EDITED },
+          { id: 'pg1', ms: EDITED },
+        ],
+      },
+      undefined,
+    )
+    expect(n.requests.map((r) => r.path).filter((p) => p.startsWith('/blocks'))).toEqual([
+      '/blocks/pg2/children',
+    ])
+    expect(out.body).toMatch(/1 new page/)
+  })
+
+  it('NEGATIVE CONTROL: a page edited since it was read is read again, and a database is never skipped', async () => {
+    const n = notion({
+      '/search': () =>
+        json(200, {
+          results: [
+            page('pg0', 'Edited'),
+            {
+              object: 'data_source',
+              id: 'ds1',
+              title: [{ plain_text: 'Tasks' }],
+              last_edited_time: '2026-10-01T00:00:00.000Z',
+            },
+          ],
+          has_more: false,
+        }),
+      '/blocks/pg0/children': blocks('new words'),
+      '/data_sources/ds1/query': () =>
+        json(200, { results: [page('row', 'A row')], has_more: false }),
+    })
+    await runWith({ stored: [{ id: 'pg0', ms: EDITED - 60_000 }] }, undefined)
+    const paths = n.requests.map((r) => r.path)
+    expect(paths).toContain('/blocks/pg0/children')
+    expect(paths).toContain('/data_sources/ds1/query')
+  })
+
+  it('a spent budget stops the run between pages, reports what it left, and completes (never throws)', async () => {
+    let now = 0
+    const n = notion({
+      '/search': () => json(200, { results: many(6), has_more: false }),
+      ...blockRoutes(6),
+    })
+    // Every page read costs 25 s of the clock; the budget is 60 s, so three pages fit and three are deferred.
+    const slow: Record<string, Route> = {}
+    for (let i = 0; i < 6; i += 1)
+      slow[`/blocks/pg${String(i)}/children`] = () => {
+        now += 25_000
+        return blocks(`text ${String(i)}`)()
+      }
+    n.requests.length = 0
+    notion({ '/search': () => json(200, { results: many(6), has_more: false }), ...slow })
+    const out = await runWith({}, { runBudgetMs: 60_000, clock: () => now })
+    expect(out.body).toMatch(/3 pages were not read this time/)
+    expect(out.body).toMatch(/3 new pages/)
+  })
+
+  it('the continuation reads the deferred pages first and finishes the work', async () => {
+    let now = 0
+    const slow: Record<string, Route> = {}
+    for (let i = 0; i < 6; i += 1)
+      slow[`/blocks/pg${String(i)}/children`] = () => {
+        now += 25_000
+        return blocks(`text ${String(i)}`)()
+      }
+    const n = notion({ '/search': () => json(200, { results: many(6), has_more: false }), ...slow })
+    // The first three were read last time (stored at their edit time): only the other three are fetched now.
+    const out = await runWith(
+      {
+        stored: [0, 1, 2].map((i) => ({ id: `pg${String(i)}`, ms: EDITED })),
+      },
+      { runBudgetMs: 120_000, clock: () => now },
+    )
+    expect(n.requests.map((r) => r.path).filter((p) => p.startsWith('/blocks'))).toEqual([
+      '/blocks/pg3/children',
+      '/blocks/pg4/children',
+      '/blocks/pg5/children',
+    ])
+    expect(out.body).not.toMatch(/not read this time/)
+    expect(out.body).toMatch(/3 new pages/)
+  })
+
+  it('a single enormous page cannot hold the run past its budget', async () => {
+    let now = 0
+    notion({
+      '/search': () => json(200, { results: many(1), has_more: false }),
+      '/blocks/pg0/children': () => {
+        now += 90_000
+        return json(200, {
+          results: [{ ...paragraph('x'), has_children: true, id: 'child' }, paragraph('y')],
+          has_more: false,
+        })
+      },
+      '/blocks/child/children': () => json(200, { results: [paragraph('z')], has_more: false }),
+    })
+    const out = await runWith({}, { runBudgetMs: 60_000, clock: () => now })
+    expect(out.body).toMatch(/1 page was not read this time/)
   })
 })

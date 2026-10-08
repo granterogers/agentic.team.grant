@@ -370,7 +370,37 @@
       "old": "  if (ASKS_FOR_TEAM.some((re) => re.test(input.instruction))) return 'team'",
       "new": "  if (false) return 'team'",
       "invariant": "an explicit request for the team on Telegram is never answered as a routine one: he asked for who, and the office never overrides it",
-      "expect": "tests/agents/delegation-scope.test.ts"
+      "expect": "tests/handlers/speaker.test.ts"
+    },
+    {
+      "id": "M29",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/sync.ts",
+      "old": "    if (budget?.expired() === true) {\n      deferred += 1\n      continue\n    }",
+      "new": "",
+      "invariant": "a Notion sync run stops reading when its budget is spent, so it cannot outlive the host's wall-clock limit and be retried into the same crawl",
+      "expect": "tests/notion/sync-handler.test.ts"
+    },
+    {
+      "id": "M29b",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/sync.ts",
+      "old": "    if (fresh.has(object.id)) {",
+      "new": "    if (false) {",
+      "invariant": "a page Notion says is unedited since it was read costs no request, so a continuation resumes instead of restarting",
+      "expect": "tests/notion/sync-handler.test.ts"
+    },
+    {
+      "id": "M29c",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/handlers/notion-sync.ts",
+      "old": "        const shared = await listShared(client)\n        for (const project of attached) {",
+      "new": "        const shared = await listShared(client)\n        for (const project of attached) {\n          await listShared(client)",
+      "invariant": "the workspace is listed once per run, not once per attached project",
+      "expect": "tests/notion/sync-handler.test.ts"
     }
   ]
 }

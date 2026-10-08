@@ -55,7 +55,7 @@ import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionApiError, NotionClient } from '../notion/api.ts'
-import { syncNotion } from '../notion/sync.ts'
+import { listShared, syncNotion } from '../notion/sync.ts'
 import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count, list } from '../text/plain.ts'
@@ -88,7 +88,26 @@ export const refusedNotice = (
         topic: 'notion.sync_refused',
       }
 
-export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null = null): Handler {
+/**
+ * How long one run may keep reading Notion. The edge worker stops STARTING jobs at 60 s into its pass and is killed well
+ * after 150 s, so a job begun at the last moment has to finish inside that: 60 s of reading plus one in-flight request
+ * (20 s at most) plus the writes is under the limit with room to spare.
+ */
+export const RUN_BUDGET_MS = 60_000
+
+export interface NotionSyncOptions {
+  readonly runBudgetMs?: number
+  /** Milliseconds, monotonic enough for a budget. A test passes its own. */
+  readonly clock?: () => number
+}
+
+export function notionSyncHandler(
+  db: SqlExecutor,
+  router: ProviderRouter | null = null,
+  options: NotionSyncOptions = {},
+): Handler {
+  const runBudgetMs = options.runBudgetMs ?? RUN_BUDGET_MS
+  const clock = options.clock ?? Date.now
   return {
     kind: 'office.notion_sync',
     handle: async (job: Job): Promise<HandlerOutput> => {
@@ -175,15 +194,34 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
 
       // Summed across projects, because the duty runs once and reports once.
       const client = new NotionClient(token)
-      const result = { added: 0, changed: 0, shared: 0, skipped: [] as string[] }
+      const result = { added: 0, changed: 0, shared: 0, skipped: [] as string[], deferred: 0 }
       const filed: string[] = []
+      /*
+        BOUNDED BY CONSTRUCTION. The edge worker has a wall-clock limit and only declines to START a job past its deadline,
+        so a run with no bound of its own could outlive the host, die mid-run and be retried into the same crawl until five
+        attempts were spent. The workspace is listed ONCE for all the projects (it used to be listed, and every page's block
+        tree fetched, once per attached project), and the whole run reads for at most `runBudgetMs`. What it did not reach
+        is read first next time: finished pages are skipped while Notion says they are unedited, so progress is the
+        documents themselves and needs no cursor to lose.
+      */
+      const startedAt = clock()
+      const budget = { expired: () => clock() - startedAt >= runBudgetMs }
       try {
+        const shared = await listShared(client)
         for (const project of attached) {
-          const one = await syncNotion(db, { jobId: job.jobId }, client, project.id)
+          if (budget.expired()) {
+            result.deferred += shared.length
+            continue
+          }
+          const one = await syncNotion(db, { jobId: job.jobId }, client, project.id, {
+            shared,
+            budget,
+          })
           result.added += one.added
           result.changed += one.changed
           result.shared += one.shared
           result.skipped.push(...one.skipped)
+          result.deferred += one.deferred
           if (one.added > 0 || one.changed > 0) filed.push(project.name)
         }
       } catch (error) {
@@ -220,7 +258,12 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
         (result.skipped.length === 0
           ? ''
           : `\n\n${count(result.skipped.length, 'page was', 'pages were')} left out: ` +
-            `${result.skipped.slice(0, 4).join('; ')}.`)
+            `${result.skipped.slice(0, 4).join('; ')}.`) +
+        // Said in the run's own report so a partial pass is never mistaken for a complete one.
+        (result.deferred === 0
+          ? ''
+          : `\n\n${count(result.deferred, 'page was', 'pages were')} not read this time (the run's time was spent); ` +
+            'they come first at the next sync.')
 
       const announce = parts.length > 0 || result.skipped.length > 0
       /*
@@ -258,6 +301,9 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
               ...(result.skipped.length === 0
                 ? []
                 : [`these were left out: ${result.skipped.slice(0, 4).join('; ')}`]),
+              ...(result.deferred === 0
+                ? []
+                : [`${String(result.deferred)} page(s) are still to be read at the next sync`]),
             ],
             fallback: plain,
             // #268: attributed, so the call lands under this job KIND rather than under (unattributed).
