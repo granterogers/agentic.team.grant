@@ -447,7 +447,7 @@ const monthBody = (list, s, dense) => {
             const shown = evs.slice(0, cap)
             const more = evs.length - shown.length
             return `<div class="${cls.join(' ')}" role="gridcell" data-cal-day="${day}">
-          <button type="button" class="bccal2num" data-cal-pick="${day}" aria-label="${esc(`${dayWords(day)}${evs.length > 0 ? `, ${String(evs.length)} ${evs.length === 1 ? 'item' : 'items'}` : ''}`)}">${String(parseDay(day).getDate())}</button>
+          <button type="button" class="bccal2num" data-cal-pick="${day}" aria-pressed="${day === s.sel ? 'true' : 'false'}" aria-label="${esc(`${dayWords(day)}${evs.length > 0 ? `, ${String(evs.length)} ${evs.length === 1 ? 'item' : 'items'}` : ''}`)}">${String(parseDay(day).getDate())}</button>
           ${dense ? '' : `<div class="bccal2chips">${shown.map((e) => chip(e, day, true)).join('')}${more > 0 ? `<button type="button" class="bccal2more" data-cal-open-day="${day}">+${String(more)} more</button>` : ''}</div>`}
           ${dense && evs.length > 0 ? `<span class="bccal2dots" aria-hidden="true">${evs.slice(0, 3).map((e) => `<i class="bccal2dot bccal2dot--${esc(e.source === 'google' ? 'google' : e.source === 'task' ? 'task' : 'own')}"></i>`).join('')}</span>` : ''}
         </div>`

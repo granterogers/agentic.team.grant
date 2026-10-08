@@ -93,9 +93,9 @@ for (const size of sizes) {
            and one would end the string. This file earned that note the same
            way the rest of the repository did.
          */
-         const flags = [...document.querySelectorAll('[aria-pressed], [aria-current]')]
-           .map((e) => (e.getAttribute('aria-pressed') ?? '') + (e.getAttribute('aria-current') ?? ''))
-           .join('')
+         const flags = [...document.querySelectorAll('[aria-pressed], [aria-current], [aria-expanded]')]
+           .map((e) => (e.getAttribute('aria-pressed') ?? '') + (e.getAttribute('aria-current') ?? '') + (e.getAttribute('aria-expanded') ?? ''))
+           .join('') + (document.querySelector('.bcmenupanel')?.hidden === false ? 'menuopen' : '')
          return [
            location.pathname,
            String(document.querySelectorAll('*').length),
@@ -122,7 +122,7 @@ for (const size of sizes) {
     await page
       .evaluate(() => {
         for (const k of Object.keys(localStorage))
-          if (k.startsWith('bc.layout.')) localStorage.removeItem(k)
+          if (k.startsWith('bc.layout.') || k.startsWith('bc.stage.')) localStorage.removeItem(k)
       })
       .catch(() => undefined)
     await page.goto(url(p), { waitUntil: 'domcontentloaded' })
@@ -196,6 +196,26 @@ for (const size of sizes) {
         .trim()
         .slice(0, 46)
 
+      /*
+        A RESET HAS NOTHING TO RESET ON AN UNTOUCHED BOARD. The two reset controls are given something to undo first
+        (a ctrl-wheel zoom, which always zooms), so pressing them must change the view. Tidy is different: on the
+        default arrangement there is nothing overlapping to move, so it is named below and proved by
+        verify:workspace, which overlaps modules and then tidies them.
+      */
+      if (/^Reset (view|zoom)/.test(name)) {
+        const b = await page.evaluate(
+          inPage(`const r = document.querySelector('[data-bc-board]')?.getBoundingClientRect()
+             return r ? { x: r.x + r.width * 0.9, y: r.y + r.height * 0.85 } : null`),
+        )
+        if (b !== null) {
+          const pt = b as { x: number; y: number }
+          await page.mouse.move(pt.x, pt.y)
+          await page.keyboard.down('Control')
+          await page.mouse.wheel(0, -300)
+          await page.keyboard.up('Control')
+          await page.waitForTimeout(150)
+        }
+      }
       const before = await fingerprint()
       /*
         A CONTROL THAT OPENS A NEW TAB CHANGES NOTHING ON THIS ONE, and that
@@ -219,8 +239,8 @@ for (const size of sizes) {
         page.context().off('page', onPopup)
         unpressable += 1
         /* The log names WHICH of the five actionability checks failed. */
-        const why = e instanceof Error ? e.message.split('\n').slice(0, 6).join(' / ') : String(e)
-        findings.push(`${size.id} ${route} — "${name}" could not be pressed: ${why.slice(0, 220)}`)
+        const why = e instanceof Error ? e.message.split('\n').slice(0, 14).join(' / ') : String(e)
+        findings.push(`${size.id} ${route} — "${name}" could not be pressed: ${why.slice(0, 900)}`)
         continue
       }
       await page.waitForTimeout(420)
@@ -250,6 +270,8 @@ for (const size of sizes) {
         const marked =
           (await el.getAttribute('aria-current')) === 'page' ||
           (await el.getAttribute('aria-pressed')) === 'true' ||
+          /* Named, with its reason: nothing overlaps on the default arrangement. Proved by verify:workspace (section 6). */
+          name === 'Tidy' ||
           (await el.isDisabled().catch(() => false))
         if (marked) {
           inert += 1

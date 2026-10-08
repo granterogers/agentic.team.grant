@@ -90,7 +90,9 @@ for (const sz of ['1440x900', '1920x1080', '768x1024', '390x844']) {
   const bar = await page.locator('.bcsamplebar').count()
   check(`${sz}: the Sample strip is drawn`, bar === 1, String(bar))
   if (bar === 1) {
-    const hgt = await page.locator('.bcsamplebar').evaluate((e: any) => e.getBoundingClientRect().height)
+    const hgt = await page
+      .locator('.bcsamplebar')
+      .evaluate((e: any) => e.getBoundingClientRect().height)
     check(`${sz}: the strip is compact`, hgt <= (w < 600 ? 120 : 64), `${hgt}px`)
   }
   const over = await page.evaluate(
