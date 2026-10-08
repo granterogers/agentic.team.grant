@@ -463,6 +463,16 @@
       "expect": "tests/handlers/speaker.test.ts"
     },
     {
+      "id": "M38",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "...(draftIsTheAnswer ? { landed: outcome.landed + 1 } : {}),",
+      "new": "...(draftIsTheAnswer || findingsAreTheAnswer ? { landed: outcome.landed + 1 } : {}),",
+      "invariant": "a findings answer drops the disclaimer sentence but never counts as a landed row, so the permission to promise or claim completion is unchanged",
+      "expect": "tests/handlers/findings-do-not-widen-permission.test.ts"
+    },
+    {
       "id": "M29",
       "critical": false,
       "severity": "high",

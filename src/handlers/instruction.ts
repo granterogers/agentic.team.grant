@@ -7353,9 +7353,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               colleaguesAsked: Number(counted?.colleagues ?? 0) + (who.handoff === null ? 0 : 1),
             }
           : {}),
-        ...(draftIsTheAnswer || findingsAreTheAnswer ? { landed: outcome.landed + 1 } : {}),
+        ...(draftIsTheAnswer ? { landed: outcome.landed + 1 } : {}),
       }
-      const outcomeLine = sayWhatHappened(outcomeNow)
+      // Findings that are the answer need no state sentence. The rows are NOT bumped: the permission to promise or to claim
+      // completion (`may`, below) reads the same rows as before, so a promise nothing will perform is still refused.
+      const outcomeLine = findingsAreTheAnswer ? null : sayWhatHappened(outcomeNow)
       /*
         Joined with a SPACE, not a blank line.
 

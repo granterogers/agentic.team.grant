@@ -252,11 +252,12 @@ const settle = async (root: string, maxTicks = 14): Promise<void> => {
     await db.execute(`delete from public.provider_health`)
     await db.execute(
       `update public.jobs set not_before = app.now_utc() - interval '1 second'
-        where correlation_id = ${corr(root)} and state in ('retrying', 'queued')`,
+        where correlation_id = ${corr(root)}
+          and (state in ('retrying', 'queued') or (state = 'paused' and kind = 'office.synthesise'))`,
     )
     const done = await tick()
     const live = await count(
-      `select count(*)::int as n from public.jobs where correlation_id = ${corr(root)} and state in ${LIVE}`,
+      `select count(*)::int as n from public.jobs where correlation_id = ${corr(root)} and (state in ${LIVE} or (state = 'paused' and kind = 'office.synthesise'))`,
     )
     if (done.length === 0 && live === 0) return
   }
@@ -889,7 +890,7 @@ part('T6', 'retries and duplicates: one command, one job, one team, one answer')
     out.length === 2 &&
       new Set(out.map((o) => o.text)).size === 2 &&
       out.every((o) => o.token === CHIEF_TOKEN),
-    `${String(out.length)} message(s)`,
+    `${String(out.length)} message(s): ${out.map((o) => o.text.slice(0, 50)).join(' | ')}`,
   )
 
   // Delivery: the first send is refused before a byte leaves; the redrive sends it and re-convenes nothing.
@@ -915,7 +916,7 @@ part('T6', 'retries and duplicates: one command, one job, one team, one answer')
       (await childrenOf(d.job, 'office.synthesise')).length === 1 &&
       out2.length === 2 &&
       new Set(out2.map((o) => o.text)).size === 2,
-    `${String(out2.length)} message(s)`,
+    `${String(out2.length)} message(s): ${out2.map((o) => o.text.slice(0, 50)).join(' | ')}`,
   )
 }
 

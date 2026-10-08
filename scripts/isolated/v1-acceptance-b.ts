@@ -489,11 +489,11 @@ const settle = async (root: string, maxTicks = 14, keepBreaker = false): Promise
     await db.execute(
       `update public.jobs set not_before = app.now_utc() - interval '1 second'
         where correlation_id = (select correlation_id from public.jobs where job_id = ${lit(root)}::uuid)
-          and state in ('retrying', 'queued')`,
+          and (state in ('retrying', 'queued') or (state = 'paused' and kind = 'office.synthesise'))`,
     )
     const done = await tick()
     const live = await count(
-      `select count(*)::int as n from public.jobs where correlation_id = (select correlation_id from public.jobs where job_id = ${lit(root)}::uuid) and state in ${LIVE}`,
+      `select count(*)::int as n from public.jobs where correlation_id = (select correlation_id from public.jobs where job_id = ${lit(root)}::uuid) and (state in ${LIVE} or (state = 'paused' and kind = 'office.synthesise'))`,
     )
     if (done.length === 0 && live === 0) return i
   }
@@ -1262,7 +1262,9 @@ await journey(
       announced.length === 2 &&
         announced[0]?.kind === 'office.instruction' &&
         announced[1]?.kind === 'office.synthesise' &&
-        /handed this on in 3 pieces/.test(String(announced[0]?.body)),
+        /(handed this on in 3 pieces|asked 2 colleagues to look into this)/.test(
+          String(announced[0]?.body),
+        ),
       announced.map((a) => `${String(a.kind)}/${String(a.recipient_agent)}`).join(' '),
     )
     check(
@@ -1307,7 +1309,7 @@ await journey(
       const leadOut = (await outputsOfTree(r)).find((o) => o.job === r)
       check(
         "H2 (control for the repeat fix) a worker RETRY finds its own earlier children and still owns them: the lead's reply says it handed the work on, and does not say somebody else is already on it",
-        /handed this on/.test(String(leadOut?.body)) &&
+        /handed this on|asked 2 colleagues/.test(String(leadOut?.body)) &&
           !/already on that/i.test(String(leadOut?.body)),
         String(leadOut?.body).slice(0, 100),
       )
@@ -1345,7 +1347,7 @@ await journey(
       )
       check(
         'H3a the repeat does not CLAIM a hand-off it did not make: no "handed this on", no "I have not done this yet", and it says somebody is already on it',
-        !/handed this on|have not done this yet/i.test(String(out2?.body)) &&
+        !/handed this on|asked \d+ colleagues|have not done this yet/i.test(String(out2?.body)) &&
           /already on that/i.test(String(out2?.body)),
         String(out2?.body).slice(0, 120),
       )
@@ -1441,7 +1443,7 @@ await journey(
           'H3d (control) the same sentence once nothing of the earlier work is running is new work: two new children, its own fan-in group, the hand-off said, no refused fan-in',
           k4.length === 2 &&
             (await groupsOf(r4)).length === 1 &&
-            /handed this on/i.test(String(out4?.body)) &&
+            /handed this on|asked 2 colleagues/i.test(String(out4?.body)) &&
             (await count(
               `select count(*)::int as n from public.job_impediments where job_id = ${lit(r4)}::uuid and needed = 'draw several answers together'`,
             )) === 0,
@@ -1494,7 +1496,7 @@ await journey(
         "H4 the chat receives the lead's reply and then ONE synthesised recommendation, each exactly once, through the chief's bot to the same chat; the specialists send nothing",
         sent.length === 2 &&
           new Set(sent).size === 2 &&
-          /handed this on in 3 pieces/.test(sent[0] ?? '') &&
+          /(handed this on in 3 pieces|asked 2 colleagues to look into this)/.test(sent[0] ?? '') &&
           /Recommendation/.test(sent[1] ?? '') &&
           dels.length === 2 &&
           dels.every((d) => d.state === 'sent') &&
