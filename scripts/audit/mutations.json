@@ -403,6 +403,16 @@
       "expect": "tests/agents/quoted-material.test.ts"
     },
     {
+      "id": "M32",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/agents/mine.ts",
+      "old": "  I_MUST.test(sentence) && !ASKING_WHETHER_I_MUST.test(sentence)",
+      "new": "  I_MUST.test(sentence)",
+      "invariant": "a question about what he must do ('When do I have to pay the deposit?') is never filed as a task on his list",
+      "expect": "tests/agents/a-question-about-a-duty-is-not-a-task.test.ts"
+    },
+    {
       "id": "M29",
       "critical": false,
       "severity": "high",

@@ -105,6 +105,24 @@ const I_MUST = new RegExp(
 )
 
 /*
+  A QUESTION ABOUT WHAT HE MUST DO IS NOT A COMMITMENT TO DO IT.
+
+  "When do I have to pay the venue deposit, and how much is it?" matched `I_MUST` and was filed as a task titled
+  "When do pay the venue deposit, and how much is it?" - found by the first controlled real-model run, in one of five
+  ways of asking the same question. The same shape is every natural question about an obligation: "Do I need to call the
+  accountant?", "What do I need to bring on Friday?", "Why do I have to renew the licence?". A task nobody asked for sits
+  on the list he is supposed to trust, so this is the expensive direction.
+
+  The mark of the question is the auxiliary in front of the "I" (do I, should I, must I, will I, can I): a statement of
+  need ("I need to call the accountant") never has one. Read per SENTENCE, so a question and a real commitment in one
+  message ("When do I need to be there? Also I need to call Kevin tomorrow.") still files the second.
+*/
+const ASKING_WHETHER_I_MUST =
+  /\b(?:do|does|did|should|shall|must|will|would|can|could|am|have|had)\s+(?:i|we)\s+(?:really\s+|actually\s+|also\s+)?(?:need|have|want|ought|must|gotta|meant|remember)\b/i
+const isMust = (sentence: string): boolean =>
+  I_MUST.test(sentence) && !ASKING_WHETHER_I_MUST.test(sentence)
+
+/*
   THE OVERLAP, and why there is no guard for it.
 
   "I need you to find the hold-up" is first person AND the office's work —
@@ -626,7 +644,7 @@ const requestSentences = (said: string): string | null => {
   const carriers = sentences.filter(
     (x) =>
       (REMIND_ME.test(x) && !REMIND_SOMEBODY_ELSE.test(x)) ||
-      I_MUST.test(x) ||
+      isMust(x) ||
       ADD_COLON.test(x) ||
       ((MAKE_A_TASK.test(x) ||
         MAKE_AN_ITEM_TO.test(x) ||
@@ -650,7 +668,7 @@ export function personalTaskRequest(
   if (mentionsWithoutAsking(said)) return null
   const remind = REMIND_ME.test(said) && !REMIND_SOMEBODY_ELSE.test(said)
   const commit =
-    I_MUST.test(said) ||
+    sentencesOf(said).some(isMust) ||
     ADD_COLON.test(said) ||
     ((MAKE_A_TASK.test(said) ||
       MAKE_AN_ITEM_TO.test(said) ||
