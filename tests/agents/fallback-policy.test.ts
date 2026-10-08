@@ -93,6 +93,16 @@ describe('what the real fallback models said, refused', () => {
       ).ok,
     ).toBe(true)
   })
+  it('an answer that carries the facts and then raises a blocker only the held-evidence check can see', () => {
+    const a = admit(
+      'The deposit is 2000 pounds, due 1 November. I would need you to confirm the owner before it goes anywhere. Please provide these details.',
+    )
+    expect(reasons(a)).toContain('offers_unasked_action')
+    // The neighbour: the same facts followed by a real offer is fine.
+    expect(admit('The deposit is 2000 pounds, due 1 November. Want me to set a reminder?').ok).toBe(
+      true,
+    )
+  })
   it('a blocker raised against a plain question when the turn held nothing relevant (the final real run)', () => {
     const asked = 'Is there a cancellation cap in the venue contract?'
     const said =
