@@ -311,6 +311,8 @@
     "verify:dictation-fallback": "tsx scripts/verify/dictation-fallback.ts",
     "verify:canvas-session": "tsx scripts/verify/canvas-session.ts",
     "verify:canvas-background": "tsx scripts/verify/canvas-background.ts",
+    "verify:boot-recovery": "tsx scripts/verify/boot-recovery.ts",
+    "verify:load-reliability": "tsx scripts/verify/load-reliability.ts",
     "verify:preview-sample": "tsx scripts/verify/preview-sample.ts",
     "verify:preview-gallery": "tsx scripts/verify/preview-gallery.ts",
     "textures:import": "python3 scripts/art/import_textures.py",
