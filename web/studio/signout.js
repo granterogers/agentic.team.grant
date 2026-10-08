@@ -32,6 +32,7 @@
   moved is dropped rather than drawn.
 */
 
+import * as backdrop from './bc/backdrop.js'
 import * as notes from './bc/notestore.js'
 import * as session from './session.js'
 
@@ -64,7 +65,7 @@ const wipeLocal = () => {
 
 const wipeDatabases = async () => {
   if (typeof indexedDB === 'undefined') return
-  let names = ['bc.notes']
+  let names = ['bc.notes', 'bc.backdrops']
   try {
     const listed = (await indexedDB.databases?.()) ?? []
     names = [...new Set([...names, ...listed.map((d) => d.name).filter(Boolean)])]
@@ -112,6 +113,8 @@ export async function signOut({ reload = true } = {}) {
   wipeLocal()
   // The page's own open IndexedDB connection would block the deletion below, so it is closed first.
   await notes.release().catch(() => {})
+  // And the person's own canvas pictures (#445): closed so the database can be deleted below, and their addresses dropped.
+  await backdrop.release().catch(() => {})
   await Promise.all([wipeDatabases(), wipeCaches()])
   // A second pass: a request that landed between the first and now may have written back.
   wipeLocal()

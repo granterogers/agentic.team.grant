@@ -36,6 +36,7 @@
   inside one ends the string.
 */
 
+import * as backdrop from './backdrop.js'
 import * as cal from './calendar.js'
 import * as grid from './layout.js'
 import { NAMES, note } from './compose.js'
@@ -58,6 +59,12 @@ export const wireStage = (root, ctx) => {
   const guides = board.querySelector('.bcguides')
   if (stageEl === null) return
   const stacked = () => globalThis.matchMedia?.(PHONE)?.matches === true
+  /* A picture of the person's own is held in this browser: draw it once it is loaded. Built-in materials are drawn by the template. */
+  if (grid.bgOf(slug)?.id === 'custom') {
+    void backdrop.hydrate(board, slug).then((why) => {
+      if (why !== '') board.setAttribute('data-bg-why', why)
+    })
+  }
 
   /* The view: zoom, and where the world origin sits on screen. Painted live, stored late. */
   let view = grid.viewOf(slug)

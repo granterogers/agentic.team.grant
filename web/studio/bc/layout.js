@@ -439,7 +439,47 @@ export const tidy = (mods, st) => {
 const KEY = (slug) => `bc.stage.${slug}`
 const slugOf = (s) => (typeof s === 'string' ? s : (s?.slug ?? ''))
 
-const emptyDoc = () => ({ mods: null, zoom: 1, pan: { x: 0, y: 0 }, layouts: {}, postits: [], gone: {}, seeded: false })
+const emptyDoc = () => ({
+  mods: null,
+  zoom: 1,
+  pan: { x: 0, y: 0 },
+  layouts: {},
+  postits: [],
+  gone: {},
+  seeded: false,
+  bg: null,
+})
+
+/*
+  The canvas background a project chose (#445): a small REFERENCE, never image bytes. `id` names a library entry or 'custom'
+  (a picture held in this browser) or 'default' (the microcement the page always had, chosen on purpose); `at` is when it was
+  chosen, so two devices that disagree settle on the newer choice exactly as a Post-it does. A project that never chose has
+  `bg: null`, which draws the default and costs nothing.
+*/
+export const BG_MODES = ['tile', 'cover', 'fit', 'center']
+const BG_ID = /^[a-z0-9][a-z0-9-]{0,47}$/
+const num = (v, lo, hi, dflt) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt)
+export const cleanBg = (raw) => {
+  if (raw === null || typeof raw !== 'object') return null
+  const id = typeof raw.id === 'string' ? raw.id : ''
+  if (!BG_ID.test(id)) return null
+  return {
+    id,
+    mode: BG_MODES.includes(raw.mode) ? raw.mode : 'tile',
+    scale: Math.round(num(raw.scale, 0.5, 2, 1) * 100) / 100,
+    intensity: Math.round(num(raw.intensity, 0.2, 1, 1) * 100) / 100,
+    tint: Math.round(num(raw.tint, 0, 0.6, 0) * 100) / 100,
+    at: Number.isFinite(raw.at) ? raw.at : 0,
+  }
+}
+/** The newer of two choices; on the same instant `mineWins` decides, and otherwise the same copy wins on every device. */
+export const mergeBg = (a, b, mineWins = false) => {
+  if (a === null || a === undefined) return b ?? null
+  if (b === null || b === undefined) return a
+  if (a.at !== b.at) return a.at > b.at ? a : b
+  if (mineWins) return a
+  return JSON.stringify(a) <= JSON.stringify(b) ? a : b
+}
 
 let stage = { w: 1200, h: 620 }
 let measured = false
@@ -508,6 +548,7 @@ export const normalise = (raw) => {
     }
   }
   d.seeded = raw.seeded === true
+  d.bg = cleanBg(raw.bg)
   return d
 }
 
@@ -558,6 +599,7 @@ export const toPanels = (d) => [
     postits: d.postits,
     gone: d.gone,
     seeded: d.seeded,
+    bg: d.bg,
   },
 ]
 
@@ -574,6 +616,7 @@ export const fromPanels = (panels) => {
     postits: meta.postits,
     gone: meta.gone,
     seeded: meta.seeded,
+    bg: meta.bg,
   })
 }
 
@@ -586,6 +629,7 @@ const isBlank = (d) =>
   d.postits.length === 0 &&
   Object.keys(d.gone).length === 0 &&
   Object.keys(d.layouts).length === 0 &&
+  d.bg === null &&
   d.seeded === false
 
 /* Where the browser keeps the document. Replaceable so a test can run two "devices" side by side in one process. */
@@ -647,6 +691,7 @@ const HEAL_AFTER_MS = 2500
 const HEAL_EVERY_MS = 10000
 const healing = new Map()
 const lastHeal = new Map()
+const sameBg = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 const canon = (postits, gone) =>
   JSON.stringify([
     [...postits].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
@@ -664,10 +709,13 @@ const check = async (s) => {
   const there = fromPanels(panels) ?? emptyDoc()
   const here = doc(s)
   const merged = mergeNotes(here, there)
-  const lacksHere = canon(merged.postits, merged.gone) !== canon(here.postits, here.gone)
-  const lacksThere = canon(merged.postits, merged.gone) !== canon(there.postits, there.gone)
+  const bg = mergeBg(here.bg, there.bg)
+  const lacksHere =
+    canon(merged.postits, merged.gone) !== canon(here.postits, here.gone) || !sameBg(bg, here.bg)
+  const lacksThere =
+    canon(merged.postits, merged.gone) !== canon(there.postits, there.gone) || !sameBg(bg, there.bg)
   if (lacksHere) {
-    const d = { ...here, ...merged }
+    const d = { ...here, ...merged, bg }
     cache.set(s, d)
     try {
       ls()?.setItem(KEY(s), JSON.stringify(d))
@@ -730,10 +778,14 @@ const saveChecked = async (s) => {
         if (there !== null) {
           const here = doc(s)
           const merged = mergeNotes(here, there)
-          if (canon(merged.postits, merged.gone) !== canon(here.postits, here.gone)) {
-            cache.set(s, { ...here, ...merged })
+          const bg = mergeBg(here.bg, there.bg)
+          if (
+            canon(merged.postits, merged.gone) !== canon(here.postits, here.gone) ||
+            !sameBg(bg, here.bg)
+          ) {
+            cache.set(s, { ...here, ...merged, bg })
             try {
-              ls()?.setItem(KEY(s), JSON.stringify({ ...here, ...merged }))
+              ls()?.setItem(KEY(s), JSON.stringify({ ...here, ...merged, bg }))
             } catch {
               /* Cached in memory regardless. */
             }
@@ -766,7 +818,10 @@ const commit = (slug, mine_) => {
   let d = mine_
   try {
     const raw = ls()?.getItem(KEY(s)) ?? ''
-    if (raw !== '') d = { ...d, ...mergeNotes(d, normalise(JSON.parse(raw)), true) }
+    if (raw !== '') {
+      const stored = normalise(JSON.parse(raw))
+      d = { ...d, ...mergeNotes(d, stored, true), bg: mergeBg(d.bg, stored.bg, true) }
+    }
   } catch {
     /* Nothing readable to fold in. */
   }
@@ -813,12 +868,13 @@ export const adopt = (slug, panels) => {
     */
     const here = doc(s)
     const merged = mergeNotes(here, theirs)
+    const bg = mergeBg(here.bg, theirs.bg)
     const whole = canon(merged.postits, merged.gone)
-    const lacksHere = whole !== canon(here.postits, here.gone)
+    const lacksHere = whole !== canon(here.postits, here.gone) || !sameBg(bg, here.bg)
     /* A save that failed (offline) leaves notes only here: a refresh must send them, not just take what the office has. */
-    const lacksThere = whole !== canon(theirs.postits, theirs.gone)
+    const lacksThere = whole !== canon(theirs.postits, theirs.gone) || !sameBg(bg, theirs.bg)
     if (!lacksHere && !lacksThere) return false
-    const d = { ...here, ...merged }
+    const d = { ...here, ...merged, bg }
     cache.set(s, d)
     try {
       ls()?.setItem(KEY(s), JSON.stringify(d))
@@ -841,9 +897,13 @@ export const adopt = (slug, panels) => {
   try {
     const raw = ls()?.getItem(KEY(s)) ?? ''
     if (raw !== '') {
-      const merged = mergeNotes(theirs, normalise(JSON.parse(raw)))
-      ahead = canon(merged.postits, merged.gone) !== canon(theirs.postits, theirs.gone)
-      d = { ...theirs, ...merged }
+      const stored = normalise(JSON.parse(raw))
+      const merged = mergeNotes(theirs, stored)
+      const bg = mergeBg(theirs.bg, stored.bg)
+      ahead =
+        canon(merged.postits, merged.gone) !== canon(theirs.postits, theirs.gone) ||
+        !sameBg(bg, theirs.bg)
+      d = { ...theirs, ...merged, bg }
     }
   } catch {
     d = theirs
@@ -993,6 +1053,21 @@ export const setView = (slug, v) => {
   const zoom = Math.round(clampZoom(v.zoom) * 1000) / 1000
   commit(slug, { ...doc(slug), zoom, pan: cleanPan(v) })
   return viewOf(slug)
+}
+
+/** The project's chosen background (a reference), or null when it never chose one. */
+export const bgOf = (slug) => doc(slug).bg
+
+/**
+ * Choose a background. Stored with the moment it was chosen, so the newer of two devices' choices wins; a project's notes,
+ * arrangement and view are carried through untouched. `null` is not accepted: going back to the default is a choice too
+ * ({ id: 'default' }), because a plain removal could not beat an older choice on another device.
+ */
+export const setBg = (slug, bg, now = Date.now()) => {
+  const clean = cleanBg({ ...bg, at: now })
+  if (clean === null) return doc(slug).bg
+  commit(slug, { ...doc(slug), bg: clean })
+  return clean
 }
 
 export const setZoom = (slug, z) => {

@@ -348,3 +348,116 @@
   }
   [data-experience='basecamp'] body.docked .shell { padding-bottom: 0; }
 }
+
+/* ======================================================================== *
+ * THE CANVAS BACKGROUND (#445, 9 October 2026)
+ *
+ * A project that chose a material has data-bg on its board and four custom
+ * properties (image, tile size, veil, shade). Layers, top to bottom: the dotted
+ * grid, a shade, a veil of the canvas colour (the opacity control), the image,
+ * the canvas colour. A tiling material is drawn from the SAME variables as the
+ * grid (--bc-gx, --bc-gy, --bc-gz), so it pans and zooms with the modules and
+ * cannot drift from the dots; cover, fit and centre are anchored to the board
+ * (the viewport) instead. The page chrome outside the board keeps the stone.
+ * A project with no choice has no data-bg and none of this applies.
+ * ======================================================================== */
+[data-experience='basecamp'] .bcpanes[data-bg] {
+  --bc-shade-ink: #28241c;
+  background-color: var(--bc-bg-solid, var(--bc-canvas));
+  background-image:
+    radial-gradient(circle at center, var(--bc-dot) 0 calc(0.9px + 0.25px * var(--bc-gz, 1)), transparent calc(1.6px + 0.25px * var(--bc-gz, 1))),
+    linear-gradient(color-mix(in srgb, var(--bc-shade-ink) var(--bc-bg-shadep, 0%), transparent), color-mix(in srgb, var(--bc-shade-ink) var(--bc-bg-shadep, 0%), transparent)),
+    linear-gradient(color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) var(--bc-bg-veilp, 0%), transparent), color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) var(--bc-bg-veilp, 0%), transparent)),
+    var(--bc-bg-img, none);
+  background-repeat: repeat, no-repeat, no-repeat, repeat;
+  background-size:
+    var(--bc-gstep) var(--bc-gstep),
+    100% 100%,
+    100% 100%,
+    calc(var(--bc-bg-tw, 1024px) * var(--bc-gz, 1)) calc(var(--bc-bg-th, 576px) * var(--bc-gz, 1));
+  background-position: var(--bc-gx, 0) var(--bc-gy, 0), 0 0, 0 0, var(--bc-gx, 0) var(--bc-gy, 0);
+}
+[data-experience='basecamp'][data-scheme='dark'] .bcpanes[data-bg] { --bc-shade-ink: #000; }
+[data-experience='basecamp'] .bcpanes[data-bg-mode='cover'] {
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  background-size: var(--bc-gstep) var(--bc-gstep), 100% 100%, 100% 100%, cover;
+  background-position: var(--bc-gx, 0) var(--bc-gy, 0), 0 0, 0 0, center;
+}
+[data-experience='basecamp'] .bcpanes[data-bg-mode='fit'] {
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  background-size: var(--bc-gstep) var(--bc-gstep), 100% 100%, 100% 100%, contain;
+  background-position: var(--bc-gx, 0) var(--bc-gy, 0), 0 0, 0 0, center;
+}
+[data-experience='basecamp'] .bcpanes[data-bg-mode='center'] {
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  background-size: var(--bc-gstep) var(--bc-gstep), 100% 100%, 100% 100%, var(--bc-bg-tw, auto) var(--bc-bg-th, auto);
+  background-position: var(--bc-gx, 0) var(--bc-gy, 0), 0 0, 0 0, center;
+}
+/* The grid dots follow the material, not the colour scheme: dark dots on a light material, light dots on a dark one. */
+[data-experience='basecamp'] .bcpanes[data-bg][data-bg-tone='light'] { --bc-dot: rgb(40 36 28 / 0.34); }
+[data-experience='basecamp'] .bcpanes[data-bg][data-bg-tone='dark'] { --bc-dot: rgb(255 255 255 / 0.5); }
+/* A phone stacks the panels and has no canvas to pan: the material is laid once, at a fixed size, with no grid. */
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcpanes[data-bg] {
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--bc-shade-ink) var(--bc-bg-shadep, 0%), transparent), color-mix(in srgb, var(--bc-shade-ink) var(--bc-bg-shadep, 0%), transparent)),
+      linear-gradient(color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) var(--bc-bg-veilp, 0%), transparent), color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) var(--bc-bg-veilp, 0%), transparent)),
+      var(--bc-bg-img, none);
+    background-repeat: no-repeat, no-repeat, repeat;
+    background-size: 100% 100%, 100% 100%, var(--bc-bg-tw, 1024px) var(--bc-bg-th, 576px);
+    background-position: 0 0, 0 0, 0 0;
+  }
+  [data-experience='basecamp'] .bcpanes[data-bg-mode='cover'] { background-repeat: no-repeat, no-repeat, no-repeat; background-size: 100% 100%, 100% 100%, cover; background-position: 0 0, 0 0, center; }
+  [data-experience='basecamp'] .bcpanes[data-bg-mode='fit'] { background-repeat: no-repeat, no-repeat, no-repeat; background-size: 100% 100%, 100% 100%, contain; background-position: 0 0, 0 0, center; }
+  [data-experience='basecamp'] .bcpanes[data-bg-mode='center'] { background-repeat: no-repeat, no-repeat, no-repeat; background-size: 100% 100%, 100% 100%, var(--bc-bg-tw, auto) var(--bc-bg-th, auto); background-position: 0 0, 0 0, center; }
+}
+
+/* The picker, inside How this project looks. */
+.bdbody { display: grid; gap: var(--s3, 12px); min-width: 0; width: 100%; }
+.bdgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.bdthumb {
+  appearance: none; display: grid; gap: 4px; padding: 4px; margin: 0; min-height: 44px; text-align: left;
+  background: transparent; border: 1px solid var(--edge, rgb(0 0 0 / .14)); border-radius: 10px; cursor: pointer;
+  color: var(--ink-2, inherit); font: 500 12px/1.2 var(--text, inherit);
+}
+.bdthumb:hover { border-color: var(--ink-2, #666); }
+.bdthumb:focus-visible { outline: 2px solid var(--accent, #3b6ea5); outline-offset: 2px; }
+.bdthumb.on { border-color: var(--accent, #3b6ea5); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #3b6ea5) 35%, transparent); color: var(--ink, inherit); }
+.bdface { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 7px; background: var(--sunken, #ddd); }
+.bdface--plain { background: repeating-linear-gradient(45deg, var(--sunken, #ddd) 0 6px, transparent 6px 12px); }
+.bdname { overflow-wrap: anywhere; }
+.bdrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bdseg {
+  appearance: none; min-height: 36px; padding: 0 12px; margin: 0; cursor: pointer; font: 500 13px/1 var(--text, inherit);
+  background: transparent; color: var(--ink-2, inherit); border: 1px solid var(--edge, rgb(0 0 0 / .14)); border-radius: 8px;
+}
+.bdseg.on { background: color-mix(in srgb, var(--accent, #3b6ea5) 14%, transparent); color: var(--ink, inherit); border-color: var(--accent, #3b6ea5); }
+.bdseg:focus-visible, .bdrange input:focus-visible { outline: 2px solid var(--accent, #3b6ea5); outline-offset: 2px; }
+.bdsliders { display: grid; gap: 6px; }
+.bdrange { display: grid; grid-template-columns: 64px 1fr 44px; gap: 10px; align-items: center; font: 500 13px/1 var(--text, inherit); color: var(--ink-2, inherit); }
+.bdrange output { text-align: right; font-variant-numeric: tabular-nums; }
+.bdactions { justify-content: flex-end; position: sticky; bottom: 0; z-index: 2; padding: 8px 0 2px; background: var(--bc-panel, #efece6); }
+.bdactions--idle { display: none; }
+@media (max-width: 560px) {
+  /* One scrolling row of thumbnails on a phone: fourteen choices in three columns are a page of their own. */
+  .bdgrid { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 6px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+  .bdthumb { flex: 0 0 88px; scroll-snap-align: start; }
+}
+.bdsay { margin-right: auto; min-width: 0; overflow-wrap: anywhere; }
+.bdupload.is-busy { opacity: 0.6; pointer-events: none; }
+.bdactions button[disabled] { opacity: 0.45; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .bdthumb, .bdseg { transition: none; } }
+/* While a background is being previewed the sheet steps to the corner and stops dimming, so the canvas can be judged. */
+body.behind:has(#viewer.bd-preview) .shell { filter: none; transform: none; }
+#viewer.bd-preview { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; place-items: start end; pointer-events: none; padding-top: 64px; }
+#viewer.bd-preview .sheet { pointer-events: auto; max-height: calc(100dvh - 80px); width: min(440px, 100%); }
+/* Previewing: only the background picker stays, so the sheet is a small panel at the corner and the canvas is visible. */
+#viewer.bd-preview .sheet .field:not(.bdfield), #viewer.bd-preview .sheet .chead p { display: none; }
+/* One column: the label above the picker, not squeezed into the 108px label column the other fields use. */
+[data-experience='basecamp'] .sheet:has([data-icon-picker]) .field.bdfield,
+.field.bdfield { grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: stretch; }
+.field.bdfield > .t-label { padding-top: 0; }
+@media (max-width: 760px) {
+  #viewer.bd-preview { place-items: end center; padding: 0; }
+  #viewer.bd-preview .sheet { max-height: 62dvh; width: 100%; border-radius: 16px 16px 0 0; }
+}

@@ -36,6 +36,7 @@ import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
 import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
+import * as backdropUi from './bc/backdrop-ui.js'
 import * as bcDocOrder from './bc/docorder.js'
 import * as bcWire from './bc/wire.js'
 import * as bcJump from './bc/jump.js'
@@ -546,6 +547,8 @@ let settingsCameFrom = null
 const sheet = (el, open) => {
   const wasOpen = !el.hidden
   el.hidden = !open
+  // A background that was only being previewed goes back to the project's own when the sheet goes away (#445).
+  if (!open && el.id === 'viewer' && wasOpen) backdropUi.cancel()
   if (el.id === 'settings') {
     el.classList.toggle('page', open)
     /*
@@ -12296,6 +12299,8 @@ function lookSheet(p, keepSearch = false) {
         </span>
       </div>
 
+      ${backdropUi.field(p)}
+
       <div class="field" style="margin-top:var(--s5);align-items:flex-start">
         <span class="t-label">Colour</span>
         <span class="huepick">
@@ -12346,6 +12351,7 @@ function lookSheet(p, keepSearch = false) {
     </button>`
 
   sheet(v, true)
+  backdropUi.wire(v, p)
   $('.close', v).addEventListener('click', () => { sheet(v, false) })
   v.addEventListener('click', (e) => { if (e.target === v) sheet(v, false) })
 
@@ -14181,12 +14187,21 @@ document.addEventListener(
 )
 
 bcGrid.persistence({
+  /*
+    A Sample visitor is read-only: the gateway refuses every write from one. The arrangement, the view and the background
+    they choose stay in this browser (they still persist across a reload here) and are never sent, rather than being sent
+    to be refused. Found when a real Sample run pressed Reset view and the gateway was asked to reset a layout.
+  */
   save: (slug, panels) =>
-    act('dashboard_layout_set', { p_slug: slug, p_panels: panels, p_surface: 'basecamp' }).catch(
-      () => undefined,
-    ),
+    bcSession.isSample()
+      ? undefined
+      : act('dashboard_layout_set', { p_slug: slug, p_panels: panels, p_surface: 'basecamp' }).catch(
+          () => undefined,
+        ),
   reset: (slug) =>
-    act('dashboard_layout_reset', { p_slug: slug, p_surface: 'basecamp' }).catch(() => undefined),
+    bcSession.isSample()
+      ? undefined
+      : act('dashboard_layout_reset', { p_slug: slug, p_surface: 'basecamp' }).catch(() => undefined),
   /* After a save, the office's copy is read back and merged note by note, so two devices cannot erase each other's notes. */
   fetch: async (slug) => {
     const data = await read('studio')

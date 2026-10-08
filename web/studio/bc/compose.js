@@ -38,6 +38,7 @@
 */
 
 import * as icons from '../icons.js'
+import * as backdrop from './backdrop.js'
 import * as grid from './layout.js'
 import * as live from './livevoice.js'
 import { button, esc } from './parts.js'
@@ -760,7 +761,7 @@ export const compositionC = (p) => {
   return `<div class="bchome bccomp bccomp--c">
     ${head(p, `<div class="bcworkbar">${offChips(p)}${dock(p)}</div>`)}
     <div class="bcworkspace">
-    <div class="bcpanes" data-bc-board="${esc(p.slug)}" style="height:${String(st.h)}px;--bc-gx:${String(view.x)}px;--bc-gy:${String(view.y)}px;--bc-gz:${String(view.zoom)};--bc-gstep:${String(grid.gridStep(view.zoom))}px">
+    <div class="bcpanes" data-bc-board="${esc(p.slug)}" ${backdrop.attrsFor(grid.bgOf(p.slug), p.slug)} style="height:${String(st.h)}px;--bc-gx:${String(view.x)}px;--bc-gy:${String(view.y)}px;--bc-gz:${String(view.zoom)};--bc-gstep:${String(grid.gridStep(view.zoom))}px;${backdrop.styleFor(grid.bgOf(p.slug), p.slug)}">
       <div class="bcstage" style="width:${String(st.w)}px;height:${String(st.h)}px;--bc-zoom:${String(view.zoom)};transform:translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})">
         ${place
           .map((r) => {
