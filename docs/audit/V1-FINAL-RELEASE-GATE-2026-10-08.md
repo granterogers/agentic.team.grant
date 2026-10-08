@@ -187,7 +187,7 @@ Exact, on the final tree unless noted. Nothing weakened; two proofs were *correc
 | `verify:critical` | **63 green, 0 red; 3,557 assertions** (against the migrated candidate built from the committed files) |
 | `verify:extended` | **71 green, 0 red; 1,625 assertions** |
 | `verify:gate-sabotage` | **16 of 16 sabotages turned the critical gate red** (run on `0956be1` plus the mutation file; the later commits touch only the fallback policy, the rewrite check and two proofs, none of which a sabotage targets) |
-| mutation campaign | MUTATION_RESULT |
+| mutation campaign | mutation campaign (`scripts/audit/mutation-campaign.ts`, throwaway worktree, committed tree) | **74 mutations: 73 caught, 0 survived, 0 did not land**; one (M21) is declared equivalent. Includes M38 to M49 added in this and the previous phase |
 | `check:migrations` | 809 files, 798 recorded as applied |
 | `check:secrets` | clean, 2,967 files, 75 env values |
 | `check:templates`, `check:deployment-state`, `check:proofs`, `check:pressable` | clean |
