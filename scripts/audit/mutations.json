@@ -493,6 +493,26 @@
       "expect": "tests/handlers/team-is-the-work.test.ts"
     },
     {
+      "id": "M41",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/jobs/worker.ts",
+      "old": "await retryOnLinkFailure(() => assertHeld(db, job))",
+      "new": "await assertHeld(db, job)",
+      "invariant": "the claim check in a handler failure path survives a database blip, so the failure is recorded rather than left to the lease sweep",
+      "expect": "tests/db/link-failure.test.ts"
+    },
+    {
+      "id": "M42",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/jobs/worker.ts",
+      "old": "await retryOnLinkFailure(() =>\n      moveJob(\n        db,\n        job,\n        retryable ? 'retrying' : 'failed',\n        `handler threw: ${(error as Error).message.slice(0, 180)}`,\n      ),\n    )",
+      "new": "await moveJob(\n      db,\n      job,\n      retryable ? 'retrying' : 'failed',\n      `handler threw: ${(error as Error).message.slice(0, 180)}`,\n    )",
+      "invariant": "the move to retrying or failed, with the handler reason, survives a database blip",
+      "expect": "tests/db/link-failure.test.ts"
+    },
+    {
       "id": "M29",
       "critical": false,
       "severity": "high",

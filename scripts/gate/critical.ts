@@ -202,6 +202,11 @@ export const CRITICAL: readonly Proof[] = [
     { okRe: '^(PASS|CONTROL red)', failRe: '^(FAIL|CONTROL DID NOT)', timeoutS: 240 },
   ),
 
+  p(
+    'worker-failure-paths',
+    11,
+    "the worker records a handler failure through a short database blip (retrying with the handler reason, not left running), never retries a refused statement, never spends an attempt twice on a persistent outage, recovers once under concurrent sweeps, and never touches another office's live job",
+  ),
   // ---- provenance, retrieval scope and the drivers that exercise whole journeys --------------------------------------
   p(
     'project-provenance',

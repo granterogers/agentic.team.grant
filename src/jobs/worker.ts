@@ -37,6 +37,7 @@ import { metadataProblems, reviewRequired } from '../agents/quality.ts'
 import { withoutStrayQuotes } from '../agents/stray-quotes.ts'
 import { withJobScope } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { retryOnLinkFailure } from '../db/link-failure.ts'
 import { personOfJob, withPerson } from '../office/person.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
 import { redactDeep } from '../text/secrets.ts'
@@ -1174,7 +1175,17 @@ const runJobHeld = async (
       job.lost = true
       throw new StaleWorkerError(job.jobId, job.leasedBy ?? '', job.attempt)
     }
-    await assertHeld(db, job)
+    /*
+      THE DATABASE CAN BLIP AT THE ONE MOMENT A FAILURE IS BEING RECORDED (#443).
+
+      The handler threw, so the next two writes are about THIS failure: is the claim still mine, and move the job to
+      retrying or failed with the reason. If the link times out for a second or two, the job used to stay `running` with a
+      reason that said nothing about the failure, and the lease had to lapse (five minutes) before the recovery sweep
+      moved it. Both are idempotent records of something that already happened, so each is tried again on a LINK failure
+      only (`retryOnLinkFailure`): a stale claim, a refused transition or anything else is rethrown at once, and an outage
+      that outlasts the retries still ends in the lease sweep, as before.
+    */
+    await retryOnLinkFailure(() => assertHeld(db, job))
     const retryable = await mayRetry(db, job)
     /*
       Recognise it (#132).
@@ -1252,11 +1263,13 @@ const runJobHeld = async (
         /* Recording a failure must never be a second failure. */
       }
     }
-    await moveJob(
-      db,
-      job,
-      retryable ? 'retrying' : 'failed',
-      `handler threw: ${(error as Error).message.slice(0, 180)}`,
+    await retryOnLinkFailure(() =>
+      moveJob(
+        db,
+        job,
+        retryable ? 'retrying' : 'failed',
+        `handler threw: ${(error as Error).message.slice(0, 180)}`,
+      ),
     )
     return {
       jobId: job.jobId,
