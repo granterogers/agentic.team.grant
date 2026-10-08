@@ -1812,6 +1812,7 @@
 }
 .bchere--none { color: var(--bc-text-muted); font-weight: 500; }
 .bchere .bcjumpname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bcmenupanel[hidden] { display: none; }
 .bcmenupanel {
   position: absolute;
   left: 0;

@@ -133,159 +133,64 @@ const nameless = (await page.evaluate(
 )) as string[]
 check('no control is nameless', nameless.length === 0, nameless.join(' | '))
 
-/* --- §8.2 point 4: a preview announces its tool AND its summary -------- */
-const previews = (await page.evaluate(
-  inPage(
-    `return [...document.querySelectorAll('.bcpreview')].map((p) => p.getAttribute('aria-label') ?? '')`,
-  ),
-)) as string[]
-check(
-  'every preview announces what it opens and what it is summarising',
-  previews.length > 0 && previews.every((p) => p.includes('Opens the') || p.includes('Opens')),
-  previews.slice(0, 2).join(' // '),
-)
+/* The portfolio's project previews were removed with the portfolio (8 October 2026), and with them their announce check. */
 
-/* --- §7: Shift+J from anywhere outside composition --------------------- */
 await open('/basecamp')
-await page.keyboard.press('Shift+J')
+await page.locator('[data-bc-menu]').focus()
+await page.keyboard.press('Enter')
 await page.waitForTimeout(300)
-check('Shift+J opens Jump', (await page.locator('#bcjump').count()) === 1)
-check('focus lands in the query box', (await here()).includes('bcinput'), await here())
-
-/* --- §11.2: the focus trap ---------------------------------------------- */
-const seen = new Set<string>()
-let escaped = false
-for (let i = 0; i < 25; i += 1) {
-  await page.keyboard.press('Tab')
-  const inside = (await page.evaluate(
-    inPage("return document.activeElement?.closest('#bcjump') !== null"),
-  )) as boolean
-  if (!inside) {
-    escaped = true
-    break
-  }
-  seen.add(await here())
-}
-check('25 Tabs never leave the open sheet', !escaped, `focus reached ${await here()}`)
-check(
-  'the trap is not a single stuck element',
-  seen.size > 1,
-  `${String(seen.size)} distinct stop(s)`,
-)
-
-/* --- §7.3: the keyboard map --------------------------------------------- */
-await page.locator('#bcjumpq').focus()
-const first = await page.evaluate(
-  inPage('return document.querySelector(\'[aria-selected="true"]\')?.textContent?.trim()'),
-)
+check('Enter on the hamburger opens the menu', await page.locator('.bcmenupanel').isVisible())
+check('focus lands on the first entry', (await here()).includes('bcmenuitem'), await here())
+const firstItem = await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))
 await page.keyboard.press('ArrowDown')
-await page.waitForTimeout(150)
-const second = await page.evaluate(
-  inPage('return document.querySelector(\'[aria-selected="true"]\')?.textContent?.trim()'),
-)
-check('ArrowDown moves the selection', first !== second, `${String(first)} -> ${String(second)}`)
+const secondItem = await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))
+check('ArrowDown moves to the next entry', firstItem !== secondItem, `${String(firstItem)} -> ${String(secondItem)}`)
 await page.keyboard.press('ArrowUp')
-await page.waitForTimeout(150)
 check(
-  'ArrowUp moves it back',
-  (await page.evaluate(
-    inPage('return document.querySelector(\'[aria-selected="true"]\')?.textContent?.trim()'),
-  )) === first,
+  'ArrowUp moves back',
+  (await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))) === firstItem,
 )
 await page.keyboard.press('End')
-await page.waitForTimeout(150)
-const atEnd = await page.evaluate(
-  inPage('return document.querySelector(\'[aria-selected="true"]\')?.textContent?.trim()'),
-)
-check('End jumps to the last result', atEnd !== first, String(atEnd))
+const lastItem = await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))
+check('End jumps to the last entry', lastItem !== firstItem, String(lastItem))
 await page.keyboard.press('Home')
-await page.waitForTimeout(150)
 check(
   'Home jumps back to the first',
-  (await page.evaluate(
-    inPage('return document.querySelector(\'[aria-selected="true"]\')?.textContent?.trim()'),
-  )) === first,
+  (await page.evaluate(inPage("return document.activeElement?.textContent?.trim() ?? ''"))) === firstItem,
 )
-
-/* --- §7.1: Escape closes and restores focus to the invoker -------------- */
 await page.keyboard.press('Escape')
 await page.waitForTimeout(250)
-check('Escape closes the sheet', (await page.locator('#bcjump').count()) === 0)
+check('Escape closes the menu', !(await page.locator('.bcmenupanel').isVisible()))
 check(
-  'and focus returns to the control that opened it',
-  (await page.evaluate(
-    inPage("return document.activeElement?.hasAttribute('data-bc-jump') === true"),
-  )) === true,
+  'and focus returns to the hamburger',
+  (await page.evaluate(inPage("return document.activeElement?.hasAttribute('data-bc-menu') === true"))) === true,
   await here(),
 )
 
-/* --- §7.1 and §7.3: the shortcut must not fire while composing ---------- */
-const slug = (await page.evaluate(
-  inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
-     return el === null ? '' : (el.dataset.bcGo ?? '')`),
-)) as string
-await open(`${slug}/tasks`)
-await page.locator('[data-bc-addtask]').first().click()
-await page.waitForTimeout(200)
-await page.locator('[data-bc-taskform] input[name="title"]').first().focus()
-await page.keyboard.press('Shift+J')
-await page.waitForTimeout(250)
-check(
-  'Shift+J does NOT open Jump while a field has focus',
-  (await page.locator('#bcjump').count()) === 0,
-  'typing a capital J into a title must type a J',
-)
-check(
-  'and the letter was typed instead',
-  (await page.locator('[data-bc-taskform] input[name="title"]').first().inputValue()).includes('J'),
-  `the field holds "${await page.locator('[data-bc-taskform] input[name="title"]').first().inputValue()}"`,
-)
-
-/* --- §10E: a core journey completed with the keyboard only -------------- */
+/* --- A core journey with the keyboard only: hamburger, entry, Enter, a project ------------------- */
 await open('/basecamp')
-/*
-  Home to a project to a tool, using only Shift+J and the arrow keys. This is
-  the check that cannot be satisfied by parts that each work: it fails if the
-  selection, the Enter handler, the navigation or the focus restore is wrong.
-*/
-await page.keyboard.press('Shift+J')
-await page.waitForTimeout(300)
-await page.locator('#bcjumpq').type('Legacy')
-await page.waitForTimeout(350)
+await page.locator('[data-bc-menu]').focus()
 await page.keyboard.press('Enter')
-await page.waitForTimeout(600)
+await page.waitForTimeout(300)
+await page.keyboard.press('Enter')
+await page.waitForTimeout(700)
 check(
-  'keyboard only: Jump, filter, Enter opened a project overview',
+  'keyboard only: hamburger, Enter, Enter opened a project overview',
   (await page.locator('.bchome').count()) > 0 && new URL(page.url()).pathname.startsWith('/p/'),
   page.url(),
 )
 
-/* --- §7.3: Shift+Enter reaches a full search that actually searches ------ */
-/*
-  THE CHECK THAT WOULD HAVE CAUGHT THE BROKEN PROMISE.
-
-  Shift+Enter used to navigate to `/?q=…` in the default studio. Nothing there
-  reads `q`, and keepUrl strips the query on the first paint, so the keystroke
-  went home and silently dropped what had been typed — indistinguishable, from
-  the outside, from a search that found nothing.
-
-  So the assertion is not "a search surface opened". It is that the query
-  survived the promotion AND that results for it are on screen: a surface that
-  opens empty is the same defect wearing a better address.
-*/
+/* --- Search is reached from the menu and actually searches --------------------------------------- */
 await open('/basecamp')
-await page.keyboard.press('Shift+J')
-await page.waitForTimeout(300)
-await page.locator('#bcjumpq').type('interview')
-await page.waitForTimeout(300)
-await page.keyboard.press('Shift+Enter')
+await page.locator('[data-bc-menu]').focus()
+await page.keyboard.press('Enter')
+await page.waitForTimeout(250)
+await page.locator('.bcmenuitem', { hasText: 'Search' }).first().click()
+await page.waitForTimeout(500)
+check('the menu reaches the full search', new URL(page.url()).pathname === '/search', page.url())
+await page.locator('#bc-search-q').fill('interview')
+await page.keyboard.press('Enter')
 await page.waitForTimeout(700)
-check('Shift+Enter reaches the full search', new URL(page.url()).pathname === '/search', page.url())
-check(
-  'and the query survived the promotion',
-  (await page.locator('#bc-search-q').inputValue()) === 'interview',
-  `the box holds "${await page.locator('#bc-search-q').inputValue()}"`,
-)
 const hits = await page.locator('.bcresult').count()
 check('and it actually found something', hits > 0, `${String(hits)} result(s) for "interview"`)
 check(
@@ -310,6 +215,12 @@ check(
   (await page.locator('.bcresult').count()) <= hits &&
     (await page.locator('[data-bc-kind="Documents"]').getAttribute('aria-pressed')) === 'true',
 )
+
+await open('/basecamp')
+const slug = (await page.evaluate(
+  inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
+     return el === null ? '' : (el.dataset.bcGo ?? '')`),
+)) as string
 
 /* --- §15: aria-current marks where you are ------------------------------ */
 const crumb = await page.locator('.bccrumb').count()

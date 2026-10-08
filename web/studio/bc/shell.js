@@ -307,7 +307,8 @@ const menuPanel = () => {
     `<button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(to)}"
       aria-current="${isHere(to) ? 'page' : 'false'}">${mark}<span class="bcmenuname">${esc(label)}</span></button>`
   const firstRunShown = projects.length === 0 && source.live === true && mine && state().view === 'home'
-  return `<div class="bcmenupanel" id="bc-menu" role="menu" aria-label="Projects and navigation">
+  /* Always in the page, hidden until opened: the button's aria-controls always names something that exists. */
+  return `<div class="bcmenupanel" id="bc-menu" role="menu" aria-label="Projects and navigation"${menu.isOpen() ? '' : ' hidden'}>
     <p class="bcmenuhead">Projects</p>
     ${
       projects.length === 0
@@ -338,6 +339,7 @@ const menuPanel = () => {
               title="Sign in to create a project"><span class="bcmenuplus" aria-hidden="true">+</span><span class="bcmenuname">Create project (sign in first)</span></button>`
     }
     <hr class="bcmenusep">
+    ${item(at('/search'), 'Search')}
     ${item(at('/tasks'), 'My Tasks')}
     ${item(at('/activity'), 'Activity')}
     ${
@@ -393,7 +395,7 @@ const topRow = () => {
           <path d="M4 7h16M4 12h16M4 17h16"></path>
         </svg>
       </button>
-      ${menu.isOpen() ? menuPanel() : ''}
+      ${menuPanel()}
     </div>
     <div class="bchere${here === null ? ' bchere--none' : ''}" role="status"
       aria-label="${esc(here === null ? 'No project selected' : `You are in ${here.name}`)}">
@@ -843,7 +845,8 @@ const portfolio = () => {
     the workspace, so with nothing chosen it shows the dotted canvas and one
     sentence inviting the person to pick or make a project.
   */
-  return `<div class="bcvoid" role="region" aria-label="No project selected">
+  return `<h1 class="bcvh">Team HQ</h1>
+  <div class="bcvoid" role="region" aria-label="No project selected">
     <div class="bcvoidcard">
       <p class="bcvoidline">${listed().length === 0 ? 'No projects yet.' : 'Choose a project to begin.'}</p>
       <div class="bcvoidrow">

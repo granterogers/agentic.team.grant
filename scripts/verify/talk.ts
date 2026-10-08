@@ -348,7 +348,7 @@ for (const phone of [false, true]) {
   // ---- no project loaded, and a project that is not the person's
   mints.length = 0
   await page.goto(url('/'), { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[data-bc-go^="/p/"]', { timeout: 20000 })
+  await page.waitForSelector('[data-bc-go^="/p/"]', { state: 'attached', timeout: 20000 })
   await page.waitForTimeout(500)
   check(
     `[${leg}] on the portfolio, with no project loaded, there is no call control`,

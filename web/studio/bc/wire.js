@@ -735,6 +735,19 @@ export const wire = (root) => {
       else root.ownerDocument.querySelector('[data-bc-menu]')?.focus()
     })
   }
+  /* The menu is a role=menu, so the arrow keys, Home and End move between its entries. */
+  for (const panel of root.querySelectorAll('.bcmenupanel')) {
+    panel.addEventListener('keydown', (e) => {
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
+      const items = [...panel.querySelectorAll('.bcmenuitem:not(:disabled)')]
+      if (items.length === 0) return
+      const at = items.indexOf(root.ownerDocument.activeElement)
+      const next =
+        e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+      e.preventDefault()
+      items[next].focus()
+    })
+  }
   for (const b of root.querySelectorAll('[data-bc-menu-new]')) {
     b.addEventListener('click', () => {
       menu.setMaking(true)

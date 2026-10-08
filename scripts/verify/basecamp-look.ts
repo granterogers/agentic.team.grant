@@ -93,7 +93,7 @@ await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
   suite died waiting for a control that route does not have - which reads as
   a product defect and was a stopwatch.
 */
-await page.waitForSelector('[data-bc-go^="/p/"]', { timeout: 20000 })
+await page.waitForSelector('[data-bc-go^="/p/"]', { state: 'attached', timeout: 20000 })
 const slug = (await page.evaluate(
   inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
      return el === null ? '' : (el.dataset.bcGo ?? '')`),

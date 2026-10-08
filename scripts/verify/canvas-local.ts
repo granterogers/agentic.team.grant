@@ -65,10 +65,10 @@ try {
   check('the menu lists the projects', items >= 2, `${String(items)} projects`)
   check('the menu offers Create project', (await page.locator('.bcmenucreate').count()) === 1)
   await page.keyboard.press('Escape')
-  check('Escape closes the menu', (await page.locator('.bcmenupanel').count()) === 0)
+  check('Escape closes the menu', (await page.locator('.bcmenupanel').isVisible()) === false)
   await page.click('[data-bc-menu]')
   await page.mouse.click(900, 600)
-  check('pressing outside closes the menu', (await page.locator('.bcmenupanel').count()) === 0)
+  check('pressing outside closes the menu', (await page.locator('.bcmenupanel').isVisible()) === false)
   await page.click('[data-bc-menu]')
   const first = page.locator('.bcmenulist .bcmenuitem').first()
   const firstName = (await first.innerText()).trim()
@@ -77,7 +77,7 @@ try {
   await page.waitForTimeout(500)
   check(
     'choosing a project opens its workspace and closes the menu',
-    (await page.locator('.bcmenupanel').count()) === 0,
+    (await page.locator('.bcmenupanel').isVisible()) === false,
   )
   check(
     'the active project is named in the header',

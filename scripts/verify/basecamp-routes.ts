@@ -104,17 +104,20 @@ check(
 const canvas = await page.evaluate(inPage('return getComputedStyle(document.body).backgroundColor'))
 check(
   'the experimental stylesheet loaded and applied',
-  canvas === 'rgb(11, 21, 27)',
-  `body background is ${canvas}; expected the --bc-canvas value rgb(11, 21, 27)`,
+  canvas === 'rgb(214, 211, 204)',
+  `body background is ${canvas}; expected the light stone --bc-canvas value rgb(214, 211, 204) (the default scheme since 8 October 2026)`,
 )
 
 /* ------------------------------------------- deep addresses under the prefix */
 
+await page.locator('[data-bc-menu]').click()
+await page.waitForTimeout(200)
 const slug = (await page.evaluate(
-  inPage(`const first = document.querySelector('[data-bc-go^="/p/"]')
+  inPage(`const first = document.querySelector('.bcmenupanel [data-bc-go^="/p/"]')
      return first === null ? null : first.dataset.bcGo`),
 )) as string | null
-check('the home surface offers a project', slug !== null)
+check('the project menu offers a project', slug !== null)
+await page.keyboard.press('Escape')
 
 if (slug !== null) {
   await open(slug)
@@ -293,49 +296,35 @@ if (slug !== null) {
   Home, and every result must point somewhere this experience routes to.
 */
 await open('/basecamp')
-await page.keyboard.press('Shift+J')
-await page.waitForTimeout(350)
-const jumpRows = (await page.evaluate(
+await page.locator('[data-bc-menu]').click()
+await page.waitForTimeout(250)
+const menuRows = (await page.evaluate(
   inPage(`const out = []
-     let group = ''
-     for (const el of document.querySelectorAll('#bcjumplist > *')) {
-       if (el.classList.contains('bcjumpgroup')) { group = (el.textContent ?? '').trim(); continue }
-       const name = (el.querySelector('span')?.textContent ?? '').trim()
-       out.push({ group, name, i: el.dataset.bcJumpi })
+     for (const el of document.querySelectorAll('.bcmenupanel [data-bc-go]')) {
+       out.push({ name: (el.textContent ?? '').trim(), to: el.dataset.bcGo })
      }
      return out`),
-)) as { group: string; name: string; i: string }[]
+)) as { name: string; to: string }[]
 
-check('Jump offers results to check', jumpRows.length >= 6, `${String(jumpRows.length)} row(s)`)
+check('the project menu offers destinations to check', menuRows.length >= 3, `${String(menuRows.length)} row(s)`)
 
-/*
-  Read the destination by PRESSING each row and seeing where it lands, not by
-  reading an attribute. The attribute is what the code intended; the address
-  is what a person gets.
-*/
-const landed: { name: string; group: string; url: string }[] = []
-for (const r of jumpRows) {
+/* Read the destination by pressing each row and seeing where it lands, not by reading an attribute. */
+const landed: { name: string; url: string }[] = []
+for (const r of menuRows) {
   await open('/basecamp')
-  await page.keyboard.press('Shift+J')
-  await page.waitForTimeout(280)
-  const row = page.locator(`[data-bc-jumpi="${r.i}"]`)
+  await page.locator('[data-bc-menu]').click()
+  await page.waitForTimeout(200)
+  const row = page.locator('.bcmenupanel [data-bc-go]', { hasText: r.name }).first()
   if ((await row.count()) === 0) continue
   await row.click()
   await page.waitForTimeout(500)
-  landed.push({
-    name: r.name,
-    group: r.group,
-    url: (await page.evaluate(inPage('return location.pathname'))) as string,
-  })
+  landed.push({ name: r.name, url: (await page.evaluate(inPage('return location.pathname'))) as string })
 }
-
 for (const l of landed) {
-  if (l.name === 'Home') continue
-  if (l.group === 'Leaves this experience' || l.name === 'Current Team HQ') continue
   check(
-    `Jump result "${l.name}" (${l.group}) goes somewhere of its own`,
+    `menu entry "${l.name}" goes somewhere of its own`,
     l.url !== '/' && l.url !== '',
-    `landed on ${l.url} — the home page, which is where a result that has no real destination ends up`,
+    `landed on ${l.url}, the empty canvas, which is where an entry with no real destination ends up`,
   )
 }
 

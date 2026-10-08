@@ -50,7 +50,7 @@ page.on('requestfailed', (r) => {
 })
 
 await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-await page.waitForSelector('[data-bc-go^="/p/"]')
+await page.waitForSelector('[data-bc-go^="/p/"]', { state: 'attached' })
 const slug = (await page.evaluate(
   inPage(`return document.querySelector('[data-bc-go^="/p/"]').dataset.bcGo`),
 )) as string

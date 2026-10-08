@@ -377,7 +377,7 @@ for (const [name, vp, touch, budget] of [
   const hctx = await browser.newContext({ viewport: vp, hasTouch: touch, isMobile: touch })
   const hp = await hctx.newPage()
   await hp.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await hp.waitForSelector('[data-bc-go^="/p/"]', { timeout: 20000 })
+  await hp.waitForSelector('[data-bc-go^="/p/"]', { state: 'attached', timeout: 20000 })
   const hslug = (await hp.evaluate(
     inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
        return el === null ? '' : (el.dataset.bcGo ?? '')`),
@@ -394,7 +394,7 @@ for (const [name, vp, touch, budget] of [
        const purpose = (window.__shots.projects.find((x) => location.pathname.endsWith(x.slug))?.purpose ?? '')
        const headText = head === null ? '' : (head.textContent ?? '').replace(/\\s+/g, ' ')
        const mark = document.querySelector('.bcjumpmark .bcprojmark')
-       const chip = document.querySelector('.bcjump')
+       const chip = document.querySelector('.bchere')
        return {
          top: panes === null ? -1 : Math.round(panes.getBoundingClientRect().top)
            - (strip === null ? 0 : Math.round(strip.getBoundingClientRect().height)),

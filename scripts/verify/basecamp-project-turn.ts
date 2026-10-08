@@ -220,7 +220,7 @@ const dock = async (page: Page, text: string): Promise<void> => {
   const thrown: string[] = []
   page.on('pageerror', (e) => thrown.push(e.message))
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[data-bc-go^="/p/provenance-a"]', { timeout: 20000 })
+  await page.waitForSelector('[data-bc-go^="/p/provenance-a"]', { state: 'attached', timeout: 20000 })
   for (const [slug, n] of [
     ['provenance-a', 1],
     ['provenance-b', 1],
@@ -329,7 +329,7 @@ const dock = async (page: Page, text: string): Promise<void> => {
   const ctx = await newContext(turns, { delayMs: 1500 })
   const page = await ctx.newPage()
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[data-bc-go^="/p/provenance-a"]', { timeout: 20000 })
+  await page.waitForSelector('[data-bc-go^="/p/provenance-a"]', { state: 'attached', timeout: 20000 })
   await go(page, '/basecamp/p/provenance-a/chat', '[data-bc-sayform]')
   const words = 'Where is the venue contract? (switch test)'
   await page.fill('#bc-say', words)
@@ -411,7 +411,7 @@ const LOOPBACK = `
   const thrown: string[] = []
   page.on('pageerror', (e) => thrown.push(e.message))
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[data-bc-go^="/p/provenance-a"]', { timeout: 20000 })
+  await page.waitForSelector('[data-bc-go^="/p/provenance-a"]', { state: 'attached', timeout: 20000 })
   await go(page, '/basecamp/p/provenance-a', '[data-bc-voice]')
   await page.locator('[data-bc-voice]').first().click()
   const live = await page
@@ -492,7 +492,7 @@ const mineCount = (v: DockView, text: string): number =>
   const thrown: string[] = []
   page.on('pageerror', (e) => thrown.push(e.message))
   await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[data-bc-go^="/p/provenance-b"]', { timeout: 20000 })
+  await page.waitForSelector('[data-bc-go^="/p/provenance-b"]', { state: 'attached', timeout: 20000 })
   await go(page, '/basecamp/p/provenance-b', '.bcmain')
   await dock(page, 'Opened on B (dock-376)')
 
