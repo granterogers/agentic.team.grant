@@ -4801,6 +4801,14 @@ Each of these cost real time. They are here so they cost it once.
   `e2e-duties-budget` seeded a 07:00 briefing into offices on both sides of the date line, so one of the two was correctly not due for seven hours of
   every UTC day. Anchor a fixture to local midnight, or pin the clock.
 
+- **Final stabilisation run lessons (8 October 2026, `docs/audit/V1-RELEASE-CANDIDATE-2026-10-08.md`).** (1) **Two mechanisms each answering one request is a class,
+  and only a real model found it**: the planner also pursued a request whose team was convened, so a plan say-back replaced the hand-off note and a verbatim source dump
+  followed the synthesis. A scripted model whose planner returns `{}` can never exercise it; `message-ordering` O6 now scripts a plan. Only a findings-only request is left to its team: one that
+  also asks for a change still plans. (2) **Fixing a disclaimer by counting the answer as a landed row widens the permission to promise**: sentence and permission must read one set of rows, and the disclaimer alone is
+  dropped. (3) **A new wait in one handler goes stale in every proof that assumed it never waits** (`fan-in-waits`, two settle loops); change the proof's subject, never its assertion. (4) **A real-model trial that repeats one question
+  tests the repeat detector**, correctly answered "you asked me that a moment ago"; vary the ask per trial. (5) **Fallback models answer the same routine question worse**: 3 of 7 off-target when the primary was refused; the reading was right
+  (`understood_as`), the answering model drifted (Issue #444). (6) **Capture provenance for every real-model denial**, so the next occurrence is localised rather than guessed at.
+
 ---
 
 ## Visual standard

@@ -1192,6 +1192,14 @@ rather than rediscovery.
 
 ---
 
+## 8 October 2026 - Version 1 release candidate (local only; nothing deployed)
+
+Branch `claude/deep-systems-audit-3cwbtc`. Selective delegation on Telegram, Slack and Team HQ, #440 and #441 fixed (migration 1035), bounded Notion sync, real-model acceptance R1 to R17.
+Critical gate 61 green, extended 71 green, 65 mutations run (64 caught, 1 declared equivalent). Recommendation B (a separately authorised live smoke test). Full evidence, the fourteen answers, the
+pending migrations (1023 to 1035) and the deployment risks: `docs/audit/V1-RELEASE-CANDIDATE-2026-10-08.md`. Open: Issues #443 (worker failure path), #444 (fallback models), #440/#441 until deployed.
+
+---
+
 ## 4 October 2026 (run 2, last stretch) - production frozen, local and replica work only
 
 **Read `docs/ops/deployment-queue-2026-10-04.md` first: it is the authority for what is waiting and the order to do it in.**
