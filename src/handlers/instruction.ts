@@ -144,7 +144,12 @@ import {
   withoutNegated,
 } from '../agents/negation.ts'
 import type { CanonicalOutcome } from '../agents/outcome.ts'
-import { answersByWriting, contractFor, sayWhatHappened } from '../agents/outcome.ts'
+import {
+  answersByFindings,
+  answersByWriting,
+  contractFor,
+  sayWhatHappened,
+} from '../agents/outcome.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import { performable } from '../agents/perform.ts'
 import {
@@ -864,8 +869,12 @@ export async function speaker(
    * directly: a specialist whose bot he opened still answers. Default false.
    */
   settledInCode = false,
-  /** The door the turn came through. Only `telegram` is routed selectively (see below); null and every other door as before. */
-  channel: string | null = null,
+  /**
+   * What he actually said (`turn.kept`: his words, nothing a model wrote, nothing he pasted). The selective-delegation
+   * decision below reads THIS, never `instruction`, which may be a model's rewrite or carry pasted material (a permit
+   * must not read a paraphrase). Null means the caller has no turn (a test of the literal roster path): no selection.
+   */
+  hisWords: string | null = null,
 ): Promise<Speaker> {
   const direct = addressedDirectly({ addressedTo, alsoAddressed, handedOff })
   if (settledInCode && !direct) {
@@ -1031,22 +1040,24 @@ export async function speaker(
   const namedHere = asks.map((t) => namedColleague(t, colleagues))
 
   /*
-    SELECTIVE DELEGATION ON TELEGRAM (owner decision, 7 October 2026).
+    SELECTIVE DELEGATION, ON EVERY INTERFACE (owner decisions, 7 and 8 October 2026).
 
-    Typed to the chief's bot and not addressed to anybody else, a routine request is Claire's to answer: no subject lookup,
-    no semantic reading, no child job. The team is convened when he asks for it by name or by role, or when the work is
-    plainly more than one person's quick answer (`delegation-scope.ts`). Only Telegram: the dashboard and Slack keep the
-    roster they had, because their routing was measured and nothing here is evidence about them.
+    Not addressed to a specialist, a routine request is Claire's to answer: no subject lookup, no semantic reading, no child
+    job. The team is convened when he asks for it by name or by role, or when what is asked is investigative, weighs options
+    towards a recommendation, or holds several independent workstreams (`delegation-scope.ts`). The decision belongs here,
+    in the one function every door's turn reaches, so Telegram, Slack, Team HQ and the call cannot disagree about it: a door
+    that decided for itself would be an adapter deciding (master spec section 5). It reads his words, not the length.
   */
-  if (channel === 'telegram') {
+  if (hisWords !== null) {
+    const hisClauses = split(withoutNegated(hisWords)).map((p) => p.text)
     const scope = delegationScope({
-      instruction,
-      classification: classified,
-      asks: asks.length,
+      instruction: hisWords,
+      classification: classifyIntent(hisWords),
+      asks: hisClauses.length,
       namesAColleague:
-        namedHere.some((n) => n !== null) ||
+        hisClauses.some((t) => namedColleague(t, colleagues) !== null) ||
         namesColleagueInFrame(
-          instruction,
+          hisWords,
           colleagues.map((c) => c.name),
         ),
     })
@@ -1061,8 +1072,7 @@ export async function speaker(
       if (c !== undefined)
         return {
           ...c,
-          reason:
-            'routine request on Telegram: the chief of staff answers it herself, nobody is convened',
+          reason: 'routine request: the chief of staff answers it herself, nobody is convened',
           alsoConvened: [],
           convened: [],
           handoff: null,
@@ -2771,7 +2781,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         job.jobId,
         isBranch,
         settledInCode,
-        typeof payload.origin_channel === 'string' ? payload.origin_channel : null,
+        // Forwarded words are content, not a request (nothing was asked): Claire answers, nobody is convened.
+        forwarded ? '' : turn.kept,
       )
 
       /*
@@ -5966,13 +5977,21 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                    where d.office_id = app.job_office(${lit(job.jobId)}::uuid) and d.produced_by_job = ${lit(job.jobId)}::uuid) as n,
                  (select count(*) from public.jobs c
                    where c.office_id = app.job_office(${lit(job.jobId)}::uuid) and c.parent_job_id = ${lit(job.jobId)}::uuid) as kids,
+                 (select count(*) from public.jobs c
+                   where c.office_id = app.job_office(${lit(job.jobId)}::uuid) and c.parent_job_id = ${lit(job.jobId)}::uuid
+                     and c.kind = 'office.instruction') as colleagues,
                  (select count(*) from public.blockers b
                    where b.office_id = app.job_office(${lit(job.jobId)}::uuid) and b.state = 'open'
                      and (b.job_id = ${lit(job.jobId)}::uuid
                           or b.job_id in (select c.job_id from public.jobs c
                                            where c.office_id = app.job_office(${lit(job.jobId)}::uuid)
                                              and c.parent_job_id = ${lit(job.jobId)}::uuid))) as asking`)
-        .then((r) => r.rows[0] as { n?: number; kids?: number; asking?: number } | undefined)
+        .then(
+          (r) =>
+            r.rows[0] as
+              | { n?: number; kids?: number; colleagues?: number; asking?: number }
+              | undefined,
+        )
         .catch(() => undefined)
       const landedRows = counted === undefined ? acted : Number(counted.n ?? 0)
       /*
@@ -7304,9 +7323,38 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         is still judged by `consequence.ts` against its rows.
       */
       const draftIsTheAnswer = requests.some(answersByWriting) && bodyHoldsDraft(said, '')
-      const outcomeNow: CanonicalOutcome = draftIsTheAnswer
-        ? { ...outcome, landed: outcome.landed + 1 }
-        : outcome
+      /*
+        FINDINGS ARE THE ANSWER, WHEN THERE IS DURABLE EVIDENCE THAT THEY EXIST (#440).
+
+        A request to research, review, compare or recommend lands no row: the finding is the text. Counted by rows alone it
+        read "wanted 1, landed 0", and the office opened a grounded finding with "I have not done this yet, and nothing has
+        been changed". Every clause must be a findings request that asks for nothing to be changed, sent or created
+        (`answersByFindings`), and the EVIDENCE is not the wording: either this turn read material (`hits`, the project's
+        own documents) or it is a specialist's own deliverable (a hand-off child, whose answer IS the job). The answer must
+        also be substantive. Nothing else is loosened: a promise of future work is still refused (`mayCommitToFuture` is
+        untouched), and a claim that something was sent, posted, filed or created is still judged by `consequence.ts`
+        against recorded rows.
+      */
+      const findingsRequested = requests.length > 0 && requests.every(answersByFindings)
+      const findingsAreTheAnswer =
+        findingsRequested &&
+        // While colleagues are still working the person needs the progress note, not silence: it is owed by the pending work.
+        outcome.pendingActions === 0 &&
+        (isBranch || hits.length > 0) &&
+        said.trim().length >= 25 &&
+        // Not merely a question handed back: "Which contract do you mean?" found nothing.
+        !/\?\s*$/.test(said.trim())
+      const outcomeNow: CanonicalOutcome = {
+        ...outcome,
+        ...(findingsRequested
+          ? {
+              findingsOnly: true,
+              // Specialist jobs only: a synthesis job is not a colleague, and "I have asked 3 colleagues" must be true.
+              colleaguesAsked: Number(counted?.colleagues ?? 0) + (who.handoff === null ? 0 : 1),
+            }
+          : {}),
+        ...(draftIsTheAnswer || findingsAreTheAnswer ? { landed: outcome.landed + 1 } : {}),
+      }
       const outcomeLine = sayWhatHappened(outcomeNow)
       /*
         Joined with a SPACE, not a blank line.

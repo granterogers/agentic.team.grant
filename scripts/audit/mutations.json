@@ -367,7 +367,7 @@
       "critical": true,
       "severity": "high",
       "file": "src/agents/delegation-scope.ts",
-      "old": "  if (ASKS_FOR_TEAM.some((re) => re.test(input.instruction))) return 'team'",
+      "old": "  if (ASKS_FOR_TEAM.some((re) => re.test(said))) return 'team'",
       "new": "  if (false) return 'team'",
       "invariant": "an explicit request for the team on Telegram is never answered as a routine one: he asked for who, and the office never overrides it",
       "expect": "tests/handlers/speaker.test.ts"
@@ -433,6 +433,36 @@
       "expect": "tests/agents/own-task.test.ts"
     },
     {
+      "id": "M35",
+      "critical": false,
+      "severity": "high",
+      "file": "src/agents/delegation-scope.ts",
+      "old": "const said = withoutQuotedMaterial(input.instruction)",
+      "new": "const said = input.instruction",
+      "invariant": "an email he pasted that says 'investigate' is not him asking for an investigation (delegation reads his words, not pasted material)",
+      "expect": "tests/agents/delegation-scope.test.ts"
+    },
+    {
+      "id": "M36",
+      "critical": false,
+      "severity": "high",
+      "file": "src/agents/delegation-scope.ts",
+      "old": "  if (INVESTIGATIVE.test(body)) return 'complex'",
+      "new": "",
+      "invariant": "a short request that is investigative by its nature ('Investigate why X') is eligible for specialists; length is not what decides",
+      "expect": "tests/agents/delegation-scope.test.ts"
+    },
+    {
+      "id": "M37",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "forwarded ? '' : turn.kept,",
+      "new": "turn.kept,",
+      "invariant": "forwarded words are content and never a request for the team: the selective-delegation decision reads nothing from a forwarded turn",
+      "expect": "tests/handlers/speaker.test.ts"
+    },
+    {
       "id": "M29",
       "critical": false,
       "severity": "high",
@@ -461,6 +491,136 @@
       "new": "        const shared = await listShared(client)\n        for (const project of attached) {\n          await listShared(client)",
       "invariant": "the workspace is listed once per run, not once per attached project",
       "expect": "tests/notion/sync-handler.test.ts"
+    },
+    {
+      "id": "N1",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/api.ts",
+      "old": "Math.min(this.requestTimeoutMs, left())",
+      "new": "this.requestTimeoutMs",
+      "invariant": "one Notion call is bounded as a whole: an attempt gets only what the call deadline has left, so a 429 wait followed by a hang cannot stretch a call past it",
+      "expect": "tests/notion/call-bounds.test.ts"
+    },
+    {
+      "id": "N2",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/api.ts",
+      "old": "if (seconds * 1_000 < left()) {",
+      "new": "if (true) {",
+      "invariant": "a Retry-After that cannot fit before the call deadline is not waited out",
+      "expect": "tests/notion/call-bounds.test.ts"
+    },
+    {
+      "id": "N3",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/sync.ts",
+      "old": "if (isDatabaseLinkFailure(error)) throw error",
+      "new": "if (false) throw error",
+      "invariant": "a database connection failure ends the Notion sync and names itself instead of being recorded as a page left out for every remaining page",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N4",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/sync.ts",
+      "old": "    'GET',\n    guardOf(budget),\n",
+      "new": "    'GET',\n",
+      "invariant": "the run budget is asked before every cursor page of a page's block tree, so a long flat page cannot outlive the host",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N5",
+      "critical": false,
+      "severity": "high",
+      "file": "src/handlers/notion-sync.ts",
+      "old": "export const RUN_BUDGET_MS = 25_000",
+      "new": "export const RUN_BUDGET_MS = 60_000",
+      "invariant": "the run budget plus one call in flight, the writes and the voice leave at least 20 s of the 90 s a last-started job has before the 150 s wall clock",
+      "expect": "tests/notion/handler-bounds.test.ts"
+    },
+    {
+      "id": "N6",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/sync.ts",
+      "old": "if (error.kind === 'transient') {",
+      "new": "if (false) {",
+      "invariant": "a transient Notion failure on a page defers it (read again next run) and a run of them stops the pass; it is never reported as a page left out",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N7",
+      "critical": false,
+      "severity": "high",
+      "file": "src/jobs/fence.ts",
+      "old": "Promise.race([renewal, tooLate])",
+      "new": "renewal",
+      "invariant": "a lease renewal the database never answers counts as failed, so one hung query cannot silence every later renewal and let the lease lapse under a working handler",
+      "expect": "tests/jobs/heartbeat.test.ts"
+    },
+    {
+      "id": "N8",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/sync.ts",
+      "old": "return renamed ? 'changed' : 'unchanged'",
+      "new": "return 'unchanged'",
+      "invariant": "a page renamed in Notion with the same body is a change, and its stored title follows",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N9",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/sync.ts",
+      "old": "Number.isFinite(now) && stored === now) same.add(o.id)",
+      "new": "Number.isFinite(now) && stored <= now) same.add(o.id)",
+      "invariant": "a page is skipped only while its stored edit time EQUALS Notion's, so a page edited by one millisecond is read again and never missed",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N10",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/sync.ts",
+      "old": "clock() - startedPage >= pageCap }",
+      "new": "false }",
+      "invariant": "one page may use only its own share of the run, so a page too large for any run is named and does not starve the pages behind it",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N11",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/api.ts",
+      "old": "if (page.next_cursor === cursor)",
+      "new": "if (false)",
+      "invariant": "a cursor handed back unchanged is a loop and ends the listing instead of running until the clock does",
+      "expect": "tests/notion/call-bounds.test.ts"
+    },
+    {
+      "id": "N12",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/handlers/notion-sync.ts",
+      "old": "runBudgetMs / 2",
+      "new": "runBudgetMs * 1000",
+      "invariant": "the workspace listing may use only half the run budget, so a workspace too big to list quickly still leaves time to read pages",
+      "expect": "tests/notion/handler-bounds.test.ts"
+    },
+    {
+      "id": "N13",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/infra.ts",
+      "old": "if (LINK_TEXT.test(message) || LINK_SQLSTATE.test(message)) return true",
+      "new": "if (false) return true",
+      "invariant": "a database connection timeout is recognised as the link and not as one page's problem",
+      "expect": "tests/notion/infra.test.ts"
     }
   ]
 }

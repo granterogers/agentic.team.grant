@@ -44,6 +44,9 @@ import type { ProviderRouter } from '../providers/router.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
+/** How long after the team finished the lead's own reply may still hold the final answer back (see the gate below). */
+export const LEAD_REPLY_WAIT_S = 180
+
 export interface SynthesiseDeps {
   readonly db: SqlExecutor
   readonly router: ProviderRouter | null
@@ -199,6 +202,55 @@ export function synthesiseHandler(deps: SynthesiseDeps): Handler {
           ...base,
           announce: false,
           body: `Waiting for ${who === '' ? 'the rest of the team' : who} before I answer.`,
+          evidence: 'verified',
+          path: await howComposed(deps.db, job.jobId),
+        }
+      }
+
+      /*
+        THE FIRST REPLY GOES BEFORE THE FINAL ONE (#441), AS A STATE AND NOT A TIMING ASSUMPTION.
+
+        The lead's reply (her own finding and "I have asked N colleagues, I will come back") and this synthesis are two
+        jobs on two workers. With a real model the lead's own turn (retrieval, a model call, the coherence gates) can
+        finish AFTER two colleagues and this synthesis have, so the hand-off announcement arrived after the result it
+        announces. So this does not answer until the lead's reply has SETTLED: the lead job is terminal and none of its
+        deliveries is still in flight (a retryable send stays `claimed` until it is sent or given up). Read from rows, so it
+        holds across workers, retries, a restart and redelivery.
+
+        Bounded, because a lead that never settles (paused on an approval, stuck) must not hold the final answer for ever:
+        three minutes after the team finished it goes anyway, and a lead reply that still arrives after that is suppressed
+        by the database as superseded (migration 1035), so there is never a stale announcement after the answer.
+      */
+      const lead = await readRow<{ settled: boolean; since_team_done_s: number } | null>(
+        `select jsonb_build_object(
+                  'settled', (p.state::text in ('complete', 'failed', 'cancelled')
+                              and not exists (select 1 from public.deliveries d
+                                               where d.job_id = p.job_id and d.state::text = 'claimed')),
+                  'since_team_done_s', coalesce((select extract(epoch from (app.now_utc() - max(b.finished_at)))::int
+                                                   from public.job_branches jb join public.jobs b on b.job_id = jb.job_id
+                                                  where jb.group_id = ${lit(group)}::uuid), 0)) as r
+           from public.jobs j
+           join public.jobs p on p.job_id = j.parent_job_id and p.office_id = j.office_id
+          where j.job_id = ${lit(job.jobId)}::uuid and j.office_id = app.job_office(${lit(job.jobId)}::uuid)`,
+        'r',
+      ).catch(() => null)
+      if (lead !== null && !lead.settled && Number(lead.since_team_done_s) < LEAD_REPLY_WAIT_S) {
+        await pauseJob(
+          db,
+          job.jobId,
+          {
+            detail: 'the team is done; the first reply has not gone out yet.',
+            reason: 'dependency_wait',
+            resumable: true,
+            resumeWhen: 'Waiting for my first reply to go out before the answer.',
+            until: new Date(Date.now() + 10_000),
+          },
+          job,
+        )
+        return {
+          ...base,
+          announce: false,
+          body: 'Waiting for my first reply to go out before I give the answer.',
           evidence: 'verified',
           path: await howComposed(deps.db, job.jobId),
         }

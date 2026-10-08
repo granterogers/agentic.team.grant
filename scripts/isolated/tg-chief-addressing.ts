@@ -479,8 +479,7 @@ part(
   )
   check(
     'and it cost no routing model call: the semantic reading of the subject was never asked, and the reason says it was routine',
-    model.since(m, 'other').length === 0 &&
-      /routine request on Telegram/.test(String(d.roster_reason)),
+    model.since(m, 'other').length === 0 && /routine request/.test(String(d.roster_reason)),
     `other calls=${String(model.since(m, 'other').length)} reason=${String(d.roster_reason).slice(0, 70)}`,
   )
 }
@@ -590,7 +589,7 @@ part('T2', "the chief's bot: 'Ask the team ...' convenes the team, ONE answer, s
     out.length === 2 &&
       new Set(out.map((o) => o.text)).size === 2 &&
       out.every((o) => o.token === CHIEF_TOKEN && o.chat === CHAT) &&
-      /handed this on in 3 pieces/.test(out[0]?.text ?? '') &&
+      /asked 2 colleagues to look into this/.test(out[0]?.text ?? '') &&
       /Recommendation/.test(out[1]?.text ?? ''),
     `${String(out.length)} message(s)`,
   )
@@ -1045,6 +1044,90 @@ part(
       (await count(
         `select count(*)::int as n from public.tasks where office_id = ${lit(op)}::uuid and title ilike '%PAY NOW%'`,
       )) === 0,
+  )
+}
+
+// ===================================================================================================================
+part(
+  'T9',
+  'what the answer says about what happened (#440): findings are not disclaimed, an unsupported claim still is, a mixed outcome is truthful',
+)
+{
+  const DISCLAIMER = /I have not done this yet/
+  const FINDING =
+    'The contract carries a 100 percent cancellation fee with no cap, and the insurance certificate is still outstanding. Recommendation: negotiate a cap before paying the deposit.'
+
+  // (a) research that read the project's own document: the finding is the work, nothing to disclaim.
+  await quiet()
+  await scopeChat(proj)
+  model.script('answer:Claire', FINDING)
+  const fromA = tgCalls.length
+  const a = await say('Review the venue contract and give me a recommendation.')
+  await settle(a.job)
+  const outA = sent(fromA)
+  check(
+    'research grounded in the project documents is delivered as the finding, with no "I have not done this yet" in front of it',
+    outA.length === 1 &&
+      /cancellation fee/.test(outA[0]?.text ?? '') &&
+      !DISCLAIMER.test(outA[0]?.text ?? ''),
+    (outA[0]?.text ?? '').slice(0, 90),
+  )
+
+  // (b) the same request in a project that holds nothing: no durable evidence that findings exist, so the disclosure stays.
+  const empty = await mkProject(op, `Empty ${run}`)
+  await quiet()
+  await scopeChat(empty)
+  model.script('answer:Claire', FINDING)
+  const fromB = tgCalls.length
+  const b = await say('Review the venue contract and give me a recommendation.')
+  await settle(b.job)
+  const outB = sent(fromB)
+  check(
+    'CONTROL: with no material to ground it, the same words keep the disclosure (evidence, not wording, decides)',
+    outB.length === 1 && DISCLAIMER.test(outB[0]?.text ?? ''),
+    (outB[0]?.text ?? '').slice(0, 90),
+  )
+
+  // (c) findings plus an action: the office may not claim the action, and the message stays truthful about it.
+  await quiet()
+  await scopeChat(proj)
+  model.script('answer:Claire', `I have reviewed it. ${FINDING} I have emailed Kevin the summary.`)
+  model.script('answer:Claire', FINDING)
+  const fromC = tgCalls.length
+  const c = await say('Review the venue contract and email Kevin the summary.')
+  await settle(c.job)
+  const outC = sent(fromC)
+  const textC = outC.map((o) => o.text).join(' ')
+  check(
+    'a mixed request (findings and an email): no email is claimed, nothing is sent, and the message is delivered once',
+    outC.length === 1 &&
+      !/(emailed|sent) (kevin|the summary)/i.test(textC) &&
+      (await count(
+        `select count(*)::int as n from public.deliveries d join public.jobs j on j.job_id = d.job_id
+          where j.correlation_id = ${corr(c.job)} and d.channel <> 'telegram'`,
+      )) === 0,
+    textC.slice(0, 110),
+  )
+
+  // (d) a delegated request: the colleagues' findings are not disclaimed either, and the lead says plainly it asked them.
+  await quiet()
+  await scopeChat(proj)
+  scriptTeam()
+  const fromD = tgCalls.length
+  const d = await say(ASK)
+  await settle(d.job)
+  const kidBodies = await rows(
+    `select o.body from public.outputs o join public.jobs j on j.job_id = o.job_id
+      where j.correlation_id = ${corr(d.job)} and j.parent_job_id is not null and j.kind = 'office.instruction'`,
+  )
+  const outD = sent(fromD)
+  check(
+    "a colleague's findings carry no 'I have not done this yet', and the lead's note says she asked them rather than that nothing changed",
+    kidBodies.length === 2 &&
+      kidBodies.every((k) => !DISCLAIMER.test(String(k.body))) &&
+      outD.some((o) => /asked 2 colleagues to look into this/.test(o.text)) &&
+      !outD.some((o) => /Nothing has changed yet/.test(o.text)),
+    outD.map((o) => o.text.slice(0, 50)).join(' | '),
   )
 }
 

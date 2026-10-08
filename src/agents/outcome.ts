@@ -183,6 +183,17 @@ export interface CanonicalOutcome {
    * asked for nothing still may not say it did something.
    */
   readonly asked: boolean
+  /**
+   * Every clause he asked for was a request for FINDINGS (`answersByFindings`): nothing was to be changed, sent, created or
+   * scheduled, so "nothing has changed yet" is not the news. Only changes how the pending-work sentence is worded; it never
+   * widens what an answer may claim. Optional, so every caller that does not know stays exactly as before.
+   */
+  readonly findingsOnly?: boolean
+  /**
+   * How many COLLEAGUES were asked (specialist jobs), which is not `pendingActions`: that also counts a synthesis job and a
+   * hand-off, and "I have asked 3 colleagues" must not count a job that is not a person. When absent, `pendingActions`.
+   */
+  readonly colleaguesAsked?: number
 }
 
 /**
@@ -394,6 +405,12 @@ export const sayWhatHappened = (c: CanonicalOutcome): string | null => {
         he would wait for a decision nobody needs, while the office waits for
         him.
       */
+      if (!c.awaitingApproval && c.findingsOnly === true) {
+        const asked = Math.max(1, c.colleaguesAsked ?? c.pendingActions)
+        return `I have asked ${
+          asked > 1 ? `${String(asked)} colleagues` : 'a colleague'
+        } to look into this and will come back with what they find.`
+      }
       return c.awaitingApproval
         ? 'Nothing has changed yet. It is waiting on your word.'
         : `Nothing has changed yet — I have handed this on${
@@ -429,6 +446,28 @@ const ALSO_SENDS_IT =
   /\b(?:and|then|also|&)\s+(?:then\s+|also\s+)?(?:send|e-?mail|post|publish|share|forward|text|submit|file|upload|deliver)\b/i
 export const answersByWriting = (request: string): boolean =>
   OPENS_WITH_WRITING.test(request) && !ALSO_SENDS_IT.test(request)
+
+/**
+ * Was this clause a request for FINDINGS, where the answer is the whole job? (#440)
+ *
+ * Found by the controlled real-model run: "Ask the team to look at the venue contract risk and the budget impact and give
+ * me a recommendation" convened two specialists, and each opened its grounded finding with "I have not done this yet, and
+ * nothing has been changed". A request to research, review, compare or recommend lands no row, because the finding is the
+ * text of the answer, so a rows-only count read "wanted 1, landed 0" and the office contradicted itself in one message.
+ * Journey E fixed the same shape for drafts; this is the same fact for findings.
+ *
+ * Deliberately narrow, and never sufficient alone: the opener must be an analysis verb (optionally behind "please", "can
+ * you", or a delegation frame such as "ask the team to"), the clause must NOT also ask for something to be changed, sent,
+ * created or scheduled (those have a half the office may not have done, and the "I have not done this" sentence is true of
+ * them), and the caller still requires durable evidence that findings exist (material retrieved this turn, or a specialist's
+ * own deliverable). "Send it to Kevin" and "add a task" have no such opening and are untouched.
+ */
+const OPENS_WITH_FINDINGS =
+  /^\s*(?:(?:please|kindly)[\s,]+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?|i\s+need\s+you\s+to\s+|i(?:'|’)d\s+like\s+you\s+to\s+|i\s+want\s+you\s+to\s+)?(?:(?:ask|get|have)\s+(?:the\s+)?(?:team|specialists?|directors?|[a-z]+(?:\s+and\s+[a-z]+)*)\s+to\s+)?(?:analy[sz]e|assess|review|evaluate|compare|recommend|research|investigate|summari[sz]e|explain|look\s+(?:at|into)|find\s+out|work\s+out|tell\s+me|give\s+me\s+(?:a|an|the)\s+(?:recommendation|summary|view|assessment|analysis|overview)|advise)\b/i
+const ALSO_CHANGES_SOMETHING =
+  /\b(?:and|then|also|&|,)\s+(?:then\s+|also\s+)?(?:send|e-?mail|post|publish|share|forward|text|submit|file|upload|deliver|create|add|schedule|book|pay|delete|remove|update|change|set\s+up|make|tell\s+(?:kevin|emma|daniel|tom|marcus|ruby|oliver|grace|them|him|her))\b/i
+export const answersByFindings = (request: string): boolean =>
+  OPENS_WITH_FINDINGS.test(request) && !ALSO_CHANGES_SOMETHING.test(request)
 
 /**
  * The classes in which a turn owes Grant a sentence it cannot get from the

@@ -179,6 +179,18 @@ const SABOTAGES: readonly Sabotage[] = [
       ]),
   },
   {
+    id: 'stale-lead-reply-not-suppressed',
+    title:
+      "app.result_superseded always answers false: a lead's hand-off reply is sent after the team's answer that supersedes it",
+    expect: ['message-ordering'],
+    apply: (db) =>
+      replaceFn(
+        db,
+        'app.result_superseded(uuid,uuid,text,text)',
+        `create or replace function app.result_superseded(p_office uuid, p_job uuid, p_channel text, p_target_ref text) returns boolean language sql stable security definer set search_path = '' as $f$ select false $f$`,
+      ),
+  },
+  {
     id: 'reminder-harness-filter-removed',
     title:
       'app.reminders_due stops excluding harness tasks: a test task can be reminded to a real person',
