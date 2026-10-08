@@ -161,3 +161,15 @@ describe('where a new note goes', () => {
     expect(L.postits('n').map((n: { id: string }) => n.id)).toContain(b.id)
   })
 })
+
+describe('the dotted grid', () => {
+  it('never crowds below 14px and keeps its dots on the base lattice', () => {
+    for (let z = 0.2; z <= 2.5; z += 0.05) {
+      const step = L.gridStep(z) as number
+      expect(step).toBeGreaterThanOrEqual(14 - 1e-9)
+      const ratio = step / (24 * z)
+      expect(Math.log2(ratio) % 1).toBeCloseTo(0, 9)
+    }
+    expect(L.gridStep(1)).toBe(24)
+  })
+})

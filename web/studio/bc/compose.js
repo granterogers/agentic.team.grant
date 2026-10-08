@@ -760,7 +760,7 @@ export const compositionC = (p) => {
   return `<div class="bchome bccomp bccomp--c">
     ${head(p, `<div class="bcworkbar">${offChips(p)}${dock(p)}</div>`)}
     <div class="bcworkspace">
-    <div class="bcpanes" data-bc-board="${esc(p.slug)}" style="height:${String(st.h)}px;--bc-gx:${String(view.x)}px;--bc-gy:${String(view.y)}px;--bc-gz:${String(view.zoom)}">
+    <div class="bcpanes" data-bc-board="${esc(p.slug)}" style="height:${String(st.h)}px;--bc-gx:${String(view.x)}px;--bc-gy:${String(view.y)}px;--bc-gz:${String(view.zoom)};--bc-gstep:${String(grid.gridStep(view.zoom))}px">
       <div class="bcstage" style="width:${String(st.w)}px;height:${String(st.h)}px;transform:translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})">
         ${place
           .map((r) => {

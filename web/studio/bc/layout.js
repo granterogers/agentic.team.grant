@@ -198,6 +198,16 @@ export const zoomAt = (v, factor, sx, sy) => {
   const k = zoom / v.zoom
   return { zoom, x: sx - (sx - v.x) * k, y: sy - (sy - v.y) * k }
 }
+/**
+ * The distance between grid dots on screen. The grid doubles its spacing each time the dots would otherwise crowd closer
+ * than 14px, so zoomed far out it stays a calm lattice instead of a grey haze. Every spacing is a multiple of the base one,
+ * so the dots that remain are a subset of the dots that went: nothing seems to slide as you zoom.
+ */
+export const gridStep = (zoom, base = 24, min = 14) => {
+  let step = base * zoom
+  while (step < min) step *= 2
+  return step
+}
 export const panBy = (v, dx, dy) => ({ ...v, x: v.x + dx, y: v.y + dy })
 /** The view that brings every rectangle into a box of w by h with a margin, never magnifying past 1. */
 export const fitView = (rects, w, h, pad = 40) => {

@@ -288,3 +288,4 @@
   --stage-blocked: #ef8f6b;
   --stage-done: #63c295;
 }
+[data-experience='basecamp'] .bcmain h1:not(.bcvh) { font: 750 26px/1.2 var(--bc-font); margin: 6px 0 8px; }

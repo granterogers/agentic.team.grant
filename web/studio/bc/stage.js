@@ -110,6 +110,7 @@ export const wireStage = (root, ctx) => {
     board.style.setProperty('--bc-gx', `${String(view.x)}px`)
     board.style.setProperty('--bc-gy', `${String(view.y)}px`)
     board.style.setProperty('--bc-gz', String(view.zoom))
+    board.style.setProperty('--bc-gstep', `${String(grid.gridStep(view.zoom))}px`)
     const val = dock.querySelector('.bczoomval')
     if (val !== null) val.textContent = `${String(Math.round(view.zoom * 100))}%`
   }

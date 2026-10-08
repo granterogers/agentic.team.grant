@@ -4235,7 +4235,6 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
   touch-action: none;
   cursor: grab;
   --bc-dot: color-mix(in srgb, var(--bc-text-muted) 38%, transparent);
-  --bc-gstep: calc(24px * var(--bc-gz, 1));
   background-image: radial-gradient(circle at center, var(--bc-dot) 0 calc(0.9px + 0.25px * var(--bc-gz, 1)), transparent calc(1.6px + 0.25px * var(--bc-gz, 1)));
   background-size: var(--bc-gstep) var(--bc-gstep);
   background-position: var(--bc-gx, 0) var(--bc-gy, 0);
