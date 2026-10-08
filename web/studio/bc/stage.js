@@ -584,6 +584,7 @@ export const wireStage = (root, ctx) => {
     document.removeEventListener('keydown', spaceKey)
     document.removeEventListener('keyup', spaceKey)
     document.removeEventListener('pointerdown', gone, true)
+    shut()
   }
   document.addEventListener('pointerdown', gone, true)
 
@@ -592,14 +593,17 @@ export const wireStage = (root, ctx) => {
     pop = document.createElement('div')
     pop.className = `bcpop ${cls}`
     pop.innerHTML = html
-    board.append(pop)
-    const b = board.getBoundingClientRect()
+    /* Fixed and on the body: the board clips its contents (it is a viewport onto an infinite canvas), and the anchor may be above it. */
+    pop.style.position = 'fixed'
+    document.body.append(pop)
     const a = anchor.getBoundingClientRect()
     const w = pop.offsetWidth
     const h = pop.offsetHeight
-    const left = Math.max(6, Math.min(b.width - w - 6, a.right - b.left - w))
-    const below = a.bottom - b.top + 6
-    const top = below + h > b.height ? Math.max(6, a.top - b.top - h - 6) : below
+    const vw = globalThis.innerWidth ?? 1200
+    const vh = globalThis.innerHeight ?? 800
+    const left = Math.max(6, Math.min(vw - w - 6, a.right - w))
+    const below = a.bottom + 6
+    const top = below + h > vh - 6 ? Math.max(6, a.top - h - 6) : below
     pop.style.left = `${String(Math.round(left))}px`
     pop.style.top = `${String(Math.round(top))}px`
     return pop
@@ -705,6 +709,7 @@ export const wireStage = (root, ctx) => {
         glide()
         grid.applyPreset(slug, b.dataset.preset)
         view = grid.viewOf(slug)
+        shut()
         ctx.render()
       })
     }
@@ -713,6 +718,7 @@ export const wireStage = (root, ctx) => {
         glide()
         grid.loadLayout(slug, b.dataset.load)
         view = grid.viewOf(slug)
+        shut()
         ctx.render()
       })
     }
@@ -730,6 +736,7 @@ export const wireStage = (root, ctx) => {
     for (const b of p.querySelectorAll('[data-addback]')) {
       b.addEventListener('click', () => {
         grid.add(slug, b.dataset.addback)
+        shut()
         ctx.render()
       })
     }
@@ -887,9 +894,13 @@ export const wireStage = (root, ctx) => {
   const onResize = () => {
     if (!board.isConnected) {
       globalThis.removeEventListener('resize', onResize)
+      globalThis.removeEventListener('bc-dock-resized', onResize)
       return
     }
     fit()
   }
   globalThis.addEventListener('resize', onResize)
+  /* The chat dock opening, closing or being resized changes the board's width without a window resize. */
+  globalThis.addEventListener('bc-dock-resized', onResize)
+  if (typeof ResizeObserver === 'function') new ResizeObserver(onResize).observe(board)
 }

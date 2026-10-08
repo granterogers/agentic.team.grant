@@ -78,109 +78,33 @@ export const why = () => {
 export const disclosure = () =>
   'Dictate a message. Your browser transcribes the audio — in Chrome that means Google hears it. Nothing is sent until you press Send.'
 
-let session = null
+/*
+  The logic lives in dictation.js, a state machine with the recogniser injected so it can be tested without a
+  microphone (8 October 2026). This file keeps the page-facing API the Chat page and the Team Chat dock both use.
+*/
+import { createDictation } from './dictation.js'
+
+const machine = createDictation({
+  Recognition,
+  lang: typeof navigator === 'undefined' ? 'en-GB' : navigator.language || 'en-GB',
+})
 
 /**
  * True while the microphone is open. A CHECK reads this rather than trusting
- * a comment that says the microphone was released — #196 asks for exactly that
+ * a comment that says the microphone was released - #196 asks for exactly that
  * and #102 is why.
  */
-export const active = () => session !== null
+export const active = () => machine.active()
+export const state = () => machine.state()
 
 /**
- * Start dictating into a textarea.
- *
- * `onchange` is called on every update so the caller can resize the box and
- * keep its draft in step; `onstop` is called once, whatever ended it — the
- * user pressing stop, the browser timing out, an error, or silence. There is
- * no path that leaves the microphone open and no path that leaves the button
- * looking live.
+ * Start dictating into a textarea. `onchange(value, { settled, interim })` on every update, `onstate(state, reason)` on
+ * every transition, `onstop(reason)` once, whatever ended it. No path leaves the microphone open or the button live.
  */
-export const start = (box, { onchange = () => {}, onstop = () => {} } = {}) => {
-  if (Recognition === null || session !== null) return false
+export const start = (box, hooks = {}) => machine.start(box, hooks)
 
-  const r = new Recognition()
-  r.continuous = true
-  r.interimResults = true
-  r.lang = navigator.language || 'en-GB'
+/** Release the microphone now. Safe to call when nothing is running, so a page teardown can call it unasked. */
+export const stop = () => machine.stop()
 
-  /*
-    The text that was already in the box is kept and dictation is appended to
-    it. Somebody who typed half a sentence and then picked up their phone
-    should not lose the half they typed.
-
-    `settled` is what has been finalised; the interim words are painted after
-    it on every event and replaced by the next one, so the box shows the
-    sentence forming without ever double-writing a word.
-  */
-  const before = box.value === '' ? '' : `${box.value.replace(/\s+$/, '')} `
-  let settled = ''
-
-  r.addEventListener('result', (e) => {
-    let interim = ''
-    for (let i = e.resultIndex; i < e.results.length; i += 1) {
-      const alt = e.results[i][0]
-      if (alt === undefined) continue
-      if (e.results[i].isFinal) settled += alt.transcript
-      else interim += alt.transcript
-    }
-    box.value = `${before}${settled}${interim}`
-    onchange(box.value)
-  })
-
-  /*
-    Every ending goes through one place.
-
-    `end` fires for all of them — stopped on purpose, stopped by the browser
-    after a silence, stopped by an error — and the error handler below does not
-    stop anything itself, it only records WHY, because doing both would run the
-    teardown twice.
-  */
-  let reason = ''
-  r.addEventListener('error', (e) => {
-    reason =
-      e.error === 'not-allowed' || e.error === 'service-not-allowed'
-        ? 'The microphone was refused. Allow it for this site and try again.'
-        : e.error === 'no-speech'
-          ? 'Nothing was heard.'
-          : e.error === 'network'
-            ? 'Transcription needs the network and it could not be reached.'
-            : ''
-  })
-  r.addEventListener('end', () => {
-    session = null
-    onstop(reason)
-  })
-
-  session = r
-  try {
-    r.start()
-  } catch {
-    // `start()` throws if it is already running, which the guard above makes
-    // impossible — but a throw here must not leave `session` claiming the
-    // microphone is open when it is not.
-    session = null
-    return false
-  }
-  return true
-}
-
-/**
- * Release the microphone. Safe to call when nothing is running, which is what
- * lets a caller wire it to a page teardown without asking first.
- *
- * `abort()` rather than `stop()`: `stop()` asks for one last result and can sit
- * holding the microphone while it waits. #102's defect was a microphone that
- * stayed open after being switched off, so this ends it now and the words
- * already in the box are the ones that were captured.
- */
-export const stop = () => {
-  const r = session
-  if (r === null) return
-  session = null
-  try {
-    r.abort()
-  } catch {
-    /* already gone */
-  }
-}
+/** The composer was redrawn while dictating: keep writing into the new textarea. */
+export const retarget = (box) => machine.retarget(box)

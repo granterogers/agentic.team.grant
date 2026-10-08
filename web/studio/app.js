@@ -38,6 +38,8 @@ import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
 import * as bcDocOrder from './bc/docorder.js'
 import * as bcWire from './bc/wire.js'
+import * as bcGrip from './bc/dockgrip.js'
+import * as bcDictate from './bc/dockdictate.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
 import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme } from './appearance.js'
@@ -1701,8 +1703,8 @@ function paintDock() {
   document.body.classList.toggle('docked', open)
   if (!open) {
     el.innerHTML = ''
-    /* Closing the dock must also stop a voice note recording inside it. */
-    if (state.experience === 'basecamp') bcWire.wireDockNote(el)
+    /* Closing the dock releases the microphone. */
+    if (state.experience === 'basecamp') bcDictate.release()
     return
   }
 
@@ -1786,8 +1788,6 @@ function paintDock() {
     carried across the innerHTML below and put back where they were.
   */
   const bcNote = state.experience === 'basecamp'
-  const keptMic = bcNote ? el.querySelector('[data-bc-note]') : null
-  const keptPanel = bcNote ? el.querySelector('[data-bc-notepanel]') : null
 
   el.innerHTML = `<div class="dockhead">
       <span style="flex:1;min-width:0">
@@ -1847,26 +1847,28 @@ function paintDock() {
         ? ''
         : `<form class="composer" data-dockform${bcNote ? ` data-bc-noteproject="${esc(p.slug)}"` : ''}>
       <div class="crow">
-        <textarea data-docksay rows="1" placeholder="${p.slug !== 'unnamed' ? `Ask the team about ${esc(p.name)}…` : 'Ask the team…'}"
+        <textarea data-docksay rows="1" placeholder="${bcNote ? 'Message the team…' : p.slug !== 'unnamed' ? `Ask the team about ${esc(p.name)}…` : 'Ask the team…'}"
                   aria-label="Message the team"></textarea>
-        ${bcNote ? bc.dockNoteButton() : ''}
+        ${bcNote ? bc.dockDictateButton(dictate.supported(), dictate.supported() ? dictate.disclosure() : dictate.why()) : ''}
         <button class="btn primary" type="submit">Send</button>
       </div>
-      ${bcNote ? '<div class="bcnote" data-bc-notepanel hidden></div>' : ''}
+      ${bcNote ? '<p class="dockdic t-meta" data-dockdic role="status" aria-live="polite"></p>' : ''}
     </form>`
     }`
-  if (keptMic !== null) el.querySelector('[data-bc-note]')?.replaceWith(keptMic)
-  if (keptPanel !== null) el.querySelector('[data-bc-notepanel]')?.replaceWith(keptPanel)
-  if (bcNote) bcWire.wireDockNote(el)
 
   const box = $('[data-docksay]', el)
   if (box) box.value = draft
+  if (bcNote) {
+    bcGrip.mount(el)
+    bcDictate.wire(el)
+  }
   const thread = $('[data-dockthread]', el)
   if (thread) thread.scrollTop = wasAtEnd ? thread.scrollHeight : (at ?? thread.scrollHeight)
   state.dockAtEnd = thread ? thread.scrollHeight - thread.scrollTop - thread.clientHeight < 40 : true
   wireDockKeyboard()
 
   $('[data-dock-close]', el)?.addEventListener('click', () => {
+    bcDictate.release()
     rememberDock(false)
     paintDock()
   })
@@ -1939,6 +1941,11 @@ function paintDock() {
 
   $('[data-dockform]', el)?.addEventListener('submit', (e) => {
     e.preventDefault()
+    /* Send while the microphone is open only stops it: half a sentence is never sent by accident. */
+    if (dictate.active()) {
+      dictate.stop()
+      return
+    }
     const text = String(box?.value ?? '').trim()
     if (text === '' || !p) return
     if (box) box.value = ''
