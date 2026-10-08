@@ -15,6 +15,8 @@
 > `npm run verify:preview-app` (41 passed, 0 failed, 3 n/a). `verify:preview-live` (signed-out page only) is not workspace evidence (the earlier "24/24" was a weaker rewritten set; reconciled in the log).
 > **Canvas Background Library (#445, ADR-0069, `docs/ux/canvas-backgrounds.md`):** pick a material per project inside How this project looks (8 supplied textures imported, plain colours, upload your own picture), preview before Apply,
 > stored as a small reference in the workspace document. A custom picture is kept in the browser only (no per-person image store exists on the gateway; backend dependency recorded on #445). `npm run verify:canvas-background` (65 passed, 0 failed, 2 n/a).
+> **For Grant's visual acceptance:** gallery at https://team-hq-ux-review.vercel.app/review/ (39 photographs of the deployed preview on the real Sample data, every material light and dark, zoom levels, picker, tablet, phone); the textures were flattened
+> so they do not read as stripes when zoomed out. Cross-device custom pictures are PLANNED only (`docs/ux/canvas-background-storage-plan.md`, #445; browser-only today). iPhone acceptance sequence: `docs/ux/iphone-acceptance-2026-10-09.md` (NOT yet run on a device).
 > Not merged to main, not deployed to production. Still open: #442; real-device dictation and touch; custom pictures on other devices (backend). The verbatim original specification is `docs/spec/team-hq-ux-overhaul-2026-10-08-verbatim.md`.
 >
 > ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)

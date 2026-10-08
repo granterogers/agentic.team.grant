@@ -16,6 +16,10 @@ Tracked by #445. Decisions: `docs/adr/0069-canvas-backgrounds-are-references-anc
    `intensity` / `tint` defaults in the map and re-run only if you removed the id (an id is never overwritten).
 5. Commit `web/studio/textures/bg/` and the map file. Run `npm run verify:canvas-background` and `npx vitest run tests/studio/canvas-background.test.ts`.
 
+Each image is FLATTENED before it is tiled (the large-scale light and dark is subtracted, the grain kept), because a gradient that comes round every tile reads as
+stripes when the canvas is zoomed out; set `"flatten": { "radius": 30, "strength": 1 }` per image in the map (a smaller radius flattens more; strength 0 turns it off). After changing it, re-render from
+the same originals with `--reprocess`: ids and the projects that chose them are unaffected. Judge every new texture zoomed OUT (the gallery script does this) as well as at 100%.
+
 What the importer guarantees: an image already imported (same SHA-1) is skipped; an id taken by a different image gets a numeric suffix,
 so a project that chose an id never sees it change meaning; each image becomes a 2048x1152 (or the image's own aspect, doubled) mirrored
 tile and a 192px thumbnail; the average colour and tone (light or dark) are recorded so the grid dots stay visible.

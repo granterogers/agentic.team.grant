@@ -268,7 +268,46 @@ real documents, tasks, contacts and activity, all of which drew without clipping
 Strict compare-and-swap (#442); a per-person image store for custom backgrounds on every device (#445, backend); `voice-token` origin if the live call is wanted on the preview; real-microphone dictation and real touch on real devices;
 AVIF fixture; the preview serves the branch, production is unchanged.
 
+## Fifth session (9 October, later): ready for visual acceptance
+
+**Deployed state.** Preview https://team-hq-ux-review.vercel.app is deployment `dpl_BYfqXMvhGx1wkdx1DUdNvSvjVT3L`, built from the clean pushed commit `0b95740` plus the generated public `config.js`. Before that deploy the served bytes
+of `app.js`, `layout.js`, `backdrop.js`, `backdrop-ui.js`, `stone.css`, `compose.js`, `stage.js`, `signout.js`, `library.js`, `slate.webp` and `config.js` were compared with the working tree by md5 and matched; production is untouched and the
+`signin` allow-list is as left in the fourth session.
+
+**A defect found by looking, fixed.** Zoomed out, the first imported textures read as obvious stripes and diamonds (brushed aluminium as vertical bars, slate as a kaleidoscope): the supplied images carry large-scale light and dark that
+repeats every tile, and the mirrored 2x2 tile makes it symmetric. Measured and seen in the live Sample captures at 22% zoom, not assumed. Fix at the class, not the instance: the importer now flattens each image before tiling
+(`flatten()` in `scripts/art/import_textures.py`: subtract a blurred copy, keep the grain, restore the mean; default radius 30, slate 18), recorded per entry, with `--reprocess` to re-render from the same originals so ids and the projects that chose them are
+unchanged. Result judged on the real Sample: zoomed out every material is an even, restrained surface; at 100% the character (wood grain, slate veining, linen weave, leather grain) is kept. Remaining honest limit: slate and leather still show
+their mirror symmetry in places at 100% and above, which is the price of building seamless tiles from images that were not seamless.
+
+**Review gallery.** Open https://team-hq-ux-review.vercel.app/review/ (an index page, no login) and direct images such as https://team-hq-ux-review.vercel.app/review/desktop-light-walnut.jpg. 39 JPEGs, taken from the
+deployed preview signed in as the Sample visitor on the real Sample data: each of the nine materials (including the default) in light at the default view and zoomed out, all eight textures in dark, slate at 25, 100 and 200% zoom,
+the picker (light, dark, previewing walnut), a tablet (linen, picker preview, chat widened) and a phone (paper, picker, preview). Produced by `scripts/verify/preview-gallery.ts` (real gateway, every POST aborted and counted: 0, 21/21 passed), served from `docs/ux/review-gallery/` at
+`/review/` by `deploy:ux-review` (it is outside `web/studio`, so deploying the page elsewhere never carries it). That gallery asserts for every material that **choosing it moves no module and no Post-it** (positions and sizes compared before and after: unchanged).
+
+**The eight textures, judged.** Names match what they are: Blue-grey slate, Warm walnut, Brushed aluminium, Warm microcement, Natural linen, Tan leather, Handmade paper, Speckled light stone. They are visually distinct from one another in the picker and on the board;
+the light ones (microcement, linen, paper, stone) are quiet; slate and aluminium are the coolest and darkest of the light group; walnut and leather are the strongest and are defaulted to 70% opacity so they sit back. A judgement for Grant, not a measured fact: whether walnut and leather
+are still too bold for a working surface (Opacity and Shade in the picker pull them back); the dots keep at least 1.35:1 against every material (asserted) and read clearly in the captures.
+
+**Extra browser checks added to `verify:canvas-background` (now 73 passed, 0 failed, 2 not applicable).**
+- *Missing asset:* the walnut file is made to fail to load; the board keeps the canvas colour and the grid, the panels work, no page error (also after a reload).
+- *Memory and time:* a 6000x4000 (24 megapixel) JPEG chosen five times: 640 to 790 ms each, JS heap 9 MB to 10 MB, 2560x1707 and 21 KB stored, applying keeps one picture. Honest limits: the test image was a smooth gradient (182 KB), so the decoded bitmap (about 96 MB for 24 MP, outside the JS heap) was not measured by this run; a 6000x4000 PNG of 21 MB was correctly refused as over 15 MB.
+- *Contrast:* the picker's own text, light and dark, measured against what is behind it: worst 5.2:1. The check first failed (the shared quiet button is 2.6:1; Apply was judged against the wrong colour); Cancel, Remove and Restore now use the readable ink.
+- *Storage failure, project switching, reload, upload and refusals, sign-out wipe, keyboard, phone:* unchanged and green.
+
+**Safe Sample behaviour (real gateway, 38/38):** backgrounds chosen and kept in the visitor's browser, no gateway write (zero POSTs). Layout, chat resize and the picker at tablet and phone widths: gallery checks (no sideways overflow; the chat widens 340 to 422 over a material).
+
+**Test accounting, this session.** Real gateway on the deployed preview: `verify:preview-sample` 38/38, `verify:preview-gallery` 21/21. Stand-in on the deployed preview: `verify:preview-app` 41/0/3 n/a on its second run; **its first run of this deploy failed** waiting for the board after a
+reload (`scripts/verify/preview-app.ts` line 345, a page that did not start within 30 seconds; no Vercel error was recorded, so a sandbox proxy cut is suspected, not proven). The Sample runs have shown the same kind of intermittent failure twice in three days (a Sample that did not open within a minute, once in `preview-sample` and once in `preview-gallery`); the gallery now
+presses again and prints what the page said. Local: `verify:canvas-background` 73/0/2, 26 unit tests, all `tests/studio` and `tests/safety` 314/314.
+
+**Planning for cross-device custom pictures:** `docs/ux/canvas-background-storage-plan.md` (the existing storage, the smallest safe design, security model, costs, the one additive migration and function deploy it needs, 14 acceptance tests). Nothing was built, migrated or deployed. #445 is updated and stays open. Browser-only uploads are described everywhere as exactly that.
+
+**Real-device acceptance:** `docs/ux/iphone-acceptance-2026-10-09.md` (where the dictation microphone is, and the separate voice-call microphone). Outstanding and NOT claimed: real-microphone dictation (Chrome, Safari, iPhone, Android) and real touch.
+
 ## Process slips (disclosed)
+
+Session 5: no repository edit was made with a shell redirect, heredoc or `sed`; scratch Python scripts were used for image montages and to render textures in the scratchpad only (the importer script itself was edited with Edit). One `sed -i ... /dev/null` was not repeated.
 
 Session 4: three Python heredoc edits to repository files (one to add a biome-ignore line to the harness, one to apply a deliberate sabotage to `layout.js` for a control and restore it from a copy, one scratch montage script), and two `sed -i ... /dev/null` reflex
 commands that changed nothing. Every other repository edit went through Edit or Write; the repository file the sabotage touched was restored byte-for-byte from `cp` and the suite re-run.

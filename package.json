@@ -312,6 +312,7 @@
     "verify:canvas-session": "tsx scripts/verify/canvas-session.ts",
     "verify:canvas-background": "tsx scripts/verify/canvas-background.ts",
     "verify:preview-sample": "tsx scripts/verify/preview-sample.ts",
+    "verify:preview-gallery": "tsx scripts/verify/preview-gallery.ts",
     "textures:import": "python3 scripts/art/import_textures.py",
     "verify:preview-live": "tsx scripts/verify/preview-live.ts",
     "verify:preview-app": "tsx scripts/verify/preview-app.ts",
