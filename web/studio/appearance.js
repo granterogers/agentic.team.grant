@@ -97,7 +97,7 @@ const DEFAULTS = {
   texture: 'concrete',
   own: null,
   ownName: '',
-  scheme: 'dark',
+  scheme: 'light',
   density: 'comfortable',
 }
 

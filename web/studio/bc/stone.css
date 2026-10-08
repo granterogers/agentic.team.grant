@@ -1,0 +1,95 @@
+/* ======================================================================== *
+ * THE STONE-GREY SURFACE (8 October 2026)
+ *
+ * Grant: too dark and flat; wants a premium lighter stony grey. The colour
+ * tokens are in tokens.css (light by default, dark by choice). This sheet is the
+ * material: an original seamless microcement texture (scripts/art/microcement.py,
+ * 100KB, procedural so there is nothing to licence) laid over the canvas colour
+ * with a blend mode so one file serves both schemes, the dotted grid on the
+ * board, floating panels with layered shadow, and the full-bleed workspace.
+ * Last in the chain on purpose: it overrides what the sheets before it set.
+ * ======================================================================== */
+
+[data-experience='basecamp'] {
+  --bc-stone-tex: url('/textures/microcement.webp');
+  --bc-panel: color-mix(in srgb, var(--bc-surface) 92%, white);
+  --bc-panel-shadow:
+    0 1px 1.5px rgb(40 36 28 / 0.12),
+    0 6px 14px -6px rgb(40 36 28 / 0.22),
+    0 22px 38px -22px rgb(40 36 28 / 0.30);
+  --bc-panel-shadow-lift:
+    0 2px 3px rgb(40 36 28 / 0.14),
+    0 14px 26px -8px rgb(40 36 28 / 0.30),
+    0 34px 54px -26px rgb(40 36 28 / 0.38);
+}
+[data-experience='basecamp'][data-scheme='dark'] {
+  --bc-panel: color-mix(in srgb, var(--bc-surface) 96%, white);
+  --bc-panel-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 10px 24px -10px rgb(0 0 0 / 0.55);
+  --bc-panel-shadow-lift: 0 2px 4px rgb(0 0 0 / 0.4), 0 22px 44px -14px rgb(0 0 0 / 0.65);
+}
+
+/* The page and the canvas share one material. */
+[data-experience='basecamp'] body,
+[data-experience='basecamp'] #root.shell {
+  background-color: var(--bc-canvas);
+  background-image: var(--bc-stone-tex);
+  background-size: 1024px 1024px;
+  background-blend-mode: soft-light;
+}
+
+/* The top bar sits on the stone, not on a painted band. */
+[data-experience='basecamp'] .bctop { background: transparent; }
+
+/* Project workspace: full bleed. The board IS the page. */
+[data-experience='basecamp'] .bcmain:has(.bccomp--c) {
+  width: 100%;
+  margin: 0;
+  padding: 0 var(--bc-3) var(--bc-3);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-experience='basecamp'] .bccomp--c .bcworkspace { padding: 0; }
+[data-experience='basecamp'] .bccomp--c .bchead { margin: 0 2px; }
+
+[data-experience='basecamp'] .bcpanes {
+  border-radius: 14px;
+  border: 1px solid var(--bc-border-subtle);
+  background-color: color-mix(in srgb, var(--bc-canvas) 55%, transparent);
+  box-shadow: inset 0 1px 3px rgb(40 36 28 / 0.14), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  --bc-dot: color-mix(in srgb, var(--bc-text) 26%, transparent);
+}
+[data-experience='basecamp'][data-scheme='dark'] .bcpanes {
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.5);
+  --bc-dot: color-mix(in srgb, var(--bc-text-muted) 38%, transparent);
+}
+
+/* Floating panels. */
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed {
+  background: var(--bc-panel);
+  border: 1px solid color-mix(in srgb, var(--bc-text) 11%, transparent);
+  box-shadow: var(--bc-panel-shadow);
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed:hover { box-shadow: var(--bc-panel-shadow-lift); }
+[data-experience='basecamp'] .bcmod--dragging { box-shadow: var(--bc-panel-shadow-lift) !important; }
+
+/* Quiet instrument chips (dock, counters). */
+[data-experience='basecamp'] .bcdock,
+[data-experience='basecamp'] .bcstate {
+  background: color-mix(in srgb, var(--bc-surface) 78%, transparent);
+  border: 1px solid var(--bc-border-control);
+  box-shadow: 0 1px 2px rgb(40 36 28 / 0.10);
+}
+[data-experience='basecamp'] .bcmenupanel,
+[data-experience='basecamp'] .bcpop {
+  background: var(--bc-panel);
+  box-shadow: var(--bc-panel-shadow-lift);
+}
+
+/* Focus is always visible and always the accent. */
+[data-experience='basecamp'] :focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed { transition: none; }
+}

@@ -191,6 +191,8 @@ try {
   )
 
   /* ------------------------------------------------------------ move and resize at a non-1 zoom */
+  await page.click('[data-bc-viewreset]')
+  await page.waitForTimeout(350)
   await page.click('[data-bc-zoom="out"]')
   await page.waitForTimeout(350)
   const z = (await view(page)).zoom

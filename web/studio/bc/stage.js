@@ -43,7 +43,7 @@ import { esc } from './parts.js'
 
 const PHONE = '(max-width: 860px)'
 /** Pixels kept under the stage for the tray and the page's own bottom margin. */
-const RESERVE = 92
+const RESERVE = 24
 const SWALLOW_MS = 350
 
 const calm = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
