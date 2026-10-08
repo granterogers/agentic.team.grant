@@ -662,7 +662,26 @@ let forget = null
 let look = null
 let changed = null
 let timer = null
+let readRev = null
+let keepIf = null
+let casOff = false
+let skew = 0
 const pending = new Map()
+const revs = new Map()
+const backoff = new Map()
+
+/**
+ * The time a note is stamped with: this device's clock moved by how far it was from the office's last time the office said its
+ * own (migration 1023 returns `now`). A device with a wrong clock would otherwise stamp every edit in the past or the future
+ * and outrank or lose to every honest one. Zero until the office has answered, and ignored when the difference is implausible.
+ */
+export const stamp = () => Date.now() + skew
+const noteClock = (serverNow) => {
+  const n = Number(serverNow)
+  if (!Number.isFinite(n) || n < 1.5e12) return
+  const d = n - Date.now()
+  skew = Math.abs(d) < 5 * 365 * 24 * 3600 * 1000 ? d : 0
+}
 
 /**
  * Tell this module how to put the document in the office.
@@ -671,7 +690,22 @@ const pending = new Map()
  * told when notes from another device were folded in, so the page can draw them. Both are optional: without them a save is
  * not checked afterwards and nothing is announced.
  */
-export const persistence = ({ save: saveAway, reset: resetAway, fetch: fetchAway, changed: told } = {}) => {
+export const persistence = ({
+  save: saveAway,
+  reset: resetAway,
+  fetch: fetchAway,
+  changed: told,
+  readRev: readRevision,
+  saveIf: saveIfRevision,
+} = {}) => {
+  /*
+    `readRev(slug)` answers `{ panels, rev, now }` and `saveIf(slug, panels, rev)` answers `{ ok, rev }` or
+    `{ conflict, rev, panels }` (migration 1023, #442). Both or neither: a gateway that lacks them is detected on first use
+    and the page falls back to the merge-and-check loop below, which is what it did before they existed.
+  */
+  readRev = typeof readRevision === 'function' && typeof saveIfRevision === 'function' ? readRevision : null
+  keepIf = readRev === null ? null : saveIfRevision
+  casOff = false
   keep = typeof saveAway === 'function' ? saveAway : null
   forget = typeof resetAway === 'function' ? resetAway : null
   look = typeof fetchAway === 'function' ? fetchAway : null
@@ -702,7 +736,17 @@ const check = async (s) => {
   if (look === null) return
   let panels
   try {
-    panels = await look(s)
+    if (readRev !== null && !casOff) {
+      try {
+        const r = await readRev(s)
+        noteClock(r?.now)
+        panels = r?.panels ?? null
+      } catch (e) {
+        if (!unsupported(e)) throw e
+        casOff = true
+        panels = await look(s)
+      }
+    } else panels = await look(s)
   } catch {
     return
   }
@@ -769,7 +813,92 @@ const sendNow = () => {
   office's copy is merged in first. At most once every ten seconds per project, because typing saves every 700ms and the read is the
   whole studio payload; the check after the save covers the rest.
 */
+const MAX_SWAPS = 6
+const unsupported = (e) =>
+  /unknown section|PGRST202|could not find the function|schema cache|p_expected_rev/i.test(String(e?.message ?? e))
+
+/** Fold the office's copy into this device's, drawing anything that arrived. */
+const foldIn = (s, panels) => {
+  const there = fromPanels(panels)
+  if (there === null) return
+  const here = doc(s)
+  const merged = mergeNotes(here, there)
+  const bg = mergeBg(here.bg, there.bg)
+  if (canon(merged.postits, merged.gone) === canon(here.postits, here.gone) && sameBg(bg, here.bg)) return
+  const d = { ...here, ...merged, bg }
+  cache.set(s, d)
+  try {
+    ls()?.setItem(KEY(s), JSON.stringify(d))
+  } catch {
+    /* Cached in memory regardless. */
+  }
+  changed?.(s)
+}
+
+/**
+ * Save by compare-and-swap: read the office's copy and its revision, fold it in, send naming that revision. If the office has
+ * moved on, it refuses and hands back its current copy, which is folded in and the save is tried again. Bounded; a save that
+ * is still being refused is kept and tried on the next tick, never dropped. Returns false when the office cannot do this.
+ */
+const swapSave = async (s) => {
+  let r
+  try {
+    r = await readRev(s)
+  } catch (e) {
+    if (unsupported(e)) casOff = true
+    return false
+  }
+  if (r === null || typeof r !== 'object') return false
+  noteClock(r.now)
+  for (let i = 0; i < MAX_SWAPS; i += 1) {
+    foldIn(s, r.panels)
+    const now = doc(s)
+    if (isBlank(now)) {
+      if (forget !== null) await forget(s)
+      revs.delete(s)
+      return true
+    }
+    let out
+    try {
+      out = await keepIf(s, toPanels(now), Number(r.rev) || 0)
+    } catch (e) {
+      if (unsupported(e)) casOff = true
+      throw e
+    }
+    if (out === undefined) return true
+    noteClock(out?.now)
+    if (out?.conflict === true) {
+      r = { panels: out.panels, rev: out.rev }
+      continue
+    }
+    if (out?.ok === true || out?.reset === true) {
+      backoff.delete(s)
+      revs.set(s, Number(out.rev) || 0)
+      return true
+    }
+    return false
+  }
+  /* Still being refused after several tries: keep it and go again later, waiting longer each round (1.5 s, 3 s ... 60 s). */
+  const round = (backoff.get(s) ?? 0) + 1
+  backoff.set(s, round)
+  pending.set(s, doc(s))
+  if (timer !== null) globalThis.clearTimeout(timer)
+  timer = globalThis.setTimeout(sendNow, Math.min(60_000, 750 * 2 ** round))
+  return true
+}
+
 const saveChecked = async (s) => {
+  if (readRev !== null && !casOff) {
+    try {
+      if (await swapSave(s)) {
+        heal(s)
+        return
+      }
+    } catch {
+      /* Fell through to the plain save below only when the office lacks compare-and-swap. */
+      if (!casOff) return
+    }
+  }
   try {
     if (look !== null && Date.now() - (lastHeal.get(s) ?? 0) > HEAL_EVERY_MS) {
       lastHeal.set(s, Date.now())
@@ -930,6 +1059,8 @@ export const forgetAll = () => {
   for (const t of healing.values()) globalThis.clearTimeout(t)
   healing.clear()
   lastHeal.clear()
+  backoff.clear()
+  revs.clear()
 }
 
 /* ------------------------------------------------------------- the modules --- */
@@ -1063,7 +1194,7 @@ export const bgOf = (slug) => doc(slug).bg
  * arrangement and view are carried through untouched. `null` is not accepted: going back to the default is a choice too
  * ({ id: 'default' }), because a plain removal could not beat an older choice on another device.
  */
-export const setBg = (slug, bg, now = Date.now()) => {
+export const setBg = (slug, bg, now = stamp()) => {
   const clean = cleanBg({ ...bg, at: now })
   if (clean === null) return doc(slug).bg
   commit(slug, { ...doc(slug), bg: clean })
@@ -1211,7 +1342,7 @@ export const addPostit = (slug, { near, at } = {}) => {
   if (origin !== undefined) pos = spotNear(origin, [...layout(slug), ...all])
   else if (at !== undefined) pos = { x: Math.round(at.x), y: Math.round(at.y) }
   else pos = { x: stage.w - POSTIT_DEFAULT.w - 24 - offset, y: 24 + offset }
-  const n = clampRect({ id: newId(), ...pos, ...POSTIT_DEFAULT, z, text: '', at: Date.now() })
+  const n = clampRect({ id: newId(), ...pos, ...POSTIT_DEFAULT, z, text: '', at: stamp() })
   commit(slug, { ...d, postits: [...d.postits, n], seeded: true })
   return n
 }
@@ -1220,13 +1351,13 @@ export const addPostit = (slug, { near, at } = {}) => {
 export const setPostit = (slug, id, patch) => {
   const d = doc(slug)
   if (id === 'n_starter' && !d.postits.some((n) => n.id === id)) {
-    const real = cleanPostit({ ...postits(slug)[0], ...patch, id: newId(), at: Date.now() })
+    const real = cleanPostit({ ...postits(slug)[0], ...patch, id: newId(), at: stamp() })
     commit(slug, { ...d, postits: [real], seeded: true })
     return real.id
   }
   commit(slug, {
     ...d,
-    postits: d.postits.map((n) => (n.id === id ? cleanPostit({ ...n, ...patch, at: Date.now() }) : n)),
+    postits: d.postits.map((n) => (n.id === id ? cleanPostit({ ...n, ...patch, at: stamp() }) : n)),
   })
   return id
 }
@@ -1235,14 +1366,14 @@ export const movePostit = (slug, id, rect) => {
   const d = doc(slug)
   const z = topZ(d) + 1
   if (id === 'n_starter' && !d.postits.some((n) => n.id === id)) {
-    const real = cleanPostit({ ...postits(slug)[0], ...rect, id: newId(), z, at: Date.now() })
+    const real = cleanPostit({ ...postits(slug)[0], ...rect, id: newId(), z, at: stamp() })
     commit(slug, { ...d, postits: [real], seeded: true })
     return real.id
   }
   commit(slug, {
     ...d,
     postits: d.postits.map((n) =>
-      n.id === id ? cleanPostit({ ...clampRect({ ...n, ...rect, id, z }, stage), at: Date.now() }) : n,
+      n.id === id ? cleanPostit({ ...clampRect({ ...n, ...rect, id, z }, stage), at: stamp() }) : n,
     ),
   })
   return id
@@ -1254,7 +1385,7 @@ export const restorePostit = (slug, note) => {
   if (d.postits.some((n) => n.id === note.id)) return false
   const gone = { ...d.gone }
   // Strictly newer than the removal it undoes, even inside the same millisecond.
-  const at = Math.max(Date.now(), (gone[note.id] ?? 0) + 1)
+  const at = Math.max(stamp(), (gone[note.id] ?? 0) + 1)
   delete gone[note.id]
   commit(slug, { ...d, postits: [...d.postits, cleanPostit({ ...note, at })], gone, seeded: true })
   return true
@@ -1266,7 +1397,7 @@ export const removePostit = (slug, id) => {
   commit(slug, {
     ...d,
     postits: d.postits.filter((n) => n.id !== id),
-    gone: { ...d.gone, [id]: Date.now() },
+    gone: { ...d.gone, [id]: stamp() },
     seeded: true,
   })
 }

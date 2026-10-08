@@ -14208,6 +14208,24 @@ bcGrid.persistence({
     const p_ = (data?.projects ?? []).find((x) => x?.slug === slug)
     return Array.isArray(p_?.layout_board) ? p_.layout_board : null
   },
+  /*
+    Compare-and-swap (migration 1023, #442). The gateway section and the revision argument exist only once that migration is
+    applied; until then the read fails with "unknown section" and layout.js falls back to the merge-and-check loop above.
+  */
+  readRev: async (slug) => {
+    const r = await read('layout', undefined, { slug, surface: 'basecamp' })
+    if (r === null || typeof r !== 'object' || typeof r.rev !== 'number') throw new Error('unknown section')
+    return r
+  },
+  saveIf: (slug, panels, rev) =>
+    bcSession.isSample()
+      ? undefined
+      : act('dashboard_layout_set', {
+          p_slug: slug,
+          p_panels: panels,
+          p_surface: 'basecamp',
+          p_expected_rev: rev,
+        }),
   /* Notes from another device arrived: draw them, but never under somebody who is typing in a note. */
   changed: () => {
     let tries = 0

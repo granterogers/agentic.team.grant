@@ -666,6 +666,19 @@ const SECTIONS: Readonly<
     office: true,
     also: [{ param: 'slug', arg: 'p_slug' }],
   },
+  /*
+    ONE project's saved arrangement and its REVISION (migration 1023, #442): `{ panels, rev, now }`, absent = revision 0.
+    The page names `rev` as `p_expected_rev` on `dashboard_layout_set` so a save made from a stale copy is refused, and
+    stamps its notes with `now` so a device with a wrong clock cannot outrank a newer change. `?slug=&surface=`.
+  */
+  layout: {
+    fn: 'hq_dashboard_layout_get',
+    office: true,
+    also: [
+      { param: 'slug', arg: 'p_slug' },
+      { param: 'surface', arg: 'p_surface' },
+    ],
+  },
   // Which kinds that search can serve in THIS database (calendar needs 0906) - the page draws only filters that find something.
   project_search_providers: { fn: 'project_search_providers', office: true },
   /*
