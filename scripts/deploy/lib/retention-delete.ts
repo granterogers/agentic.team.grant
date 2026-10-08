@@ -88,7 +88,10 @@ export interface DeleteOptions {
   ids: readonly string[]
   /** Without this nothing is deleted: every check runs and the answer is what WOULD be deleted. */
   go: boolean
+  /** The time the run began. Used only for the freshness check, never to stamp a log entry. */
   now: number
+  /** Reads the clock. Called once per log entry, at the moment that entry is written. Defaults to Date.now. */
+  clock?: () => number
   /** May only shorten the freshness limit. */
   maxAgeMs?: number
   /** Append one entry; it must be durable before this returns. If it throws, nothing is sent. */
@@ -176,8 +179,10 @@ export async function runDeletion(o: DeleteOptions): Promise<DeleteResult> {
   const frozen = new Map(proposal.inventory.map((r) => [r.id, r]))
   const candidate = new Map(proposal.candidates.map((c) => [c.id, c]))
   const gone = new Set<string>()
+  const clock = o.clock ?? Date.now
+  // TIMESTAMP: each entry is stamped when it is built, which is when it is written, not when the run began.
   const entry = (e: Omit<LogEntry, 'at' | 'run'>): LogEntry => ({
-    at: new Date(o.now).toISOString(),
+    at: new Date(clock()).toISOString(),
     run: o.runId,
     ...e,
   })

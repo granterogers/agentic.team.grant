@@ -369,3 +369,78 @@ describe('deleting', () => {
     expect(s.f.count('DELETE')).toBe(0)
   })
 })
+
+describe('every log entry is stamped when it is written, not when the run began', () => {
+  /** A clock that moves 1 ms every time it is read, and a client whose DELETE takes `slowMs` of that clock. */
+  const timed = (s: Setup, slowMs: number) => {
+    let t = NOW + 60_000
+    const clock = (): number => {
+      t += 1
+      return t
+    }
+    const client = {
+      request: async (method: 'GET' | 'DELETE', path: string) => {
+        if (method === 'DELETE') t += slowMs
+        return s.f.request(method, path)
+      },
+    }
+    return { clock, client }
+  }
+  const at = (e: LogEntry): number => Date.parse(e.at)
+
+  it('attempt and completion get their own times, and a slow request separates them', async () => {
+    const s = await setup()
+    const id = s.ids[0] as string
+    const { clock, client } = timed(s, 30_000)
+    await run(s, { ids: [id], client, clock })
+    const attempt = s.log.find((e) => e.phase === 'attempt') as LogEntry
+    const done = s.log.find((e) => e.phase === 'completed') as LogEntry
+    expect(at(done) - at(attempt)).toBeGreaterThanOrEqual(30_000)
+    // neither is the time the run began
+    expect(at(attempt)).toBeGreaterThan(NOW + 60_000)
+  })
+
+  it('two sequential deletions have strictly increasing timestamps across every entry', async () => {
+    const s = await setup()
+    const { clock, client } = timed(s, 2_000)
+    await run(s, { ids: s.ids.slice(0, 2), client, clock })
+    const times = s.log.map(at)
+    expect(s.log.map((e) => `${e.phase}`)).toEqual(['attempt', 'completed', 'attempt', 'completed'])
+    for (let i = 1; i < times.length; i += 1)
+      expect(times[i] as number).toBeGreaterThan(times[i - 1] as number)
+    expect(new Set(s.log.map((e) => e.at)).size).toBe(4)
+  })
+
+  it('the failure path (an unexpected answer) is stamped separately from its attempt', async () => {
+    const s = await setup()
+    const id = s.ids[0] as string
+    s.f.deleteMode.set(id, 'http500')
+    const { clock, client } = timed(s, 5_000)
+    await run(s, { ids: [id], client, clock })
+    const attempt = s.log.find((e) => e.phase === 'attempt') as LogEntry
+    const done = s.log.find((e) => e.phase === 'completed') as LogEntry
+    expect(done.result).toBe('unexpected')
+    expect(at(done) - at(attempt)).toBeGreaterThanOrEqual(5_000)
+  })
+
+  it('the ambiguous path (a timeout) is stamped separately from its attempt', async () => {
+    const s = await setup()
+    const id = s.ids[0] as string
+    s.f.deleteMode.set(id, 'timeout')
+    const { clock, client } = timed(s, 30_000)
+    await run(s, { ids: [id], client, clock })
+    const attempt = s.log.find((e) => e.phase === 'attempt') as LogEntry
+    const done = s.log.find((e) => e.phase === 'completed') as LogEntry
+    expect(done.result).toBe('ambiguous')
+    expect(at(done) - at(attempt)).toBeGreaterThanOrEqual(30_000)
+  })
+
+  it('a dry-run entry is stamped too, and the default clock is the real one', async () => {
+    const s = await setup()
+    const before = Date.now()
+    await run(s, { ids: [s.ids[0] as string], go: false })
+    const after = Date.now()
+    expect(at(s.log[0] as LogEntry)).toBeGreaterThanOrEqual(before)
+    expect(at(s.log[0] as LogEntry)).toBeLessThanOrEqual(after)
+  })
+})
