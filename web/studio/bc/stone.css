@@ -445,6 +445,8 @@
 }
 .bdsay { margin-right: auto; min-width: 0; overflow-wrap: anywhere; }
 .bdupload.is-busy { opacity: 0.6; pointer-events: none; }
+/* The shared quiet button is ink-3, which measured 2.6:1 on the sheet; these are actions people take, so they use the readable ink. */
+.bdbody .btn.quiet:not([disabled]) { color: var(--ink-2, inherit); }
 .bdactions button[disabled] { opacity: 0.45; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .bdthumb, .bdseg { transition: none; } }
 /* While a background is being previewed the sheet steps to the corner and stops dimming, so the canvas can be judged. */

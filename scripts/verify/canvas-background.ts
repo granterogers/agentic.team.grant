@@ -24,7 +24,7 @@ const PORT = 4695
 const OUT = '.out/backgrounds'
 await mkdir(OUT, { recursive: true })
 const server = await serveStudio(PORT)
-const browser = await chromium.launch()
+const browser = await chromium.launch({ args: ['--enable-precise-memory-info'] })
 const url = (p: string): string => `http://127.0.0.1:${String(PORT)}${p}`
 
 type Verdict = 'pass' | 'fail' | 'n/a'
@@ -468,6 +468,106 @@ check('a different browser profile (another person) starts with the default', (a
 await other.ctx.close()
 check('no page errors in the desktop session', d.errors.length === 0, d.errors.join(' | '))
 await d.ctx.close()
+
+/* ---- a texture file that is missing: the board must stay usable ---- */
+{
+  const m = await newPage()
+  await m.page.route('**/textures/bg/walnut.webp', (r) => r.abort())
+  await m.page.goto(url('/'), { waitUntil: 'domcontentloaded' })
+  await m.page.waitForSelector('[data-bc-menu]')
+  await pickProject(m.page, 0)
+  await openLook(m.page)
+  await pick(m.page, 'walnut')
+  await m.page.locator('[data-bd-apply]').click()
+  await m.page.waitForTimeout(500)
+  await closeLook(m.page)
+  await m.page.reload({ waitUntil: 'domcontentloaded' })
+  await m.page.waitForSelector('[data-bc-board]')
+  await m.page.waitForTimeout(900)
+  const missingBoard = await board(m.page)
+  const solid = (await m.page.evaluate(() => window.getComputedStyle(document.querySelector('[data-bc-board]')).backgroundColor)) as string
+  check('a texture file that fails to load leaves the canvas colour under the grid, and the board works', missingBoard.bg === 'walnut' && !/rgba\(0, 0, 0, 0\)|transparent/.test(solid) && missingBoard.image.startsWith('radial-gradient'), `${solid}`)
+  const stillZooms = await m.page.evaluate(`(() => { const t = document.querySelector('.bcstage'); return !!t })()`)
+  check('and the panels are still there and no page error was raised', stillZooms === true && (await m.page.locator('[data-mod]').count()) >= 3 && m.errors.length === 0, m.errors.join(' | '))
+  await m.page.screenshot({ path: `${OUT}/missing-asset.png` })
+  await m.ctx.close()
+}
+
+/* ---- memory and time: a very large picture, five times over ---- */
+{
+  const m = await newPage()
+  await m.page.goto(url('/'), { waitUntil: 'domcontentloaded' })
+  await m.page.waitForSelector('[data-bc-menu]')
+  await pickProject(m.page, 0)
+  await openLook(m.page)
+  const heap = (): Promise<number> => m.page.evaluate(`performance.memory ? performance.memory.usedJSHeapSize : 0`) as Promise<number>
+  /* A phone photograph is a JPEG: a 6000x4000 PNG of a gradient is 21 MB and is correctly refused as over 15 MB. */
+  const big = await png(m.page, 6000, 4000, 'image/jpeg')
+  const h0 = await heap()
+  const times: number[] = []
+  for (let i = 0; i < 5; i += 1) {
+    const t0 = Date.now()
+    await m.page.locator('[data-bd-file]').setInputFiles({ name: `big${String(i)}.jpg`, mimeType: 'image/jpeg', buffer: big })
+    await m.page.waitForFunction(() => /Preview shown/.test(document.querySelector('[data-bd-say]')?.textContent ?? ''), null, { timeout: 60000 })
+    times.push(Date.now() - t0)
+  }
+  const h1 = await heap()
+  const said = await say(m.page)
+  check('a 24-megapixel picture is optimised in a few seconds each time', Math.max(...times) < 15000, `${times.join(', ')} ms; input ${String(Math.round(big.length / 1024))} KB`)
+  check('and the page does not hold on to what it decoded (JS heap after five, with no apply)', h0 === 0 || h1 - h0 < 120 * 1024 * 1024, `${String(Math.round(h0 / 1e6))} MB -> ${String(Math.round(h1 / 1e6))} MB`)
+  check('the preview names the optimised size (2560 wide, a few hundred KB at most)', /2560 x 1707/.test(said) && Number(/(\d+) KB/.exec(said)?.[1] ?? 99999) < 3000, said)
+  await m.page.locator('[data-bd-apply]').click()
+  await m.page.waitForTimeout(700)
+  check('and applying stores one picture, not five', (await idbRecords(m.page)) === 1)
+  await m.ctx.close()
+}
+
+/* ---- contrast of the picker's own text, light and dark ---- */
+for (const scheme of ['light', 'dark'] as const) {
+  const m = await newPage()
+  await m.ctx.addInitScript(`try { localStorage.setItem('studio.appearance', JSON.stringify({ scheme: '${scheme}' })) } catch {}`)
+  await m.page.goto(url('/'), { waitUntil: 'domcontentloaded' })
+  await m.page.waitForSelector('[data-bc-menu]')
+  await pickProject(m.page, 0)
+  await openLook(m.page)
+  await pick(m.page, 'linen')
+  const worst = (await m.page.evaluate(`(() => {
+    const num = (v) => Number.parseFloat(v)
+    const parse = (s) => {
+      let m = /^rgba?\\(([^)]+)\\)/.exec(s)
+      if (m) { const p = m[1].split(/[ ,\\/]+/).filter(Boolean).map(num); return { r: p[0], g: p[1], b: p[2], a: p[3] ?? 1 } }
+      m = /^color\\(srgb ([^)]+)\\)/.exec(s)
+      if (m) { const p = m[1].split(/[ \\/]+/).filter(Boolean).map(num); return { r: p[0] * 255, g: p[1] * 255, b: p[2] * 255, a: p[3] ?? 1 } }
+      m = /^#([0-9a-f]{6})$/i.exec(s)
+      if (m) return { r: parseInt(m[1].slice(0, 2), 16), g: parseInt(m[1].slice(2, 4), 16), b: parseInt(m[1].slice(4, 6), 16), a: 1 }
+      return { r: 255, g: 255, b: 255, a: 0 }
+    }
+    const lum = (c) => { const f = (x) => { const y = x / 255; return y <= 0.03928 ? y / 12.92 : ((y + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b) }
+    const under = (el) => {
+      const layers = []
+      for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c.a > 0) layers.push(c); if (c.a >= 1) break }
+      let base = { r: 128, g: 128, b: 128 }
+      for (const c of layers.reverse()) base = { r: c.r * c.a + base.r * (1 - c.a), g: c.g * c.a + base.g * (1 - c.a), b: c.b * c.a + base.b * (1 - c.a) }
+      return base
+    }
+    const out = []
+    for (const sel of ['.bdbody .bdname', '.bdseg', '.bdrange span', '.bdupload', '[data-bd-apply]', '[data-bd-cancel]', '.bdfield > .t-label']) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (el.getBoundingClientRect().width === 0 || el.disabled) continue
+        const fg = parse(getComputedStyle(el).color)
+        /* The primary button paints a gradient (a background image), which has no single colour: judge it against its accent. */
+        const bg = el.matches('.btn.primary') ? parse(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || 'rgb(0,0,0)') : under(el)
+        const a = lum({ r: fg.r * fg.a + bg.r * (1 - fg.a), g: fg.g * fg.a + bg.g * (1 - fg.a), b: fg.b * fg.a + bg.b * (1 - fg.a) }); const b = lum(bg)
+        out.push({ sel, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) })
+      }
+    }
+    out.sort((x, y) => x.ratio - y.ratio)
+    return JSON.stringify(out.slice(0, 3))
+  })()`)) as string
+  const w = JSON.parse(worst) as { sel: string; ratio: number }[]
+  check(`${scheme}: the picker's own text meets 4.5:1 against what is behind it`, w.length > 0 && (w[0]?.ratio ?? 0) >= 4.5, worst)
+  await m.ctx.close()
+}
 
 /* ---- keyboard ---- */
 {

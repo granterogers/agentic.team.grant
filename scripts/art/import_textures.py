@@ -22,7 +22,11 @@ the SHA-1 of each original so the source can be identified later.
 The map file is optional JSON: { "<file name>": { "id": "...", "name": "...", "category": "...", "credit": "...",
 "license": "...", "mode": "tile", "intensity": 0.8, "tint": 0 } }. Without it the id and name come from the file name.
 
-Dependencies: python3 and Pillow, which the other art script (microcement.py) already needs.
+Each image is also FLATTENED before it is tiled (see flatten()): the map may give { "flatten": { "radius": 30, "strength": 1 } }
+per image; the default is radius 30, strength 1. Pass --reprocess to re-render images already in the library from the same
+originals (the ids and the projects that chose them are unaffected).
+
+Dependencies: python3, Pillow and numpy.
 """
 import argparse
 import hashlib
@@ -31,7 +35,8 @@ import re
 import sys
 from pathlib import Path
 
-from PIL import Image
+import numpy as np
+from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "web" / "studio" / "textures" / "bg"
@@ -62,6 +67,24 @@ def luminance(rgb) -> float:
     return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
 
 
+def flatten(img: Image.Image, radius: float, strength: float) -> Image.Image:
+    """
+    Take the large-scale light and dark out of a material, keep its grain.
+
+    A photograph or render of a surface has gentle gradients across it (a sheen down a sheet of metal, a band of darker wood).
+    Laid as a tile on an endless canvas, the same gradient comes round every 1024px and reads as stripes. Subtracting a heavily
+    blurred copy leaves the grain and the veining, which repeat invisibly, and adding the mean back keeps the colour.
+    strength 0 leaves the image alone, 1 removes all of the large-scale variation.
+    """
+    if strength <= 0:
+        return img
+    a = np.asarray(img).astype(np.float32)
+    blur = np.asarray(img.filter(ImageFilter.GaussianBlur(radius))).astype(np.float32)
+    mean = a.mean(axis=(0, 1), keepdims=True)
+    out = a - strength * (blur - mean)
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+
+
 def mirrored_tile(img: Image.Image) -> Image.Image:
     w, h = img.size
     tile = Image.new("RGB", (w * 2, h * 2))
@@ -90,6 +113,11 @@ def main() -> int:
     ap.add_argument("--batch", default="")
     ap.add_argument("--map", default="")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--reprocess",
+        action="store_true",
+        help="re-render images already in the library from the same originals (same ids), e.g. after changing flatten",
+    )
     a = ap.parse_args()
     src = Path(a.src)
     if not src.is_dir():
@@ -110,17 +138,28 @@ def main() -> int:
     for p in files:
         raw = p.read_bytes()
         sha = hashlib.sha1(raw).hexdigest()
-        if sha in seen_hash:
+        meta = mapping.get(p.name, {})
+        if sha in seen_hash and not a.reprocess:
             print(f"skip {p.name}: already imported as '{seen_hash[sha]}'")
             continue
-        meta = mapping.get(p.name, {})
-        base = slug(meta.get("id") or p.stem)
-        tid, n = base, 2
-        while tid in taken:
-            tid, n = f"{base}-{n}", n + 1
+        if sha in seen_hash:
+            # --reprocess: the SAME original, so the id keeps its meaning; only the pixels and the recorded settings change.
+            tid = seen_hash[sha]
+            old = next(e for e in lib if e["id"] == tid)
+            lib = [e for e in lib if e["id"] != tid]
+            meta = {**{k: old.get(k) for k in ("name", "category", "mode", "intensity", "tint", "credit", "license") if old.get(k) is not None}, **meta}
+            batch = old.get("batch", a.batch)
+        else:
+            batch = a.batch
+            base = slug(meta.get("id") or p.stem)
+            tid, n = base, 2
+            while tid in taken:
+                tid, n = f"{base}-{n}", n + 1
         im = Image.open(p).convert("RGB")
         h = max(1, round(HALF_W * im.height / im.width))
         half = im.resize((HALF_W, h), Image.LANCZOS)
+        flat = meta.get("flatten", {"radius": 30, "strength": 1.0})
+        half = flatten(half, flat.get("radius", 30), flat.get("strength", 1.0))
         tile = mirrored_tile(half)
         thumb = half.resize((THUMB_W, max(1, round(THUMB_W * h / HALF_W))), Image.LANCZOS)
         avg = tuple(round(c) for c in half.resize((1, 1), Image.BOX).getpixel((0, 0)))
@@ -138,7 +177,8 @@ def main() -> int:
             "tint": meta.get("tint", 0),
             "average": "#%02x%02x%02x" % avg,
             "tone": "dark" if lum < 0.18 else "light",
-            "batch": a.batch,
+            "flatten": flat,
+            "batch": batch,
             "sourceSha1": sha,
             "credit": meta.get("credit", ""),
             "license": meta.get("license", ""),

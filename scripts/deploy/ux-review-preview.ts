@@ -34,15 +34,15 @@ const PROJECT = 'team-hq-ux-review'
 const auth = { Authorization: `Bearer ${token}` }
 
 const files: { file: string; sha: string; size: number; body: Buffer }[] = []
-const walk = async (dir: string): Promise<void> => {
+const walk = async (dir: string, root = 'web/studio', prefix = ''): Promise<void> => {
   for (const e of await readdir(dir, { withFileTypes: true })) {
     const full = join(dir, e.name)
     if (e.isDirectory()) {
-      if (e.name !== 'raw') await walk(full)
+      if (e.name !== 'raw') await walk(full, root, prefix)
       continue
     }
     const body = await readFile(full)
-    const rel = relative('web/studio', full).split('\\').join('/')
+    const rel = prefix + relative(root, full).split('\\').join('/')
     files.push({
       file: rel,
       sha: createHash('sha1').update(body).digest('hex'),
@@ -52,11 +52,21 @@ const walk = async (dir: string): Promise<void> => {
   }
 }
 await walk('web/studio')
+/*
+  The review gallery (photographs of the preview and an index page) is served at /review/ on THIS project only. It lives under
+  docs/ux and not under web/studio so that deploying the page to anywhere else never carries it.
+*/
+await walk('docs/ux/review-gallery', 'docs/ux/review-gallery', 'review/')
 const config = Buffer.from(
   JSON.stringify(
     {
       rewrites: [
-        { source: '/:path((?!api/|studio/|samples/|fonts/)[^.]*)', destination: '/index.html' },
+        {
+          source: '/:path((?!api/|studio/|samples/|fonts/|review/)[^.]*)',
+          destination: '/index.html',
+        },
+        { source: '/review', destination: '/review/index.html' },
+        { source: '/review/', destination: '/review/index.html' },
       ],
     },
     null,

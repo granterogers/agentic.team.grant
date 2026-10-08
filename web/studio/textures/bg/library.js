@@ -18,8 +18,12 @@ export const LIBRARY = [
     "mode": "tile",
     "intensity": 0.85,
     "tint": 0,
-    "average": "#878c8f",
+    "average": "#878b8f",
     "tone": "light",
+    "flatten": {
+      "radius": 18,
+      "strength": 1.0
+    },
     "batch": "2026-10-09-batch-1",
     "sourceSha1": "3b87ffe0a206a8a7469031ee72ddf7b77eda822b",
     "credit": "Supplied by Grant Rogers, 9 October 2026",
@@ -41,6 +45,10 @@ export const LIBRARY = [
     "tint": 0,
     "average": "#66452f",
     "tone": "dark",
+    "flatten": {
+      "radius": 30,
+      "strength": 1.0
+    },
     "batch": "2026-10-09-batch-1",
     "sourceSha1": "f5e954c5de86affb3819d513f43af937b3f59836",
     "credit": "Supplied by Grant Rogers, 9 October 2026",
@@ -60,8 +68,12 @@ export const LIBRARY = [
     "mode": "tile",
     "intensity": 0.8,
     "tint": 0,
-    "average": "#7d838a",
+    "average": "#7c828a",
     "tone": "light",
+    "flatten": {
+      "radius": 30,
+      "strength": 1.0
+    },
     "batch": "2026-10-09-batch-1",
     "sourceSha1": "18dbfaa86aef973fc20014b5b3032ecb82434e0f",
     "credit": "Supplied by Grant Rogers, 9 October 2026",
@@ -81,8 +93,12 @@ export const LIBRARY = [
     "mode": "tile",
     "intensity": 1,
     "tint": 0,
-    "average": "#c8c4bd",
+    "average": "#c7c3bd",
     "tone": "light",
+    "flatten": {
+      "radius": 30,
+      "strength": 1.0
+    },
     "batch": "2026-10-09-batch-1",
     "sourceSha1": "ae780b9ce4b43b274d717545b08cffc2cd8eba08",
     "credit": "Supplied by Grant Rogers, 9 October 2026",
@@ -104,6 +120,10 @@ export const LIBRARY = [
     "tint": 0,
     "average": "#d1c6b7",
     "tone": "light",
+    "flatten": {
+      "radius": 30,
+      "strength": 1.0
+    },
     "batch": "2026-10-09-batch-1",
     "sourceSha1": "701c3aef88ae85d9abb9a7e35722c3edd1b03f88",
     "credit": "Supplied by Grant Rogers, 9 October 2026",
@@ -123,8 +143,12 @@ export const LIBRARY = [
     "mode": "tile",
     "intensity": 0.7,
     "tint": 0,
-    "average": "#723f22",
+    "average": "#723e21",
     "tone": "dark",
+    "flatten": {
+      "radius": 30,
+      "strength": 1.0
+    },
     "batch": "2026-10-09-batch-1",
     "sourceSha1": "b01b46dffc34a833c664b9c5e584a6b60c3e69f6",
     "credit": "Supplied by Grant Rogers, 9 October 2026",
@@ -144,8 +168,12 @@ export const LIBRARY = [
     "mode": "tile",
     "intensity": 1,
     "tint": 0,
-    "average": "#eeeae1",
+    "average": "#eee9e1",
     "tone": "light",
+    "flatten": {
+      "radius": 30,
+      "strength": 1.0
+    },
     "batch": "2026-10-09-batch-1",
     "sourceSha1": "65d5f01ed73b35d02f65262690ad7ca21b8c6885",
     "credit": "Supplied by Grant Rogers, 9 October 2026",
@@ -165,8 +193,12 @@ export const LIBRARY = [
     "mode": "tile",
     "intensity": 1,
     "tint": 0,
-    "average": "#e8e4df",
+    "average": "#e7e3df",
     "tone": "light",
+    "flatten": {
+      "radius": 30,
+      "strength": 1.0
+    },
     "batch": "2026-10-09-batch-1",
     "sourceSha1": "e4197e039ea12349a900db313fadd1a468f840e3",
     "credit": "Supplied by Grant Rogers, 9 October 2026",
