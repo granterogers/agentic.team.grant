@@ -413,6 +413,16 @@
       "expect": "tests/agents/a-question-about-a-duty-is-not-a-task.test.ts"
     },
     {
+      "id": "M33",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/agents/own-task.ts",
+      "old": "const open = ANYONE.exec(text) ?? COLLECTIVE.exec(text)",
+      "new": "const open = ANYONE.exec(text)",
+      "invariant": "'Ask the team to X' reaches each specialist as X (the work), not as an instruction to pass on",
+      "expect": "tests/agents/own-task.test.ts"
+    },
+    {
       "id": "M29",
       "critical": false,
       "severity": "high",

@@ -403,6 +403,15 @@ if (
       /budget|4,?500|10,?000|catering|contingency/i.test(out),
     out,
   )
+  // Found in the second pass: a specialist handed "Ask the team to ..." back as a question, and the lead asked him to
+  // upload a contract the project already held. A person reading either would conclude the team had not looked.
+  obs(
+    'nobody asks him for documents the project already holds, and no specialist hands the instruction back as a question',
+    !/could the team|(please|i need|need you to|can you|could you)\b.{0,50}\b(send|share|provide|upload)\b.{0,40}\b(contract|budget)|which project|project name/i.test(
+      out,
+    ),
+    out,
+  )
 }
 
 if (part('R5', 'a named colleague: "Ask Daniel ..." reaches Daniel')) {

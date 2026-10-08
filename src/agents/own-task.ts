@@ -58,10 +58,26 @@ const ANYONE = new RegExp(
   'i',
 )
 
+/*
+  THE TEAM IS ALSO ADDRESSED TO WHOEVER ANSWERS (the first controlled real-model run).
+
+  "Ask the team to look at the venue contract risk and the budget impact and give me a recommendation" is the phrase that
+  convenes specialists on Telegram, and each specialist was handed it whole. One answered "Could the team pull the venue
+  contract, flag any risk clauses ... and get back to me?" (the instruction handed back as a question) and the lead asked
+  him to upload a contract that was already in the project. Same defect as "the appropriate person", one noun over: a frame
+  that addresses the team collectively is addressed to each member who answers it.
+*/
+const COLLECTIVE = new RegExp(
+  `^\\s*(?:please\\s+|can you\\s+|could you\\s+)?(?:ask|have|get|tell|let)\\s+(?:the|our|my)\\s+` +
+    `(?:whole\\s+|entire\\s+|all\\s+(?:of\\s+)?)?(?:team|specialists|directors|experts|colleagues)` +
+    `\\s*(?:to\\s+|if\\s+(?:they|you)\\s+can\\s+|whether\\s+|:\\s*)?`,
+  'i',
+)
+
 export function ownTask(instruction: string, who: Speaking): string {
   const text = String(instruction ?? '')
   if (who.slug !== 'chief-of-staff') {
-    const open = ANYONE.exec(text)
+    const open = ANYONE.exec(text) ?? COLLECTIVE.exec(text)
     if (open !== null) {
       const rest = text.slice(open[0].length).replace(/^\s+/, '')
       // Same rules as below: a task has to follow, and somebody else being named is a request to convene them.
