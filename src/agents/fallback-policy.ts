@@ -102,7 +102,7 @@ const BLOCKER_FRAMING =
  * no project in scope that is a fair clarification.
  */
 const UNCONDITIONAL_BLOCKER =
-  /\bto proceed,? i (?:need|would need)\b|\bonce (?:you|i) (?:provide|confirm|have)\b|\bso i can proceed\b|\b(?:log|create|schedule)(?:ged)? (?:a|the) (?:payment |deposit )?task\b|\bi (?:will|['’]ll) add the task\b/i
+  /\bto proceed,? i (?:need|would need)\b|\bonce (?:you|i) (?:provide|confirm|have)\b|\bso i can proceed\b|\b(?:log|create|schedule)(?:ged)? (?:a|the) (?:payment |deposit )?task\b|\bi (?:will|['’]ll) add (?:the task|it|this|that|them) to\b|\b(?:specify|tell me|let me know) which project\b[^.!?\n]{0,60}\badd it\b/i
 
 const NARRATION =
   /\bi['\u2019]?m (?:not )?(?:skipping|routing|convening|bringing in)\b|\bnot (?:convening|routing|bringing in) (?:anyone|anybody|this)\b|\bskipping the (?:team|review)\b|\bsimple (?:fact-?check|factual retriev)|\bi (?:won['\u2019]?t|will not) pull (?:anyone|anybody|the team) in\b|\bnothing (?:else )?to route\b|\bstraight (?:factual )?retriev|\b(?:i['\u2019]?m|we['\u2019]?re|i am|we are) not (?:going to )?(?:call(?:ing)?|post(?:ing)?|ping(?:ing)?|convening|raising|creating|logging|queu(?:e|ing))\b[^.!?\n]{0,70}\b(?:meeting|channel|ping|task|record|dashboard|reminder|anyone)\b|\bwe (?:won['\u2019]?t|will not) log (?:another|a) task\b|\bno further action (?:is )?needed\b|\bthe office is not going to do anything\b/i

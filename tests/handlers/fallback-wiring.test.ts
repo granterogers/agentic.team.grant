@@ -25,6 +25,11 @@ describe('the answer', () => {
     expect(handler).toMatch(/said = limitationAnswer\(\{ retrieved: heldTexts \}\)/)
     expect(handler).toMatch(/fallback_answer_refused/)
   })
+  it("admits the promise gate's rewrite too when a backup wrote it, and ends at the composed truth if refused", () => {
+    expect(handler).toMatch(
+      /if \(\(redo\.servedBy\?\.rank \?\? 0\) > 0 && !admit\(rewritten\)\.ok\) return ''/,
+    )
+  })
   it('records the model that actually wrote the delivered answer, and none for the text composed in code', () => {
     expect(handler).toMatch(/model: wroteInCode \? null : answeredBy\.model,/)
   })

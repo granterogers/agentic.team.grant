@@ -103,6 +103,17 @@ describe('what the real fallback models said, refused', () => {
       true,
     )
   })
+  it('the rewrites a backup model wrote after the promise gate, in the words it used', () => {
+    for (const said of [
+      'To proceed, I need you to specify which project you would like to move forward with. Once you tell me which project and I will add it to the queue for further action.',
+      'To proceed with tracking the November payment, I will need the name of the dashboard owner. Once you provide this information, I will add it to the tracking list. Please let me know the name of the dashboard owner.',
+    ])
+      for (const over of [[], retrieved])
+        expect(
+          reasons(admit(said, 'Is there a cancellation cap in the venue contract?', over)),
+          said,
+        ).toContain('offers_unasked_action')
+  })
   it('a blocker raised against a plain question when the turn held nothing relevant (the final real run)', () => {
     const asked = 'Is there a cancellation cap in the venue contract?'
     const said =

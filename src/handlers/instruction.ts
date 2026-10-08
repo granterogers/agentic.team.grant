@@ -7246,32 +7246,32 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       let said = scrub(completion.content)
       // Assigned inside `answerRouter`, which the compiler cannot see through.
       const keptRequest = completionRequest as unknown as CompletionRequest | null
+      // The passages themselves, not the block that wraps them: its fence and headings are words the answer could share by accident.
+      // The office's own listings (waiting, project spine, task brief) are wrappers full of common words, so they are left out of
+      // what an inference must rest on; a figure in them is not asked about here (counts are small and money is not listed there).
+      const heldTexts = [
+        ...hits.map((h) => h.excerpt),
+        // Only real correspondence: with none cached the block is a note ABOUT not having looked, whose words are not evidence.
+        ...(mail.length > 0 ? [mailContext] : []),
+      ].filter((t) => t !== '')
+      const hisAsk = turn.kept.trim() === '' ? instruction : turn.kept
+      // Read-only: a question or a request for findings, with no writing verb in his words, and nothing this turn actually
+      // wrote or started. The cost of a wrong "no" is a check that does not run, never a good answer refused.
+      const readOnly =
+        // NOT `outcome.wanted === 0`: a request the office cannot perform wants nothing, and is still a request.
+        ((requests.length > 0 && requests.every(answersByFindings)) ||
+          (classifyIntent(hisAsk).intent === 'question' && !WRITING_WORDS.test(hisAsk))) &&
+        outcome.landed === 0 &&
+        outcome.pendingActions === 0
+      const admit = (text: string) =>
+        admitFallbackAnswer({
+          asked: hisAsk,
+          answer: text,
+          retrieved: heldTexts,
+          established: [hisAsk, ...heldTexts].join('\n'),
+          readOnly,
+        })
       if ((completion.servedBy?.rank ?? 0) > 0 && keptRequest !== null) {
-        // The passages themselves, not the block that wraps them: its fence and headings are words the answer could share by accident.
-        // The office's own listings (waiting, project spine, task brief) are wrappers full of common words, so they are left out of
-        // what an inference must rest on; a figure in them is not asked about here (counts are small and money is not listed there).
-        const heldTexts = [
-          ...hits.map((h) => h.excerpt),
-          // Only real correspondence: with none cached the block is a note ABOUT not having looked, whose words are not evidence.
-          ...(mail.length > 0 ? [mailContext] : []),
-        ].filter((t) => t !== '')
-        const hisAsk = turn.kept.trim() === '' ? instruction : turn.kept
-        // Read-only: a question or a request for findings, with no writing verb in his words, and nothing this turn actually
-        // wrote or started. The cost of a wrong "no" is a check that does not run, never a good answer refused.
-        const readOnly =
-          // NOT `outcome.wanted === 0`: a request the office cannot perform wants nothing, and is still a request.
-          ((requests.length > 0 && requests.every(answersByFindings)) ||
-            (classifyIntent(hisAsk).intent === 'question' && !WRITING_WORDS.test(hisAsk))) &&
-          outcome.landed === 0 &&
-          outcome.pendingActions === 0
-        const admit = (text: string) =>
-          admitFallbackAnswer({
-            asked: hisAsk,
-            answer: text,
-            retrieved: heldTexts,
-            established: [hisAsk, ...heldTexts].join('\n'),
-            readOnly,
-          })
         let verdict = admit(said)
         const trail: string[] = verdict.ok
           ? []
@@ -7301,6 +7301,14 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             .execute(
               `select app.job_trace_add(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'degradation',
                  ${lit(JSON.stringify({ fallback_answer_refused: trail }))}::jsonb, null, null, null, null)`,
+            )
+            .catch(() => undefined)
+        } else {
+          // What the check was told, so a backup-served answer that went through can be audited rather than guessed at.
+          await deps.db
+            .execute(
+              `select app.job_trace_add(app.job_office(${lit(job.jobId)}::uuid), ${lit(job.jobId)}::uuid, 'degradation',
+                 ${lit(JSON.stringify({ fallback_answer_admitted: { read_only: readOnly, held_passages: heldTexts.length, by: answeredBy.model, refused_first: trail.length > 0 } }))}::jsonb, null, null, null, null)`,
             )
             .catch(() => undefined)
         }
@@ -7513,7 +7521,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   // coin flip, and this one has exactly one job.
                   temperature: 0,
                 })
-                return scrub(redo.content)
+                const rewritten = scrub(redo.content)
+                // A rewrite a backup model wrote is admitted on the same evidence as the answer it replaces; if it is refused the
+                // caller ends at the sentence composed from the rows, never at another fluent guess.
+                if ((redo.servedBy?.rank ?? 0) > 0 && !admit(rewritten).ok) return ''
+                return rewritten
               },
               may,
             )

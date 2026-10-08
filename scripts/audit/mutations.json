@@ -563,6 +563,16 @@
       "expect": "tests/agents/fallback-policy.test.ts"
     },
     {
+      "id": "M49",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "if ((redo.servedBy?.rank ?? 0) > 0 && !admit(rewritten).ok) return ''",
+      "new": "",
+      "invariant": "a rewrite a backup model wrote after the promise gate is admitted on evidence like the answer it replaces",
+      "expect": "tests/handlers/fallback-wiring.test.ts"
+    },
+    {
       "id": "M48",
       "critical": true,
       "severity": "high",

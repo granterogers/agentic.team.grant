@@ -989,12 +989,17 @@ const caseRecord = async (t: Turn, mark: number, started: number, spendBefore: n
     `select detail from public.job_traces tr join public.jobs j on j.job_id = tr.job_id
       where j.correlation_id = ${corr(t.job)} and tr.kind = 'degradation' and tr.detail ? 'fallback_answer_refused'`,
   )
+  const admitted = await rows(
+    `select detail from public.job_traces tr join public.jobs j on j.job_id = tr.job_id
+      where j.correlation_id = ${corr(t.job)} and tr.kind = 'degradation' and tr.detail ? 'fallback_answer_admitted'`,
+  )
   const spend =
     Number(
       (await one(`select coalesce(sum(cost_usd),0)::float8 as c from public.inference_usage`)).c,
     ) - spendBefore
   const used = modelCalls.slice(mark)
   return {
+    admittedWith: admitted.map((r) => JSON.stringify(r.detail)).join(' '),
     answeredBy: await outputModel(t.job),
     fallbackRank: decisions.length === 0 ? 0 : 1,
     refusedTrail: refused.flatMap((r) =>
@@ -1180,7 +1185,7 @@ if (
         `${String(sent(t.from).length)} message(s)`,
       )
       obs(
-        `${c.id} #${String(i + 1)}: ${c.note} [answered by ${rec.answeredBy || 'nobody'}; fallback=${String(rec.fallbackRank > 0)}; refused=${JSON.stringify(rec.refusedTrail)}; calls=${String(rec.calls)} (${String(rec.injected)} injected failures); ${String(rec.ms)} ms; $${rec.usd.toFixed(5)}]`,
+        `${c.id} #${String(i + 1)}: ${c.note} [answered by ${rec.answeredBy || 'nobody'}; fallback=${String(rec.fallbackRank > 0)}; refused=${JSON.stringify(rec.refusedTrail)}; admitted=${rec.admittedWith}; calls=${String(rec.calls)} (${String(rec.injected)} injected failures); ${String(rec.ms)} ms; $${rec.usd.toFixed(5)}]`,
         c.judge(out),
         out,
       )
