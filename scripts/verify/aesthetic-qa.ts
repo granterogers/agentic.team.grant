@@ -530,6 +530,45 @@ if (want('tokens')) {
   }
 }
 
+/* --------------------------------------------------------------------- axe --- */
+if (want('axe')) {
+  const AXE = await (await import('node:fs/promises')).readFile('node_modules/axe-core/axe.min.js', 'utf8')
+  const violations = async (page: Page): Promise<string[]> => {
+    await page.evaluate(AXE)
+    return (await page.evaluate(`axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] } }).then((r) => r.violations.map((x) => x.id + ' (' + x.nodes.length + '): ' + x.nodes[0].target.join(' ').slice(0, 60)))`)) as string[]
+  }
+  for (const scheme of ['dark', 'light']) {
+    const { ctx, page, slug, errors } = await open({ scheme })
+    /* The control: axe is shown a nameless button first and must object, or "0 violations" would mean nothing. */
+    await page.evaluate(`(() => { const b = document.createElement('button'); b.id = 'planted'; document.body.appendChild(b) })()`)
+    const planted = await violations(page)
+    check(`axe control (${scheme}): a planted nameless button is reported`, planted.some((v) => v.startsWith('button-name')), planted.join(' | '))
+    await page.evaluate(`document.getElementById('planted').remove()`)
+    check(`no WCAG A/AA violations on the board (${scheme})`, (await violations(page)).length === 0, (await violations(page)).join(' | '))
+    await press(page, '[data-bc-menu]')
+    await page.waitForTimeout(300)
+    check(`none with the project menu open (${scheme})`, (await violations(page)).length === 0, (await violations(page)).join(' | '))
+    await page.keyboard.press('Escape')
+    await press(page, '[data-bc-dock]')
+    await page.waitForTimeout(500)
+    check(`none with the chat open (${scheme})`, (await violations(page)).length === 0, (await violations(page)).join(' | '))
+    await page.keyboard.press('Escape')
+    await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('[data-bc-board]')
+    await page.waitForTimeout(500)
+    await press(page, '[data-bc-settings]')
+    await page.waitForSelector('#settings .stg')
+    for (const tab of ['team', 'behaviour', 'connections', 'channels', 'appearance', 'models', 'help']) {
+      await press(page, `#settings [data-setting="${tab}"]`)
+      await page.waitForTimeout(250)
+      const v = await violations(page)
+      check(`none in Settings > ${tab} (${scheme})`, v.length === 0, v.join(' | '))
+    }
+    check(`no page errors (${scheme})`, errors.length === 0, errors.join(' | '))
+    await ctx.close()
+  }
+}
+
 /* ------------------------------------------------------------------ narrow --- */
 if (want('narrow')) {
   const { ctx, page, errors } = await open({ w: 1440, h: 900 })
