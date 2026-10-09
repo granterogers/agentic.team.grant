@@ -59,10 +59,23 @@ export const sessionsIn = (src: string): { literal: string; ok: boolean }[] => {
 const REFUSAL_PROBE_MARKER = /check:voice-sessions-exempt: office-key refusal probe/
 const ASSERTS_403 = /\.status\s*===\s*403/
 
+/**
+ * The SECOND narrow exception: a script that runs the voice function's own code IN PROCESS (the edge emulator) against a
+ * marked local replica never reaches the live door at all. `isolated()` refuses any database that is not a marked local
+ * socket, and the emulator refuses and records every URL that is not the replica. A real-looking session is what these
+ * proofs need, because the page's shape is the only one the office treats as a person (0598), and they are proving what
+ * the office does for a person. BOTH halves are required: the emulator without the isolation guard, or the guard without
+ * the emulator, is no exemption, and the controls below show each half alone still fails.
+ */
+const RUNS_VOICE_IN_PROCESS =
+  /startEdge\(\{[\s\S]{0,400}?edgeFile:\s*'supabase\/functions\/voice\/index\.ts'/
+const IS_ISOLATED = /\bisolated\(\s*[^)]*\)/
+
 /** A script's verdict: null when it is fine, else the reason. */
 export const verdict = (src: string): string | null => {
   if (!POSTS_TO_TURN.test(src) || INTERCEPTS.test(src)) return null
   if (REFUSAL_PROBE_MARKER.test(src) && ASSERTS_403.test(src)) return null
+  if (RUNS_VOICE_IN_PROCESS.test(src) && IS_ISOLATED.test(src)) return null
   const sessions = sessionsIn(src)
   // Posts to the door with no session literal: the door refuses a missing
   // session (400), so a script like that is a refusal probe, not a turn.
@@ -82,6 +95,12 @@ const probe =
 control.push(probe.replace('// check:voice-sessions-exempt: office-key refusal probe\n', ''))
 control.push(probe.replace('check(r.status === 403)', 'check(r.ok)'))
 passes.push(probe)
+// the in-process exemption needs BOTH halves, and neither half alone is enough
+const inProcess =
+  "const db = await isolated('post')\nconst v = await startEdge({\n  db,\n  edgeFile: 'supabase/functions/voice/index.ts',\n})\nawait v.call(new Request('https://gw.invalid/functions/v1/voice/turn', { body: JSON.stringify({ session: `s${run}` }) }))"
+passes.push(inProcess)
+control.push(inProcess.replace("const db = await isolated('post')\n", 'const db = 1\n'))
+control.push(inProcess.replace("edgeFile: 'supabase/functions/voice/index.ts'", "edgeFile: 'x.ts'"))
 if (control.some((c) => verdict(c) === null) || passes.some((p) => verdict(p) !== null)) {
   console.error(
     'check:voice-sessions CANNOT RUN — its detector does not tell an escape from a name.',

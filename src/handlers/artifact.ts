@@ -499,6 +499,9 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               const browsed = found
                 .filter((h) => h.connector === 'browser')
                 .map((h) => h.documentId)
+              // Hoisted out of the statement: a template literal inside a template literal splits the SQL for every reader that
+              // scans the source (the raw-SQL ratchet read the office predicate as outside the statement).
+              const browsedIds = browsed.map((i) => `'${i}'::uuid`).join(',')
               const urls = new Map<string, string>(
                 browsed.length === 0
                   ? []
@@ -507,7 +510,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                         await db.execute(
                           `select d.document_id::text as id, d.external_ref as url
                              from public.documents d
-                            where d.document_id in (${browsed.map((i) => `'${i}'::uuid`).join(',')})
+                            where d.document_id in (${browsedIds})
                               and d.office_id = app.job_office('${job.jobId}'::uuid)
                               and d.connector = 'browser' and d.external_ref is not null`,
                         )

@@ -41,7 +41,7 @@ export const redriveLapsedDeliveries = async (
   // P3: DEPLOYMENT SCAN. Every row is one job's own delivery, and the job is read back by its own id below.
   const { rows } = await db
     .execute(
-      `select l.job_id::text as job_id, l.output_id::text as output_id,
+      `select l.job_id::text as job_id, l.output_id::text as output_id, j.office_id::text as office_id,
               j.kind, j.correlation_id::text as correlation_id, j.project_id::text as project_id
          from app.deliveries_to_redrive(${String(max)}) l
          join public.jobs j on j.job_id = l.job_id`,
@@ -52,14 +52,19 @@ export const redriveLapsedDeliveries = async (
   for (const r of rows as {
     job_id: string
     output_id: string
+    office_id: string
     kind: string
     correlation_id: string
     project_id: string | null
   }[]) {
     const stored = await db.execute(
-      `select body, confidence::text as confidence, evidence::text as evidence,
-              deterministic, model, sources, contradictions
-         from public.outputs where output_id = ${lit(r.output_id)}::uuid`,
+      `select o.body, o.confidence::text as confidence, o.evidence::text as evidence,
+              o.deterministic, o.model, o.sources, o.contradictions
+         from public.outputs o
+         join public.jobs j on j.job_id = o.job_id
+        where o.output_id = ${lit(r.output_id)}::uuid
+          and j.job_id = ${lit(r.job_id)}::uuid
+          and j.office_id = ${lit(r.office_id)}::uuid`,
     )
     const o = stored.rows[0] as
       | {

@@ -308,9 +308,12 @@ export async function upsertDocument(
     const stored = String(existing.rows[0]?.title ?? '')
     const renamed = object.title !== '' && stored !== object.title
     if (renamed || (object.object === 'page' && object.lastEdited !== null)) {
+      // Hoisted out of the statement: a template literal inside a template literal splits the SQL for every reader that
+      // scans the source (the raw-SQL ratchet read the office predicate as outside the statement).
+      const titleSet = renamed ? `title = ${lit(object.title)},` : ''
       await db.execute(`
         update public.documents
-           set ${renamed ? `title = ${lit(object.title)},` : ''}
+           set ${titleSet}
                remote_updated_at = coalesce(${nul(object.lastEdited)}::timestamptz, remote_updated_at)
          where office_id = ${officeOfProject(projectId)}
            and connector = ${lit(CONNECTOR)}

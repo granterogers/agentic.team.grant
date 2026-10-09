@@ -158,6 +158,17 @@ const reachedFrom = (kind: string): string | null => {
     if (stmt.includes(quoted) && /responsibilities/i.test(stmt)) return 'a duty'
   }
   /*
+    A duty's description is prose in a string literal, and one that says "Measures and tells; deletes nothing" cuts its own
+    INSERT into the duty table in two at that semicolon, so the half naming the job kind no longer names the table and a
+    kind with a real duty reads as unreachable (`office.capacity_watch`, found on the integration branch). A
+    quote-aware split is not safe over the whole corpus, because an apostrophe in a comment flips the state for every file
+    after it, so an INSERT into the duty table is instead given a window: the kind must be named within the next 1,500
+    characters. The window only ever adds a path, so it cannot hide an unreachable kind that no duty names.
+  */
+  for (const m of migrations.matchAll(/insert\s+into\s+public\.responsibilities/gi)) {
+    if (migrations.slice(m.index, m.index + 1500).includes(quoted)) return 'a duty'
+  }
+  /*
     A plpgsql body is full of semicolons, so a statement split fragments a
     function and separates its name from the line that names the kind. That
     is why `mcp.discover` read as unreachable on the second run while

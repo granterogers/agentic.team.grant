@@ -108,7 +108,6 @@
     "scripts/verify/briefing.ts": { "responsibilities": 1 },
     "scripts/verify/browse-asked.ts": { "projects": 1, "inbound_commands": 1 },
     "scripts/verify/browser.ts": { "projects": 1, "browser_actions": 4, "jobs": 2 },
-    "scripts/verify/budget.ts": { "jobs": 7 },
     "scripts/verify/capability-claims.ts": { "projects": 1, "documents": 1, "inbound_commands": 1 },
     "scripts/verify/capability.ts": { "staff_tools": 1, "tool_requests": 1 },
     "scripts/verify/chaos.ts": { "projects": 3, "jobs": 4, "inbound_commands": 2, "documents": 1 },

@@ -64,6 +64,8 @@ export const MAKES_NO_TURN: Record<string, string> = {
   'scripts/verify/oauth.ts':
     'registers an OAuth client and redeems a code; never calls a tool, so the door makes no work',
   'scripts/check-door-origins.ts': 'this check',
+  'scripts/release/bundle-manifest.ts':
+    'names the telegram-webhook and slack-events bundles to say which services differ from a commit; reads files and git, contacts nothing',
 }
 
 /**
