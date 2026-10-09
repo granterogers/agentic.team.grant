@@ -288,6 +288,9 @@ const MEASURE = `(() => {
     sampleText: (document.querySelector('.bcsamplebar') || {}).innerText || '',
     reduce: matchMedia('(prefers-reduced-motion: reduce)').matches, running: running,
     body: document.body.innerText.slice(0, 4000),
+    // The project list lives in the hamburger menu (ADR-0068: the canvas has no portfolio). The panel is in the page even
+    // while it is closed, so its text is read directly; innerText of a hidden element would be empty.
+    menu: ((document.getElementById('bc-menu') || {}).textContent || '').replace(/\\s+/g, ' ').slice(0, 4000),
   };
 })()`
 type M = {
@@ -306,6 +309,7 @@ type M = {
   reduce: boolean
   running: number
   body: string
+  menu: string
 }
 
 const settle = async (page: Page, who: 'person' | 'sample'): Promise<void> => {
@@ -347,11 +351,11 @@ try {
           })
           await settle(page, who)
           const m = (await page.evaluate(MEASURE)) as M
-          const home = m.body
+          const home = `${m.body} ${m.menu}`
           check(
-            `${tag}: the shell draws and the office's own projects are named`,
-            m.top && names.every((n) => home.includes(n.slice(0, 24))),
-            `${m.main} chars`,
+            `${tag}: the shell draws and the office's own projects are named (in the menu)`,
+            m.top && m.menu.length > 0 && names.every((n) => m.menu.includes(n.slice(0, 24))),
+            `${m.main} chars, menu ${m.menu.length} chars`,
           )
           check(
             `${tag}: the OTHER office's projects are nowhere on the page`,
