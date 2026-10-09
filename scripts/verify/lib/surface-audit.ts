@@ -32,6 +32,12 @@ export const auditScript = (rootSelector = ''): string => `(() => {
       if (parseFloat(s.fontSize) < 11.5) { tiny += 1; const k = 'tiny:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('type under 12px: ' + name(e) + ' ' + s.fontSize) } }
       if ((s.overflow === 'hidden' || s.overflowX === 'hidden') && s.textOverflow !== 'ellipsis' && e.scrollWidth > e.clientWidth + 2 && s.whiteSpace === 'nowrap') { clipped += 1; const k = 'clip:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('text clipped by its box: ' + name(e) + ' ' + e.scrollWidth + ' > ' + e.clientWidth) } }
     }
+    if (e.matches('input[placeholder], textarea[placeholder]') && e.value === '' && e.tagName === 'INPUT') {
+      const m = document.createElement('span'); m.textContent = e.getAttribute('placeholder'); m.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font:' + s.font + ';letter-spacing:' + s.letterSpacing
+      document.body.appendChild(m); const need = m.getBoundingClientRect().width; m.remove()
+      const room = e.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight)
+      if (need > room + 1) { const k = 'ph:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('placeholder is cut off: "' + e.getAttribute('placeholder') + '" needs ' + Math.round(need) + 'px, has ' + Math.round(room) + 'px') } }
+    }
     let hw = r.width, hh = r.height
     const lab = e.matches('input[type="checkbox"], input[type="radio"]') ? e.closest('label') : null
     if (lab) { const lr = lab.getBoundingClientRect(); hw = Math.max(hw, lr.width); hh = Math.max(hh, lr.height) }

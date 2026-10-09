@@ -46,7 +46,7 @@ let failed = false
   await page.waitForTimeout(600)
   await page.evaluate(`(() => {
     const g = document.createElement('div'); g.id = 'control'
-    g.innerHTML = '<p style="font-size:9px">tiny type</p><button style="width:18px;height:18px">x</button><div style="width:60px;white-space:nowrap;overflow:hidden">this text is far wider than its box and is clipped</div><span style="display:block;padding:6px;background:#c800c8;color:#fff">a foreign hue</span><div style="position:absolute;left:800px;width:50px;height:20px">off the edge</div>'
+    g.innerHTML = '<p style="font-size:9px">tiny type</p><button style="width:18px;height:18px">x</button><div style="width:60px;white-space:nowrap;overflow:hidden">this text is far wider than its box and is clipped</div><span style="display:block;padding:6px;background:#c800c8;color:#fff">a foreign hue</span><input style="width:80px" placeholder="A placeholder far too long for its field"><div style="position:absolute;left:800px;width:50px;height:20px">off the edge</div>'
     document.body.appendChild(g)
   })()`)
   const seen = ((await page.evaluate(auditScript('#control'))) as { out: string[] }).out.join(' | ')
@@ -56,6 +56,7 @@ let failed = false
     ['clipped text', /text clipped/],
     ['a foreign hue', /foreign hue/],
     ['spilling off the edge', /spills off the right edge/],
+    ['a cut-off placeholder', /placeholder is cut off/],
   ]
   for (const [what, re] of wanted) {
     if (!re.test(seen)) {

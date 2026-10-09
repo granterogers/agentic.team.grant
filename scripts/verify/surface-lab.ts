@@ -15,6 +15,7 @@
  */
 import '../../src/safety/arm.ts'
 import { mkdir, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { chromium, type Page } from 'playwright'
 import { auditScript } from './lib/surface-audit.ts'
 import { serveStudio } from './serve-studio.ts'
@@ -28,6 +29,38 @@ const OUT = process.env.OUT ?? '.out/surface-lab'
 await mkdir(OUT, { recursive: true })
 const server = await serveStudio(PORT)
 const browser = await chromium.launch()
+
+/*
+  A signed-in person, without a real office: WRITER=1 starts a stand-in gateway (the contract canvas-devices uses) and the
+  page is given a token, so controls drawn only for a writer (the new-project form, the first-run screen) can be opened.
+*/
+const WRITER = process.env.WRITER === '1'
+const API_PORT = 4717
+let writerProjects = 1
+const office = WRITER
+  ? createServer((req, res) => {
+      const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization,content-type', 'content-type': 'application/json' }
+      req.resume()
+      req.on('end', () => {
+        if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return }
+        const url = new URL(req.url ?? '/', 'http://x')
+        res.writeHead(200, cors)
+        if (req.method === 'GET') {
+          const section = url.searchParams.get('section')
+          if (section === 'layout') { res.end(JSON.stringify({ data: { panels: null, rev: 0, now: Date.now() } })); return }
+          if (section === 'studio') {
+            const project = { slug: 'riverside', name: 'Riverside', purpose: 'A made-up project for the lab.', tasks: [], documents: [], contacts: [], sources: [], activity: [], waiting: [], modules: [], requests: [], layout_board: null }
+            res.end(JSON.stringify({ data: { generated_at: new Date().toISOString(), crew: [{ slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' }], projects: writerProjects === 0 ? [] : [project] } }))
+            return
+          }
+          res.end(JSON.stringify({ data: [] }))
+          return
+        }
+        res.end(JSON.stringify({ result: { ok: true } }))
+      })
+    })
+  : null
+if (office !== null) await new Promise<void>((r) => office.listen(API_PORT, '127.0.0.1', () => r()))
 const u = (p: string): string => `http://127.0.0.1:${String(PORT)}${p}`
 
 const DEVICES: Record<string, { w: number; h: number; touch: boolean }> = {
@@ -48,7 +81,7 @@ const looks = pick(process.env.LOOKS, 'original')
 const glass = process.env.GLASS ?? 'soft'
 const depth = process.env.DEPTH ?? 'soft'
 const only = new Set(pick(process.env.ONLY, ''))
-const want = (g: string): boolean => only.size === 0 || only.has(g)
+const want = (g: string): boolean => (only.size === 0 && g !== 'writer') || only.has(g)
 
 type Row = { surface: string; context: string; verdict: 'verified' | 'defect' | 'blocked'; findings: string[]; shot: string }
 const rows: Row[] = []
@@ -59,6 +92,7 @@ async function newPage(dev: string, scheme: string, palette: string, look: strin
   const d = DEVICES[dev] ?? { w: 1440, h: 900, touch: false }
   const ctx = await browser.newContext({ viewport: { width: d.w, height: d.h }, deviceScaleFactor: 1, hasTouch: d.touch, isMobile: d.touch, colorScheme: 'dark' })
   await ctx.addInitScript(`try { localStorage.setItem('studio.appearance', JSON.stringify({ palette: '${palette}', texture: 'concrete', own: null, ownName: '', scheme: '${scheme}', density: 'comfortable', look: '${look}', glass: '${glass}', depth: '${depth}' })) } catch {}`)
+  if (WRITER) await ctx.addInitScript(`window.HQ_API = 'http://127.0.0.1:${String(API_PORT)}/hq-api'; try { localStorage.setItem('hq.token', 'lab-writer') } catch {}`)
   const page = await ctx.newPage()
   page.on('pageerror', (e) => errors.push(e.message))
   return { ctx, page }
@@ -107,11 +141,20 @@ for (const dev of devices) {
         await go(`${slug}/settings`); await record(page, 'project-settings', context, errors)
       }
 
+      if (want('writer') && WRITER) {
+        writerProjects = 1
+        await go('/'); await record(page, 'home-writer', context, errors)
+        if ((await tryPress(page, '[data-bc-menu]')) && (await tryPress(page, '[data-bc-menu-new]'))) await record(page, 'new-project-form', context, errors, '.bcnewproject:not([hidden])'); else blocked('new-project-form', context, 'writer mode but the project menu has no [data-bc-menu-new]')
+        writerProjects = 0
+        await go('/'); await record(page, 'first-run', context, errors, '.bcfirst')
+        writerProjects = 1
+      }
+
       if (want('menus')) {
         await go(slug)
         if (await tryPress(page, '[data-bc-menu]')) { await record(page, 'burger-menu', context, errors, '.bcmenupanel:not([hidden])'); await page.keyboard.press('Escape'); await settle(page, 300) } else blocked('burger-menu', context, 'no [data-bc-menu] control')
-        await go(slug)
-        if (await tryPress(page, '[data-bc-menu]') && (await tryPress(page, '[data-bc-menu-new], .bcmenucreate'))) { await record(page, 'new-project-form', context, errors, '.bcnewproject'); await page.keyboard.press('Escape') } else blocked('new-project-form', context, 'no create control in the menu')
+        await go('/')
+        if (WRITER) { /* covered by the writer group */ } else if (await tryPress(page, '[data-bc-newproject-open]')) { await record(page, 'new-project-form', context, errors, '.bcnewproject:not([hidden])') } else blocked('new-project-form', context, 'the portfolio has no [data-bc-menu-new] in the prototype (needs a signed-in office)')
         await go(slug)
         await page.keyboard.press('Control+k'); await settle(page, 450)
         if ((await page.locator('#bcjump:not([hidden]) .bcjumphead').count()) > 0) { await record(page, 'jump-overlay', context, errors, '#bcjump .bcjumphead'); await page.keyboard.press('Escape') } else blocked('jump-overlay', context, 'Ctrl+K opened nothing')
@@ -161,6 +204,7 @@ for (const dev of devices) {
 }
 await browser.close()
 server.close()
+office?.close()
 
 const by = (v: Row['verdict']): number => rows.filter((r) => r.verdict === v).length
 await writeFile(`${OUT}/matrix.json`, JSON.stringify(rows, null, 1))
