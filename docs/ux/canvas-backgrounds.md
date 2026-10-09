@@ -55,4 +55,8 @@ Cancel, Apply and reload for every material on the real board; per-project choic
 positions and view untouched; texture and grid share one origin and the tile scales exactly with zoom; no stretch, no reloads, no seam;
 upload accepted and optimised; refused: not an image, SVG, a 60,000px "bomb", empty, over 15 MB, truncated JPEG, a lying header;
 a storage failure; remove; the missing-picture fallback; sign-out wipes the database; a phone; the keyboard. Not applicable: server storage
-authorisation (no server storage is used), and a custom picture on a second device (the dependency in the ADR).
+authorisation here (proved against the real gateway: `scripts/isolated/background-storage.ts`, and on production: `npm run sample:release-acceptance`).
+
+**Custom pictures are now stored in the office (ADR-0070, deployed 9 October 2026):** one per project, kept in this browser first and in the office second, so
+another device draws it from a signed link and caches it by revision. `verify:canvas-background` drives that flow against a stand-in office (81 checks);
+`npm run sample:release-browser` drives it on the deployed page with two independent sessions. Evidence and limits: `docs/ux/deploy-442-445.md`.

@@ -1,9 +1,8 @@
 # Custom canvas backgrounds on every device: the smallest safe path
 
-**Status, 10 October 2026: this plan is now IMPLEMENTED on the branch and proved on the isolated replica (ADR-0070); it is NOT applied to production
-and NOT deployed.** What was built and how to ship it: `docs/ux/deploy-442-445.md`. Differences from the plan below: the revision is the object's
+**Status, 9 October 2026: this plan is IMPLEMENTED, DEPLOYED and verified on production (ADR-0070; migration 1041, hq-api v899).** What was built, the evidence and the rollback: `docs/ux/deploy-442-445.md`. Differences from the plan below: the revision is the object's
 last-written time in base 36 (not a SHA-1) so a read needs no download; a project is named by slug inside the verified office through an optional `p_slug` on
-`hq_upload_target` (migration 1024) rather than by project id; deletion of a project is handled by a fail-safe sweep on every put/delete, since the gateway has no
+`hq_upload_target` (migration 1041) rather than by project id; deletion of a project is handled by a fail-safe sweep on every put/delete, since the gateway has no
 project delete. Until it is deployed, a person's own picture lives in that browser only and the picker says so.
 
 Original plan follows, unchanged. Tracked by #445. Decisions so far: ADR-0069, ADR-0070.

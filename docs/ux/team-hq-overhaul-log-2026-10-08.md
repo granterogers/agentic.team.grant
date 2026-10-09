@@ -352,7 +352,19 @@ and no overflow. `verify:canvas-background` covers picker, upload, preview, Appl
 
 **Not verifiable here:** real-device dictation and touch pinch, a real second device against the live gateway (neither migration is applied), the live Sample after this commit.
 
+## Seventh session (9 October): the release
+
+Grant authorised applying the two migrations, deploying hq-api and the page, and merging to `main`. Full record: `docs/ux/deploy-442-445.md`. Summary: reconciled first (production already held a different `1023` and a `1027`;
+the migrations were renumbered **1040/1041**; live function definitions equal to the rollback baseline; the live gateway v897 matched `main`; the live page was the efficiency branch's, so its two-file diff was carried in);
+applied 1040 then 1041 with `migrate:one` and read the postconditions; deployed hq-api (v898, then v899 after finding that the gateway refused an empty-list compare-and-swap reset); deployed the page three times
+(overhaul, one-pull-at-a-time fix, 12px menu heading). Production acceptance: `sample:release-acceptance` 35/35, `sample:release-browser` 15/15 on the deployed page, public Sample 38/38 with zero writes, `sample:tour` desktop and phone.
+Gates: `tsc`, migrations, secrets, templates clean; the full unit suite 5448 passed, 1 failed that passes with the Supabase variables unset, and 1 test file that fails to load identically on unmodified `main`; `npm run lint` has one
+error in a file this branch does not touch (`scripts/isolated/p3-cases/20-projects.ts`, also on `main`). With read-only production access (after the migrations and deploys) all pass: `check:gateway-wrappers` (the new `layout` section and
+`hq_dashboard_layout_get` are reachable), `check:ownership`, `check:callers`, `check:consumed`, `check:capabilities`, `check:machine-key`, `check:anon-exposure` (no public function reachable by anon), `check:office-edges`; and `check:pressable`.
+
 ## Process slips (disclosed)
+
+Session 7: repository edits went through Edit, Write and `git apply` (the efficiency page diff). Two scratch scripts were created with a shell heredoc under the gitignored `.out/` (deleted).
 
 Session 6: every repository edit went through Edit or Write. Two scratch scripts were created with a shell heredoc under the gitignored `.out/` to inspect the replica (deleted, never committed), and one no-op `python3` heredoc printed a
 sentence and touched no file. `biome` was used to PRINT formatted output (`--stdin-file-path`) and the result transcribed with Write, as the rule asks; formatter hunks in `hq-api/index.ts` were applied by hand.

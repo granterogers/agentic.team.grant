@@ -1,12 +1,12 @@
-> ## 2026-10-10 - #442 AND #445 IMPLEMENTED AND PROVED ON THE REPLICA; NOT APPLIED, NOT DEPLOYED (branch `claude/confident-cori-ql21nl`)
+> ## 2026-10-09 - TEAM HQ OVERHAUL RELEASED TO PRODUCTION, #442 AND #445 DEPLOYED AND VERIFIED (branch `claude/confident-cori-ql21nl`, merged to `main`)
 >
-> **Revisioned layout saves (#442)**: migration 1023 (a revision from one sequence by trigger, optional `p_expected_rev`, `hq_dashboard_layout_get`), gateway section `layout`, compare-and-swap with bounded
-> retry and automatic fallback in `layout.js`. **Custom background pictures across devices (#445)**: migration 1024 (`hq_upload_target` takes `project_background` + `p_slug`), gateway actions
-> `project_background_put`/`_delete` and section `project_background`, per-office key, header-sniffed, quotas, signed links, orphan sweep, page keeps local first then the office. ADR-0070. Proofs:
-> `scripts/isolated/layout-cas.ts` 21/21, `scripts/isolated/background-storage.ts` 49/49 (cross-tenant write and read refused, sabotage turns it red), `verify:canvas-background` 81/0/2, `tests/studio/canvas-cas.test.ts` 7.
-> **Production is unchanged.** To ship: `docs/ux/deploy-442-445.md` (three narrow approvals: apply 1023+1024 with `migrate:one`, `deploy:hq-api`, `deploy:hq-page`; rollback SQL in `docs/ux/rollback/`, rehearsed). The
-> intermittent "did not open" loads were diagnosed: 502 `text/plain` with no `x-vercel-id` on static files (the build sandbox's proxy), zero page errors, local 12/12 (`verify:load-reliability`); the real gap (a blank page when a
-> script does not arrive) now shows a notice with Reload (`verify:boot-recovery`). Preview https://team-hq-ux-review.vercel.app redeployed from `7e4de031a49f`. Issues #442 and #445 stay OPEN until the live steps are done.
+> On Grant's explicit authorisation: migrations **1040** (revisioned layout saves; written as 1023) and **1041** (a project background is an authorisable upload; written as 1024) applied with `migrate:one`; **hq-api v899**;
+> the redesigned Team HQ page at https://ai-team-hq.vercel.app (`dpl_6zXt…`; previous `dpl_Dj7erfTXZYqDJhEgxQ9eTBzsnc8H`). Record, reconciliation, evidence and rollback: **`docs/ux/deploy-442-445.md`**; decisions ADR-0070.
+> Production acceptance with the Sample Person in two independent sessions plus a public-Sample visitor: `sample:release-acceptance` 35/35, `sample:release-browser` 15/15 on the deployed page, the public Sample 38/38 with zero writes.
+> **Reconciliation that mattered:** production already held another workstream's `1023` and `1027` (efficiency; not on `main`), so mine were renumbered; and production's page was that branch's `app.js`/`account.js`, whose diff was carried into this branch rather
+> than overwritten. Two defects found only by production acceptance and fixed: the gateway refused an empty-list compare-and-swap reset (400); every redraw re-ran the custom-picture pull. Intermittent loads: 502 `text/plain` with no `x-vercel-id` (the build sandbox's
+> proxy), zero page errors; the page now says when a script does not arrive and offers Reload (`verify:boot-recovery`). Not verified (needs a person and a device): real-microphone dictation, touch pinch, a second PHYSICAL device
+> (`docs/ux/iphone-acceptance-2026-10-09.md`). Known and not mine: `npm run lint` has one format error in `scripts/isolated/p3-cases/20-projects.ts` and `tests/sessions/weather-is-not-a-failure.test.ts` fails to load, both identical on unmodified `main`.
 >
 > ## 2026-10-08/09 - TEAM HQ INFINITE-CANVAS OVERHAUL (#439, branch `claude/confident-cori-ql21nl`, NOT merged, NOT deployed to production; isolated preview live)
 >

@@ -1,6 +1,6 @@
 # ADR-0070: A project's arrangement is saved by compare-and-swap on a revision, and a custom background picture is stored in the office under a per-office key
 
-Status: accepted for implementation, 10 October 2026. **Implemented and proved on the isolated replica; NOT applied to production and NOT deployed.**
+Status: accepted and DEPLOYED, 9 October 2026 (migrations `1040` and `1041`, written as 1023 and 1024 and renumbered before applying; hq-api v899; page `dpl_6zXt…`). Acceptance on production: `docs/ux/deploy-442-445.md`.
 Tracked by #442 (revisioned layout saves) and #445 (custom background storage), under #439, ADR-0068 and ADR-0069.
 Deployment steps, rollback and the exact approvals required: `docs/ux/deploy-442-445.md`.
 
@@ -16,7 +16,7 @@ check. And a person's own background picture lived only in that browser's Indexe
 ### #442
 
 1. **The row carries a revision from ONE sequence, assigned by a trigger** (`public.dashboard_layouts.rev`, `public.dashboard_layouts_rev_seq`,
-   migration 1023), on every insert and update, whoever writes (the gateway function, an undo, anything added later). A per-row counter
+   migration 1040), on every insert and update, whoever writes (the gateway function, an undo, anything added later). A per-row counter
    was rejected: a reset deletes the row, a counter would restart, and a stale device that remembered "1" would match a different row
    (the ABA case). A row that does not exist is revision 0.
 2. **`hq_dashboard_layout_set` gains an optional `p_expected_rev`.** Null is the old behaviour exactly (last writer wins), so every
@@ -41,7 +41,7 @@ check. And a person's own background picture lived only in that browser's Indexe
 
 7. **One object per project in the private `files` bucket, under `<office_id>/backgrounds/<project_id>.<ext>`.** The key is built by the
    gateway from the office the session proved and the project the DATABASE resolved from the slug inside that office; nothing in the
-   request is trusted (office, owner and project id sent by a client are discarded). Migration 1024 lets `hq_upload_target` take
+   request is trusted (office, owner and project id sent by a client are discarded). Migration 1041 lets `hq_upload_target` take
    `project_background` and an optional `p_slug`; a foreign project and a missing one are the same refusal, before any byte is written.
 8. **The gateway validates the bytes, not the claim.** The type comes from the header (jpeg, png, webp, avif; SVG, XML and HTML refused),
    at most 3 MB, 4096 pixels a side and 16 megapixels, base64 must decode. At most twelve pictures per office (replacing one is not a
@@ -59,8 +59,8 @@ check. And a person's own background picture lived only in that browser's Indexe
 
 ## Consequences
 
-- Neither is live. Until the migrations are applied and the gateway deployed, production behaves as before and the page falls back
-  cleanly. Verified: with the new page against today's gateway the section is unknown and the plain save path runs.
+- Both are live. The fallback to the previous merge-and-check loop remains for any gateway or database that lacks the feature (a rollback, a stand-in office).
+  Verified: with the new page against the pre-release gateway the section was unknown and the plain save path ran.
 - A project's custom picture is one per project server side: two devices uploading different pictures at once settle by whichever
   object was written last, and by the newer reference (`at`) in the arrangement; the two normally agree because the reference is saved
   after the upload.
