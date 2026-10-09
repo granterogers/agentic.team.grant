@@ -30,7 +30,7 @@ export const auditScript = (rootSelector = ''): string => `(() => {
     const direct = [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim() !== '')
     if (direct) {
       if (parseFloat(s.fontSize) < 11.5) { tiny += 1; const k = 'tiny:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('type under 12px: ' + name(e) + ' ' + s.fontSize) } }
-      if ((s.overflow === 'hidden' || s.overflowX === 'hidden') && s.textOverflow !== 'ellipsis' && e.scrollWidth > e.clientWidth + 2 && s.whiteSpace === 'nowrap') { clipped += 1; const k = 'clip:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('text clipped by its box: ' + name(e) + ' ' + e.scrollWidth + ' > ' + e.clientWidth) } }
+      if ((s.overflow === 'hidden' || s.overflowX === 'hidden') && s.textOverflow !== 'ellipsis' && e.scrollWidth > e.clientWidth + 2 && !e.matches('.face')) { clipped += 1; const k = 'clip:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('text clipped by its box: ' + name(e) + ' ' + e.scrollWidth + ' > ' + e.clientWidth) } }
     }
     if (e.matches('input[placeholder], textarea[placeholder]') && e.value === '' && e.tagName === 'INPUT') {
       const m = document.createElement('span'); m.textContent = e.getAttribute('placeholder'); m.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font:' + s.font + ';letter-spacing:' + s.letterSpacing

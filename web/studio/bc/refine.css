@@ -135,6 +135,19 @@
 }
 [data-experience='basecamp'] .bcpopfit:hover { background: color-mix(in oklab, var(--bc-accent) 26%, transparent); }
 
+/*
+  A module header whose meta is a pair of switches (Mine / The team's) has a width it needs, and a narrow module (the chat open
+  beside it) cannot give it: the pair was cut mid-word ("8 te"). A module is a size container; below 300px the switch keeps its
+  numbers and drops the words (its accessible name keeps them, and the title attribute shows them on hover).
+*/
+/* Only on the canvas (wider than a phone): size containment lets a module collapse to nothing in the stacked phone layout. */
+@media (min-width: 861px) {
+  [data-experience='basecamp'] .bccomp--c .bcstage .bcmod.bcmod--placed { container-type: inline-size; container-name: bcmod; }
+  @container bcmod (max-width: 300px) {
+    [data-experience='basecamp'] .bcsplitbtn .bcsplitlab { display: none; }
+  }
+}
+
 /* ---------------------------------------------------------------- 4. touch --- */
 
 /*

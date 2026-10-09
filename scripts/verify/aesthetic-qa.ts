@@ -530,6 +530,28 @@ if (want('tokens')) {
   }
 }
 
+/* ------------------------------------------------------------------ narrow --- */
+if (want('narrow')) {
+  const { ctx, page, errors } = await open({ w: 1440, h: 900 })
+  const switches = (): Promise<any> =>
+    page.evaluate(`(() => { const m = document.querySelector('.bcstage [data-mod="tasks"]'); const meta = m && m.querySelector('.bcmodmeta'); if (!meta) return null; const mr = m.getBoundingClientRect(); const r = meta.getBoundingClientRect(); return { module: Math.round(mr.width), metaRight: Math.round(r.right), moduleRight: Math.round(mr.right), cut: [...meta.querySelectorAll('button')].some((b) => b.scrollWidth > b.clientWidth + 1 || b.getBoundingClientRect().right > mr.right), labels: [...meta.querySelectorAll('.bcsplitlab')].map((l) => getComputedStyle(l).display), names: [...meta.querySelectorAll('button')].map((b) => b.getAttribute('aria-label')) } })()`)
+  const wide = await switches()
+  check('a roomy module shows the words on its Mine / The team switch', wide !== null && wide.labels.every((d: string) => d !== 'none'), JSON.stringify(wide))
+  await press(page, '[data-bc-dock]')
+  await page.waitForTimeout(700)
+  const narrow = await switches()
+  check('with the chat open the module is narrow and the switch drops its words, not part of one', narrow !== null && narrow.module <= 300 && narrow.labels.every((d: string) => d === 'none') && !narrow.cut, JSON.stringify(narrow))
+  check('the switch keeps its full accessible name when the words are hidden', narrow !== null && narrow.names.every((n: string) => /\d+ (yours|team's)/.test(n)), JSON.stringify(narrow?.names))
+  await page.screenshot({ path: `${OUT}/narrow-module-switch.png` })
+  check('no page errors', errors.length === 0, errors.join(' | '))
+  await ctx.close()
+  /* On a phone the modules are stacked: size containment must not collapse any of them (it once made controls 8px wide). */
+  const ph = await open({ w: 390, h: 844, touch: true })
+  const small = (await ph.page.evaluate(`[...document.querySelectorAll('.bcstage button, .bcstage [data-bc-mine]')].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.width < 20 && getComputedStyle(b).display !== 'none' && !b.matches('.bccheck, [type=checkbox]') }).map((b) => b.className.slice(0, 30) + ' ' + Math.round(b.getBoundingClientRect().width))`)) as string[]
+  check('on a phone no stacked module collapses a control to a sliver', small.length === 0, small.slice(0, 4).join(' | '))
+  await ph.ctx.close()
+}
+
 /* --------------------------------------------------------------------- fit --- */
 if (want('fit')) {
   const { ctx, page, slug, errors } = await open({ w: 1700, h: 900 })
