@@ -800,5 +800,6 @@
   "1023_the_health_reading_asks_the_cheap_question_first.sql": "3298fd850579f8b1897b0304820d62b0657e6f48abc4bbe75d0ef29b3d0519ea",
   "1027_the_pulse_reads_each_table_once.sql": "8dca35908c2c238d4b299969680e18bf2b8c7d58a8afafe1c026a98d9271528a",
   "1040_a_layout_save_can_say_which_revision_it_was_made_from.sql": "6b14ce9a290f432fd3f41cb5104ec9f26d74e239e37cb13435b5043ce88d5376",
-  "1041_a_project_background_picture_is_an_upload_the_office_can_authorise.sql": "325fdf5b1710312e6630cc926be13fc0fc4a29b7af128aca9442f4d640e6372f"
+  "1041_a_project_background_picture_is_an_upload_the_office_can_authorise.sql": "325fdf5b1710312e6630cc926be13fc0fc4a29b7af128aca9442f4d640e6372f",
+  "1053_a_public_key_reaches_no_view.sql": "4af2848b7bb96c8afd5c9d0f40f50655b714ab2a61fb7b4bb01076caf64606a3"
 }

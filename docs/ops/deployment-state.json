@@ -11,9 +11,9 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 802,
-    "highestAppliedAtRecord": "1041",
-    "note": "The pending set is DERIVED: every committed migration file whose name is not in the ledger. It is not stored here, so it cannot go stale. The 802 are: the 798 of the 6 October record, the efficiency workstream's 1023_the_health_reading_asks_the_cheap_question_first and 1027_the_pulse_reads_each_table_once (7 October), and 1040 and 1041 (9 October). The reliability migrations are authored 1023 to 1035 on claude/deep-systems-audit-3cwbtc and are renumbered 1042 to 1052 here, because production already held a different 1023 and 1027."
+    "appliedAtRecord": 803,
+    "highestAppliedAtRecord": "1053",
+    "note": "On 9 October 2026 at 19:11 UTC migration 1053 (a public key reaches no view, #457) was applied ALONE with migrate:one, making 803; 1042 to 1052 are still pending. The pending set is DERIVED: every committed migration file whose name is not in the ledger. It is not stored here, so it cannot go stale. The 802 are: the 798 of the 6 October record, the efficiency workstream's 1023_the_health_reading_asks_the_cheap_question_first and 1027_the_pulse_reads_each_table_once (7 October), and 1040 and 1041 (9 October). The reliability migrations are authored 1023 to 1035 on claude/deep-systems-audit-3cwbtc and are renumbered 1042 to 1052 here, because production already held a different 1023 and 1027."
   },
   "components": {
     "worker": {
