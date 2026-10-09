@@ -143,6 +143,12 @@ export const EXTENDED: readonly Proof[] = [
     "Team HQ in a real browser as a person and as a Sample visitor: draws, no overflow at the phone width, a guest's writes refused",
     { args: ['--only=390'], timeoutS: 420 },
   ),
+  p(
+    'series-ui-browser',
+    28,
+    'Team HQ My Tasks, real page and real gateway: ticking a recurring reminder completes that time only, Stop repeating is its own press that asks twice and cancels exactly that series, and the proof reads the database (a refused stop turns it red)',
+    { timeoutS: 420 },
+  ),
 
   // ---- migration-specific and structural proofs ----------------------------------------------------------------------
   via(

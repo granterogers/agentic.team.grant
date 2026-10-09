@@ -2911,6 +2911,44 @@ const wireTasks = (root) => {
       await ctx.refresh()
     })
   }
+
+  /*
+    ENDING A RECURRING REMINDER (owner decision, 7 October 2026; migration 1051 in this repository).
+
+    Ticking a series off completes THAT time only, so the series has its own, separate press. It asks first the way every other
+    destructive press in this surface does (press again within six seconds), because it stops every later reminder. The writer
+    is the gateway's reminder_series_stop, which cancels the row through the same path the rest of the product uses, so the
+    office's undo offer comes back in the answer. Drawn for a series only (shell.js myTasks).
+  */
+  for (const b of root.querySelectorAll('[data-bc-mystopseries]')) {
+    let armed = false
+    const label = b.textContent
+    b.addEventListener('click', async () => {
+      const id = b.dataset.bcMystopseries ?? ''
+      if (id === '') return
+      if (!armed) {
+        armed = true
+        b.textContent = 'Press again to stop'
+        setTimeout(() => {
+          armed = false
+          if (b.isConnected) b.textContent = label
+        }, 6000)
+        return
+      }
+      const done = await attempt(
+        b,
+        'Stopping…',
+        () => act('reminder_series_stop', { p_task_id: id }),
+        'Stopped.',
+      )
+      armed = false
+      if (done === null) {
+        b.textContent = label
+        return
+      }
+      await ctx.refresh()
+    })
+  }
 }
 
 const showFieldError = (f, id, message) => {

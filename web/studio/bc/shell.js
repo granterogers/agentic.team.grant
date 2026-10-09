@@ -3275,9 +3275,22 @@ const myTasks = () => {
                     aria-label="${esc(`${t.state === 'done' ? 'Completed' : 'Not completed'}: ${t.title}`)}">
                   <div class="bcitembody">
                     <span class="bcitemtitle">${esc(t.title)}</span>
-                    <span class="bcitemmeta">${esc([bcMini.dueWords(t), typeof t.project === 'string' ? t.project : (t.project?.name ?? '')].filter(Boolean).join(' · '))}</span>
+                    <span class="bcitemmeta">${esc([bcMini.dueWords(t), typeof t.project === 'string' ? t.project : (t.project?.name ?? ''), t.repeats?.series === true ? 'repeats' : ''].filter(Boolean).join(' · '))}</span>
                   </div>
-                  <span></span>
+                  <!--
+                    STOPPING A RECURRING REMINDER IS ITS OWN PRESS (owner decision, 7 October 2026). Ticking a series off
+                    completes that time only, so the series needs a way to end that is not the tick. Drawn for a series
+                    only, and only where the row has an id to write to. No backticks in this comment. Template literal.
+                  -->
+                  ${
+                    t.repeats?.series === true && String(t.id ?? '') !== ''
+                      ? button('Stop repeating', {
+                          kind: 'danger',
+                          'data-bc-mystopseries': String(t.id),
+                          'aria-label': `Stop repeating: ${t.title}`,
+                        })
+                      : '<span></span>'
+                  }
                 </div>`,
               )
               .join('')}</div>`
