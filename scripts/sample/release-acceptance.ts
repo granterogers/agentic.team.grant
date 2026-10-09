@@ -11,7 +11,7 @@
  * Person AGAINST the public Sample's project (never against Grant's), and every attempt has its positive control.
  */
 import '../../src/safety/require-production-writes.ts'
-import { act, read, REF, secondSession } from '../p4/lib.ts'
+import { act, REF, read, secondSession } from '../p4/lib.ts'
 import { guardOffice } from './guard.ts'
 import { rows, sampleOffice } from './lib.ts'
 

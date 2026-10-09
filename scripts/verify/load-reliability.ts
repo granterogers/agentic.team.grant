@@ -38,7 +38,7 @@ mockServer?.close()
 const layouts: Record<string, any[]> = {}
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*', 'content-type': 'application/json' }
 const PORT = 4733
-let delayMs = 0
+const delayMs = 0
 const office = createServer((req, res) => {
   const go = () => {
     if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return }
@@ -105,7 +105,7 @@ for (let i = 1; i <= N; i += 1) {
     await page.waitForSelector('[data-bc-board]', { timeout: 30000 })
     await page.waitForTimeout(1200)
     restored = ((await page.evaluate(() => document.body.innerHTML)) as string).includes(`diag-${String(i)}`)
-  } catch (e) {
+  } catch {
     /* the iteration failed: report it with whatever evidence the page gave */
   }
   const res = (await page.evaluate(`performance.getEntriesByType('resource').map((r) => ({ n: r.name, d: Math.round(r.duration) })).sort((a, b) => b.d - a.d).slice(0, 1)`).catch(() => [])) as { n: string; d: number }[]
