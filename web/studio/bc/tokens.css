@@ -22,7 +22,7 @@
   /* --- Colour (§4.1) ---------------------------------------------------- */
   --bc-canvas: #d6d3cc;
   --bc-surface: #f0eee9;
-  --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 14%, var(--bc-surface));
+  --bc-surface-selected: color-mix(in oklab, var(--bc-accent) 14%, var(--bc-surface));
   --bc-text: #272a2d;
   --bc-text-strong: #14171a;
   --bc-text-muted: #4d5258;
@@ -183,7 +183,7 @@
 :root[data-experience='basecamp'][data-scheme='dark'] {
   --bc-canvas: #0b151b;
   --bc-surface: #1b2930;
-  --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 20%, var(--bc-surface));
+  --bc-surface-selected: color-mix(in oklab, var(--bc-accent) 20%, var(--bc-surface));
   --bc-text: #e1e5e8;
   --bc-text-strong: #f2f4f5;
   --bc-text-muted: #a8afb3;
@@ -219,7 +219,7 @@
   :root[data-experience='basecamp']:not([data-scheme='light']):not([data-scheme='dark']) {
     --bc-canvas: #0b151b;
     --bc-surface: #1b2930;
-    --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 20%, var(--bc-surface));
+    --bc-surface-selected: color-mix(in oklab, var(--bc-accent) 20%, var(--bc-surface));
     --bc-text: #e1e5e8;
     --bc-text-strong: #f2f4f5;
     --bc-text-muted: #a8afb3;
@@ -275,7 +275,7 @@
   --ink-3: var(--bc-text-muted);
   --edge: var(--bc-border-control);
   --accent: var(--bc-accent);
-  --accent-wash: color-mix(in srgb, var(--bc-accent) 14%, transparent);
+  --accent-wash: color-mix(in oklab, var(--bc-accent) 14%, transparent);
   --on-accent: var(--bc-accent-ink);
   --good: var(--bc-success);
   --warn: var(--bc-warn);

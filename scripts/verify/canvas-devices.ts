@@ -84,7 +84,9 @@ const office = createServer((req, res) => {
         res.writeHead(200, cors)
         /* Compare-and-swap, as the gateway does it: a write made against an older revision is refused and handed the newer copy to merge. */
         if (expected !== undefined && expected !== rev) {
-          res.end(JSON.stringify({ result: { conflict: true, panels: stored, rev, now: Date.now() } }))
+          res.end(
+            JSON.stringify({ result: { conflict: true, panels: stored, rev, now: Date.now() } }),
+          )
           return
         }
         stored = panels

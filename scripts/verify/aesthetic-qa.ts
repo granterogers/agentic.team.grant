@@ -463,7 +463,7 @@ if (want('contrast')) {
       const size = Number.parseFloat(cs.fontSize); const bold = Number.parseInt(cs.fontWeight, 10) >= 700
       const need = size >= 24 || (size >= 18.66 && bold) ? 3 : 4.5
       /* A gradient or image cannot be sampled from computed style; the primary button is covered by the token-pair check below. */
-      if (bg.image && el.closest('.btn.primary')) continue
+      if (bg.image && el.closest('.btn.primary, .msg.mine')) continue
       if (rt < need) { const key = (el.className || el.tagName) + '|' + t.slice(0, 24); if (!seen.has(key)) { seen.add(key); out.push({ cls: String(el.className || el.tagName).slice(0, 48), text: t.slice(0, 28), ratio: Number(rt.toFixed(2)), need, image: bg.image }) } }
     }
     return out

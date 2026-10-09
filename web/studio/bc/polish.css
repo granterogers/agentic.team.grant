@@ -35,8 +35,8 @@
 
 [data-experience='basecamp'] .bcburger { transition: background var(--bc-t-colour) ease, box-shadow var(--bc-t-colour) ease; }
 [data-experience='basecamp'] .bcburger[aria-expanded='true'] {
-  background: color-mix(in srgb, var(--bc-accent) 16%, var(--bc-surface));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-accent) 45%, transparent);
+  background: color-mix(in oklab, var(--bc-accent) 16%, var(--bc-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bc-accent) 45%, transparent);
   color: var(--bc-text-strong);
 }
 [data-experience='basecamp'] .bcburger svg path { transform-box: fill-box; transform-origin: center; }
@@ -88,13 +88,13 @@
 [data-experience='basecamp'] .bcmenupanel > .bcmenuitem { animation-delay: 170ms; }
 [data-experience='basecamp'] .bcmenuitem:hover:not(:disabled),
 [data-experience='basecamp'] .bcmenuitem:focus-visible {
-  background: color-mix(in srgb, var(--bc-accent) 11%, transparent);
+  background: color-mix(in oklab, var(--bc-accent) 11%, transparent);
   transform: translateX(2px);
 }
 [data-experience='basecamp'] .bcmenuitem:active:not(:disabled) { transform: translateX(2px) scale(0.985); }
 [data-experience='basecamp'] .bcmenuitem[aria-current='page'] {
-  background: color-mix(in srgb, var(--bc-accent) 17%, var(--bc-surface));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-accent) 38%, transparent), inset 3px 0 0 var(--bc-accent);
+  background: color-mix(in oklab, var(--bc-accent) 17%, var(--bc-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bc-accent) 38%, transparent), inset 3px 0 0 var(--bc-accent);
   color: var(--bc-text-strong);
 }
 [data-experience='basecamp'] .bcmenusep {
@@ -129,12 +129,12 @@
 }
 [data-experience='basecamp'] .dock .msg p,
 [data-experience='basecamp'] .dock .msglist { color: var(--bc-text); }
-/* What you said: the accent as a tint, with strong ink, so it reads as yours without shouting. */
+/* What you said: the accent itself, with its own ink (the same pair as Send and Chat with Team). A tint of a warm accent over slate goes muddy; the pure colour does not. */
 [data-experience='basecamp'] .dock .msg.mine p {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bc-accent) 30%, var(--bc-surface)), color-mix(in srgb, var(--bc-accent) 21%, var(--bc-surface)));
-  color: var(--bc-text-strong);
-  border: 1px solid color-mix(in srgb, var(--bc-accent) 50%, transparent);
-  box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-1);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bc-accent) 92%, white), var(--bc-accent));
+  color: var(--bc-accent-ink);
+  border: 0;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 28%, transparent), var(--bc-sh-1);
 }
 /* What the team said: a raised card on the thread, with its speaker's own colour as a quiet edge. */
 [data-experience='basecamp'] .dock .msg.theirs .mbody {
@@ -150,8 +150,8 @@
   box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-1);
 }
 [data-experience='basecamp'] .dock .composer:focus-within {
-  border-color: color-mix(in srgb, var(--bc-accent) 60%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bc-accent) 20%, transparent), var(--bc-sh-1);
+  border-color: color-mix(in oklab, var(--bc-accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--bc-accent) 20%, transparent), var(--bc-sh-1);
 }
 [data-experience='basecamp'] .dock .crow textarea { color: var(--bc-text-strong); }
 [data-experience='basecamp'] .dock .crow textarea::placeholder { color: var(--bc-text-muted); }
@@ -207,14 +207,14 @@
   background-size: 10px 10px;
 }
 [data-experience='basecamp'] .bdthumb { border-color: var(--bc-border-control); color: var(--bc-text-muted); }
-[data-experience='basecamp'] .bdthumb:hover { border-color: color-mix(in srgb, var(--bc-accent) 55%, transparent); color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bdthumb:hover { border-color: color-mix(in oklab, var(--bc-accent) 55%, transparent); color: var(--bc-text-strong); }
 [data-experience='basecamp'] .bdthumb.on {
   border-color: var(--bc-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bc-accent) 35%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--bc-accent) 35%, transparent);
   color: var(--bc-text-strong);
 }
 [data-experience='basecamp'] .bdseg { border-color: var(--bc-border-control); color: var(--bc-text-muted); }
-[data-experience='basecamp'] .bdseg.on { background: color-mix(in srgb, var(--bc-accent) 18%, transparent); border-color: var(--bc-accent); color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bdseg.on { background: color-mix(in oklab, var(--bc-accent) 18%, transparent); border-color: var(--bc-accent); color: var(--bc-text-strong); }
 [data-experience='basecamp'] .bdactions { background: var(--bc-panel, var(--bc-surface)); }
 
 /* ------------------------------------------- the schedule module's own views -- */
@@ -223,7 +223,7 @@
 [data-experience='basecamp'] .bccal2views--mini { display: flex; width: 100%; border: 1px solid var(--bc-border-control); border-radius: 9px; padding: 2px; gap: 2px; background: color-mix(in srgb, var(--bc-canvas) 40%, transparent); }
 [data-experience='basecamp'] .bccal2views--mini .bccal2btn--seg { flex: 1 1 0; min-height: 26px; justify-content: center; text-align: center; border: 0; border-radius: 7px; background: transparent; color: var(--bc-text-muted); font-size: 12px; }
 [data-experience='basecamp'] .bccal2views--mini .bccal2btn--seg:hover { color: var(--bc-text-strong); background: var(--bc-hover); }
-[data-experience='basecamp'] .bccal2views--mini .bccal2btn--seg.is-on { background: color-mix(in srgb, var(--bc-accent) 20%, var(--bc-surface)); color: var(--bc-text-strong); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-accent) 45%, transparent); }
+[data-experience='basecamp'] .bccal2views--mini .bccal2btn--seg.is-on { background: color-mix(in oklab, var(--bc-accent) 20%, var(--bc-surface)); color: var(--bc-text-strong); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bc-accent) 45%, transparent); }
 [data-experience='basecamp'] .bccal2compact .bccal2agenda { padding-right: 2px; }
 @media (pointer: coarse) {
   [data-experience='basecamp'] .bccal2views--mini .bccal2btn--seg { min-height: 36px; }
@@ -292,9 +292,9 @@
 }
 [data-experience='basecamp'] .bccal2views:not(.bccal2views--mini) .bccal2btn--seg:hover { color: var(--bc-text-strong); background: var(--bc-hover); }
 [data-experience='basecamp'] .bccal2views:not(.bccal2views--mini) .bccal2btn--seg.is-on {
-  background: color-mix(in srgb, var(--bc-accent) 20%, var(--bc-surface));
+  background: color-mix(in oklab, var(--bc-accent) 20%, var(--bc-surface));
   color: var(--bc-text-strong);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-accent) 45%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bc-accent) 45%, transparent);
 }
 
 /* The heading row and the board are two edges one beside the other; the board's own edge is the only rule (a second line 45px above it read as fussy). */
