@@ -1,3 +1,9 @@
+> ## 2026-10-09 (second run) - LIVE-CODE RECONCILIATION AND RECOVERY VERIFICATION: STILL B, CONDITIONAL GO (branch `claude/v1-integration-main-2026-10-09`, NOT merged, NOT deployed)
+>
+> The "live literals missing from the candidate" were an artefact of the first scanner (it read regular expressions as strings). `scripts/release/reconcile-live.ts` reproduces each function's upload from a source tree and compares ordered canonical syntax trees with the captured live bundle:
+> hq-api, voice, voice-token, mcp, signin, telegram-webhook, slack-events and google-oauth are **identical**; the worker is identical except 9 class-field lowerings and 2 type-only files. **Nothing live is missing from the candidate**; every difference is the candidate adding the reliability work. No integration change was needed.
+> Rollback: 11 captured bundles rehearsed against an isolated loopback target (`rollback-rehearsal.ts`), 11 of 11, checksums stable. Gates on the final commit `ff203317`: unit 6,746 passed, critical 67 of 67 (3,664 assertions), extended 73 of 73 three times (one load-sensitive browser control was red 3 times earlier, Issue filed). Full detail: section 0 of `docs/audit/V1-R1B-R1C-RELEASE-VERIFICATION-2026-10-09.md`.
+>
 > ## 2026-10-09 (R1b + R1c) - V1 RELEASE VERIFICATION: RECOMMENDATION B, CONDITIONAL GO (branch `claude/v1-integration-main-2026-10-09`, NOT merged, NOT deployed)
 >
 > Read-only R1b and an isolated R1c restore were done; the report is **`docs/audit/V1-R1B-R1C-RELEASE-VERIFICATION-2026-10-09.md`**. Live versions are worker v976, voice v659, signin v130 (the number is not the identity: bundle sha256 and a word-level code
