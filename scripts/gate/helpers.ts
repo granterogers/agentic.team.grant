@@ -11,6 +11,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: 'the connection every proof uses and the refusal that keeps it isolated (marker table, local socket)',
   },
   {
+    stem: 'reference/dequeue.efficiency-1030',
+    role: "frozen text: efficiency's unapplied 1030 as written, the CONTROL dequeue-reconciled installs in a scratch schema to show the conflict with 1044 is real; never applied",
+  },
+  {
     stem: 'fixtures-approvals',
     role: 'fixtures: a real turn, a shown question, the door application name',
   },
