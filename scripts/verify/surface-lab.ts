@@ -81,7 +81,7 @@ const looks = pick(process.env.LOOKS, 'original')
 const glass = process.env.GLASS ?? 'soft'
 const depth = process.env.DEPTH ?? 'soft'
 const only = new Set(pick(process.env.ONLY, ''))
-const want = (g: string): boolean => (only.size === 0 && g !== 'writer') || only.has(g)
+const want = (g: string): boolean => (only.size === 0 && g !== 'writer' && g !== 'empty') || only.has(g)
 
 type Row = { surface: string; context: string; verdict: 'verified' | 'defect' | 'blocked'; findings: string[]; shot: string }
 const rows: Row[] = []
@@ -191,6 +191,26 @@ for (const dev of devices) {
           const btn = `.bcstage [data-mod="${m}"] [data-bc-expand], .bcstage [data-mod="${m}"] [data-expand]`
           if (await tryPress(page, btn)) { await record(page, `module-maximised-${m}`, context, errors, '.bcexp .bcexpbox'); await page.keyboard.press('Escape') } else blocked(`module-maximised-${m}`, context, 'no expand control')
         }
+      }
+
+      if (want('popovers')) {
+        await go(slug)
+        if (await tryPress(page, '[data-bc-pagemenu]')) { await record(page, 'page-menu', context, errors, '[data-bc-pagemenu-panel]:not([hidden])'); await page.keyboard.press('Escape') } else blocked('page-menu', context, 'no page menu control')
+        await go(slug)
+        if (await tryPress(page, '.bcstage [data-bc-tint]')) { await record(page, 'module-tint-popover', context, errors, '.bcpop'); await page.keyboard.press('Escape') } else blocked('module-tint-popover', context, DEVICES[dev]?.touch ? 'not offered on a phone: the arrangement controls are off there by design' : 'no tint control')
+        await go(slug)
+        if (await tryPress(page, '[data-bc-layouts]')) { await record(page, 'layouts-popover', context, errors, '.bcpop--layouts'); await page.keyboard.press('Escape') } else blocked('layouts-popover', context, DEVICES[dev]?.touch ? 'not offered on a phone: the arrangement controls are off there by design' : 'no layouts control')
+        await go(slug)
+        if (await tryPress(page, '[data-bc-attention]')) await record(page, 'attention', context, errors, 'url:/team'); else blocked('attention', context, 'no attention control')
+        await go(slug)
+        if (await tryPress(page, '.bcpostit')) await record(page, 'note-focused', context, errors, '.bcpostit'); else blocked('note-focused', context, DEVICES[dev]?.touch ? 'notes are not on the phone board' : 'no note')
+      }
+
+      if (want('empty') && WRITER) {
+        writerProjects = 1
+        await go('/p/riverside'); await record(page, 'empty-project-board', context, errors, '[data-bc-board]')
+        if (await tryPress(page, '.bcstage [data-mod="tasks"] [data-bc-expand], .bcstage [data-mod="tasks"] [data-expand]')) await record(page, 'empty-tasks-maximised', context, errors, '.bcexp .bcexpbox'); else blocked('empty-tasks-maximised', context, 'no expand control on the empty project')
+        await go('/p/riverside'); if (await tryPress(page, '.bcstage [data-mod="schedule"] [data-bc-expand], .bcstage [data-mod="schedule"] [data-expand]')) await record(page, 'empty-schedule-maximised', context, errors, '.bcexp .bcexpbox'); else blocked('empty-schedule-maximised', context, 'no expand control')
       }
 
       if (want('chat')) {
