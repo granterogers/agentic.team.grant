@@ -387,7 +387,7 @@ const topRow = () => {
         aria-label="Projects and navigation" title="Projects and navigation">
         <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none"
           stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-          <path d="M4 7h16M4 12h16M4 17h16"></path>
+          <path class="bcb1" d="M4 7h16"></path><path class="bcb2" d="M4 12h16"></path><path class="bcb3" d="M4 17h16"></path>
         </svg>
       </button>
       ${menuPanel()}

@@ -74,6 +74,9 @@
   */
   --bc-danger: #b3382e;
   --bc-success: #2a7a54;
+  --bc-warn: #8f5a08;
+  /* The colour shadows are made of: warm near-black on stone, true black on the dark scheme. */
+  --bc-shadow-ink: rgb(40 36 28);
 
   /* --- Typography (§4.2) ------------------------------------------------ */
   /*
@@ -188,6 +191,8 @@
   --bc-focus-fill: rgb(255 255 255 / 0.1);
   --bc-danger: #f0857c;
   --bc-success: #6fd3a3;
+  --bc-warn: #f3c677;
+  --bc-shadow-ink: rgb(0 0 0);
   --bc-shadow-surface: 0 0 30px rgb(0 0 0 / 0.08);
   color-scheme: dark;
 }
@@ -217,9 +222,52 @@
     --bc-focus-fill: rgb(255 255 255 / 0.1);
     --bc-danger: #f0857c;
     --bc-success: #6fd3a3;
+    --bc-warn: #f3c677;
+    --bc-shadow-ink: rgb(0 0 0);
     --bc-shadow-surface: 0 0 30px rgb(0 0 0 / 0.08);
     color-scheme: dark;
   }
+}
+
+/*
+  ONE PALETTE (9 October 2026). Grant: the chat, the menu, the maximised views and Settings each wore a different
+  colour (brown, blue, terracotta) because the studio's own tokens (--ground, --surface, --accent, from skins.css and
+  its five palettes) and Team HQ's (--bc-*) were two systems painting one screen.
+
+  Inside Team HQ the studio's names are now only ALIASES of the --bc-* values above. A palette choice changes the accent
+  (the blocks further up) and the accent changes everywhere at once; the scheme changes every surface at once. The
+  selector repeats the root so it outranks skins.css's palette-and-scheme rules, which carry more specificity than a
+  single attribute and would otherwise win in the dark scheme. Textures are the board's one material (stone.css), not a
+  second one on every button, so the studio's per-control texture is switched off here.
+*/
+:root:root:root[data-experience='basecamp'] {
+  /* Section headings share the module headings' one quiet gold; a third heading colour was the peach on the team page. */
+  --bc-section-accent: var(--bc-heading);
+  --ground: var(--bc-canvas);
+  --surface: var(--bc-surface);
+  --sunken: color-mix(in srgb, var(--bc-canvas) 60%, var(--bc-surface));
+  --ink: var(--bc-text-strong);
+  --ink-2: var(--bc-text-muted);
+  --ink-3: var(--bc-text-muted);
+  --edge: var(--bc-border-control);
+  --accent: var(--bc-accent);
+  --accent-wash: color-mix(in srgb, var(--bc-accent) 14%, transparent);
+  --on-accent: var(--bc-accent-ink);
+  --good: var(--bc-success);
+  --warn: var(--bc-warn);
+  --bad: var(--bc-danger);
+  --wash: transparent;
+  --glass: color-mix(in srgb, var(--bc-surface) 88%, transparent);
+  --emboss: inset 0 1px 0 color-mix(in srgb, var(--bc-text-strong) 7%, transparent);
+  --engrave: inset 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) 28%, transparent);
+  --paper-edge: inset 0 1px 0 color-mix(in srgb, var(--bc-text-strong) 7%, transparent);
+  --lift-1: 0 1px 2px color-mix(in srgb, var(--bc-shadow-ink) 22%, transparent), 0 6px 14px -6px color-mix(in srgb, var(--bc-shadow-ink) 34%, transparent), var(--emboss);
+  --lift-2: 0 2px 4px color-mix(in srgb, var(--bc-shadow-ink) 24%, transparent), 0 14px 28px -10px color-mix(in srgb, var(--bc-shadow-ink) 42%, transparent), var(--emboss);
+  --lift-3: 0 4px 8px color-mix(in srgb, var(--bc-shadow-ink) 26%, transparent), 0 28px 56px -16px color-mix(in srgb, var(--bc-shadow-ink) 55%, transparent), var(--emboss);
+  --tex: none;
+  --tex-src: none;
+  --tex-size: auto;
+  --tex-fine: auto;
 }
 
 /*
@@ -244,6 +292,21 @@
 :root[data-experience='basecamp'][data-palette='paper'] {
   --bc-accent: #b9a6f2;
   --bc-accent-ink: #150c33;
+}
+
+/*
+  The five accents above are tuned for the dark scheme. On the light stone surface they are darker steps of the same
+  hue, so a palette choice reads as the same colour in both schemes and still clears 4.5:1 with white ink on it.
+*/
+:root[data-experience='basecamp'][data-palette='moss'][data-scheme='light'] { --bc-accent: #3b7526; --bc-accent-ink: #ffffff; }
+:root[data-experience='basecamp'][data-palette='clay'][data-scheme='light'] { --bc-accent: #a24a22; --bc-accent-ink: #ffffff; }
+:root[data-experience='basecamp'][data-palette='ink'][data-scheme='light'] { --bc-accent: #7a5314; --bc-accent-ink: #ffffff; }
+:root[data-experience='basecamp'][data-palette='paper'][data-scheme='light'] { --bc-accent: #6244c0; --bc-accent-ink: #ffffff; }
+@media (prefers-color-scheme: light) {
+  :root[data-experience='basecamp'][data-palette='moss']:not([data-scheme='dark']) { --bc-accent: #3b7526; --bc-accent-ink: #ffffff; }
+  :root[data-experience='basecamp'][data-palette='clay']:not([data-scheme='dark']) { --bc-accent: #a24a22; --bc-accent-ink: #ffffff; }
+  :root[data-experience='basecamp'][data-palette='ink']:not([data-scheme='dark']) { --bc-accent: #7a5314; --bc-accent-ink: #ffffff; }
+  :root[data-experience='basecamp'][data-palette='paper']:not([data-scheme='dark']) { --bc-accent: #6244c0; --bc-accent-ink: #ffffff; }
 }
 
 /*

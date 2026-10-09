@@ -557,3 +557,58 @@ export const optimise = async (file) => {
     bitmap.close?.()
   }
 }
+
+/* ------------------------------------------ the material, under the whole page --- */
+/*
+  Grant: choosing a background "doesn't work". It did, but only inside the board, which most of the window is covered by
+  panels and framed by the page's own stone, so the choice read as a thin strip. The page behind the bar and the heading
+  rows now wears the same material, still, as wallpaper (the board keeps its own, which pans with the modules).
+
+  The board stays the one source of the choice: this copies its variables to the shell root, whenever the board is drawn,
+  previewed or changed, and clears them when no board has a material. Nothing is stored here.
+*/
+const MIRROR = ['--bc-bg-img', '--bc-bg-tw', '--bc-bg-th', '--bc-bg-veilp', '--bc-bg-shadep', '--bc-bg-solid']
+const syncWallpaper = () => {
+  const root = document.getElementById('root')
+  if (root === null) return
+  const board = document.querySelector('[data-bc-board][data-bg]')
+  if (board === null) {
+    if (root.hasAttribute('data-bg-page')) {
+      root.removeAttribute('data-bg-page')
+      root.removeAttribute('data-bg-mode')
+      root.removeAttribute('data-bg-tone')
+      for (const k of MIRROR) root.style.removeProperty(k)
+    }
+    return
+  }
+  const same = (a, v) => root.getAttribute(a) !== v && root.setAttribute(a, v)
+  same('data-bg-page', board.getAttribute('data-bg') ?? '')
+  same('data-bg-mode', board.getAttribute('data-bg-mode') ?? 'tile')
+  same('data-bg-tone', board.getAttribute('data-bg-tone') ?? 'light')
+  for (const k of MIRROR) {
+    const v = board.style.getPropertyValue(k)
+    if (v === '') root.style.removeProperty(k)
+    else if (root.style.getPropertyValue(k) !== v) root.style.setProperty(k, v)
+  }
+}
+if (typeof document !== 'undefined' && typeof MutationObserver === 'function') {
+  let queued = false
+  const soon = () => {
+    if (queued) return
+    queued = true
+    queueMicrotask(() => {
+      queued = false
+      syncWallpaper()
+    })
+  }
+  const start = () => {
+    const root = document.getElementById('root')
+    if (root === null) return
+    new MutationObserver((records) => {
+      if (records.some((r) => r.target !== root)) soon()
+    }).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-bg', 'data-bg-mode', 'data-bg-tone'] })
+    soon()
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true })
+  else start()
+}

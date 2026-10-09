@@ -109,8 +109,79 @@ export const wireStage = (root, ctx) => {
     }
   }
 
+  /*
+    THE DOT GRID, DRAWN RATHER THAN TILED. A tiled radial gradient at a fractional step (24px at 64% is 15.36px) lands
+    its dots on fractions of a pixel, so some are crisp and some are smears and the pattern looks broken as you zoom. Here
+    every dot is placed in world units, snapped to a device pixel, and the density steps by powers of two so the spacing
+    never drops below a readable distance. Every fourth dot each way is a little stronger, which gives the eye a ruler.
+    The colour is whatever --bc-dot resolves to on the board, so a material and a scheme change it without code here.
+  */
+  const gridCv = board.querySelector('.bcgridcv')
+  let gridQueued = false
+  const drawGrid = () => {
+    gridQueued = false
+    if (gridCv === null || !board.isConnected || stacked()) return
+    const dpr = Math.min(3, globalThis.devicePixelRatio || 1)
+    const w = board.clientWidth
+    const h = board.clientHeight
+    if (w < 2 || h < 2) return
+    if (gridCv.width !== Math.round(w * dpr) || gridCv.height !== Math.round(h * dpr)) {
+      gridCv.width = Math.round(w * dpr)
+      gridCv.height = Math.round(h * dpr)
+    }
+    const c = gridCv.getContext('2d')
+    if (c === null) return
+    c.setTransform(dpr, 0, 0, dpr, 0, 0)
+    c.clearRect(0, 0, w, h)
+    const ink = globalThis.getComputedStyle(gridCv).color
+    const z = view.zoom
+    let mult = 1
+    while (24 * mult * z < 18) mult *= 2
+    const step = 24 * mult * z
+    const ix0 = Math.floor(-view.x / step) - 1
+    const iy0 = Math.floor(-view.y / step) - 1
+    const cols = Math.ceil(w / step) + 3
+    const rows = Math.ceil(h / step) + 3
+    const snap = (v) => Math.round(v * dpr) / dpr
+    c.fillStyle = ink
+    const r = Math.max(0.9, Math.min(1.5, 0.8 + 0.5 * z))
+    for (const major of [false, true]) {
+      c.globalAlpha = major ? 1 : 0.62
+      c.beginPath()
+      for (let j = 0; j < rows; j++) {
+        const iy = iy0 + j
+        const y = snap(view.y + iy * step)
+        for (let i = 0; i < cols; i++) {
+          const ix = ix0 + i
+          if ((ix % 4 === 0 && iy % 4 === 0) !== major) continue
+          const x = snap(view.x + ix * step)
+          const rr = major ? r * 1.35 : r
+          c.moveTo(x + rr, y)
+          c.arc(x, y, rr, 0, Math.PI * 2)
+        }
+      }
+      c.fill()
+    }
+    c.globalAlpha = 1
+  }
+  const queueGrid = () => {
+    if (gridQueued) return
+    gridQueued = true
+    globalThis.requestAnimationFrame(drawGrid)
+  }
+  if (gridCv !== null && typeof MutationObserver === 'function') {
+    /* A new material or a scheme change moves the dot colour; the board and the root are the two places that say so. */
+    const watch = new MutationObserver(() => {
+      if (!board.isConnected) return watch.disconnect()
+      queueGrid()
+    })
+    watch.observe(board, { attributes: true, attributeFilter: ['data-bg', 'data-bg-tone', 'style'] })
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-scheme', 'data-palette'] })
+  }
+
   /* One place writes the transform and the grid, so a pan, a zoom and a drag cannot disagree. */
   const paintView = () => {
+    queueGrid()
     zoomLive = view.zoom
     stageEl.style.transform = `translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})`
     stageEl.style.setProperty('--bc-zoom', String(view.zoom))

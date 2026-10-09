@@ -589,6 +589,67 @@ const toolbar = (s, mode) => `<div class="bccal2bar">
       : ''
   }`
 
+/*
+  THE MODULE'S OWN VIEWS (9 October 2026). Grant: the minimised schedule should choose between day, week and month as the
+  expanded one does. Small and medium share one drawing: a bar (previous, the period, next, New), a Day / Week / Month
+  switch, and under it the day's list, the week's days in order, or the month with its dots and the chosen day beneath.
+  The choice is the same stored one the expanded view uses, so the two never disagree about which view is showing.
+*/
+const dayRows = (list, d, empty) => {
+  const evs = onDay(list, d)
+  if (evs.length === 0) return `<p class="bccal2empty">${esc(empty)}</p>`
+  return evs
+    .map(
+      (e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, d, false, true)}${e.source === 'google' ? '<span class="bccal2src" title="From Google Calendar">Google</span>' : ''}</div>`,
+    )
+    .join('')
+}
+
+const compact = (s, list, size, today, selected) => {
+  const view = s.view
+  const word = { day: 'day', week: 'week', month: 'month' }[view]
+  const title =
+    view === 'month'
+      ? `${MONTHS[parseDay(s.cursor).getMonth()]} ${String(parseDay(s.cursor).getFullYear())}`
+      : view === 'day'
+        ? s.cursor === today
+          ? 'Today'
+          : dayWords(s.cursor)
+        : titleOf(s)
+  const switcher = `<span class="bccal2views bccal2views--mini" role="group" aria-label="View">${['day', 'week', 'month']
+    .map(
+      (v) =>
+        `<button type="button" class="bccal2btn bccal2btn--seg${view === v ? ' is-on' : ''}" data-cal-view="${v}" aria-pressed="${view === v ? 'true' : 'false'}">${v.charAt(0).toUpperCase()}${v.slice(1)}</button>`,
+    )
+    .join('')}</span>`
+  let body = ''
+  if (view === 'day') body = `<div class="bccal2agenda">${dayRows(list, s.cursor, 'Nothing on this day.')}</div>`
+  else if (view === 'week') {
+    const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart(s.cursor), i))
+    body = `<div class="bccal2agenda">${days
+      .map(
+        (d) => `<section class="bccal2ag"><h3 class="bccal2agh${d === today ? ' is-today' : ''}">${esc(d === today ? 'Today' : dayWords(d))}</h3>${dayRows(list, d, 'Nothing.')}</section>`,
+      )
+      .join('')}</div>`
+  } else {
+    body = `${monthBody(list, { ...s, view: 'month' }, true)}<div class="bccal2day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>${
+      selected.length === 0
+        ? '<p class="bccal2empty">Nothing on this day.</p>'
+        : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')
+    }</div>`
+  }
+  return `<div class="bccal2compact bccal2compact--${size}">
+    <div class="bccal2minibar">
+      <button type="button" class="bccal2btn bccal2btn--icon" data-cal-nav="prev" aria-label="${esc(`Previous ${word}`)}">&lsaquo;</button>
+      <span class="bccal2minititle" aria-live="polite">${esc(title)}</span>
+      <button type="button" class="bccal2btn bccal2btn--icon" data-cal-nav="next" aria-label="${esc(`Next ${word}`)}">&rsaquo;</button>
+      <button type="button" class="bccal2btn bccal2btn--primary bccal2btn--small" data-cal-new>New</button>
+    </div>
+    ${switcher}
+    ${body}
+  </div>`
+}
+
 /**
  * The calendar for a project, as markup.
  *
@@ -616,22 +677,7 @@ export const block = (p, { full = false } = {}) => {
         ${selected.length === 0 ? '<p class="bccal2empty">Nothing on this day.</p>' : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')}
       </div>` : monthBody(list, s, false)) : timeGrid(list, days, s)}
     </div>` : ''}
-    ${size === 'medium' ? `<div class="bccal2medium">
-      <div class="bccal2minibar">
-        <button type="button" class="bccal2btn bccal2btn--icon" data-cal-nav="prev" aria-label="Previous month">&lsaquo;</button>
-        <span class="bccal2minititle">${esc(`${MONTHS[parseDay(s.cursor).getMonth()]} ${String(parseDay(s.cursor).getFullYear())}`)}</span>
-        <button type="button" class="bccal2btn bccal2btn--icon" data-cal-nav="next" aria-label="Next month">&rsaquo;</button>
-        <button type="button" class="bccal2btn bccal2btn--primary bccal2btn--small" data-cal-new>New</button>
-      </div>
-      ${monthBody(list, { ...s, view: 'month' }, true)}
-      <div class="bccal2day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>
-        ${selected.length === 0 ? '<p class="bccal2empty">Nothing on this day.</p>' : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')}
-      </div>
-    </div>` : ''}
-    ${size === 'small' ? `<div class="bccal2small">
-      ${agenda(list, today, 6, 'Nothing coming up.')}
-      <button type="button" class="bccal2btn bccal2btn--small" data-cal-new>New event</button>
-    </div>` : ''}
+    ${size === 'medium' || size === 'small' ? compact(s, list, size, today, selected) : ''}
   </div>`
 }
 
@@ -857,7 +903,7 @@ export const wire = (root) => {
         if (how === 'today') {
           s.cursor = todayIso()
           s.sel = s.cursor
-        } else if (s.view === 'month' || el.dataset.size === 'medium') {
+        } else if (s.view === 'month') {
           s.cursor = addMonths(s.cursor, step)
           s.sel = s.cursor
         } else s.cursor = addDays(s.cursor, step * (s.view === 'week' ? 7 : 1))
@@ -866,6 +912,8 @@ export const wire = (root) => {
     }
     for (const b of el.querySelectorAll('[data-cal-view]')) {
       b.addEventListener('click', () => {
+        /* Moving from the month to a day or a week lands on the day that was chosen there, not on wherever the cursor last was. */
+        if (b.dataset.calView !== 'month' && s.view === 'month') s.cursor = s.sel
         s.view = b.dataset.calView
         redraw()
       })

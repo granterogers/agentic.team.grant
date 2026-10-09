@@ -23,37 +23,37 @@
 
 #settings,
 .stg-confirm {
-  /* --- surfaces --------------------------------------------------------- */
-  --st-canvas: #0a1419;
-  --st-nav: #0d1a20;
-  --st-bar: #0d1a20;
-  --st-panel: #132129;
-  --st-panel-2: #182932;
-  --st-raise: #1f343e;
-  --st-field: #0b161c;
+  /* --- surfaces: all derived from Team HQ's one palette (bc/tokens.css), so Settings follows the scheme and the accent --- */
+  --st-canvas: var(--bc-canvas, #0b151b);
+  --st-nav: color-mix(in srgb, var(--bc-canvas, #0b151b) 62%, var(--bc-surface, #1b2930));
+  --st-bar: color-mix(in srgb, var(--bc-canvas, #0b151b) 62%, var(--bc-surface, #1b2930));
+  --st-panel: var(--bc-surface, #1b2930);
+  --st-panel-2: color-mix(in srgb, var(--bc-surface, #1b2930) 93%, var(--bc-text-strong, #f2f4f5));
+  --st-raise: color-mix(in srgb, var(--bc-surface, #1b2930) 86%, var(--bc-text-strong, #f2f4f5));
+  --st-field: color-mix(in srgb, var(--bc-canvas, #0b151b) 55%, var(--bc-surface, #1b2930));
   /* --- lines ------------------------------------------------------------ */
-  --st-line: rgb(225 229 232 / 0.09);
-  --st-line-2: rgb(225 229 232 / 0.17);
-  --st-line-3: rgb(225 229 232 / 0.3);
-  /* --- text: three tiers, all >= 4.5:1 on panel and canvas -------------- */
-  --st-text: #eef2f4;
-  --st-text-2: #c4ccd1;
-  --st-text-3: #9fa9b0;
+  --st-line: color-mix(in srgb, var(--bc-text, #e1e5e8) 10%, transparent);
+  --st-line-2: color-mix(in srgb, var(--bc-text, #e1e5e8) 18%, transparent);
+  --st-line-3: color-mix(in srgb, var(--bc-text, #e1e5e8) 32%, transparent);
+  /* --- text: three tiers --------------------------------------------------- */
+  --st-text: var(--bc-text-strong, #f2f4f5);
+  --st-text-2: var(--bc-text, #e1e5e8);
+  --st-text-3: var(--bc-text-muted, #a8afb3);
   /* --- accent ----------------------------------------------------------- */
   /* the accent is the person's own choice (Appearance); everything below derives from it */
   --st-accent: var(--bc-accent, #6ab3fd);
-  --st-accent-2: color-mix(in srgb, var(--st-accent) 78%, white);
+  --st-accent-2: color-mix(in srgb, var(--st-accent) 78%, var(--bc-text-strong, #f2f4f5));
   --st-accent-ink: var(--bc-accent-ink, #06141f);
   --st-accent-wash: color-mix(in srgb, var(--st-accent) 13%, transparent);
   --st-accent-line: color-mix(in srgb, var(--st-accent) 62%, transparent);
   /* --- state: only ever used for state ---------------------------------- */
-  --st-ok: #6fd3a3;
-  --st-ok-wash: rgb(111 211 163 / 0.12);
-  --st-warn: #f3c677;
-  --st-warn-wash: rgb(243 198 119 / 0.12);
-  --st-bad: #f59a92;
-  --st-bad-wash: rgb(240 133 124 / 0.12);
-  --st-off: #9fa9b0;
+  --st-ok: var(--bc-success, #6fd3a3);
+  --st-ok-wash: color-mix(in srgb, var(--bc-success, #6fd3a3) 13%, transparent);
+  --st-warn: var(--bc-warn, #f3c677);
+  --st-warn-wash: color-mix(in srgb, var(--bc-warn, #f3c677) 13%, transparent);
+  --st-bad: var(--bc-danger, #f0857c);
+  --st-bad-wash: color-mix(in srgb, var(--bc-danger, #f0857c) 13%, transparent);
+  --st-off: var(--bc-text-muted, #a8afb3);
   /* --- shape and size: one rhythm ---------------------------------------- */
   --st-h: 40px; /* every button, field and chooser */
   --st-r: 10px; /* controls */
@@ -61,7 +61,7 @@
   --st-gap: 16px;
   --st-pad: 20px;
   --st-font: var(--bc-font, 'Instrument Sans', Inter, ui-sans-serif, system-ui, sans-serif);
-  --st-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 12px 28px -12px rgb(0 0 0 / 0.55);
+  --st-shadow: 0 1px 0 color-mix(in srgb, var(--bc-text-strong, #f2f4f5) 5%, transparent) inset, 0 12px 28px -12px color-mix(in srgb, var(--bc-shadow-ink, #000) 55%, transparent);
 }
 @media (pointer: coarse) {
   #settings {
@@ -791,10 +791,10 @@
   max-width: min(560px, calc(100vw - 32px));
   padding: 12px 18px;
   border-radius: 12px;
-  background: #1f343e;
-  border: 1px solid rgb(225 229 232 / 0.25);
-  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
-  color: #eef2f4;
+  background: var(--bc-surface, #1f343e);
+  border: 1px solid var(--bc-border-control, rgb(225 229 232 / 0.25));
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--bc-shadow-ink, #000) 45%, transparent);
+  color: var(--bc-text-strong, #eef2f4);
   font: 600 14px/20px 'Instrument Sans', Inter, ui-sans-serif, system-ui, sans-serif;
   transform: translate(-50%, 12px);
   opacity: 0;

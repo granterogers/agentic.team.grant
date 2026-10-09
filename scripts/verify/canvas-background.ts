@@ -260,7 +260,8 @@ await page.waitForTimeout(600)
 const px = (s: string): number[] => (s.match(/-?[\d.]+px/g) ?? []).map((n) => Number.parseFloat(n))
 const layer4 = (s: string): number[] => {
   const parts = s.split(/,(?![^(]*\))/)
-  return px(parts[3] ?? '')
+  /* The material is the THIRD layer now (shade, veil, material): the dots are drawn on a canvas, not painted as a layer. */
+  return px(parts[2] ?? '')
 }
 const readView = (): Promise<any> =>
   page.evaluate(() => {
@@ -300,8 +301,8 @@ for (let step = 0; step < 8; step += 1) {
     await page.mouse.up()
   }
   const v = await readView()
-  const dotPos = v.pos.split(',')[0]?.trim() ?? ''
-  const texPos = v.pos.split(',')[3]?.trim() ?? ''
+  const dotPos = `${String(v.x)}px ${String(v.y)}px`
+  const texPos = v.pos.split(',')[2]?.trim() ?? ''
   const sz = layer4(v.size)
   const okPos = dotPos === texPos
   const okSize = Math.abs((sz[0] ?? 0) - tw * v.z) < 1.5 && Math.abs((sz[1] ?? 0) - th * v.z) < 1.5
@@ -358,8 +359,8 @@ for (const e of LIB) {
   if (ratio < 1.35) dotsOk.push(`${e.id} ${ratio.toFixed(2)}`)
 }
 check('the grid dots keep a visible contrast against every material', dotsOk.length === 0, dotsOk.join(', '))
-const dotLayer = await page.evaluate(`getComputedStyle(document.querySelector('[data-bc-board]')).backgroundImage.startsWith('radial-gradient')`)
-check('the dotted grid is the top layer of a board with a material', dotLayer === true)
+const dotLayer = await page.evaluate(`(() => { const c = document.querySelector('[data-bc-board] .bcgridcv'); if (!c || c.width < 2) return false; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true; return false })()`)
+check('the dotted grid is drawn on a board with a material (the canvas above the material holds dots)', dotLayer === true)
 
 /* ---- 7. upload a valid picture ---- */
 await page.goto(url(pathC), { waitUntil: 'domcontentloaded' })
@@ -557,7 +558,7 @@ await d.ctx.close()
   await m.page.waitForTimeout(900)
   const missingBoard = await board(m.page)
   const solid = (await m.page.evaluate(() => window.getComputedStyle(document.querySelector('[data-bc-board]')).backgroundColor)) as string
-  check('a texture file that fails to load leaves the canvas colour under the grid, and the board works', missingBoard.bg === 'walnut' && !/rgba\(0, 0, 0, 0\)|transparent/.test(solid) && missingBoard.image.startsWith('radial-gradient'), `${solid}`)
+  check('a texture file that fails to load leaves the canvas colour under the grid, and the board works', missingBoard.bg === 'walnut' && !/rgba\(0, 0, 0, 0\)|transparent/.test(solid) && missingBoard.image.startsWith('linear-gradient'), `${solid}`)
   const stillZooms = await m.page.evaluate(`(() => { const t = document.querySelector('.bcstage'); return !!t })()`)
   check('and the panels are still there and no page error was raised', stillZooms === true && (await m.page.locator('[data-mod]').count()) >= 3 && m.errors.length === 0, m.errors.join(' | '))
   await m.page.screenshot({ path: `${OUT}/missing-asset.png` })
