@@ -16,6 +16,7 @@
 import '../../src/safety/arm.ts'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium, type Page } from 'playwright'
+import { auditScript } from './lib/surface-audit.ts'
 import { serveStudio } from './serve-studio.ts'
 
 declare const document: any
@@ -52,57 +53,6 @@ const want = (g: string): boolean => only.size === 0 || only.has(g)
 type Row = { surface: string; context: string; verdict: 'verified' | 'defect' | 'blocked'; findings: string[]; shot: string }
 const rows: Row[] = []
 
-/* What the page measures about itself, run inside the browser. */
-const AUDIT = `(() => {
-  const out = []
-  const vw = window.innerWidth
-  const doc = document.documentElement
-  if (doc.scrollWidth > vw + 1) out.push('page scrolls sideways: ' + doc.scrollWidth + ' > ' + vw)
-  const touch = window.matchMedia('(pointer: coarse)').matches
-  const root = document.querySelector('#settings .stg') || document.body
-  const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.05 }
-  const name = (e) => (e.tagName.toLowerCase() + (e.className && typeof e.className === 'string' ? '.' + e.className.trim().split(/\\s+/)[0] : '') + (e.dataset && Object.keys(e.dataset)[0] ? '[' + Object.keys(e.dataset)[0] + ']' : ''))
-  const hueOf = (css) => { const m = /rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/.exec(css); if (!m) return null; const R = +m[1] / 255, G = +m[2] / 255, B = +m[3] / 255; const mx = Math.max(R, G, B), mn = Math.min(R, G, B), d = mx - mn; if (d < 0.12) return null; let h = 0; if (mx === R) h = ((G - B) / d) % 6; else if (mx === G) h = (B - R) / d + 2; else h = (R - G) / d + 4; return (h * 60 + 360) % 360 }
-  const probe = document.createElement('span'); document.body.appendChild(probe)
-  const roles = ['--bc-accent', '--bc-accent-2', '--bc-mod-tasks', '--bc-mod-board', '--bc-mod-documents', '--bc-mod-schedule', '--bc-mod-contacts', '--bc-mod-activity', '--bc-mod-other', '--bc-warn', '--bc-amber', '--bc-info', '--bc-success', '--bc-danger', '--bc-error', '--bc-gold', '--accent', '--ok', '--bad', '--warn'].map((v) => { probe.style.color = 'var(' + v + ')'; return hueOf(getComputedStyle(probe).color) }).filter((x) => x !== null)
-  probe.remove()
-  let clipped = 0, small = 0, tiny = 0, blue = 0
-  const seen = new Set()
-  for (const e of root.querySelectorAll('*')) {
-    if (!vis(e) || e.closest('.bcvh, .bcskip, .aonly, [class*="sr-only"]')) continue
-    const s = getComputedStyle(e)
-    const r = e.getBoundingClientRect()
-    if (r.right > vw + 1 && !e.closest('[class*="scroll"], .bcstage, .bcboard, svg, .bdgrid')) { const k = 'off:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('spills off the right edge: ' + name(e) + ' (' + Math.round(r.right) + ' > ' + vw + ')') } }
-    const direct = [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim() !== '')
-    if (direct) {
-      if (parseFloat(s.fontSize) < 11.5) { tiny += 1; const k = 'tiny:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('type under 12px: ' + name(e) + ' ' + s.fontSize) } }
-      if ((s.overflow === 'hidden' || s.overflowX === 'hidden') && s.textOverflow !== 'ellipsis' && e.scrollWidth > e.clientWidth + 2 && s.whiteSpace === 'nowrap') { clipped += 1; const k = 'clip:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('text clipped by its box: ' + name(e) + ' ' + e.scrollWidth + ' > ' + e.clientWidth) } }
-    }
-    let hw = r.width, hh = r.height
-    const lab = e.matches('input[type="checkbox"], input[type="radio"]') ? e.closest('label') : null
-    if (lab) { const lr = lab.getBoundingClientRect(); hw = Math.max(hw, lr.width); hh = Math.max(hh, lr.height) }
-    for (const ps of ['::before', '::after']) { const pc = getComputedStyle(e, ps); if (pc.content !== 'none' && pc.position === 'absolute') { hw = Math.max(hw, parseFloat(pc.width) || 0); hh = Math.max(hh, parseFloat(pc.height) || 0) } }
-    if (touch && (e.matches('button, a[href], [role="button"], input:not([type="hidden"]), select, summary')) && (hw < 40 || hh < 40) && !e.closest('[hidden]')) { small += 1; const k = 'tap:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('touch target ' + Math.round(hw) + 'x' + Math.round(hh) + ': ' + name(e)) } }
-    for (const prop of ['color', 'backgroundColor', 'borderTopColor']) {
-      const m = /rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?/.exec(s[prop])
-      if (!m) continue
-      const a = m[4] === undefined ? 1 : Number(m[4])
-      if (a < 0.4) continue
-      const R = +m[1] / 255, G = +m[2] / 255, B = +m[3] / 255
-      const mx = Math.max(R, G, B), mn = Math.min(R, G, B), d = mx - mn
-      if (d < 0.22 || mx < 0.25) continue
-      let h = 0
-      if (mx === R) h = ((G - B) / d) % 6; else if (mx === G) h = (B - R) / d + 2; else h = (R - G) / d + 4
-      h = (h * 60 + 360) % 360
-      if (d > 0.3 && !e.closest('.st-swatch, [data-palette-pick], .bcswatch, .bcpal, [data-bg-pick], .bcbgtile, .bcmat, svg, .st-logo, .bcvh')) {
-        const near = (x) => Math.min(Math.abs(h - x), 360 - Math.abs(h - x)) < 28
-        if (!roles.some(near)) { blue += 1; const k = 'hue:' + name(e) + prop; if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('foreign hue ' + Math.round(h) + ' (' + prop + ' ' + s[prop] + ') matches neither the accent nor a state role: ' + name(e)) } }
-      }
-    }
-  }
-  return { out, clipped, small, tiny, blue }
-})()`
-
 const settle = (p: Page, ms = 500): Promise<void> => p.waitForTimeout(ms)
 
 async function newPage(dev: string, scheme: string, palette: string, look: string, errors: string[]) {
@@ -120,7 +70,7 @@ async function record(page: Page, surface: string, context: string, errors: stri
   await settle(page, 350)
   const opened = expect.startsWith('url:') ? new URL(page.url()).pathname.includes(expect.slice(4)) : expect === '' || (await page.locator(expect).first().isVisible().catch(() => false))
   if (!opened) { blocked(surface, context, `did not open (no visible ${expect})`); return }
-  const a = (await page.evaluate(AUDIT)) as { out: string[] }
+  const a = (await page.evaluate(auditScript())) as { out: string[] }
   await page.screenshot({ path: shot })
   const findings = [...a.out, ...extra, ...errors.splice(0).map((e) => `page error: ${e}`)]
   rows.push({ surface, context, verdict: findings.length === 0 ? 'verified' : 'defect', findings, shot })
