@@ -31,13 +31,12 @@ const ratio = (a: string, b: string): number => {
 
 /** The first rule for a look in a scheme: its canvas, surface and (when it sets one) muted text. */
 const lookBlock = (look: string, scheme: 'dark' | 'light') => {
-  const re = new RegExp(
-    `\\[data-look='${look}'\\]\\[data-scheme='${scheme}'\\]\\s*\\{([^}]*)\\}`,
-  )
+  const re = new RegExp(`\\[data-look='${look}'\\]\\[data-scheme='${scheme}'\\]\\s*\\{([^}]*)\\}`)
   const m = re.exec(refine)
   if (m === null) return null
   const body = m[1] ?? ''
-  const get = (n: string): string | null => new RegExp(`${n}:\\s*(#[0-9a-fA-F]{6})`).exec(body)?.[1] ?? null
+  const get = (n: string): string | null =>
+    new RegExp(`${n}:\\s*(#[0-9a-fA-F]{6})`).exec(body)?.[1] ?? null
   return { canvas: get('--bc-canvas'), surface: get('--bc-surface'), muted: get('--bc-text-muted') }
 }
 const base = (scheme: 'dark' | 'light') => {
@@ -69,7 +68,10 @@ describe('every look keeps text readable', () => {
             ['strong', t.strong],
             ['muted', muted],
           ] as const) {
-            expect(ratio(ink, colour as string), `${look} ${scheme} ${name} on ${face}`).toBeGreaterThanOrEqual(4.5)
+            expect(
+              ratio(ink, colour as string),
+              `${look} ${scheme} ${name} on ${face}`,
+            ).toBeGreaterThanOrEqual(4.5)
           }
         }
       })
@@ -80,7 +82,10 @@ describe('every look keeps text readable', () => {
     for (const scheme of ['dark', 'light'] as const)
       for (const look of LOOKS) {
         const b = lookBlock(look, scheme)
-        expect(ratio(b?.surface as string, b?.canvas as string), `${look} ${scheme}`).toBeGreaterThanOrEqual(1.08)
+        expect(
+          ratio(b?.surface as string, b?.canvas as string),
+          `${look} ${scheme}`,
+        ).toBeGreaterThanOrEqual(1.08)
       }
   })
 
@@ -119,7 +124,8 @@ describe('glass and depth', () => {
   })
 
   it('glass never leaves less than 70% of the surface, so text over the board stays legible', () => {
-    for (const m of refine.matchAll(/--bc-glass-keep:\s*(\d+)%/g)) expect(Number(m[1])).toBeGreaterThanOrEqual(70)
+    for (const m of refine.matchAll(/--bc-glass-keep:\s*(\d+)%/g))
+      expect(Number(m[1])).toBeGreaterThanOrEqual(70)
   })
 })
 
@@ -147,7 +153,11 @@ describe('the appearance module', () => {
     const m = await import('../../web/studio/appearance.js')
     store.clear()
     m.apply({ ...m.appearance(), look: 'forest', glass: 'rich', depth: 'deep' })
-    expect([root.dataset.look, root.dataset.glass, root.dataset.depth]).toEqual(['forest', 'rich', 'deep'])
+    expect([root.dataset.look, root.dataset.glass, root.dataset.depth]).toEqual([
+      'forest',
+      'rich',
+      'deep',
+    ])
     const again = m.appearance()
     expect([again.look, again.glass, again.depth]).toEqual(['forest', 'rich', 'deep'])
   })
@@ -161,7 +171,10 @@ describe('the appearance module', () => {
 
   it('an older saved appearance (no look keys) loads unchanged and gains only the defaults', async () => {
     const m = await import('../../web/studio/appearance.js')
-    store.set('studio.appearance', JSON.stringify({ palette: 'clay', texture: 'oak', scheme: 'dark', density: 'compact' }))
+    store.set(
+      'studio.appearance',
+      JSON.stringify({ palette: 'clay', texture: 'oak', scheme: 'dark', density: 'compact' }),
+    )
     const a = m.appearance()
     expect([a.palette, a.texture, a.scheme, a.density]).toEqual(['clay', 'oak', 'dark', 'compact'])
     expect([a.look, a.glass, a.depth]).toEqual(['original', 'soft', 'soft'])

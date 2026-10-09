@@ -7,7 +7,15 @@ import * as L from '../../web/studio/bc/layout.js'
   arrangement made at another window width. Nothing here may lose what the person made: the arrangement as it was is saved
   first, shape is kept, and notes and tints are untouched.
 */
-type Rect = { id: string; x: number; y: number; w: number; h: number; z?: number; tint?: string | null }
+type Rect = {
+  id: string
+  x: number
+  y: number
+  w: number
+  h: number
+  z?: number
+  tint?: string | null
+}
 
 const memory = (): Storage => {
   const m = new Map<string, string>()
@@ -49,7 +57,11 @@ describe('scaleToWidth (pure)', () => {
   })
   it('keeps modules that did not overlap from overlapping when widening', () => {
     const out = L.scaleToWidth(mods, 1800) as Rect[]
-    for (let i = 0; i < out.length - 1; i += 1) expect(out[i].x + out[i].w).toBeLessThanOrEqual(out[i + 1].x + 1)
+    for (let i = 0; i < out.length - 1; i += 1) {
+      const a = out[i] as Rect
+      const b = out[i + 1] as Rect
+      expect(a.x + a.w).toBeLessThanOrEqual(b.x + 1)
+    }
   })
   it('is bounded: a degenerate arrangement is not blown up or crushed', () => {
     const tiny = L.scaleToWidth([{ id: 'tasks', x: 0, y: 0, w: 240, h: 150 }], 100000) as Rect[]
@@ -114,7 +126,9 @@ describe('fitToWindow', () => {
     expect(L.fitToWindow('p')).toBe('')
     L.setStage(1000, 700)
     expect(L.fitToWindow('p')).toBe('Before fitting 2')
-    expect(L.layoutNames('p')).toEqual(expect.arrayContaining(['Before fitting', 'Before fitting 2']))
+    expect(L.layoutNames('p')).toEqual(
+      expect.arrayContaining(['Before fitting', 'Before fitting 2']),
+    )
   })
 
   it('never touches the notes', () => {
