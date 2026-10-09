@@ -43,6 +43,9 @@ const pick = (v: string | undefined, d: string): string[] => (v ?? d).split(',')
 const devices = pick(process.env.DEVICES, 'phone390,desktop1440').flatMap((d) => GROUPS[d] ?? [d])
 const schemes = pick(process.env.SCHEMES, 'dark,light')
 const palettes = pick(process.env.PALETTES, 'slate')
+const looks = pick(process.env.LOOKS, 'original')
+const glass = process.env.GLASS ?? 'soft'
+const depth = process.env.DEPTH ?? 'soft'
 const only = new Set(pick(process.env.ONLY, ''))
 const want = (g: string): boolean => only.size === 0 || only.has(g)
 
@@ -66,16 +69,20 @@ const AUDIT = `(() => {
   let clipped = 0, small = 0, tiny = 0, blue = 0
   const seen = new Set()
   for (const e of root.querySelectorAll('*')) {
-    if (!vis(e) || e.closest('.bcvh, .bcskip, [class*="sr-only"]')) continue
+    if (!vis(e) || e.closest('.bcvh, .bcskip, .aonly, [class*="sr-only"]')) continue
     const s = getComputedStyle(e)
     const r = e.getBoundingClientRect()
-    if (r.right > vw + 1 && !e.closest('[class*="scroll"], .bcstage, .bcboard, svg')) { const k = 'off:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('spills off the right edge: ' + name(e) + ' (' + Math.round(r.right) + ' > ' + vw + ')') } }
+    if (r.right > vw + 1 && !e.closest('[class*="scroll"], .bcstage, .bcboard, svg, .bdgrid')) { const k = 'off:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('spills off the right edge: ' + name(e) + ' (' + Math.round(r.right) + ' > ' + vw + ')') } }
     const direct = [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim() !== '')
     if (direct) {
       if (parseFloat(s.fontSize) < 11.5) { tiny += 1; const k = 'tiny:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('type under 12px: ' + name(e) + ' ' + s.fontSize) } }
       if ((s.overflow === 'hidden' || s.overflowX === 'hidden') && s.textOverflow !== 'ellipsis' && e.scrollWidth > e.clientWidth + 2 && s.whiteSpace === 'nowrap') { clipped += 1; const k = 'clip:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('text clipped by its box: ' + name(e) + ' ' + e.scrollWidth + ' > ' + e.clientWidth) } }
     }
-    if (touch && (e.matches('button, a[href], [role="button"], input:not([type="hidden"]), select, summary')) && (r.width < 40 || r.height < 40) && !e.closest('[hidden]')) { small += 1; const k = 'tap:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('touch target ' + Math.round(r.width) + 'x' + Math.round(r.height) + ': ' + name(e)) } }
+    let hw = r.width, hh = r.height
+    const lab = e.matches('input[type="checkbox"], input[type="radio"]') ? e.closest('label') : null
+    if (lab) { const lr = lab.getBoundingClientRect(); hw = Math.max(hw, lr.width); hh = Math.max(hh, lr.height) }
+    for (const ps of ['::before', '::after']) { const pc = getComputedStyle(e, ps); if (pc.content !== 'none' && pc.position === 'absolute') { hw = Math.max(hw, parseFloat(pc.width) || 0); hh = Math.max(hh, parseFloat(pc.height) || 0) } }
+    if (touch && (e.matches('button, a[href], [role="button"], input:not([type="hidden"]), select, summary')) && (hw < 40 || hh < 40) && !e.closest('[hidden]')) { small += 1; const k = 'tap:' + name(e); if (!seen.has(k) && out.length < 14) { seen.add(k); out.push('touch target ' + Math.round(hw) + 'x' + Math.round(hh) + ': ' + name(e)) } }
     for (const prop of ['color', 'backgroundColor', 'borderTopColor']) {
       const m = /rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?/.exec(s[prop])
       if (!m) continue
@@ -98,19 +105,21 @@ const AUDIT = `(() => {
 
 const settle = (p: Page, ms = 500): Promise<void> => p.waitForTimeout(ms)
 
-async function newPage(dev: string, scheme: string, palette: string, errors: string[]) {
+async function newPage(dev: string, scheme: string, palette: string, look: string, errors: string[]) {
   const d = DEVICES[dev] ?? { w: 1440, h: 900, touch: false }
   const ctx = await browser.newContext({ viewport: { width: d.w, height: d.h }, deviceScaleFactor: 1, hasTouch: d.touch, isMobile: d.touch, colorScheme: 'dark' })
-  await ctx.addInitScript(`try { localStorage.setItem('studio.appearance', JSON.stringify({ palette: '${palette}', texture: 'concrete', own: null, ownName: '', scheme: '${scheme}', density: 'comfortable' })) } catch {}`)
+  await ctx.addInitScript(`try { localStorage.setItem('studio.appearance', JSON.stringify({ palette: '${palette}', texture: 'concrete', own: null, ownName: '', scheme: '${scheme}', density: 'comfortable', look: '${look}', glass: '${glass}', depth: '${depth}' })) } catch {}`)
   const page = await ctx.newPage()
   page.on('pageerror', (e) => errors.push(e.message))
   return { ctx, page }
 }
 
-async function record(page: Page, surface: string, context: string, errors: string[], extra: string[] = []): Promise<void> {
+async function record(page: Page, surface: string, context: string, errors: string[], expect = '', extra: string[] = []): Promise<void> {
   const slug = `${surface}__${context}`.replace(/[^a-z0-9_.-]+/gi, '-').toLowerCase()
   const shot = `${OUT}/${slug}.png`
   await settle(page, 350)
+  const opened = expect.startsWith('url:') ? new URL(page.url()).pathname.includes(expect.slice(4)) : expect === '' || (await page.locator(expect).first().isVisible().catch(() => false))
+  if (!opened) { blocked(surface, context, `did not open (no visible ${expect})`); return }
   const a = (await page.evaluate(AUDIT)) as { out: string[] }
   await page.screenshot({ path: shot })
   const findings = [...a.out, ...extra, ...errors.splice(0).map((e) => `page error: ${e}`)]
@@ -131,10 +140,10 @@ const tryPress = async (page: Page, sel: string): Promise<boolean> => {
 
 for (const dev of devices) {
   for (const scheme of schemes) {
-    for (const palette of palettes) {
-      const context = `${dev}-${scheme}-${palette}`
+    for (const palette of palettes) for (const look of looks) {
+      const context = `${dev}-${scheme}-${palette}${look === 'original' ? '' : `-${look}`}`
       const errors: string[] = []
-      const { ctx, page } = await newPage(dev, scheme, palette, errors)
+      const { ctx, page } = await newPage(dev, scheme, palette, look, errors)
       const go = async (p: string): Promise<void> => { await page.goto(u(p), { waitUntil: 'domcontentloaded' }); await settle(page, 700) }
       await go('/basecamp')
       const slug = ((await page.evaluate(`document.querySelector('[data-bc-go^="/p/"]')?.dataset.bcGo ?? ''`)) as string) || '/p/riverside'
@@ -150,24 +159,24 @@ for (const dev of devices) {
 
       if (want('menus')) {
         await go(slug)
-        if (await tryPress(page, '[data-bc-menu]')) { await record(page, 'burger-menu', context, errors); await page.keyboard.press('Escape'); await settle(page, 300) } else blocked('burger-menu', context, 'no [data-bc-menu] control')
+        if (await tryPress(page, '[data-bc-menu]')) { await record(page, 'burger-menu', context, errors, '.bcmenupanel:not([hidden])'); await page.keyboard.press('Escape'); await settle(page, 300) } else blocked('burger-menu', context, 'no [data-bc-menu] control')
         await go(slug)
-        if (await tryPress(page, '[data-bc-menu]') && (await tryPress(page, '[data-bc-menu-new], .bcmenucreate'))) { await record(page, 'new-project-form', context, errors); await page.keyboard.press('Escape') } else blocked('new-project-form', context, 'no create control in the menu')
+        if (await tryPress(page, '[data-bc-menu]') && (await tryPress(page, '[data-bc-menu-new], .bcmenucreate'))) { await record(page, 'new-project-form', context, errors, '.bcnewproject'); await page.keyboard.press('Escape') } else blocked('new-project-form', context, 'no create control in the menu')
         await go(slug)
         await page.keyboard.press('Control+k'); await settle(page, 450)
-        if ((await page.locator('#bcjump:not([hidden]) .bcjumphead').count()) > 0) { await record(page, 'jump-overlay', context, errors); await page.keyboard.press('Escape') } else blocked('jump-overlay', context, 'Ctrl+K opened nothing')
+        if ((await page.locator('#bcjump:not([hidden]) .bcjumphead').count()) > 0) { await record(page, 'jump-overlay', context, errors, '#bcjump .bcjumphead'); await page.keyboard.press('Escape') } else blocked('jump-overlay', context, 'Ctrl+K opened nothing')
         await go(slug)
-        if ((await tryPress(page, '[data-bc-pagemenu]')) && (await tryPress(page, '[data-bc-look]'))) { await page.waitForSelector('.bdgrid', { timeout: 4000 }).catch(() => null); await record(page, 'background-picker', context, errors); await page.keyboard.press('Escape') } else blocked('background-picker', context, 'no page menu or look control')
+        if ((await tryPress(page, '[data-bc-pagemenu]')) && (await tryPress(page, '[data-bc-look]'))) { await page.waitForSelector('.bdgrid', { timeout: 4000 }).catch(() => null); await record(page, 'background-picker', context, errors, '.bdgrid'); await page.keyboard.press('Escape') } else blocked('background-picker', context, 'no page menu or look control')
       }
 
       if (want('settings')) {
         await go(slug)
         if (await tryPress(page, '[data-bc-settings]')) {
           await page.waitForSelector('#settings .stg', { timeout: 6000 }).catch(() => null)
-          await record(page, 'settings-index', context, errors)
+          await record(page, 'settings-index', context, errors, '#settings .stg')
           const tabs = (await page.evaluate(`[...document.querySelectorAll('#settings [data-setting]')].map((e) => e.dataset.setting)`)) as string[]
           for (const t of tabs) {
-            if (await tryPress(page, `#settings [data-setting="${t}"]`)) await record(page, `settings-${t}`, context, errors)
+            if (await tryPress(page, `#settings [data-setting="${t}"]`)) await record(page, `settings-${t}`, context, errors, '#settings .stg')
             else blocked(`settings-${t}`, context, 'tab not pressable')
             if (DEVICES[dev]?.touch) await tryPress(page, '#settings [data-stg-back]')
           }
@@ -175,10 +184,10 @@ for (const dev of devices) {
       }
 
       if (want('records')) {
-        await go(slug); if (await tryPress(page, '.bcstage [data-cal-new]')) { await record(page, 'event-editor', context, errors); await page.keyboard.press('Escape') } else blocked('event-editor', context, 'no new-event control')
-        await go(slug); if (await tryPress(page, '.bcstage [data-bc-contact]')) { await record(page, 'contact-record', context, errors); await page.keyboard.press('Escape') } else blocked('contact-record', context, 'no contact in the prototype')
-        await go(slug); if (await tryPress(page, '.bcstage [data-bc-doc]')) { await record(page, 'document-viewer', context, errors); await page.keyboard.press('Escape') } else blocked('document-viewer', context, 'no document in the prototype')
-        await go(slug); if (await tryPress(page, '.bcstage [data-bc-task-open]')) { await record(page, 'task-record', context, errors); await page.keyboard.press('Escape') } else blocked('task-record', context, 'no task in the prototype')
+        await go(slug); if (await tryPress(page, '.bcstage [data-cal-new]')) { await record(page, 'event-editor', context, errors, '.bccal2form'); await page.keyboard.press('Escape') } else blocked('event-editor', context, 'no new-event control')
+        await go(slug); if (await tryPress(page, '.bcstage [data-bc-contact]')) { await record(page, 'contact-record', context, errors, 'url:/x/'); await page.keyboard.press('Escape') } else blocked('contact-record', context, 'no contact in the prototype')
+        await go(slug); if (await tryPress(page, '.bcstage [data-bc-doc]')) { await record(page, 'document-viewer', context, errors, 'url:/x/'); await page.keyboard.press('Escape') } else blocked('document-viewer', context, 'no document in the prototype')
+        await go(slug); if (await tryPress(page, '.bcstage [data-bc-task-open]')) { await record(page, 'task-record', context, errors, 'url:/x/'); await page.keyboard.press('Escape') } else blocked('task-record', context, 'no task in the prototype')
       }
 
       if (want('modules')) {
@@ -187,13 +196,13 @@ for (const dev of devices) {
         for (const m of mods) {
           await go(slug)
           const btn = `.bcstage [data-mod="${m}"] [data-bc-expand], .bcstage [data-mod="${m}"] [data-expand]`
-          if (await tryPress(page, btn)) { await record(page, `module-maximised-${m}`, context, errors); await page.keyboard.press('Escape') } else blocked(`module-maximised-${m}`, context, 'no expand control')
+          if (await tryPress(page, btn)) { await record(page, `module-maximised-${m}`, context, errors, '.bcexp .bcexpbox'); await page.keyboard.press('Escape') } else blocked(`module-maximised-${m}`, context, 'no expand control')
         }
       }
 
       if (want('chat')) {
         await go(slug)
-        if (await tryPress(page, '[data-bc-chat], [data-bc-dock], .bcdocktoggle')) await record(page, 'chat-dock', context, errors)
+        if (await tryPress(page, '[data-bc-chat], [data-bc-dock], .bcdocktoggle')) await record(page, 'chat-dock', context, errors, '.dock')
         else blocked('chat-dock', context, 'no dock toggle')
       }
       await ctx.close()

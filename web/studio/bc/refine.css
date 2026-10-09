@@ -51,7 +51,7 @@
 :root[data-experience='basecamp'] { --bc-glass-keep: 92%; --bc-glass-blur: 16px; }
 :root[data-experience='basecamp'][data-glass='off'] { --bc-glass-keep: 100%; --bc-glass-blur: 0px; }
 :root[data-experience='basecamp'][data-glass='rich'] { --bc-glass-keep: 80%; --bc-glass-blur: 24px; }
-[data-experience='basecamp'] :is(.bcmenupanel, .bcsheet, .bcpop, .bcofficemenu) {
+[data-experience='basecamp'] :is(.bcmenupanel, .bcsheet, .bcpop) {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--bc-text-strong) 6%, var(--bc-surface)) 0%, var(--bc-surface) 40%, color-mix(in srgb, var(--bc-canvas) 20%, var(--bc-surface)) 100%);
   background-color: color-mix(in srgb, var(--bc-surface) var(--bc-glass-keep), transparent);
@@ -59,9 +59,9 @@
   backdrop-filter: blur(var(--bc-glass-blur)) saturate(1.15);
 }
 /* The gradient above would hide the glass, so a translucent surface paints its gradient at the same share. */
-[data-experience='basecamp'][data-glass='soft'] :is(.bcmenupanel, .bcsheet, .bcpop, .bcofficemenu),
-[data-experience='basecamp'][data-glass='rich'] :is(.bcmenupanel, .bcsheet, .bcpop, .bcofficemenu),
-:root[data-experience='basecamp']:not([data-glass]) :is(.bcmenupanel, .bcsheet, .bcpop, .bcofficemenu) {
+[data-experience='basecamp'][data-glass='soft'] :is(.bcmenupanel, .bcsheet, .bcpop),
+[data-experience='basecamp'][data-glass='rich'] :is(.bcmenupanel, .bcsheet, .bcpop),
+:root[data-experience='basecamp']:not([data-glass]) :is(.bcmenupanel, .bcsheet, .bcpop) {
   background:
     linear-gradient(180deg, color-mix(in srgb, color-mix(in srgb, var(--bc-text-strong) 6%, var(--bc-surface)) var(--bc-glass-keep), transparent) 0%, color-mix(in srgb, var(--bc-surface) var(--bc-glass-keep), transparent) 40%, color-mix(in srgb, color-mix(in srgb, var(--bc-canvas) 20%, var(--bc-surface)) var(--bc-glass-keep), transparent) 100%);
 }
@@ -118,13 +118,63 @@
   A backdrop filter only sees what is painted inside the nearest ancestor that has one. The top bar is frosted, so a menu
   hanging from it would blur nothing but the bar; while a panel is open the bar keeps its tint and drops its own filter.
 */
-[data-experience='basecamp'] .bctop:has(.bcmenupanel:not(.bcmenupanel-ghost)) {
+[data-experience='basecamp'] .bctop:has(.bcmenupanel:not([hidden]):not(.bcmenupanel-ghost)) {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background-color: color-mix(in srgb, var(--bc-canvas) 94%, transparent);
 }
 
+/* ---------------------------------------------------------------- 4. touch --- */
+
+/*
+  On a touch screen the drawn control stays the size the design chose; the part that answers a finger grows around it
+  (a transparent pseudo-element), so nothing looks bigger and nothing is hard to hit. 44px is the floor.
+*/
+@media (pointer: coarse) {
+  [data-experience='basecamp'] :is(.bccal2num, .bccal2chip, .bctasklist .bccheck, .bclists .bccheck) { position: relative; }
+  [data-experience='basecamp'] .bccal2num::after { content: ''; position: absolute; inset: -12px -6px; }
+  [data-experience='basecamp'] .bccal2chip::after { content: ''; position: absolute; inset: -6px 0; }
+  [data-experience='basecamp'] :is(.bctasklist .bccheck, .bclists .bccheck)::before { content: ''; position: absolute; inset: -14px -13px; }
+  [data-experience='basecamp'] .bccal2views:not(.bccal2views--mini) .bccal2btn--seg,
+  [data-experience='basecamp'] .bccal2views .bccal2btn--seg { min-height: 44px; }
+  /* A form field on a phone is 44px tall and 16px type, or iOS zooms the page when it is focused. */
+  [data-experience='basecamp'] .bccal2fl :is(input, select, textarea) { min-height: 44px; font-size: 16px; }
+  [data-experience='basecamp'] .bccal2check { min-height: 44px; display: flex; align-items: center; gap: 10px; }
+  [data-experience='basecamp'] .bccal2check input { width: 22px; height: 22px; }
+  [data-experience='basecamp'] .hueswatch { width: 40px; height: 40px; border-radius: 12px; }
+  [data-experience='basecamp'] .bdfield .in, [data-experience='basecamp'] .bdsheet .in { min-height: 44px; font-size: 16px; }
+  [data-experience='basecamp'] #viewer :is(.seg, .btn) { min-height: 44px; }
+  [data-experience='basecamp'] #viewer input[data-icon-search] { min-height: 44px; font-size: 16px; }
+  [data-experience='basecamp'] .iconpick { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
+  [data-experience='basecamp'] .iconopt { min-height: 44px; }
+  [data-experience='basecamp'] .dockhead .closeconv { position: relative; }
+  [data-experience='basecamp'] .dockhead .closeconv::after { content: ''; position: absolute; inset: -6px; }
+  /* The agenda under a month is a list a finger works down: its rows are the 44px a row should be. */
+  [data-experience='basecamp'] :is(.bccal2agenda, .bccal2day) .bccal2chip { min-height: 40px; display: flex; align-items: center; }
+  [data-experience='basecamp'] :is(.bccal2agenda, .bccal2day) .bccal2chip::after { inset: -2px 0; }
+}
+
+/*
+  A document that has no picture yet is drawn as a page of paper (--bc-paper) with ink lines (--bc-paper-ink). Both were
+  derived from the text colour, which is a soft grey in the dark scheme and a heavy near-black slab in the light one.
+  Paper is paper in both; the dark scheme keeps the dim-room tone it already had.
+*/
+:root[data-experience='basecamp'][data-scheme='light'] { --bc-paper: #fbf9f4; --bc-paper-ink: var(--bc-text-strong); }
+@media (prefers-color-scheme: light) {
+  :root[data-experience='basecamp']:not([data-scheme]) { --bc-paper: #fbf9f4; --bc-paper-ink: var(--bc-text-strong); }
+}
+
+/* On a phone the background choices are one scrolling row. Three and a bit are shown, so the cut-off tile says there are more. */
+@media (max-width: 560px) {
+  [data-experience='basecamp'] .bdgrid { display: flex; grid-template-columns: none; }
+  [data-experience='basecamp'] .bdthumb { flex: 0 0 calc((100% - 24px) / 3.4); }
+}
+
 /* ---------------------------------------------------------------- 2. type floor --- */
+
+/* The chat's speaker line and avatar initials were 10 and 10.5px; nothing a person reads is under 12. */
+[data-experience='basecamp'] .dock .msg .t-label { font-size: 12px; letter-spacing: 0.03em; }
+[data-experience='basecamp'] .dock .msg.theirs > .face { width: 28px; height: 28px; font-size: 12px; }
 
 /* 12px is the floor everywhere a person reads; the picker's section labels were 11px. */
 [data-experience='basecamp'] .bdsheet .t-label,

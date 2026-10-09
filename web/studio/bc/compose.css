@@ -536,13 +536,13 @@
     name, which is the one element §16 says must dominate. A document should
     read as paper and paper in a dim room is not white.
   */
-  background: color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas));
+  background: var(--bc-paper, color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas)));
   border: 1px solid var(--bc-border-subtle);
   border-radius: 3px;
   box-shadow: 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
   overflow: hidden;
 }
-[data-experience='basecamp'] .bcpline { height: 3px; border-radius: 2px; background: var(--bc-canvas); opacity: 0.38; }
+[data-experience='basecamp'] .bcpline { height: 3px; border-radius: 2px; background: var(--bc-paper-ink, var(--bc-canvas)); opacity: 0.38; }
 [data-experience='basecamp'] .bcpline:first-child { height: 6px; opacity: 0.6; }
 [data-experience='basecamp'] .bcdoc figcaption { display: grid; gap: 2px; margin-top: 8px; }
 [data-experience='basecamp'] .bcdoctitle {
@@ -1175,7 +1175,7 @@
   gap: 4px;
   aspect-ratio: 3 / 4;
   padding: 11px 10px;
-  background: color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas));
+  background: var(--bc-paper, color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas)));
   border: 1px solid var(--bc-border-subtle);
   border-radius: 3px;
   box-shadow: 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
