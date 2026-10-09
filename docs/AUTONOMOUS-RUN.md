@@ -18,6 +18,17 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
+## Latest checkpoint: Team HQ overhaul RELEASED (9 October 2026) - nothing is pending
+
+The Team HQ overhaul (#439) and its two backend pieces, revisioned layout saves (#442, migration `1040`) and custom backgrounds stored per office (#445,
+migration `1041`), are **deployed to production and merged to `main`** (#448, `e00bfab6`): hq-api v899, page `dpl_6zXt…` at https://ai-team-hq.vercel.app.
+#439, #442 and #445 are closed. The record, the reconciliation, the evidence and every rollback step are in `docs/ux/deploy-442-445.md`; decisions in ADR-0068, 0069
+and 0070; `docs/HANDOFF.md` has the summary. **Do not start another Team HQ campaign.** What remains is for a person with a device: real-microphone dictation, touch pinch and a
+second physical device (`docs/ux/iphone-acceptance-2026-10-09.md`), and whatever Grant reports from using it. Before any future deploy, compare live bytes with `main` and with the
+other branches that deploy (production's page and ledger were once ahead of `main`; CLAUDE.md's traps say how).
+
+---
+
 # ⭐ CURRENT MISSION — GOAL PLANNING, CAPABILITY COMPOSITION & PRODUCTION USABILITY
 
 **THIS PHASE HAS A FINISHING BOUNDARY.** Bounded re-planning, goal completion,
