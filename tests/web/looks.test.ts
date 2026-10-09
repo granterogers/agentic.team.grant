@@ -102,6 +102,42 @@ describe('every look keeps text readable', () => {
   })
 })
 
+describe('every accent is readable on every look', () => {
+  /* Accent pairs, read from the stylesheet: [accent, ink on it] per palette and scheme. */
+  const accentOf = (palette: string, scheme: 'dark' | 'light'): [string, string] => {
+    if (palette === 'slate')
+      return scheme === 'dark' ? ['#6ab3fd', '#0e1d24'] : ['#2b6cb0', '#ffffff']
+    const re =
+      scheme === 'light'
+        ? new RegExp(
+            `data-palette='${palette}'\\]\\[data-scheme='light'\\]\\s*\\{\\s*--bc-accent:\\s*(#[0-9a-f]{6});\\s*--bc-accent-ink:\\s*(#[0-9a-f]{6})`,
+          )
+        : new RegExp(
+            `data-palette='${palette}'\\]\\s*\\{\\s*--bc-accent:\\s*(#[0-9a-f]{6});\\s*--bc-accent-ink:\\s*(#[0-9a-f]{6})`,
+          )
+    const m = re.exec(tokens)
+    return [m?.[1] ?? '', m?.[2] ?? '']
+  }
+  const surfaces = (look: string, scheme: 'dark' | 'light'): [string, string] => {
+    if (look === 'original')
+      return scheme === 'dark' ? ['#0b151b', '#1b2930'] : ['#d6d3cc', '#f0eee9']
+    const b = lookBlock(look, scheme)
+    return [b?.canvas as string, b?.surface as string]
+  }
+  for (const scheme of ['dark', 'light'] as const)
+    for (const look of ['original', 'silver', 'forest', 'graphite'])
+      for (const palette of ['slate', 'moss', 'clay', 'ink', 'paper']) {
+        it(`${palette} accent on ${look} (${scheme}): the ink on it is 4.5:1 and the accent stands off the surface 3:1`, () => {
+          const [accent, ink] = accentOf(palette, scheme)
+          expect(accent, `${palette} ${scheme} accent found`).toMatch(/^#[0-9a-f]{6}$/)
+          const [canvas, surface] = surfaces(look, scheme)
+          expect(ratio(ink, accent), 'ink on accent').toBeGreaterThanOrEqual(4.5)
+          expect(ratio(accent, surface), 'accent against the module face').toBeGreaterThanOrEqual(3)
+          expect(ratio(accent, canvas), 'accent against the canvas').toBeGreaterThanOrEqual(3)
+        })
+      }
+})
+
 describe('glass and depth', () => {
   it('depth multiplies the one shadow scale, so no surface has a shadow of its own that ignores it', () => {
     expect(tokens).toMatch(/calc\(var\(--bc-sh-weak\) \* var\(--bc-depth, 1\)\)/)
