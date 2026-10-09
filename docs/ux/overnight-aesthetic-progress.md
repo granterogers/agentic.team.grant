@@ -38,11 +38,19 @@ Start point `c5846918` (clean tree). After a compaction: read this file, run `gi
 - icon audit 0 problems; motion/focus 0 problems; contrast scan 0 offenders.
 - `vitest tests/web tests/studio` 350 passing; `tsc` clean; `biome ci` exit 0.
 
-## Next
+## Later in the sprint
 
-- Run the existing gates again at the end (canvas-devices, basecamp-look, check:branding, check:tokens, verify:wired, canvas-* suites) and record baseline vs regression.
-- Write the inspection matrix document (`docs/ux/aesthetic-inspection-matrix.md`) from the lab output.
-- Before/after index for the sprint; final report.
+11. **Accessibility**: axe (WCAG 2 A/AA) was run over every lab surface; it found a conversation list with no list role, "Invalid Date" read to screen readers, a scroll region with no keyboard stop, warn/danger/empty-action text under 4.5:1 in the light scheme, and a text field inside a `role=menu`. All fixed; `aesthetic-qa` has an axe section with a planted-violation control (sabotage-proved).
+12. **Page menu** brought into the menu system; **select boxes** draw their own chevron; **dialogs** (confirm, danger, ask) are in the lab.
+13. **Every accent is readable on every look** (40 combinations, `tests/web/looks.test.ts`, sabotage-proved).
+14. Before/after: the same 144 surface-by-context cells, before 98 verified / 36 findings / 10 blocked, after 134 / 0 / 10. Images in `docs/ux/aesthetic-sprint-2026-10-09/`; the coverage statement is `docs/ux/aesthetic-inspection-matrix.md`.
+
+## Final state
+
+- `aesthetic-qa` 265/265; `vitest` 5535 passing; `tsc` and `biome ci` clean; `check:branding`, `check:templates`, `check:secrets`, `smoke` clean.
+- Existing suites green: canvas-background (81, 2 n/a), canvas-extremes, canvas-local, canvas-session, canvas-devices 7/7, boot-recovery, load-reliability, dictation-fallback, basecamp-keyboard/back/routes/preservation/states/touch.
+- Red, and red identically on `main` (b8ea3c0): `basecamp-settings` ("every settings pane is still offered": it looks for `[data-setpane]`, which the Settings page no longer has) and `basecamp-chat` (waits for a visible `[data-bc-dock]`); both are stale against the product, not regressions. `check:tokens` still reports the pre-existing `--cols` and `--bc-shade-ink` (set inline by script); this sprint added none. Needing production access, not run: `basecamp-look`, `check:icons`, `tests/sessions/weather-is-not-a-failure`. `tests/staging/binding` (executor refuses a production ref in a staging shell) fails in this sandbox and no file it reads was touched.
+- Not done by decision: the background material is still painted in two places (ADR-0069 anchors tiles to the world on purpose; a rounded, bordered board frame separates the two regions, so no seam reads at 2x). Type sizes still use 12 / 12.5 / 13 / 13.5 / 14 (a census is in `type-census.ts`); collapsing the half-pixel steps touches ~100 declarations for a 4% change and was left.
 
 ## Process notes (disclosed)
 
