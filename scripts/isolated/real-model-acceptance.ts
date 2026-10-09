@@ -82,6 +82,8 @@ interface ModelCall {
   model: string
 }
 const modelCalls: ModelCall[] = []
+/** What each ANSWERING call was shown (system and user text, joined), so a denial can be classed as "was not shown it" or "was shown it". */
+const answerPrompts: string[] = []
 const roleOf = (system: string): string => {
   if (system.includes('You rewrite one sentence so it stands alone')) return 'resolve'
   if (system.includes('You read one message from')) return 'understand'
@@ -110,6 +112,8 @@ const modelFetch = (async (url: string, init: { body: string }): Promise<Respons
     return injected
   }
   const system = body.messages.find((m) => m.role === 'system')?.content ?? ''
+  if (roleOf(system) === 'answer')
+    answerPrompts.push(body.messages.map((m) => m.content).join('\n'))
   const t0 = Date.now()
   const res = await realFetch(url, init as RequestInit)
   modelCalls.push({
@@ -875,14 +879,21 @@ if (
   let ok = 0
   let denied = 0
   let total = 0
+  let shown = 0
+  let deniedWhileShown = 0
   const lines: string[] = []
+  const CONTRACT = /cancellation fee is 100 percent|deposit of 2000 pounds/i
   for (let i = 0; i < TRIALS * 3; i += 1) {
     await quiet()
     await scopeChat(proj)
     const a = asks[i % asks.length] as string
+    const promptsBefore = answerPrompts.length
     const t = await say(a)
     const out = reply(t)
     total += 1
+    // Was the contract's own text in what the answering model was shown on this turn? (retrieval and prompt, not the model)
+    const sawContract = answerPrompts.slice(promptsBefore).some((p) => CONTRACT.test(p))
+    if (sawContract) shown += 1
     const denies =
       /no (venue )?contract|don.t have (the|any)|not on file|no record|nothing (on|in)|can.t (find|see)|cannot (find|see)/i.test(
         out,
@@ -895,13 +906,19 @@ if (
     if (good) ok += 1
     if (denies && !good) {
       denied += 1
+      if (sawContract) deniedWhileShown += 1
       lines.push(
-        `DENIED [${a.slice(0, 40)}] ${await provenance(t.job)} :: ${out.slice(0, 140).replace(/\n/g, ' ')}`,
+        `DENIED [${a.slice(0, 40)}] contractInPrompt=${String(sawContract)} ${await provenance(t.job)} :: ${out.slice(0, 140).replace(/\n/g, ' ')}`,
       )
     }
   }
+  // DETERMINISTIC half (retrieval and prompt assembly decide it, not the model): the contract is in the prompt on every turn that asks about it.
+  det(
+    `the contract's text was in what the model was shown on every turn (${String(shown)} of ${String(total)})`,
+    shown === total,
+  )
   obs(
-    `${String(ok)} of ${String(total)} answers used the held contract; ${String(denied)} denied it (provenance of each denial below)`,
+    `${String(ok)} of ${String(total)} answers used the held contract; ${String(denied)} denied it, ${String(deniedWhileShown)} of those while the contract was in the prompt (provenance of each denial below)`,
     denied === 0,
     lines.length === 0 ? 'no denial occurred' : lines.join('\n      '),
   )

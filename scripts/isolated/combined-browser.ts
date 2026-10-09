@@ -164,7 +164,9 @@ const ALL_VIEWPORTS: { name: string; w: number; h: number; touch: boolean }[] = 
   { name: '360', w: 360, h: 740, touch: true },
   { name: '430', w: 430, h: 932, touch: true },
 ]
-const VIEWPORTS = ONLY === undefined ? ALL_VIEWPORTS : ALL_VIEWPORTS.filter((v) => v.name === ONLY)
+// A comma list is accepted (--only=320,390) so the gate can run the narrowest phone beside the usual one.
+const VIEWPORTS =
+  ONLY === undefined ? ALL_VIEWPORTS : ALL_VIEWPORTS.filter((v) => ONLY.split(',').includes(v.name))
 
 type Seen = {
   pageErrors: string[]

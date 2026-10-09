@@ -27,7 +27,9 @@ select jsonb_pretty(app.free_tier_headroom());
 
 -- P05 deliveries the new worker's first redrive would RESEND: claimed, lease lapsed, no send recorded as begun (every pre-1029 row has
 --     send_started_at null), younger than the two-day window. EXPECT zero. Any row = Grant decides, per row, BEFORE the worker is deployed.
-select d.delivery_id, d.channel, d.purpose, d.state, d.created_at, d.lease_expires_at, d.error_code from public.deliveries d where d.state = 'claimed' and d.lease_expires_at < now() and d.send_started_at is null and d.created_at > now() - interval '2 days' order by d.created_at;
+select d.delivery_id, d.channel, d.purpose, d.state, d.created_at, d.lease_expires_at, d.error_code from public.deliveries d where d.state = 'claimed' and d.lease_expires_at < now() and d.created_at > now() - interval '2 days' order by d.created_at;
+-- (CORRECTED 9 October, final preflight run: the first version also tested `d.send_started_at is null`, a column only migration 1047 (authored 1029) adds, so it can
+--  never run on production before the migration. The condition is dropped: it is true of every pre-migration row by construction, so the result is the same set.)
 
 -- P06 failed result deliveries that 1032's first sweep would turn into Needs-me items (at most 50 per pass, last two days). EXPECT a small
 --     number Grant has already seen; each item will carry up to 500 characters of the answer it failed to deliver.
@@ -61,7 +63,8 @@ select slug, job_kind, enabled, period_minutes, last_run_at from public.responsi
 select key, value from public.system_config where key in ('telegram.only_chief_speaks', 'slack.per_office_delivery', 'jobs.lease_seconds') order by key;
 
 -- P16 test destinations registered and still live (the approved destinations for the smoke test must be named here or by Grant).
-select * from public.test_origins order by 1 desc limit 10;
+select channel, count(*) as registered, count(*) filter (where released_at is null and expires_at > now()) as still_live from public.test_origins group by channel order by channel;
+-- (CORRECTED 9 October, final preflight run: the first version was `select *`, which would print conversation identifiers, which a preflight does not need.)
 
 -- P17 what the office has said to him in the last hour, so a quiet window is confirmed before anything is changed.
 select channel, purpose, state, count(*) as n from public.deliveries where created_at > now() - interval '1 hour' group by 1, 2, 3 order by n desc;
@@ -69,6 +72,15 @@ select channel, purpose, state, count(*) as n from public.deliveries where creat
 -- P19 the scheduled commands: nothing scheduled may call a function 1025, 1029 or 1030 removes (app.over_budget(text), app.spent_today(text), the 6-argument say_in_project,
 --     the 4-argument record_delivery_failure). EXPECT zero rows (the worker heartbeat pokes an edge function; the duties are rows, not cron commands).
 select jobname, schedule, active, left(command, 160) as command from cron.job where command ~* '(over_budget|spent_today|say_in_project|record_delivery_failure)' order by jobname;
+
+-- ADDED 9 October 2026 (final preflight run). The read-only database role the preflight uses may not execute `app.*` functions (P04, P08 and P18 were refused with
+-- 42501 "permission denied for function"), so these three restate the SAME questions from catalogue and table reads only: no function call, nothing that writes.
+-- P04b the free-tier reading without app.free_tier_headroom(): the same arithmetic as migration 0180 (database size against 500 MB, storage metadata against 1 GB).
+select pg_database_size(current_database()) as db_bytes, round(pg_database_size(current_database())::numeric / (500 * 1024 * 1024) * 100, 1) as db_percent_of_500mb, (select coalesce(sum(coalesce((metadata ->> 'size')::bigint, 0)), 0) from storage.objects) as storage_bytes, (select round(coalesce(sum(coalesce((metadata ->> 'size')::bigint, 0)), 0)::numeric / (1024 * 1024 * 1024) * 100, 1) from storage.objects) as storage_percent_of_1gb, (select count(*) from storage.objects) as storage_objects, (select jsonb_agg(x) from (select c.oid::regclass::text as table_name, pg_total_relation_size(c.oid) as bytes from pg_class c join pg_namespace n on n.oid = c.relnamespace where c.relkind = 'r' and n.nspname not in ('pg_catalog', 'information_schema') order by 2 desc limit 8) x) as largest;
+-- P08b pending reminders and open repeating series by office KIND (counts only; no title, no person), without app.operator_office().
+select o.kind, count(*) filter (where t.remind_at is not null and t.reminded_at is null and t.state not in ('done', 'cancelled')) as pending_reminders, count(*) filter (where t.repeat_every is not null and t.state not in ('done', 'cancelled')) as open_series from public.tasks t join public.offices o on o.office_id = t.office_id where not t.is_fixture group by o.kind order by o.kind;
+-- P18b the backup reading without app.backup_health(): the same sources (the backups bucket manifests, the rehearsal events), no object name printed beyond the run time.
+select (select max(created_at) from storage.objects where bucket_id = 'backups' and name like '%manifest.json.gz') as newest_backup_at, (select round(extract(epoch from (now() - max(created_at))) / 3600.0, 1) from storage.objects where bucket_id = 'backups' and name like '%manifest.json.gz') as newest_backup_age_hours, (select count(distinct split_part(name, '/', 1)) from storage.objects where bucket_id = 'backups' and name like '%manifest.json.gz') as finished_backups_kept, (select coalesce(sum((metadata ->> 'size')::bigint), 0) from storage.objects where bucket_id = 'backups' and name like (select split_part(name, '/', 1) from storage.objects where bucket_id = 'backups' and name like '%manifest.json.gz' order by created_at desc limit 1) || '/%') as newest_backup_bytes, (select max(occurred_at) from public.events where action_type = 'backup.rehearsed' and after_state ->> 'outcome' = 'passed') as last_passing_rehearsal_at, (select max(occurred_at) from public.events where action_type = 'backup.rehearsed') as last_rehearsal_at, (select after_state ->> 'outcome' from public.events where action_type = 'backup.rehearsed' order by occurred_at desc limit 1) as last_rehearsal_outcome;
 
 -- P18 backups: the office's own backup and restore-rehearsal health. EXPECT the newest backup inside backup_max_age_hours (36) and a rehearsal inside
 --     rehearsal_max_age_hours (192; the last passing rehearsal on record is 21 September, so an overdue rehearsal is KNOWN and is itself a reason to

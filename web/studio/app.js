@@ -220,6 +220,12 @@ const mine = {
   */
   query: '',
   sort: 'smart',
+  /*
+    The open repeating reminders, whichever bucket they fall in (#450). Team HQ shows only the Today bucket, and a series that was
+    just ticked has its next reminder days away, so it is in no bucket the page draws and the Stop repeating press could not be
+    reached. undefined means not asked, null means a read in flight, the string trouble means the read failed, otherwise rows.
+  */
+  repeating: undefined,
 }
 
 /** What identifies one fetched list: the bucket AND how it was asked for. */
@@ -13981,6 +13987,14 @@ const bcContext = {
   */
   askForMyTasks: () => {
     void needMine(mine.bucket)
+    void needRepeating()
+  },
+  /* The open repeating reminders, or null while they are still coming; a failed read draws nothing (see needRepeating). */
+  myRepeating: () => (Array.isArray(mine.repeating) ? mine.repeating : null),
+  /* After a tick or a stop on My Tasks: the kept lists are behind, so forget them and read again. */
+  refreshMyTasks: async () => {
+    forgetMine()
+    await refresh()
   },
   canWrite: () => canWrite(),
   refresh: () => refresh(),
@@ -15176,6 +15190,26 @@ async function needMine(bucket) {
 function forgetMine() {
   for (const k of Object.keys(mine.lists)) delete mine.lists[k]
   mine.counts = null
+  mine.repeating = undefined
+}
+
+/*
+  The open repeating reminders across every bucket (#450). Read from the same gateway section as the buckets (the all bucket, no search,
+  the smart order) and narrowed here to open series, so there is one source of truth and no second task system. A failed read is
+  remembered as a failure, never as an empty list: the surface then draws nothing rather than claiming there is nothing repeating.
+*/
+async function needRepeating() {
+  if (mine.repeating !== undefined) return
+  mine.repeating = null
+  try {
+    const rows = await settles(read('my_tasks', 'all', { q: '', sort: 'smart' }))
+    mine.repeating = Array.isArray(rows)
+      ? rows.filter((r) => r?.repeats?.series === true && r.state !== 'done' && r.state !== 'cancelled')
+      : 'trouble'
+  } catch {
+    mine.repeating = 'trouble'
+  }
+  render()
 }
 
 /*

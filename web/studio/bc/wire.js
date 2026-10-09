@@ -2908,7 +2908,8 @@ const wireTasks = (root) => {
         c.checked = !wanted
         return
       }
-      await ctx.refresh()
+      // The kept lists are behind after a tick (a repeating reminder has just moved to its next time): read them again.
+      await (ctx.refreshMyTasks?.() ?? ctx.refresh())
     })
   }
 
@@ -2946,7 +2947,7 @@ const wireTasks = (root) => {
         b.textContent = label
         return
       }
-      await ctx.refresh()
+      await (ctx.refreshMyTasks?.() ?? ctx.refresh())
     })
   }
 }

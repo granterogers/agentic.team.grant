@@ -140,8 +140,8 @@ export const EXTENDED: readonly Proof[] = [
   p(
     'combined-browser',
     70,
-    "Team HQ in a real browser as a person and as a Sample visitor: draws, no overflow at the phone width, a guest's writes refused",
-    { args: ['--only=390'], timeoutS: 420 },
+    "Team HQ in a real browser as a person and as a Sample visitor: draws, no overflow at the phone width (390 and the narrowest, 320, where the project's name is at least 70px: #453), a guest's writes refused",
+    { args: ['--only=320,390'], timeoutS: 500 },
   ),
   p(
     'chat-dock-browser',
@@ -151,8 +151,8 @@ export const EXTENDED: readonly Proof[] = [
   ),
   p(
     'series-ui-browser',
-    28,
-    'Team HQ My Tasks, real page and real gateway: ticking a recurring reminder completes that time only, Stop repeating is its own press that asks twice and cancels exactly that series, and the proof reads the database (a refused stop turns it red)',
+    46,
+    'Team HQ My Tasks, real page and real gateway: ticking a recurring reminder completes that time only, Stop repeating is its own press that asks twice and cancels exactly that series (also from the Repeating reminders section when it is not due: #450), stopping again is a no-op, another office cannot stop it, and the proof reads the database (a refused stop turns it red)',
     { timeoutS: 420 },
   ),
 

@@ -13,7 +13,10 @@
  *      moved on, and the ordinary task becomes done (so the tick works and the series' survival is not a dead tick);
  *   3. the first press of Stop repeating changes NOTHING (it asks again), the second cancels exactly that series in the
  *      database and nothing else, the page sent exactly one stop action, and a fresh load no longer offers it;
- *   4. no page error and no refused gateway request.
+ *   4. (#450) a ticked series, whose next reminder is a week away and so is on no list the page draws, is listed under Repeating
+ *      reminders with its next time and its repeat, and can be stopped from there with the same ask-again press; stopping it
+ *      again is a no-op, another office cannot stop it, and a series already on Today's list is not listed twice;
+ *   5. no page error and no refused gateway request.
  * SABOTAGE (`--sabotage-stop`): the gateway refuses the stop action, so the checks that read the DATABASE must go red; this
  * is what proves the proof does not read the page's own "Stopped." message. `--dump` prints what the page draws and exits.
  */
@@ -270,10 +273,35 @@ try {
         .then(() => true)
         .catch(() => false)
       check(`${vp.name}: series B is still on the list and stoppable after a reload`, stillOffered)
-      // The honest limit, stated as a check so it cannot drift: a ticked series is a week away and is not on Today's list.
+      // A ticked series is a week away, so it is not on Today's list (control) ...
       check(
         `${vp.name}: series A, ticked, is no longer on Today's list (its next reminder is a week away)`,
         (await page.locator(`[data-bc-mytick="${ticked}"]`).count()) === 0,
+      )
+      // ... and it is STILL reachable: #450 lists every open repeating reminder in its own section, with its next time.
+      const inSection = page.locator(`[data-bc-series-list] [data-bc-mystopseries="${ticked}"]`)
+      check(
+        `${vp.name}: series A is listed under Repeating reminders with a Stop repeating control, though it is not due`,
+        (await inSection
+          .first()
+          .waitFor({ timeout: 8000 })
+          .then(() => true)
+          .catch(() => false)) === true,
+      )
+      const sectionRow = await page
+        .locator(`[data-bc-series-list] [data-bc-mystopseries="${ticked}"]`)
+        .first()
+        .evaluate((e) => e.closest('.bcitem')?.textContent ?? '')
+        .catch(() => '')
+      check(
+        `${vp.name}: the row says when it comes back and how often`,
+        /next/i.test(sectionRow) && /every/i.test(sectionRow),
+        sectionRow.replace(/\s+/g, ' ').slice(0, 120),
+      )
+      check(
+        `${vp.name}: control: the section does not list a series that is already on Today's list (no duplicate row)`,
+        (await page.locator(`[data-bc-series-list] [data-bc-mystopseries="${series}"]`).count()) ===
+          0,
       )
       if (stillOffered) {
         await stopBtn.click({ force: true })
@@ -319,6 +347,75 @@ try {
         check(
           `${vp.name}: a fresh load no longer offers to stop it`,
           (await page.locator(`[data-bc-mystopseries="${series}"]`).count()) === 0,
+        )
+      }
+
+      // 4. #450: stop series A (ticked, not due) from the Repeating reminders section, with the same ask-again press.
+      const stopA = page.locator(`[data-bc-series-list] [data-bc-mystopseries="${ticked}"]`).first()
+      if ((await stopA.count()) === 1) {
+        const callsBefore = seen.stopCalls
+        const aBefore = await stateOf(ticked)
+        await stopA.click({ force: true })
+        await page.waitForTimeout(400)
+        check(
+          `${vp.name}: from the section too, the first press changes nothing and asks again`,
+          (await stateOf(ticked)).state === aBefore.state && seen.stopCalls === callsBefore,
+        )
+        await stopA.click({ force: true })
+        await page.waitForTimeout(2500)
+        const aStopped = await stateOf(ticked)
+        check(
+          `${vp.name}: the second press cancels series A in the database although it was not due`,
+          aStopped.state === 'cancelled',
+          JSON.stringify(aStopped),
+        )
+        check(
+          `${vp.name}: and the row leaves the page without a reload`,
+          (await page.locator(`[data-bc-mystopseries="${ticked}"]`).count()) === 0,
+        )
+        // Durable and idempotent: a second stop of the same series changes nothing and says it had ended.
+        const again = json(
+          (await one(`select app.reminder_series_stop(${O}, ${lit(ticked)}) as v`)).v,
+        )
+        check(
+          `${vp.name}: stopping it again is a no-op that says it had already ended`,
+          again.ok === false &&
+            again.gone === true &&
+            (await stateOf(ticked)).state === 'cancelled',
+          JSON.stringify(again),
+        )
+        // Authorised: another person's office cannot stop this office's series.
+        const target = await mkSeries(`Other-office target ${vp.name} ${run}`)
+        const emailB = `series-other-${vp.name.replace(/\W/g, '')}-${run}@example.invalid`
+        await db.execute(
+          `insert into auth.users (id, email) values (gen_random_uuid(), ${lit(emailB)})`,
+        )
+        const otherOffice = String(
+          json(
+            (
+              await one(
+                `select app.provision_person_office('Other Person', ${lit(emailB)}, ${lit(`series-o-${vp.touch ? 'p' : 'd'}-${run}`)}) as r`,
+              )
+            ).r,
+          ).office_id,
+        )
+        const refused = json(
+          (
+            await one(
+              `select app.reminder_series_stop(${lit(otherOffice)}::uuid, ${lit(target)}) as v`,
+            )
+          ).v,
+        )
+        check(
+          `${vp.name}: another office cannot stop it (refused, and the series is untouched)`,
+          refused.ok === false && (await stateOf(target)).state !== 'cancelled',
+          JSON.stringify(refused),
+        )
+      } else {
+        check(
+          `${vp.name}: series A is stoppable from the section`,
+          false,
+          'the control was not found',
         )
       }
       check(`${vp.name}: no page error`, seen.pageErrors.length === 0, seen.pageErrors.join(' | '))

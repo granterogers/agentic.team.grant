@@ -3250,6 +3250,39 @@ const myTasks = () => {
     may say you could not look; you may not say there is nothing there.
   */
   const trouble = signedIn && ctx.myTasksTrouble?.() === true
+  /*
+    ONE ROW, TWO PLACES (#450). The Today list shows what is due; a repeating reminder that was just ticked has its next time days
+    away and is in no list this page draws, so the Stop repeating press could not be reached until it fell due again. Open series
+    are therefore ALSO listed below, from the same gateway section, without a tick (ticking a future time is not the ask).
+  */
+  const stopSeries = (t) =>
+    t.repeats?.series === true && String(t.id ?? '') !== ''
+      ? button('Stop repeating', {
+          kind: 'danger',
+          'data-bc-mystopseries': String(t.id),
+          'aria-label': `Stop repeating: ${t.title}`,
+        })
+      : '<span></span>'
+  const myMeta = (t) =>
+    esc([bcMini.dueWords(t), typeof t.project === 'string' ? t.project : (t.project?.name ?? ''), t.repeats?.series === true ? 'repeats' : ''].filter(Boolean).join(' · '))
+  const nextWords = (t) => {
+    const at = new Date(t.remind_at ?? '')
+    const when = Number.isNaN(at.getTime())
+      ? ''
+      : at.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    return esc(
+      [when === '' ? '' : `next ${when}`, t.repeats?.every ? `every ${String(t.repeats.every)}` : '', typeof t.project === 'string' ? t.project : (t.project?.name ?? '')]
+        .filter(Boolean)
+        .join(' · '),
+    )
+  }
+  const seriesBelow = (() => {
+    if (!signedIn || trouble) return []
+    const all = ctx.myRepeating?.()
+    if (!Array.isArray(all)) return []
+    const shown = new Set((Array.isArray(mine) ? mine : []).map((t) => String(t.id ?? '')))
+    return all.filter((t) => !shown.has(String(t.id ?? '')))
+  })()
   return `<h1 class="bcsectiontitle">My Tasks</h1>
     <p class="bcpmeta bcprose bcgap-l">
       Your own list. Separate from what any project has committed to, and from
@@ -3275,25 +3308,35 @@ const myTasks = () => {
                     aria-label="${esc(`${t.state === 'done' ? 'Completed' : 'Not completed'}: ${t.title}`)}">
                   <div class="bcitembody">
                     <span class="bcitemtitle">${esc(t.title)}</span>
-                    <span class="bcitemmeta">${esc([bcMini.dueWords(t), typeof t.project === 'string' ? t.project : (t.project?.name ?? ''), t.repeats?.series === true ? 'repeats' : ''].filter(Boolean).join(' · '))}</span>
+                    <span class="bcitemmeta">${myMeta(t)}</span>
                   </div>
                   <!--
                     STOPPING A RECURRING REMINDER IS ITS OWN PRESS (owner decision, 7 October 2026). Ticking a series off
                     completes that time only, so the series needs a way to end that is not the tick. Drawn for a series
                     only, and only where the row has an id to write to. No backticks in this comment. Template literal.
                   -->
-                  ${
-                    t.repeats?.series === true && String(t.id ?? '') !== ''
-                      ? button('Stop repeating', {
-                          kind: 'danger',
-                          'data-bc-mystopseries': String(t.id),
-                          'aria-label': `Stop repeating: ${t.title}`,
-                        })
-                      : '<span></span>'
-                  }
+                  ${stopSeries(t)}
                 </div>`,
               )
               .join('')}</div>`
+    }
+    ${
+      seriesBelow.length === 0
+        ? ''
+        : `<h2 class="bcsubhead">Repeating reminders</h2>
+          <p class="bcpmeta bcprose bcgap-l">These come back on their own. Stop one here without waiting for it to fall due.</p>
+          <div class="bclist" data-bc-series-list>${seriesBelow
+            .map(
+              (t) => `<div class="bcitem">
+                <span></span>
+                <div class="bcitembody">
+                  <span class="bcitemtitle">${esc(t.title)}</span>
+                  <span class="bcitemmeta">${nextWords(t)}</span>
+                </div>
+                ${stopSeries(t)}
+              </div>`,
+            )
+            .join('')}</div>`
     }`
 }
 

@@ -194,6 +194,11 @@ export const CRITICAL: readonly Proof[] = [
     18,
     "one office cannot starve another of the worker, and an overspender's background work is held, never a person's conversation",
   ),
+  p(
+    'dequeue-reconciled',
+    20,
+    "efficiency's lazy ceiling carried onto 1044's fair-share dequeue claims what 1044 claims; applying efficiency's 1030 as written would lose the fairness (deferred, proved, guarded)",
+  ),
   // The script prints WRONG rows on purpose for the `pre` control (the schema WITHOUT 0599, where recovery must fail); its
   // own exit code is what judges that half, so only an explicit CONTROL FAILED line is counted as a failed assertion here.
   via(

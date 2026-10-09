@@ -257,8 +257,19 @@ export function ensureCandidate(opts: { rebuild: boolean; given?: string | undef
   const name = `${PREFIX}_cand`
   const { pending, basis } = pendingForCandidate()
   const builtAt = sql('post', 'select built_at::text from public.isolated_replica_marker limit 1')
+  /*
+    What `post` HOLDS, not only when it was built (#454). A proof run directly against `post` can commit rows into it (two person
+    offices and their logins did, in the integration run), and a candidate cloned before that and stamped with the same build time
+    was reused as "current" while `post` itself had moved on, so a false red looked like a defect in the code under test. The count
+    of logins, offices and functions in `post` changes with any such write or with a rebuild, so the stamp changes and the candidate
+    is rebuilt.
+  */
+  const held = sql(
+    'post',
+    `select (select count(*) from auth.users)::text || '/' || (select count(*) from public.offices)::text || '/' || (select count(*) from pg_proc)::text`,
+  )
   const signature = sha(
-    `${builtAt}\n${pending.map((f) => `${f}:${sha(readFileSync(`migrations/${f}`, 'utf8'))}`).join('\n')}`,
+    `${builtAt}\n${held}\n${pending.map((f) => `${f}:${sha(readFileSync(`migrations/${f}`, 'utf8'))}`).join('\n')}`,
   ).slice(0, 16)
   const stamp = `gate:${signature}`
   if (!opts.rebuild && dbExists(name) && marked(name)) {
@@ -292,6 +303,57 @@ export function ensureCandidate(opts: { rebuild: boolean; given?: string | undef
   return {
     name,
     note: `built: post + ${String(pending.length)} newer migration(s) (${pending.map((f) => f.slice(0, 4)).join(', ') || 'none'}); ${basis}`,
+  }
+}
+
+/**
+ * The exact source a gate run tested (#454): the commit, whether the tree was clean, and a digest of everything that differs from
+ * the commit (tracked changes and untracked files, by content), so an evidence file names what was run and a dirty tree cannot pass
+ * for its commit. No network, no database: it only runs git.
+ */
+export function sourceIdentity(cwd?: string): {
+  head: string
+  branch: string
+  clean: boolean
+  dirtyDigest: string | null
+} {
+  const git = (...args: string[]): string => {
+    try {
+      return execFileSync('git', args, {
+        encoding: 'utf8',
+        ...(cwd === undefined ? {} : { cwd }),
+      }).trim()
+    } catch {
+      return ''
+    }
+  }
+  const head = git('rev-parse', 'HEAD')
+  const status = git('status', '--porcelain', '--untracked-files=all')
+  if (status === '')
+    return {
+      head,
+      branch: git('rev-parse', '--abbrev-ref', 'HEAD'),
+      clean: true,
+      dirtyDigest: null,
+    }
+  const h = createHash('sha256')
+  h.update(git('diff', 'HEAD'))
+  for (const line of status.split('\n')) {
+    if (!line.startsWith('??')) continue
+    const f = line.slice(3)
+    try {
+      h.update(`\n${f}\n`)
+      h.update(readFileSync(cwd === undefined ? f : `${cwd}/${f}`))
+    } catch {
+      // an unreadable path is named by its status line below
+    }
+  }
+  h.update(status)
+  return {
+    head,
+    branch: git('rev-parse', '--abbrev-ref', 'HEAD'),
+    clean: false,
+    dirtyDigest: h.digest('hex').slice(0, 16),
   }
 }
 

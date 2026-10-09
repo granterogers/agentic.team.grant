@@ -32,6 +32,7 @@ import {
   PORT,
   PREFIX,
   SOCK,
+  sourceIdentity,
   sql,
   sweepRun,
   sweepStale,
@@ -306,6 +307,10 @@ async function main(): Promise<number> {
       console.log(`swept ${String(swept)} database(s) a crashed earlier run left behind`)
     const cand = ensureCandidate({ rebuild: o.rebuild, given: o.candidate })
     console.log(`candidate ${cand.name}: ${cand.note}`)
+    const source = sourceIdentity()
+    console.log(
+      `source ${source.head.slice(0, 12)} on ${source.branch}, ${source.clean ? 'tree clean' : `tree DIRTY (digest ${String(source.dirtyDigest)}: this run did NOT test the commit alone)`}`,
+    )
     if (proofs.some((x) => x.kind === 'plants' || x.kind === 'fk'))
       plantTemplate = ensurePlantTemplate()
 
@@ -357,6 +362,7 @@ async function main(): Promise<number> {
       run: RUN,
       tier: o.tier,
       candidate: cand,
+      source,
       wallSeconds: wall,
       green: results.length - red.length,
       red: red.map((r) => ({

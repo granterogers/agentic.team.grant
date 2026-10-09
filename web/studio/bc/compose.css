@@ -3763,7 +3763,9 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   [data-experience='basecamp'] .bctop { padding-inline: var(--bc-2); }
   /* At this width the project's mark is decoration and its NAME is the identity: the mark gives its room to the name
      (52px became about 85px at 320, measured). The mark returns above 360px. */
-  [data-experience='basecamp'] .bcjump--in .bcjumpmark { display: none; }
+  /* The header's project block is .bchere since the hamburger menu (ADR-0068); this rule still named the old .bcjump--in, matched
+     nothing, and so the mark kept its 26px and the name was 54px at 320 (#453). */
+  [data-experience='basecamp'] .bchere .bcjumpmark { display: none; }
 }
 
 /* ======================================================================== *
