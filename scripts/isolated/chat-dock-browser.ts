@@ -254,7 +254,11 @@ try {
       'control: the same words typed again later are a NEW message',
       await (async () => {
         await say(page, LOST)
-        await page.waitForTimeout(2500)
+        // wait for the thing asserted (the second command being filed), not a fixed pause: under a busy gate the filing can land late
+        for (let waited = 0; waited < 15000; waited += 500) {
+          if ((await commandsFor(LOST)).length >= 2) break
+          await page.waitForTimeout(500)
+        }
         return (await commandsFor(LOST)).length === 2
       })(),
     )
