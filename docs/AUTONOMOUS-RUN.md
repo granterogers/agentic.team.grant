@@ -18,7 +18,11 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-## Checkpoint (9 October 2026, later): V1 integration candidate on `claude/v1-integration-main-2026-10-09`, outcome B
+## Checkpoint (9 October 2026, final): the preflight ran; recommendation B, CONDITIONAL GO
+
+`docs/audit/V1-FINAL-PRODUCTION-PREFLIGHT-2026-10-09.md`. Nothing deployed or applied. Waiting on Grant for: R1b (read-only function inventory, rollback capture, Vercel deployment id), R1c (`backup:rehearse`, #456) and the `SIGNIN_ALLOWED_ORIGIN` decision. Backlog: #446, #447, #450 to #456 (450, 451, 453, 454 have fixes on the branch and close when it merges).
+
+## Earlier checkpoint (9 October 2026, later): V1 integration candidate on `claude/v1-integration-main-2026-10-09`, outcome B
 
 Reliability work reconciled onto `main`; not merged, not deployed. Next step is Grant's decision on authorised production reads (preflight), per `docs/audit/V1-INTEGRATION-RELEASE-CANDIDATE-2026-10-09.md`. Backlog: #450 to #455.
 

@@ -4,6 +4,16 @@
 > (not 1023 to 1035); do not use the numbers or the service order in this checklist. Use the integration release-candidate report
 > `V1-INTEGRATION-RELEASE-CANDIDATE-2026-10-09.md` and the corrected preflight/monitoring SQL.
 
+> **UPDATED 9 October 2026 (final preflight run): read `V1-FINAL-PRODUCTION-PREFLIGHT-2026-10-09.md`, section 13, for the sequence to follow.** The read-only
+> preflight P01 to P19 WAS run (22 statements through the read-only endpoint, results in that report): ledger 802 / 1041, nothing at 1042 or above, database
+> 71.5% and storage 47.0%, queue idle, P05 and P06 zero, no pending reminders, one enabled Telegram bot (the chief's). Use the corrected
+> `V1-RELEASE-PREFLIGHT-QUERIES-2026-10-09.sql` (P05 no longer tests a column that does not exist before the migration; P16 prints counts; **P04b, P08b and
+> P18b replace P04, P08 and P18**, which the read-only role refuses with 42501) and run it with `ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/release/preflight-read.ts`
+> (read-only role, single plain selects, a test holds every statement to that rule). **New stops before step 3 below:** (1) the function inventory and rollback
+> capture (`capture-functions`, `snapshot-defs`, the Vercel production deployment id) have not been done and need approval R1b: **if any live version is not the
+> recorded one (worker v975, hq-api v899, voice v658, signin v129) the plan is void**; (2) the restore rehearsal is 18 days old (threshold 8): `npm run backup:rehearse`
+> or a written acceptance (Issue #456); (3) decide `SIGNIN_ALLOWED_ORIGIN`. Efficiency's unapplied 1024 to 1031 stay out of `migrations/` (1030 conflicts with 1044; deferred and proved).
+
 **NOT AUTHORISED. NOTHING HERE HAS BEEN RUN IN PRODUCTION.** Reasoning and evidence: `V1-PRODUCTION-RELEASE-PLAN-2026-10-09.md` (section numbers below refer to it).
 SQL files: `V1-RELEASE-PREFLIGHT-QUERIES-…sql` (P01 to P19), `V1-RELEASE-MONITORING-QUERIES-…sql` (M01 to M21), `V1-RELEASE-FUNCTION-FINGERPRINTS-…tsv`.
 Run each SQL with `ALLOW_PRODUCTION_CHECKS=1 npm run qq -- "<statement>"`. Grant sets `ALLOW_PRODUCTION_CHECKS` and `ALLOW_PRODUCTION_WRITES` per command; the agent never does. Never print a secret.
