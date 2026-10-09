@@ -100,7 +100,7 @@ try {
       )
       check(
         `${String(width)}px: every header control is 44px to touch`,
-        m.controls.length >= 5 && m.controls.every((c) => c.h >= 43.5),
+        m.controls.length >= 4 && m.controls.every((c) => c.h >= 43.5),
         m.controls.map((c) => `${c.label}:${String(c.h)}`).join(' '),
       )
       check(

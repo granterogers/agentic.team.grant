@@ -296,6 +296,7 @@ a `verify:*`/`poc:*`/`e2e`/`gate` verification suite, checks by the choke points
 | `hq:token` | WRITES | Management API (SQL, vault); Management API (admin); deployed gateway/functions; deployed pages / Vercel | entry `require-production-writes` (both flags) + executor + fetch guard |
 | `deploy:signin` | WRITES | Management API (SQL, vault); Management API (admin); deployed gateway/functions; deployed pages / Vercel | entry `require-production-writes` (both flags) + executor + fetch guard |
 | `deploy:hq-basecamp` | WRITES | Management API (SQL, vault); Management API (admin); deployed gateway/functions | entry `require-production-writes` (both flags) + executor + fetch guard |
+| `deploy:signin-origin` | WRITES | Management API (admin: ONE function secret, `SIGNIN_ALLOWED_ORIGIN`); deployed gateway/functions (refusal probes only) | entry `require-production-writes` (both flags) + fetch guard |
 | `deploy:ux-review` | WRITES | Management API (admin); deployed gateway/functions; deployed pages / Vercel | entry `require-production-writes` (both flags) + executor + fetch guard |
 | `deploy:voice-basecamp` | WRITES | Management API (SQL, vault); Management API (admin); deployed gateway/functions | entry `require-production-writes` (both flags) + executor + fetch guard |
 | `verify:signin` | suite | Management API (SQL, vault); Management API (admin); deployed gateway/functions; deployed pages / Vercel | executor / fetch guard (checks) + `suite-guard` (heavy needs writes) |

@@ -308,7 +308,7 @@ const run = async (label: string, phone: boolean): Promise<void> => {
   await page.waitForTimeout(3500)
   check(/Order the espresso machine/.test(await text()), 'Search: finds a task by a word in it')
   await go('/', 'Autumn Menu Research')
-  await page.keyboard.press('Shift+J')
+  await page.keyboard.press('Control+K')
   await page.keyboard.type('Winter')
   await page.waitForTimeout(1500)
   // The bar lists matches in its own dialog; "Winter Market Pop-up" is also on the home, so the dialog is what is read.

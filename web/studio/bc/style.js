@@ -7,6 +7,12 @@
   inherits it. The storage, validation and inheritance are in the office
   (`style` section, `style_set` and `style_clear` actions); this is the form.
 
+  8 October 2026, Grant: the form carried Tone of voice, Who it is for and Standing instructions, which he never
+  asked for, so they are no longer drawn and the form no longer sends them. The office keeps whatever is already
+  stored (a patch only touches the keys it names) and the documents the team makes still read it, so nothing is lost
+  and nothing is invented to fill the space. What is left is what the form is actually for: the look of a document
+  (colours, the two typefaces and the title page).
+
   Nothing here pretends to extract a style from a document: "save this report as
   the project's style" needs a reader the office does not have, so that button
   is not drawn. What a person types is what is stored, and each field says
@@ -47,12 +53,12 @@ const form = (name, scope, data) => {
   const pal = p.palette ?? {}
   const ty = p.typography ?? {}
   return `<h2 class="bcstyh">${esc(scope === 'project' ? `Document style for ${name}` : 'Document style for the whole office')}</h2>
-    <p class="bcpmeta">${esc(scope === 'project' ? 'Anything left alone is inherited from the office default. The documents the team makes here use this.' : 'The default every project inherits unless it sets its own.')}</p>
+    <p class="bcpmeta">${esc(scope === 'project' ? 'The colours, fonts and title page of the documents the team makes. Anything left alone follows the office default.' : 'The default every project inherits unless it sets its own.')}</p>
     <div class="bcstygrid">
       ${v.palette
         .map(
           (k) => `<label class="bcstyfield"><span>${esc(SWATCH[k] ?? k)} ${origin(inh, `palette.${k}`, scope)}</span>
-            <input type="color" name="pal.${esc(k)}" value="${esc(hex(pal[k], k === 'paper' ? '#ffffff' : k === 'ink' ? '#1c2428' : '#2f6f5e'))}" ${pal[k] === undefined ? 'data-unset="1"' : ''}></label>`,
+            <input type="color" name="pal.${esc(k)}" value="${esc(hex(pal[k], k === 'paper' ? '#ffffff' : k === 'ink' ? '#1c2428' : '#3b4a57'))}" ${pal[k] === undefined ? 'data-unset="1"' : ''}></label>`,
         )
         .join('')}
     </div>
@@ -64,12 +70,6 @@ const form = (name, scope, data) => {
       <label class="bcstyfield"><span>Title page ${origin(inh, 'formatting.title_page', scope)}</span>
         <select name="fm.title_page">${v.title_pages.map((f) => `<option${(p.formatting?.title_page ?? 'standard') === f ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select></label>
     </div>
-    <label class="bcstyfield bcstywide"><span>Tone of voice ${origin(inh, 'tone', scope)}</span>
-      <input name="tone" maxlength="200" value="${esc(p.tone ?? '')}" placeholder="Plain, warm, no jargon"></label>
-    <label class="bcstyfield bcstywide"><span>Who it is for ${origin(inh, 'audience', scope)}</span>
-      <input name="audience" maxlength="200" value="${esc(p.audience ?? '')}" placeholder="Prospective coaching clients"></label>
-    <label class="bcstyfield bcstywide"><span>Standing instructions for documents ${origin(inh, 'instructions', scope)}</span>
-      <textarea name="instructions" rows="3" maxlength="1500" placeholder="Lead with the conclusion. One idea per paragraph.">${esc(p.instructions ?? '')}</textarea></label>
     <p class="bcstyerr" role="alert" hidden></p>
     <div class="bcstyacts">
       ${scope === 'project' ? '<button type="button" class="bccal2btn" data-sty-clear>Use the office default</button>' : ''}
@@ -145,9 +145,6 @@ export const open = async (p) => {
       palette,
       typography: { heading: g('ty.heading'), body: g('ty.body') },
       formatting: { title_page: g('fm.title_page') },
-      tone: g('tone').trim() === '' ? null : g('tone').trim(),
-      audience: g('audience').trim() === '' ? null : g('audience').trim(),
-      instructions: g('instructions').trim() === '' ? null : g('instructions').trim(),
     }
     try {
       await act('style_set', scope === 'project' ? { p_slug: p.slug, p_patch: patch } : { p_patch: patch })

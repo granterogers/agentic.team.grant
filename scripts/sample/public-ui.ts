@@ -26,6 +26,7 @@ const label =
   process.argv[2] !== undefined && !process.argv[2].startsWith('--') ? process.argv[2] : 'now'
 const PAGE = arg('page')
 const withChat = process.argv.includes('--chat')
+const writeAttempt = !process.argv.includes('--no-write-attempt')
 const out = `.out/public-${label}`
 mkdirSync(out, { recursive: true })
 const SIGNIN = `https://${REF}.supabase.co/functions/v1/signin`
@@ -293,20 +294,23 @@ for (const name of chosen) {
   // Wait for the button itself, not for a fixed pause: the home screen is still drawing when the network goes quiet.
   await newBtn.waitFor({ state: 'visible', timeout: 20000 }).catch(() => null)
   await page.screenshot({ path: `${out}/${tag}-3a-home.png` })
-  check(
-    `${tag}: the home screen offers New project (the write attempt below can run)`,
-    (await newBtn.count()) > 0,
-    '',
-  )
+  // --no-write-attempt leaves out the one step that submits a project to the real gateway (Grant, 8 October: the only write
+  // left is the visitor session the sign-in function mints).
+  if (writeAttempt)
+    check(
+      `${tag}: the home screen offers New project (the write attempt below can run)`,
+      (await newBtn.count()) > 0,
+      '',
+    )
   const nameField = page.locator('#bc-newproject-name')
   // The home screen redraws while it finishes loading and a redraw can close the form, so press again until it holds.
   let opened = false
-  for (let attempt = 0; attempt < 4 && !opened; attempt++) {
+  for (let attempt = 0; writeAttempt && attempt < 4 && !opened; attempt++) {
     await newBtn.click().catch(() => null)
     await page.waitForTimeout(1500)
     opened = await nameField.isVisible().catch(() => false)
   }
-  check(`${tag}: pressing New project opens the form`, opened, '')
+  if (writeAttempt) check(`${tag}: pressing New project opens the form`, opened, '')
   if (opened) {
     const projectsBefore =
       (await page.locator('body').innerText()).match(

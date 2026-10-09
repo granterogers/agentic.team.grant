@@ -14,6 +14,7 @@
 import '../../src/safety/require-production-writes.ts'
 import { readFile } from 'node:fs/promises'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { SIGNIN_PAGE_ORIGINS } from './lib/signin-origins.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 if (supabaseToken === undefined || supabaseToken === '') {
@@ -30,10 +31,7 @@ const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
  * preview correctly cannot sign anybody in, and the suite that drives one
  * expects the refusal rather than treating it as a fault.
  */
-const PAGE_ORIGINS = [
-  'https://ai-team-hq.vercel.app',
-  'https://agentic-team-hq-basecamp-agentic-team-grant.vercel.app',
-]
+const PAGE_ORIGINS = SIGNIN_PAGE_ORIGINS
 
 const api = `https://api.supabase.com/v1/projects/${ref}`
 const db = new ManagementApiExecutor(ref, supabaseToken)

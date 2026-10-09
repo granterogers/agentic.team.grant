@@ -36,6 +36,7 @@
 <link rel="stylesheet" href="/bc/settings.css">
 <link rel="stylesheet" href="/bc/account.css">
 <link rel="stylesheet" href="/settings-ui.css">
+<link rel="stylesheet" href="/bc/stone.css">
 </head>
 <body>
 <div id="root" class="shell"></div>
@@ -124,6 +125,60 @@
     window.HQ_SIGNIN = base + '/signin'
     window.HQ_VOICE = base + '/voice-basecamp'
   }
+</script>
+<!--
+  WHEN THE PAGE CANNOT START. If a script or stylesheet does not arrive (a dropped connection, a proxy that cuts a transfer, a
+  captive portal) the module graph never runs and the person is left with a blank page and no way to know why. Eight seconds
+  after the page has loaded, if nothing has been drawn, say so, name the files that failed, and offer a reload. It tells and waits
+  for a press: it retries nothing and hides nothing, and the app's own first draw replaces this notice.
+-->
+<script>
+  (function () {
+    var failed = []
+    window.addEventListener('error', function (e) {
+      var t = e.target
+      if (t && t !== window && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+        failed.push(String(t.src || t.href || '').replace(location.origin, ''))
+      }
+    }, true)
+    function check() {
+        var root = document.getElementById('root')
+        if (!root || root.childElementCount > 0) return
+        /* A failed import is reported against the entry script, so name what the browser's own timing says answered with an error. */
+        try {
+          performance.getEntriesByType('resource').forEach(function (r) {
+            if (r.responseStatus >= 400 && r.name.indexOf(location.origin) === 0) {
+              var n = r.name.replace(location.origin, '')
+              if (failed.indexOf(n) < 0) failed.push(n)
+            }
+          })
+        } catch (e) {}
+        if (failed.length > 1) failed = failed.filter(function (n) { return n !== '/app.js' })
+        var box = document.createElement('div')
+        box.setAttribute('role', 'alert')
+        box.setAttribute('data-boot-notice', '')
+        box.style.cssText = 'max-width:34rem;margin:18vh auto 0;padding:0 1.25rem;font:16px/1.5 system-ui,sans-serif;color:CanvasText'
+        var h = document.createElement('h1')
+        h.style.cssText = 'font-size:1.25rem;margin:0 0 .5rem'
+        h.textContent = failed.length > 0 ? 'Team HQ could not finish loading' : 'Team HQ is taking longer than usual to start'
+        var p = document.createElement('p')
+        p.style.cssText = 'margin:0 0 1rem'
+        p.textContent = failed.length > 0
+          ? 'Part of the page did not arrive (' + failed.slice(0, 3).join(', ') + '), usually a dropped or interrupted connection. Nothing has been lost.'
+          : 'Your connection may be slow or interrupted. Nothing has been lost.'
+        var b = document.createElement('button')
+        b.type = 'button'
+        b.textContent = 'Reload'
+        b.style.cssText = 'font:inherit;min-height:44px;padding:0 1.25rem;border-radius:8px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer'
+        b.addEventListener('click', function () { location.reload() })
+        box.appendChild(h); box.appendChild(p); box.appendChild(b)
+        if (document.querySelector('[data-boot-notice]')) return
+        root.appendChild(box)
+    }
+    /* Eight seconds after the page has loaded, or twenty after it began (a hung transfer keeps `load` from ever firing). */
+    window.addEventListener('load', function () { setTimeout(check, 8000) })
+    setTimeout(check, 20000)
+  })()
 </script>
 <script type="module" src="/app.js"></script>
 </body>

@@ -99,7 +99,12 @@ check(
   (await page.locator('.bcstyfrom').allTextContents()).join('|').includes('this project'),
 )
 await page.screenshot({ path: '.out/ux-style-02-form.png' })
-await page.fill('input[name="tone"]', 'Plain and warm')
+check(
+  'Tone of voice, Who it is for and Standing instructions are not offered',
+  (await page
+    .locator('input[name="tone"], input[name="audience"], textarea[name="instructions"]')
+    .count()) === 0,
+)
 await page.selectOption('select[name="ty.heading"]', 'Times')
 await page.locator('.bcstyform button[type=submit]').click()
 await page.waitForTimeout(400)
@@ -110,9 +115,9 @@ check(
   JSON.stringify(set),
 )
 check(
-  'the patch carries what was typed, and leaves untouched colours unset',
-  JSON.stringify(set?.args?.p_patch).includes('Plain and warm') &&
-    JSON.stringify(set?.args?.p_patch).includes('Times'),
+  'the patch carries what was chosen, leaves untouched colours unset, and sends no tone, audience or instructions',
+  JSON.stringify(set?.args?.p_patch).includes('Times') &&
+    !/"(tone|audience|instructions)"/.test(JSON.stringify(set?.args?.p_patch)),
 )
 await page.close()
 const p2 = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage()

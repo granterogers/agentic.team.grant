@@ -30,6 +30,7 @@
   template.
 */
 
+import * as menu from './menu.js'
 import { PROJECTS, SOURCE_STATE, source } from '../data.js'
 import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
@@ -292,6 +293,58 @@ const isHere = (to) => currentPath() === to
   renaming.
 */
 
+/*
+  THE PROJECT MENU PANEL. Projects first (the active one marked), then Create
+  project, then the personal destinations that used to live in the tray. The
+  portfolio screen, the Jump dialog and the tray are gone: this is the one
+  place to move between projects.
+*/
+const menuPanel = () => {
+  const here = state().view === 'project' ? state().project : null
+  const projects = listed()
+  const mine = canWrite()
+  const item = (to, label, mark = '') =>
+    `<button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(to)}"
+      aria-current="${isHere(to) ? 'page' : 'false'}">${mark}<span class="bcmenuname">${esc(label)}</span></button>`
+  const firstRunShown = projects.length === 0 && source.live === true && mine && state().view === 'home'
+  /* Always in the page, hidden until opened: the button's aria-controls always names something that exists. */
+  return `<div class="bcmenupanel" id="bc-menu" role="menu" aria-label="Projects and navigation"${menu.isOpen() ? '' : ' hidden'}>
+    <p class="bcmenuhead">Projects</p>
+    ${
+      projects.length === 0
+        ? `<p class="bcmenunone">${source.state === 'unreachable' ? 'Your projects could not be loaded.' : 'No projects yet.'}</p>`
+        : `<div class="bcmenulist">${projects
+            .map((p) =>
+              item(
+                at(`/p/${p.slug}`),
+                p.name,
+                `<span class="bcmenumark" aria-hidden="true">${compose.projectMark(p, 18)}</span>`,
+              ).replace(
+                'aria-current="false"',
+                `aria-current="${here === p.slug ? 'page' : 'false'}"`,
+              ),
+            )
+            .join('')}</div>`
+    }
+    ${
+      firstRunShown
+        ? ''
+        : mine
+          ? menu.isMaking()
+            ? account.newProject({ open: true })
+            : `<button type="button" role="menuitem" class="bcmenuitem bcmenucreate" data-bc-menu-new>
+                <span class="bcmenuplus" aria-hidden="true">+</span><span class="bcmenuname">Create project</span>
+              </button>`
+          : `<button type="button" role="menuitem" class="bcmenuitem bcmenucreate" data-bc-signin-first disabled
+              title="Sign in to create a project"><span class="bcmenuplus" aria-hidden="true">+</span><span class="bcmenuname">Create project (sign in first)</span></button>`
+    }
+    <hr class="bcmenusep">
+    ${item(at('/search'), 'Search')}
+    ${item(at('/tasks'), 'My Tasks')}
+    ${item(at('/activity'), 'Activity')}
+  </div>`
+}
+
 /**
  * §6.1: a three-part sticky top row, and a persistent personal tray below the
  * content.
@@ -329,44 +382,21 @@ const topRow = () => {
   const attentionTo = firstWaiting === undefined ? null : at(`/p/${firstWaiting.slug}/team`)
   return `<header class="bctop">
     <div class="bcleft">
-      <!--
-        A HOME ICON, not the word. Grant: the icon performs the same navigation
-        without occupying space with the word. The accessible name stays, so
-        nothing is lost to anyone reading the page aloud - which is the whole
-        difference between removing a label and removing a word.
-      -->
-      <button type="button" class="bcbtn bcicon" data-bc-go="${at('/')}"
-        aria-label="Home — all your projects"
-        aria-current="${isHere(at('/')) ? 'page' : 'false'}">
+      <button type="button" class="bcbtn bcicon bcburger" data-bc-menu
+        aria-haspopup="menu" aria-expanded="${menu.isOpen() ? 'true' : 'false'}" aria-controls="bc-menu"
+        aria-label="Projects and navigation" title="Projects and navigation">
         <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none"
-          stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 10.5 12 3l9 7.5"></path>
-          <path d="M5.5 9.5V20a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.5"></path>
+          stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <path d="M4 7h16M4 12h16M4 17h16"></path>
         </svg>
       </button>
+      ${menuPanel()}
     </div>
-    <button type="button" class="bcjump${here === null ? '' : ' bcjump--in'}" data-bc-jump
-      aria-haspopup="dialog"
-      aria-label="${esc(
-        here === null
-          ? 'Jump to a project, tool or record'
-          : `You are in ${here.name}. Jump to a project, tool or record`,
-      )}">
-      <!--
-        THE PROJECT'S MARK RIDES WITH ITS NAME.
-
-        The project head used to carry an h1 with the mark beside it, and the
-        top bar named the project again 173px below. The h1 is gone (#10) and
-        the mark came up here rather than being deleted: the colour, the mark
-        or the picture somebody chose in How this project looks is the
-        project's identity, and the only place it appeared on this page was
-        that title. It is a decoration beside a name the button already
-        announces, so it is hidden from the accessible name rather than
-        repeated into it.
-      -->
+    <div class="bchere${here === null ? ' bchere--none' : ''}" role="status"
+      aria-label="${esc(here === null ? 'No project selected' : `You are in ${here.name}`)}">
       ${here === null ? '' : `<span class="bcjumpmark" aria-hidden="true">${compose.projectMark(here, 18)}</span>`}
-      <span class="bcjumpname">${esc(here === null ? 'Jump to…' : here.name)}</span><kbd>Shift J</kbd>
-    </button>
+      <span class="bcjumpname">${esc(here === null ? 'No project open' : here.name)}</span>
+    </div>
     <div class="bcright">
       <button type="button" class="bcbtn" data-bc-attention
         ${attentionTo === null ? 'disabled' : ''}
@@ -803,51 +833,22 @@ const portfolio = () => {
   if (listed().length === 0 && source.live === true && canWrite()) return account.firstRun()
   // A read that failed is not an office with nothing in it: say so, and offer to try again (#426).
   if (listed().length === 0 && source.state === 'unreachable') {
-    return `<h1 class="bcsectiontitle">Your projects</h1>
-      ${errorState('Your projects could not be loaded just now.', button('Try again', { 'data-bc-retry-office': '1' }))}`
+    return errorState('Your projects could not be loaded just now.', button('Try again', { 'data-bc-retry-office': '1' }))
   }
-  if (listed().length === 0) {
-    return `<h1 class="bcsectiontitle">Your projects</h1>
-      ${empty(
-        {
-          title: 'No projects yet',
-          body: 'A project is the container everything else lives in — documents, tasks, the team working on it and everything they produce.',
-        },
-        '',
-      )}`
-  }
-  return `<div class="bcportfoliohead"><h1 class="bcsectiontitle">Your projects</h1>${
-    canWrite()
-      ? `<button type="button" class="bcbtn bcbtn--outline" data-bc-newproject-open aria-expanded="false">New project</button>`
-      : ''
-  }</div>${canWrite() ? account.newProject({ open: false }) : ''}
-    <div class="bcgrid bcgrid--projects">
-      ${listed().map((p) => {
-        const open = (p.tasks ?? []).filter((t) => t.state !== 'done').length
-        const waiting = (p.waiting ?? []).length
-        const late = bcMini.filtered(p, 'late').length
-        const stuck = bcMini.filtered(p, 'stuck').length
-        /*
-          THE SAME THREE SIGNALS AS THE PROJECT HOME, so a project reads the
-          same from across the portfolio as it does inside. Static figures,
-          not buttons: the whole preview is already the one control that
-          opens the project, and a control inside it would be nested.
-        */
-        const signal = (n, word, tone) =>
-          `<span class="bcpsig${n === 0 ? ' bcpsig--zero' : ` bcpsig--${tone}`}"><b>${esc(String(n > 99 ? '99+' : n))}</b> ${esc(word)}</span>`
-        return tool({
-          name: p.name,
-          to: at(`/p/${p.slug}`),
-          mark: compose.projectMark(p, 22),
-          summary: `${waiting} waiting on you, ${late} late, ${stuck} stuck, ${
-            open === 1 ? '1 open task' : `${open} open tasks`
-          }. Opens the project.`,
-          body: `${p.purpose ? `<div class="bcpexcerpt">${esc(p.purpose)}</div>` : ''}
-            <div class="bcpsigs">${signal(waiting, waiting === 1 ? 'needs you' : 'need you', 'waiting')}${signal(late, 'late', 'late')}${signal(stuck, 'stuck', 'stuck')}</div>
-            ${tasksPreview(p)}`,
-        })
-      }).join('')}
-    </div>`
+  /*
+    NO PROJECT SELECTED: an empty canvas, not a screen of its own. The page is
+    the workspace, so with nothing chosen it shows the dotted canvas and one
+    sentence inviting the person to pick or make a project.
+  */
+  return `<h1 class="bcvh">Team HQ</h1>
+  <div class="bcvoid" role="region" aria-label="No project selected">
+    <div class="bcvoidcard">
+      <p class="bcvoidline">${listed().length === 0 ? 'No projects yet.' : 'Choose a project to begin.'}</p>
+      <div class="bcvoidrow">
+        <button type="button" class="bcbtn bcbtn--primary" data-bc-menu-open>${listed().length === 0 ? 'Create a project' : 'Open the project menu'}</button>
+      </div>
+    </div>
+  </div>`
 }
 
 /* ======================================================================== *
@@ -3715,24 +3716,22 @@ export const html = () => {
 const shell = () =>
   `<a class="bcskip" href="#bcmain">Skip to main content</a>
   ${account.sampleBar()}
-  ${topRow()}
+  ${(menu.sync(currentPath()), topRow())}
   ${notLive()}
-  <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>
-  ${tray()}`
+  <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>`
 
 /*
   The dock's voice-note control: the same button the Chat page's composer
   draws (same attribute, same states), icon-only because the dock's row is
   380px and already holds the text and Send.
 */
-export const dockNoteButton = () => `<button type="button" class="bcnotemic bcnotemic--dock" data-bc-note="idle"
-    aria-label="Record a voice note" title="Record a voice note">
-    <svg class="bcnotemicicon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+export const dockDictateButton = (supported, title) => `<button type="button" class="bcdictate" data-dock-dictate
+    aria-pressed="false" aria-label="Dictate a message" title="${esc(title)}"${supported ? '' : ' disabled'}>
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
       stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
       <rect x="9" y="3" width="6" height="11" rx="3"></rect>
       <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"></path>
       <path d="M12 18v3"></path>
     </svg>
-    <span class="bcnotemicdot" aria-hidden="true"></span>
-    <span class="bcnotemictxt bcvh">Voice note</span>
+    <span class="bcdictatedot" aria-hidden="true"></span>
   </button>`

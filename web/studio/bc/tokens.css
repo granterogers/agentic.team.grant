@@ -20,15 +20,15 @@
 
 :root[data-experience='basecamp'] {
   /* --- Colour (§4.1) ---------------------------------------------------- */
-  --bc-canvas: #0b151b;
-  --bc-surface: #1b2930;
-  --bc-surface-selected: #2a4259;
-  --bc-text: #e1e5e8;
-  --bc-text-strong: #f2f4f5;
-  --bc-text-muted: #a8afb3;
-  --bc-accent: #6ab3fd;
-  --bc-accent-ink: #0e1d24;
-  --bc-section-accent: #fbbda8;
+  --bc-canvas: #d6d3cc;
+  --bc-surface: #f0eee9;
+  --bc-surface-selected: #dde3ea;
+  --bc-text: #272a2d;
+  --bc-text-strong: #14171a;
+  --bc-text-muted: #595e63;
+  --bc-accent: #2b6cb0;
+  --bc-accent-ink: #ffffff;
+  --bc-section-accent: #a2502f;
 
   /* --- Module identity (§§9-10) ------------------------------------------
    *
@@ -47,20 +47,20 @@
    * The hues are deliberately close together and all desaturated against the
    * dark surface, so the board still reads as one object.
    */
-  --bc-heading: #e8c88f;
-  --bc-mod-tasks: #7fb4d8;
-  --bc-mod-board: #9db98a;
-  --bc-mod-documents: #c9a978;
-  --bc-mod-schedule: #b49ad4;
-  --bc-mod-contacts: #d99b93;
-  --bc-mod-activity: #8fb8b0;
+  --bc-heading: #7a5314;
+  --bc-mod-tasks: #3f7fa8;
+  --bc-mod-board: #5f8a48;
+  --bc-mod-documents: #a07a3a;
+  --bc-mod-schedule: #7c62a8;
+  --bc-mod-contacts: #b0675e;
+  --bc-mod-activity: #4d8479;
   /* Anything the board grows later, until it is given one of its own. */
-  --bc-mod-other: #8d9aa2;
-  --bc-border-subtle: rgb(225 229 232 / 0.1);
-  --bc-border-control: rgb(225 229 232 / 0.15);
-  --bc-border-popover: #475257;
-  --bc-hover: rgb(255 255 255 / 0.08);
-  --bc-focus-fill: rgb(255 255 255 / 0.1);
+  --bc-mod-other: #6d7a82;
+  --bc-border-subtle: rgb(40 44 48 / 0.10);
+  --bc-border-control: rgb(40 44 48 / 0.18);
+  --bc-border-popover: #b8b4ab;
+  --bc-hover: rgb(30 34 38 / 0.07);
+  --bc-focus-fill: rgb(30 34 38 / 0.09);
 
   /*
     Destructive and persisted reuse the studio's own tokens, as §4.1 requires
@@ -72,8 +72,8 @@
     in both schemes — reading the live variable would hand us a red tuned for
     a white page.
   */
-  --bc-danger: #f0857c;
-  --bc-success: #6fd3a3;
+  --bc-danger: #b3382e;
+  --bc-success: #2a7a54;
 
   /* --- Typography (§4.2) ------------------------------------------------ */
   /*
@@ -134,12 +134,16 @@
   */
   --bc-main-pad-bottom: 96px;
 
+  /* The canvas grid (bc/compose.css .bcpanes): dot colour and the distance between dots at 100% zoom. */
+  --bc-dot: rgb(40 44 48 / 0.26);
+  --bc-gstep: 24px;
+
   --bc-r-control: 8px;
   --bc-r-menu: 6px;
   --bc-r-sheet: 16px;
   --bc-r-row: 5px;
 
-  --bc-shadow-surface: 0 0 30px rgb(0 0 0 / 0.08);
+  --bc-shadow-surface: 0 1px 2px rgb(40 36 28 / 0.10), 0 10px 28px -12px rgb(40 36 28 / 0.28);
   --bc-shadow-menu: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 8px -2px rgb(0 0 0 / 0.1);
   --bc-shadow-sheet: 0 4px 8px -2px rgb(0 0 0 / 0.08), 0 16px 32px -8px rgb(0 0 0 / 0.1);
 
@@ -152,6 +156,70 @@
   --bc-t-out: 100ms;
   --bc-ease-out: cubic-bezier(0.2, 0, 0, 1);
   --bc-ease-in: cubic-bezier(0.4, 0, 1, 1);
+}
+
+
+/*
+  DARK SCHEME (8 October 2026). The stone-grey light palette above is the default; Dark is the person's explicit choice
+  in Settings > Appearance (data-scheme), or the system preference when they have chosen neither.
+*/
+:root[data-experience='basecamp'][data-scheme='dark'] {
+  --bc-canvas: #0b151b;
+  --bc-surface: #1b2930;
+  --bc-surface-selected: #2a4259;
+  --bc-text: #e1e5e8;
+  --bc-text-strong: #f2f4f5;
+  --bc-text-muted: #a8afb3;
+  --bc-accent: #6ab3fd;
+  --bc-accent-ink: #0e1d24;
+  --bc-section-accent: #fbbda8;
+  --bc-heading: #e8c88f;
+  --bc-mod-tasks: #7fb4d8;
+  --bc-mod-board: #9db98a;
+  --bc-mod-documents: #c9a978;
+  --bc-mod-schedule: #b49ad4;
+  --bc-mod-contacts: #d99b93;
+  --bc-mod-activity: #8fb8b0;
+  --bc-mod-other: #8d9aa2;
+  --bc-border-subtle: rgb(225 229 232 / 0.1);
+  --bc-border-control: rgb(225 229 232 / 0.15);
+  --bc-border-popover: #475257;
+  --bc-hover: rgb(255 255 255 / 0.08);
+  --bc-focus-fill: rgb(255 255 255 / 0.1);
+  --bc-danger: #f0857c;
+  --bc-success: #6fd3a3;
+  --bc-shadow-surface: 0 0 30px rgb(0 0 0 / 0.08);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-experience='basecamp']:not([data-scheme='light']):not([data-scheme='dark']) {
+    --bc-canvas: #0b151b;
+    --bc-surface: #1b2930;
+    --bc-surface-selected: #2a4259;
+    --bc-text: #e1e5e8;
+    --bc-text-strong: #f2f4f5;
+    --bc-text-muted: #a8afb3;
+    --bc-accent: #6ab3fd;
+    --bc-accent-ink: #0e1d24;
+    --bc-section-accent: #fbbda8;
+    --bc-heading: #e8c88f;
+    --bc-mod-tasks: #7fb4d8;
+    --bc-mod-board: #9db98a;
+    --bc-mod-documents: #c9a978;
+    --bc-mod-schedule: #b49ad4;
+    --bc-mod-contacts: #d99b93;
+    --bc-mod-activity: #8fb8b0;
+    --bc-mod-other: #8d9aa2;
+    --bc-border-subtle: rgb(225 229 232 / 0.1);
+    --bc-border-control: rgb(225 229 232 / 0.15);
+    --bc-border-popover: #475257;
+    --bc-hover: rgb(255 255 255 / 0.08);
+    --bc-focus-fill: rgb(255 255 255 / 0.1);
+    --bc-danger: #f0857c;
+    --bc-success: #6fd3a3;
+    --bc-shadow-surface: 0 0 30px rgb(0 0 0 / 0.08);
+    color-scheme: dark;
+  }
 }
 
 /*

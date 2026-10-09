@@ -214,20 +214,20 @@ await page.locator('[data-bc-zoom="out"]').click()
 await page.waitForTimeout(500)
 const w80 = by(await boxes(), 'documents').w
 check(
-  'zooming out scales the workspace (80%)',
-  Math.abs(w80 / w100 - 0.8) < 0.06,
+  'zooming out scales the workspace (two steps of 15%: 76%)',
+  Math.abs(w80 / w100 - 0.756) < 0.06,
   `${String(Math.round(w80))} / ${String(Math.round(w100))}`,
 )
 check(
-  'the zoom label reads 80%',
-  ((await page.locator('.bczoomval').textContent()) ?? '').trim() === '80%',
+  'the zoom label reads 76%',
+  ((await page.locator('.bczoomval').textContent()) ?? '').trim() === '76%',
 )
 await shot('05-zoom-80-1440')
 await page.waitForTimeout(400)
 await open()
 check(
   'zoom persists across a reload',
-  ((await page.locator('.bczoomval').textContent()) ?? '').trim() === '80%',
+  ((await page.locator('.bczoomval').textContent()) ?? '').trim() === '76%',
 )
 await page.locator('[data-bc-zoom="reset"]').click()
 await page.waitForTimeout(400)
@@ -249,11 +249,14 @@ check(
 )
 await page.locator('[data-bc-zoom="reset"]').click()
 await page.waitForTimeout(300)
-await page.mouse.move(stageBox.x + 300, stageBox.y + 200)
+/* 8 October 2026: the canvas is infinite, so a plain wheel over BARE canvas zooms; over content that scrolls it scrolls that. */
+const body = await page.locator('[data-mod="tasks"] .bcmodbody').boundingBox()
+if (body === null) throw new Error('no module body')
+await page.mouse.move(body.x + body.width / 2, body.y + body.height / 2)
 await page.mouse.wheel(0, 200)
 await page.waitForTimeout(300)
 check(
-  'a plain wheel never zooms',
+  'a plain wheel over scrollable content never zooms',
   ((await page.locator('.bczoomval').textContent()) ?? '').trim() === '100%',
 )
 
@@ -290,7 +293,11 @@ check(
   'a note takes typing directly',
   ((await page.locator('.bcpostittext').first().inputValue()) ?? '').includes('roofer'),
 )
-await page.locator('.bcdock [data-bc-newnote]').click()
+await page.locator('.bcpostit').first().hover()
+await page
+  .locator('.bcpostit [data-bc-note-add]')
+  .first()
+  .evaluate((el: { click: () => void }) => el.click())
 await page.waitForTimeout(400)
 check('a second note can be pulled out', (await page.locator('.bcpostit').count()) === 2)
 await page.keyboard.type('Second thought')
@@ -307,12 +314,18 @@ check(
   JSON.stringify(texts),
 )
 await shot('07-notes-1440')
-/* move a note */
+/* move a note (Fit first: on an infinite canvas a note can sit partly outside the window, where its strip is not under the pointer) */
+await page.locator('[data-bc-fit]').click()
+await page.waitForTimeout(500)
 const nb = await page.locator('.bcpostit').first().boundingBox()
 if (nb === null) throw new Error('no note')
 await drag({ x: nb.x + nb.width / 2, y: nb.y + 8 }, { x: nb.x + nb.width / 2 - 120, y: nb.y + 120 })
 const nb2 = await page.locator('.bcpostit').first().boundingBox()
-check('a note can be dragged by its top strip', nb2 !== null && Math.abs(nb2.x - (nb.x - 120)) < 14)
+check(
+  'a note can be dragged by its top strip',
+  nb2 !== null && Math.abs(nb2.x - (nb.x - 120)) < 14,
+  JSON.stringify([nb, nb2]),
+)
 /* remove one note */
 await page.locator('.bcpostit [data-bc-note-del]').nth(1).dispatchEvent('click')
 await page.waitForTimeout(400)
@@ -552,10 +565,16 @@ await page.waitForTimeout(500)
   await tabB.waitForSelector('.bcstage [data-mod]')
   await tabB.waitForTimeout(500)
   const nA = await noteCount()
-  await page.locator('[data-bc-newnote]').first().click()
+  await page
+    .locator('.bcpostit [data-bc-note-add]')
+    .first()
+    .evaluate((el: { click: () => void }) => el.click())
   await page.locator('.bcpostit .bcpostittext').last().fill('typed in tab A')
   await page.waitForTimeout(900)
-  await tabB.locator('[data-bc-newnote]').first().click()
+  await tabB
+    .locator('.bcpostit [data-bc-note-add]')
+    .first()
+    .evaluate((el: { click: () => void }) => el.click())
   await tabB.locator('.bcpostit .bcpostittext').last().fill('typed in tab B')
   await tabB.waitForTimeout(900)
   await page.reload({ waitUntil: 'domcontentloaded' })

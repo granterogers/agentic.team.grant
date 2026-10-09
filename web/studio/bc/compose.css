@@ -2604,7 +2604,6 @@
   font: 400 12px/1.4 var(--bc-font);
   font-variant-numeric: tabular-nums;
   color: var(--bc-text-muted);
-  opacity: 0.85;
 }
 [data-experience='basecamp'] .bceventwhat--press {
   appearance: none;
@@ -4220,4 +4219,195 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
 [data-experience='basecamp'] .bcpostitundobtn:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 2px; }
 @media (pointer: coarse) {
   [data-experience='basecamp'] .bcpostitundobtn { min-height: 44px; min-width: 44px; }
+}
+
+/* ======================================================================== *
+ * THE INFINITE CANVAS (8 October 2026)
+ *
+ * The board is a viewport. The stage inside it is a world that is panned and
+ * zoomed with one transform, and the dotted grid is painted on the board from
+ * the same three variables (--bc-gx, --bc-gy, --bc-gz), so dots and modules
+ * cannot drift apart. At the end of the sheet on purpose: it overrides the
+ * freeform block above it.
+ * ======================================================================== */
+[data-experience='basecamp'] .bcpanes {
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  --bc-dot: color-mix(in srgb, var(--bc-text-muted) 38%, transparent);
+  background-image: radial-gradient(circle at center, var(--bc-dot) 0 calc(0.9px + 0.25px * var(--bc-gz, 1)), transparent calc(1.6px + 0.25px * var(--bc-gz, 1)));
+  background-size: var(--bc-gstep) var(--bc-gstep);
+  background-position: var(--bc-gx, 0) var(--bc-gy, 0);
+}
+[data-experience='basecamp'] .bcpanes--panning { cursor: grabbing; }
+[data-experience='basecamp'] .bcpanes--grab * { cursor: grab; }
+[data-experience='basecamp'] .bcmod.bcmod--placed,
+[data-experience='basecamp'] .bcpostit { cursor: auto; touch-action: pan-x pan-y; }
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcpanes { overflow: visible; touch-action: auto; cursor: auto; background-image: none; }
+}
+
+/* Post-it plus (8 October 2026): the only way to make another note, on the note itself. */
+[data-experience='basecamp'] .bcpostitplus {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 18px;
+  margin-right: auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #5a4a00;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 140ms ease;
+}
+[data-experience='basecamp'] .bcpostit:hover .bcpostitplus,
+[data-experience='basecamp'] .bcpostit:focus-within .bcpostitplus { opacity: 0.85; }
+[data-experience='basecamp'] .bcpostitplus:hover { background: rgb(0 0 0 / 10%); opacity: 1; }
+[data-experience='basecamp'] .bcpostitplus:focus-visible { outline: 2px solid #5a4a00; opacity: 1; }
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcpostitplus { opacity: 0.85; width: 44px; height: 20px; }
+}
+[data-experience='basecamp'] .bcnoteempty { position: absolute; left: 12px; bottom: 12px; z-index: 3; }
+
+/* ======================================================================== *
+ * THE TEAM CHAT, COMPACT AND RESIZABLE (8 October 2026)
+ *
+ * The dock is the studio's own element; these rules are scoped to Team HQ and
+ * sit at the end of the sheet so they beat the base rules in studio.css. Width
+ * is --dock-w (bc/dockgrip.js), shared with the page padding beside it. Type is
+ * 13.5px on desktop and 16px on a touch screen (iOS zooms below 16px).
+ * ======================================================================== */
+[data-experience='basecamp'] .dock {
+  width: min(var(--dock-w, 340px), 100vw);
+  padding: 8px 10px 10px 12px;
+  gap: 6px;
+}
+[data-experience='basecamp'] body.docked { padding-right: min(var(--dock-w, 340px), 100vw); }
+[data-experience='basecamp'] .dockgrip {
+  position: absolute;
+  left: -5px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+}
+[data-experience='basecamp'] .dockgrip::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  width: 3px;
+  height: 36px;
+  margin-top: -18px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+  transition: background 120ms ease, height 120ms ease;
+}
+[data-experience='basecamp'] .dockgrip:hover::after,
+[data-experience='basecamp'] .dockgrip:focus-visible::after,
+[data-experience='basecamp'].bc-dockdragging .dockgrip::after { background: var(--accent); height: 56px; }
+[data-experience='basecamp'] .dockgrip:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.bc-dockdragging { cursor: col-resize; user-select: none; }
+[data-experience='basecamp'].bc-dockdragging .dock { transition: none; }
+
+[data-experience='basecamp'] .dockhead { padding-bottom: 6px; gap: 8px; align-items: center; }
+[data-experience='basecamp'] .dockhead > span { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+[data-experience='basecamp'] .dockhead b { font: 600 13.5px/1.3 var(--text); }
+[data-experience='basecamp'] .dockhead .t-meta { display: inline; margin: 0; font-size: 12px; }
+[data-experience='basecamp'] .dockhead .closeconv { width: 32px; height: 32px; }
+[data-experience='basecamp'] .dockhead .closeconv svg { width: 15px; height: 15px; }
+
+[data-experience='basecamp'] .dock .thread {
+  gap: 7px;
+  padding: 8px;
+  border-radius: 10px;
+  min-height: 0;
+}
+[data-experience='basecamp'] .dock .msg { gap: 7px; max-width: 100%; }
+[data-experience='basecamp'] .dock .msg.mine { max-width: 92%; gap: 3px; }
+[data-experience='basecamp'] .dock .msg p,
+[data-experience='basecamp'] .dock .msglist {
+  font: 400 13.5px/1.45 var(--text);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+[data-experience='basecamp'] .dock .msg p + p { margin-top: .45em; }
+[data-experience='basecamp'] .dock .msg.mine p { padding: 6px 10px; border-radius: 12px 12px 3px 12px; }
+[data-experience='basecamp'] .dock .msg.theirs .mbody { padding: 6px 10px; gap: 2px; border-radius: 12px 12px 12px 3px; min-width: 0; flex: 1 1 auto; }
+[data-experience='basecamp'] .dock .msg.theirs > .face { width: 24px; height: 24px; font-size: 10px; }
+[data-experience='basecamp'] .dock .msg .t-label { font-size: 10.5px; letter-spacing: .04em; line-height: 1.2; }
+[data-experience='basecamp'] .dock .waitrow .t-meta,
+[data-experience='basecamp'] .dock .t-meta { font-size: 12px; }
+[data-experience='basecamp'] .dock .dockblank { padding: 14px 10px; gap: 6px; }
+[data-experience='basecamp'] .dock .dockblank svg { width: 20px; height: 20px; }
+[data-experience='basecamp'] .dock .dockeg { font-size: 12.5px; line-height: 1.5; }
+
+[data-experience='basecamp'] .dock .composer { padding: 5px 6px; border-radius: 10px; gap: 4px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+[data-experience='basecamp'] .dock .crow { gap: 6px; align-items: flex-end; }
+[data-experience='basecamp'] .dock .crow textarea {
+  min-height: 34px;
+  max-height: 150px;
+  padding: 6px 4px;
+  font: 400 14px/1.4 var(--text);
+  overflow-y: auto;
+}
+[data-experience='basecamp'] .dock .crow .btn.primary { min-height: 34px; padding: 0 14px; font-size: 13.5px; }
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .dock .crow textarea { font-size: 16px; }
+  [data-experience='basecamp'] .dock .crow .btn.primary { min-height: 44px; }
+  [data-experience='basecamp'] .dockgrip { width: 18px; left: -9px; }
+}
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .dock { width: 100vw; }
+  [data-experience='basecamp'] .dockgrip { display: none; }
+  [data-experience='basecamp'] body.docked { padding-right: 0; }
+}
+
+/* Live dictation button (8 October 2026): a microphone beside Send that turns red while it listens. */
+[data-experience='basecamp'] .dock .bcdictate {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--bc-border-control);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--bc-text-muted);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .dock .bcdictate:hover:not(:disabled) { color: var(--bc-text-strong); background: var(--bc-hover); }
+[data-experience='basecamp'] .dock .bcdictate:disabled { opacity: .45; cursor: not-allowed; }
+[data-experience='basecamp'] .dock .bcdictate.on {
+  color: var(--bc-danger);
+  border-color: color-mix(in srgb, var(--bc-danger) 60%, transparent);
+  background: color-mix(in srgb, var(--bc-danger) 12%, transparent);
+}
+[data-experience='basecamp'] .dock .bcdictatedot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bc-danger);
+  opacity: 0;
+}
+[data-experience='basecamp'] .dock .bcdictate.on .bcdictatedot { opacity: 1; animation: bc-dictate-pulse 1.1s ease-in-out infinite; }
+@keyframes bc-dictate-pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .dock .bcdictate.on .bcdictatedot { animation: none; }
+}
+[data-experience='basecamp'] .dock .dockdic { margin: 0; min-height: 0; padding: 0 4px; font-size: 12px; line-height: 1.35; color: var(--ink-2); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .dock .dockdic:empty { display: none; }
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .dock .bcdictate { width: 44px; height: 44px; }
 }

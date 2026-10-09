@@ -446,7 +446,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **Production has 770 applied** (the Sample's `0897_a_visitor…` to `0905_…` are the latest; 0892 waits for the platform to recover). The 0897 to 0905 Sample files are applied and immutable; `main`'s own UX migrations (`0906_project_calendar_events`, `0907_documents_…`, 0920 to 1022) are committed and NOT applied to production (the first two were numbered 0897 and 0900 before the Sample took those numbers; see the numbering-collision trap below and `docs/multi-user/PUBLIC-SAMPLE.md`). Do not apply them without a separate decision.
+`npm run migrate` applies plain SQL from `migrations/`. **Production's ledger holds 802 entries (checked 9 October 2026).** `main`'s own UX migrations 0906 to 1022 were applied on 6 October; the efficiency workstream then applied its own `1023_the_health_reading_asks_the_cheap_question_first` and `1027_the_pulse_reads_each_table_once` (7 October; those files live on `claude/efficiency-deep-optimization`, not on `main`); and this release applied `1040_a_layout_save_can_say_which_revision_it_was_made_from` and `1041_a_project_background_picture_is_an_upload_the_office_can_authorise` (#442, #445, ADR-0070). Applied files are immutable. **Other branches use 1023 to 1035**: take a free number (`1040` upward) and read `app.schema_migrations` before choosing one. Never `npm run migrate` from a branch that is behind production's ledger; use `npm run migrate:one -- <file>`.
 
 ## Testing signed in, without Grant's office
 
@@ -4748,6 +4748,27 @@ Each of these cost real time. They are here so they cost it once.
   is that the bytes can be put back (`scripts/forensics/capture-functions.ts`, `scripts/deploy/restore-function.ts`), and what compares with Git is the set of NAMES the code
   uses (gateway sections, RPCs, handler kinds, environment variables). And a "found a secret" scan built on the log redactor's prose heuristics
   (`authorization`, `long-opaque`) fired on comments saying "bearer token": scan source for credential SHAPES only.
+
+- **Team HQ is now an infinite canvas (ADR-0068, 8 October 2026, #439).** The 4 October "not an infinite canvas" rule is superseded. Lessons:
+  a board that clips (`overflow: hidden`) clips every popover appended inside it, so popovers are `position: fixed` on the body; a sticky bar
+  must be opaque or the page scrolls under it; a redraw inside `wire()` makes the outer pass bind handlers to the NEW nodes a second time
+  (the dock toggle opened and shut in one press on a phone), so anything that can render during wiring defers with `queueMicrotask`;
+  deleting a control can delete the feature that shared its dialog (Jump To and the Cmd/Ctrl+K palette were one file); and 48 harness scripts
+  navigated from the portfolio, so a removed screen is a harness migration, checked against the baseline commit in a worktree before
+  calling any red a regression. Live dictation is `web/studio/dictation.js`, tested with a fake recogniser: it does not prove a real microphone.
+  **Second pass (8 October, #439):** a restored zoom other than 100% made the calendar measure itself at the wrong scale on the first
+  paint and redraw about 45 times a second at rest (`--bc-zoom` must be in the FIRST paint; `canvas-extremes` counts mutations at
+  rest, which no functional check does); a Post-it written on one device was erased by another device's next save because the stored
+  arrangement is ONE last-writer-wins row, so notes now merge note by note (read before write, read back after, a check once a
+  minute, `gone` tombstones) and strict compare-and-swap waits on #442; merging two copies that carry the same instant needs a
+  deterministic tie-break on EVERY device or they swap forever, but a save on this device must prefer its own newest copy; a sweep
+  helper that clears `bc.layout.` after the key became `bc.stage.` silently stopped isolating `basecamp-controls` presses; a
+  simulated recogniser that answers at once hid that the real engine in an offline browser answers NOTHING (start watchdog); a
+  `title` is not a disclosure on a phone.
+
+- **A number you chose is not free because your branch does not use it, and a page you were told is live may be another branch's.** The #442/#445 migrations were written as 1023 and 1024; production already held a different 1023 and a 1027 from another workstream, and four other branches use 1023 to 1035. Found only by reading `app.schema_migrations` before applying; the files were renumbered (1040, 1041) while still pending. The same release found production's PAGE was the efficiency branch's `app.js`, not `main`'s: deploying a main-based page would have silently rolled that work back. Before any deploy, compare the live bytes of the files that could differ (`curl` and `md5sum` against `origin/main` and against the other branches that deploy) and the live function bundle (`scripts/forensics/capture-functions.ts`); carry the other workstream's diff in, never overwrite it.
+- **A proof that calls the SQL function directly cannot see the gateway in front of it.** `layout-cas.ts` proved an empty-list compare-and-swap reset on the replica; through the deployed gateway it was a 400, because the generic required-argument check treats `[]` as missing. Only the production acceptance run (`npm run sample:release-acceptance`) found it. Prove a write path through the layer a browser calls.
+- **A pull that starts on every redraw downloads on every redraw.** The board is wired again on each render; the custom-background pull asked the office (and fetched the picture) each time until it was made one-at-a-time with a one-minute negative cache. A harness that waits a fixed pause for an asynchronous cache fill reports a defect that is only its own timing: wait for the cache to hold it.
 
 ---
 

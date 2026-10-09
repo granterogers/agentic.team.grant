@@ -63,6 +63,8 @@
     "scripts/sample/activity.ts": "sample",
     "scripts/sample/chat-status.ts": "sample",
     "scripts/sample/product.ts": "sample",
+    "scripts/sample/release-acceptance.ts": "sample",
+    "scripts/sample/release-browser.ts": "sample",
     "scripts/p6/account-lifecycle.ts": "sample",
     "scripts/p6/account-ui.ts": "sample",
     "scripts/p6/entry-ui.ts": "local",

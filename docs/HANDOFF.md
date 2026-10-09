@@ -1,3 +1,34 @@
+> ## 2026-10-09 - TEAM HQ OVERHAUL RELEASED TO PRODUCTION, #442 AND #445 DEPLOYED AND VERIFIED (branch `claude/confident-cori-ql21nl`, merged to `main`)
+>
+> On Grant's explicit authorisation: migrations **1040** (revisioned layout saves; written as 1023) and **1041** (a project background is an authorisable upload; written as 1024) applied with `migrate:one`; **hq-api v899**;
+> the redesigned Team HQ page at https://ai-team-hq.vercel.app (`dpl_6zXt…`; previous `dpl_Dj7erfTXZYqDJhEgxQ9eTBzsnc8H`). Record, reconciliation, evidence and rollback: **`docs/ux/deploy-442-445.md`**; decisions ADR-0070.
+> Production acceptance with the Sample Person in two independent sessions plus a public-Sample visitor: `sample:release-acceptance` 35/35, `sample:release-browser` 15/15 on the deployed page, the public Sample 38/38 with zero writes.
+> **Reconciliation that mattered:** production already held another workstream's `1023` and `1027` (efficiency; not on `main`), so mine were renumbered; and production's page was that branch's `app.js`/`account.js`, whose diff was carried into this branch rather
+> than overwritten. Two defects found only by production acceptance and fixed: the gateway refused an empty-list compare-and-swap reset (400); every redraw re-ran the custom-picture pull. Intermittent loads: 502 `text/plain` with no `x-vercel-id` (the build sandbox's
+> proxy), zero page errors; the page now says when a script does not arrive and offers Reload (`verify:boot-recovery`). Not verified (needs a person and a device): real-microphone dictation, touch pinch, a second PHYSICAL device
+> (`docs/ux/iphone-acceptance-2026-10-09.md`). Known and not mine: `npm run lint` has one format error in `scripts/isolated/p3-cases/20-projects.ts` and `tests/sessions/weather-is-not-a-failure.test.ts` fails to load, both identical on unmodified `main`.
+>
+> ## 2026-10-08/09 - TEAM HQ INFINITE-CANVAS OVERHAUL (#439, branch `claude/confident-cori-ql21nl`, NOT merged, NOT deployed to production; isolated preview live)
+>
+> Hamburger menu instead of Home/Jump To, an infinite pan/zoom canvas with a dotted grid, per-project arrangement saved per person, Post-it plus, a
+> compact resizable chat dock, live dictation, light stone theme (dark by choice), simplified Document Style and Project Settings, a content-led default
+> layout. ADR-0068; ledger, evidence and next actions in `docs/ux/team-hq-overhaul-log-2026-10-08.md`. Real defects fixed on the way: notes lost between
+> two devices, an endless render loop at a restored non-100% zoom, the tablet dock, text selected while panning. Not verified (needs a person and a
+> device): dictation with a real microphone in Chrome and Safari (`docs/ux/dictation-manual-test-2026-10-08.md`), touch pinch, and the live public Sample.
+> New suites: `verify:canvas`, `verify:canvas-extremes`, `verify:chat-dock`, `verify:sample-look`, `verify:canvas-devices` (two real browsers),
+> `verify:canvas-session`, `verify:dictation-fallback`, `tests/studio/canvas-sync.test.ts` (53 adversarial two/three-device cases), `scripts/isolated/layout-isolation.ts`.
+> Third session: notes from two devices now merge without loss; the race that remains is #442 (strict compare-and-swap, a backend change, OPEN, not part of this branch). **An isolated preview
+> exists: https://team-hq-ux-review.vercel.app** (Vercel project `team-hq-ux-review` only, built from the branch plus the generated public `config.js`; the deployed commit is printed by `deploy:ux-review` and recorded in the log).
+> **Production code, database, RLS and policy are unchanged.** One production CONFIGURATION change was made on Grant's explicit instruction (9 October): the origin `https://team-hq-ux-review.vercel.app` was added to the `signin`
+> function's allow-list (`npm run deploy:signin-origin`, one secret, rollback: `-- --rollback`, details and 7/7 probes in the log's fourth session). `voice-token` was not changed. **A person can now open the Sample from the preview**
+> ("Explore the Sample Office") and use the redesigned workspace; the real-gateway suite is `npm run verify:preview-sample` (38/38 on its last run, every gateway write aborted and counted: zero), the stand-in suite is
+> `npm run verify:preview-app` (41 passed, 0 failed, 3 n/a). `verify:preview-live` (signed-out page only) is not workspace evidence (the earlier "24/24" was a weaker rewritten set; reconciled in the log).
+> **Canvas Background Library (#445, ADR-0069, `docs/ux/canvas-backgrounds.md`):** pick a material per project inside How this project looks (8 supplied textures imported, plain colours, upload your own picture), preview before Apply,
+> stored as a small reference in the workspace document. A custom picture is kept in the browser only (no per-person image store exists on the gateway; backend dependency recorded on #445). `npm run verify:canvas-background` (65 passed, 0 failed, 2 n/a).
+> **For Grant's visual acceptance:** gallery at https://team-hq-ux-review.vercel.app/review/ (39 photographs of the deployed preview on the real Sample data, every material light and dark, zoom levels, picker, tablet, phone); the textures were flattened
+> so they do not read as stripes when zoomed out. Cross-device custom pictures are PLANNED only (`docs/ux/canvas-background-storage-plan.md`, #445; browser-only today). iPhone acceptance sequence: `docs/ux/iphone-acceptance-2026-10-09.md` (NOT yet run on a device).
+> Not merged to main, not deployed to production. Still open: #442; real-device dictation and touch; custom pictures on other devices (backend). The verbatim original specification is `docs/spec/team-hq-ux-overhaul-2026-10-08-verbatim.md`.
+>
 > ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
 >
 > The Team HQ UX work was already in `main`; the audit found the old UX branch held one documentation commit and nothing else, so this branch is a

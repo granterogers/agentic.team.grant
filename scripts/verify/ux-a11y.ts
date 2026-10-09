@@ -17,8 +17,10 @@
 import '../../src/safety/arm.ts'
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
+import { seedAppearance } from './seed-appearance.ts'
 import { serveStudio } from './serve-studio.ts'
 
+const SCHEME = process.env.SCHEME === 'dark' ? 'dark' : 'light'
 const inPage = (body: string): string => `(() => { ${body} })()`
 const PORT = 4687
 const server = await serveStudio(PORT)
@@ -58,12 +60,16 @@ const open = async (
     viewport: { width, height },
     ...(touch ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : {}),
   })
+  /* The scheme is asked for the way a person asks: the stored preference (SCHEME=dark for the dark leg). */
+  await ctx.addInitScript(seedAppearance(SCHEME))
   const page = await ctx.newPage()
   page.on('pageerror', (e) => {
     thrown.push(e.message)
   })
   await page.goto(url('/'), { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(500)
+  const applied = await page.evaluate(`document.documentElement.getAttribute('data-scheme')`)
+  check(`the audit is standing in the ${SCHEME} scheme`, applied === SCHEME, String(applied))
   const slug = (await page.evaluate(
     inPage(
       `const el = document.querySelector('[data-bc-go^="/p/"]'); return el ? el.dataset.bcGo : ''`,

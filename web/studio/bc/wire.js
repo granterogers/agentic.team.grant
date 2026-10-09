@@ -44,6 +44,7 @@ import * as contacts from './contacts.js'
 import * as todos from './todos.js'
 import * as docorder from './docorder.js'
 import * as jump from './jump.js'
+import * as menu from './menu.js'
 import * as account from './account.js'
 
 let ctx = null
@@ -59,9 +60,20 @@ export const mount = (c) => {
     The document survives every render, and the handler asks the experience
     flag rather than assuming.
   */
+  document.addEventListener('pointerdown', (e) => {
+    if (ctx.state.experience !== 'basecamp' || !menu.isOpen()) return
+    if (e.target instanceof Element && e.target.closest('.bcmenupanel, [data-bc-menu], [data-bc-menu-open]')) return
+    menu.setOpen(false)
+    c.render()
+  })
   document.addEventListener('keydown', (e) => {
     if (ctx.state.experience !== 'basecamp') return
     jump.onKey(e)
+    if (e.key === 'Escape' && menu.isOpen()) {
+      menu.setOpen(false)
+      c.render()
+      document.querySelector('[data-bc-menu]')?.focus()
+    }
   })
 }
 
@@ -483,29 +495,9 @@ const voiceNote = (getScope, projectOf = () => ctx.state.project) => {
 const pageNote = voiceNote(() => document.querySelector('#root [data-bc-sayform]'))
 
 /*
-  THE DOCK GETS THE VOICE NOTE TOO. "Chat with Team" opens the dock, so for
-  most people the dock IS Team Chat - and it had no microphone at all; the
-  voice note lived only on the separate Chat page. The dock is the studio's
-  (app.js paintDock), repainted on every render, so the listener sits on the
-  persistent #dock element and is attached once, and paintDock carries the
-  live microphone and panel across each repaint.
+  The dock's microphone is live dictation now (bc/dockdictate.js, 8 October 2026): the record-upload-transcribe voice note
+  this file wired onto the dock was replaced by it. The Chat page keeps its own voice note (pageNote above).
 */
-const dockNote = voiceNote(
-  () => document.getElementById('dock'),
-  /* The dock files a message under the project it SHOWS - the open one, or
-     Unnamed on the portfolio (#149) - and a voice note must go to the same
-     thread as a typed line, so it reads the dock's own choice. */
-  () => document.querySelector('#dock [data-dockform]')?.dataset.bcNoteproject || ctx.state.project,
-)
-export const wireDockNote = (dock) => {
-  if (dock !== null && dock !== undefined && dock.dataset.bcNoteWired !== '1') {
-    dock.dataset.bcNoteWired = '1'
-    dock.addEventListener('click', (e) => {
-      void dockNote.press(e)
-    })
-  }
-  dockNote.resync()
-}
 
 /*
   Whether the reader is at the end of the thread is REMEMBERED on every
@@ -715,9 +707,35 @@ export const wire = (root) => {
     })
   }
 
-  for (const b of root.querySelectorAll('[data-bc-jump]')) {
+  /* The project menu (hamburger). Its state is on bc/menu.js so a redraw does not lose it. */
+  for (const b of root.querySelectorAll('[data-bc-menu], [data-bc-menu-open]')) {
     b.addEventListener('click', () => {
-      jump.show(b)
+      const wasOpen = menu.isOpen()
+      menu.setOpen(b.hasAttribute('data-bc-menu-open') ? true : !wasOpen)
+      if (b.hasAttribute('data-bc-menu-open') && !canWrite()) menu.setMaking(false)
+      ctx.render()
+      if (menu.isOpen()) root.ownerDocument.querySelector('.bcmenuitem')?.focus()
+      else root.ownerDocument.querySelector('[data-bc-menu]')?.focus()
+    })
+  }
+  /* The menu is a role=menu, so the arrow keys, Home and End move between its entries. */
+  for (const panel of root.querySelectorAll('.bcmenupanel')) {
+    panel.addEventListener('keydown', (e) => {
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
+      const items = [...panel.querySelectorAll('.bcmenuitem:not(:disabled)')]
+      if (items.length === 0) return
+      const at = items.indexOf(root.ownerDocument.activeElement)
+      const next =
+        e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+      e.preventDefault()
+      items[next].focus()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-menu-new]')) {
+    b.addEventListener('click', () => {
+      menu.setMaking(true)
+      ctx.render()
+      root.ownerDocument.querySelector('.bcmenupanel input[name=name]')?.focus()
     })
   }
 

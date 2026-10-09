@@ -54,12 +54,20 @@
 */
 
 /** Every module the home can hold. */
+const clampZoom = (z) => Math.min(ZOOM.max, Math.max(ZOOM.min, z))
+const cleanPan = (p) => ({
+  x: Number.isFinite(p?.x) ? Math.max(-REACH, Math.min(REACH, p.x)) : 0,
+  y: Number.isFinite(p?.y) ? Math.max(-REACH, Math.min(REACH, p.y)) : 0,
+})
 export const ALL = ['tasks', 'board', 'documents', 'schedule', 'contacts', 'activity']
 
 export const MIN = { w: 240, h: 150 }
 export const POSTIT_MIN = { w: 130, h: 120 }
 export const POSTIT_DEFAULT = { w: 210, h: 190 }
-export const ZOOM = { min: 0.5, max: 1.5, step: 0.1 }
+export const ZOOM = { min: 0.2, max: 2.5, step: 0.1 }
+/** Furthest a module may sit from the origin, in logical pixels: far past anything reachable, so nothing is ever "at the edge". */
+export const REACH = 100000
+export const MAX_SIZE = 6000
 export const GAP = 12
 
 /** The curated tints. `null` is "none". The values are hues, mixed in by CSS. */
@@ -101,14 +109,22 @@ export const tintHue = (t) => {
   module. Anybody who does not want a note can remove it and drag the modules
   wherever they like; the presets below use the whole width.
 */
-const COLW = 0.8 / 3
+/*
+  Proportions follow what each module holds (8 October 2026, brief section 12). The top row is the work itself: to-dos and the
+  card table need height and the documents need room for thumbnails, so it takes the larger share of the height. The
+  bottom row is glanceable (schedule, contacts, activity). Columns line up so the board reads as one arrangement.
+*/
+const C1 = 0.25
+const C2 = 0.29
+const C3 = 0.26
+const R1 = 0.58
 const THIRDS = {
-  tasks: [0, 0, COLW, 0.5],
-  board: [COLW, 0, COLW, 0.5],
-  documents: [2 * COLW, 0, COLW, 0.5],
-  schedule: [0, 0.5, COLW, 0.5],
-  contacts: [COLW, 0.5, COLW, 0.5],
-  activity: [2 * COLW, 0.5, COLW, 0.5],
+  tasks: [0, 0, C1, R1],
+  board: [C1, 0, C2, R1],
+  documents: [C1 + C2, 0, C3, R1],
+  schedule: [0, R1, C1, 1 - R1],
+  contacts: [C1, R1, C2, 1 - R1],
+  activity: [C1 + C2, R1, C3, 1 - R1],
 }
 
 export const PRESETS = {
@@ -154,11 +170,62 @@ const minOf = (id) => (isPostit(id) ? POSTIT_MIN : MIN)
  */
 export const clampRect = (m, st) => {
   const min = minOf(m.id)
-  const w = Math.max(min.w, Math.min(Math.max(min.w, st.w), Math.round(m.w ?? min.w)))
-  const h = Math.max(min.h, Math.min(Math.max(min.h, st.h), Math.round(m.h ?? min.h)))
-  const x = Math.max(0, Math.min(Math.max(0, st.w - w), Math.round(m.x ?? 0)))
-  const y = Math.max(0, Math.min(Math.max(0, st.h - h), Math.round(m.y ?? 0)))
+  const num = (v, d) => (Number.isFinite(v) ? Math.round(v) : d)
+  if (st !== undefined) {
+    /* Given a stage, keep the rectangle inside it: how defaults, presets and tidying are laid out. */
+    const w = Math.max(min.w, Math.min(Math.max(min.w, st.w), num(m.w, min.w)))
+    const h = Math.max(min.h, Math.min(Math.max(min.h, st.h), num(m.h, min.h)))
+    return {
+      ...m,
+      x: Math.max(0, Math.min(Math.max(0, st.w - w), num(m.x, 0))),
+      y: Math.max(0, Math.min(Math.max(0, st.h - h), num(m.y, 0))),
+      w,
+      h,
+    }
+  }
+  /* With none, the canvas is infinite: only sizes and absurd distances are bounded. */
+  const w = Math.max(min.w, Math.min(MAX_SIZE, num(m.w, min.w)))
+  const h = Math.max(min.h, Math.min(MAX_SIZE, num(m.h, min.h)))
+  const x = Math.max(-REACH, Math.min(REACH, num(m.x, 0)))
+  const y = Math.max(-REACH, Math.min(REACH, num(m.y, 0)))
   return { ...m, x, y, w, h }
+}
+
+/* ---------------------------------------------------------- the view ---
+  The canvas is infinite: a view is { zoom, x, y }, where (x, y) is where the
+  world origin sits on screen, in screen pixels, relative to the board's own
+  top-left. A world point wx maps to screen wx * zoom + x. All of the
+  arithmetic lives here, as pure functions, so it can be tested without a
+  browser and so a pan, a zoom and a drag can never disagree about it.
+*/
+export const toWorld = (v, sx, sy) => ({ x: (sx - v.x) / v.zoom, y: (sy - v.y) / v.zoom })
+export const toScreen = (v, wx, wy) => ({ x: wx * v.zoom + v.x, y: wy * v.zoom + v.y })
+/** Zoom by a factor keeping the world point under (sx, sy) exactly where it is. */
+export const zoomAt = (v, factor, sx, sy) => {
+  const zoom = clampZoom(v.zoom * factor)
+  const k = zoom / v.zoom
+  return { zoom, x: sx - (sx - v.x) * k, y: sy - (sy - v.y) * k }
+}
+/**
+ * The distance between grid dots on screen. The grid doubles its spacing each time the dots would otherwise crowd closer
+ * than 14px, so zoomed far out it stays a calm lattice instead of a grey haze. Every spacing is a multiple of the base one,
+ * so the dots that remain are a subset of the dots that went: nothing seems to slide as you zoom.
+ */
+export const gridStep = (zoom, base = 24, min = 14) => {
+  let step = base * zoom
+  while (step < min) step *= 2
+  return step
+}
+export const panBy = (v, dx, dy) => ({ ...v, x: v.x + dx, y: v.y + dy })
+/** The view that brings every rectangle into a box of w by h with a margin, never magnifying past 1. */
+export const fitView = (rects, w, h, pad = 40) => {
+  if (rects.length === 0) return { zoom: 1, x: 0, y: 0 }
+  const x0 = Math.min(...rects.map((r) => r.x))
+  const y0 = Math.min(...rects.map((r) => r.y))
+  const x1 = Math.max(...rects.map((r) => r.x + r.w))
+  const y1 = Math.max(...rects.map((r) => r.y + r.h))
+  const zoom = clampZoom(Math.min(1, (w - pad * 2) / (x1 - x0), (h - pad * 2) / (y1 - y0)))
+  return { zoom, x: (w - (x1 - x0) * zoom) / 2 - x0 * zoom, y: (h - (y1 - y0) * zoom) / 2 - y0 * zoom }
 }
 
 const crossing = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
@@ -372,8 +439,50 @@ export const tidy = (mods, st) => {
 const KEY = (slug) => `bc.stage.${slug}`
 const slugOf = (s) => (typeof s === 'string' ? s : (s?.slug ?? ''))
 
-const emptyDoc = () => ({ mods: null, zoom: 1, layouts: {}, postits: [], gone: {}, seeded: false })
-const clampZoom = (z) => Math.min(ZOOM.max, Math.max(ZOOM.min, z))
+const emptyDoc = () => ({
+  mods: null,
+  zoom: 1,
+  pan: { x: 0, y: 0 },
+  layouts: {},
+  postits: [],
+  gone: {},
+  seeded: false,
+  bg: null,
+})
+
+/*
+  The canvas background a project chose (#445): a small REFERENCE, never image bytes. `id` names a library entry or 'custom'
+  (a picture held in this browser) or 'default' (the microcement the page always had, chosen on purpose); `at` is when it was
+  chosen, so two devices that disagree settle on the newer choice exactly as a Post-it does. A project that never chose has
+  `bg: null`, which draws the default and costs nothing.
+*/
+export const BG_MODES = ['tile', 'cover', 'fit', 'center']
+const BG_ID = /^[a-z0-9][a-z0-9-]{0,47}$/
+const num = (v, lo, hi, dflt) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt)
+export const cleanBg = (raw) => {
+  if (raw === null || typeof raw !== 'object') return null
+  const id = typeof raw.id === 'string' ? raw.id : ''
+  if (!BG_ID.test(id)) return null
+  const out = {
+    id,
+    mode: BG_MODES.includes(raw.mode) ? raw.mode : 'tile',
+    scale: Math.round(num(raw.scale, 0.5, 2, 1) * 100) / 100,
+    intensity: Math.round(num(raw.intensity, 0.2, 1, 1) * 100) / 100,
+    tint: Math.round(num(raw.tint, 0, 0.6, 0) * 100) / 100,
+    at: Number.isFinite(raw.at) ? raw.at : 0,
+  }
+  /* The office's revision of a custom picture (#445): a short word, never bytes or a link. Older pages drop it harmlessly. */
+  if (id === 'custom' && typeof raw.rev === 'string' && /^[0-9a-z]{1,16}$/.test(raw.rev)) out.rev = raw.rev
+  return out
+}
+/** The newer of two choices; on the same instant `mineWins` decides, and otherwise the same copy wins on every device. */
+export const mergeBg = (a, b, mineWins = false) => {
+  if (a === null || a === undefined) return b ?? null
+  if (b === null || b === undefined) return a
+  if (a.at !== b.at) return a.at > b.at ? a : b
+  if (mineWins) return a
+  return JSON.stringify(a) <= JSON.stringify(b) ? a : b
+}
 
 let stage = { w: 1200, h: 620 }
 let measured = false
@@ -421,6 +530,7 @@ export const normalise = (raw) => {
       .map(cleanMod)
   }
   if (Number.isFinite(raw.zoom)) d.zoom = clampZoom(raw.zoom)
+  d.pan = cleanPan(raw.pan)
   if (raw.layouts !== null && typeof raw.layouts === 'object') {
     for (const [name, l] of Object.entries(raw.layouts)) {
       if (l === null || typeof l !== 'object' || !Array.isArray(l.mods)) continue
@@ -441,6 +551,7 @@ export const normalise = (raw) => {
     }
   }
   d.seeded = raw.seeded === true
+  d.bg = cleanBg(raw.bg)
   return d
 }
 
@@ -451,13 +562,23 @@ export const normalise = (raw) => {
  * notes the other one wrote. A note is kept when it is the newest copy of itself and nothing newer removed it. `gone`
  * records removals (id -> when) so that a stale copy cannot bring a removed note back.
  */
-export const mergeNotes = (a, b) => {
+export const mergeNotes = (a, b, mineWins = false) => {
   const gone = { ...a.gone }
   for (const [id, at] of Object.entries(b.gone ?? {})) gone[id] = Math.max(gone[id] ?? 0, at)
   const byId = new Map()
   for (const n of [...a.postits, ...b.postits]) {
     const have = byId.get(n.id)
-    if (have === undefined || n.at > have.at) byId.set(n.id, n)
+    /*
+      On the same instant two DEVICES must pick the same copy, or they would swap forever: compare the text of the copies.
+      A save on this device (`mineWins`) is different: its own newest copy beats the stored older one, because a move
+      and an edit can land in the same millisecond.
+    */
+    if (
+      have === undefined ||
+      n.at > have.at ||
+      (n.at === have.at && !mineWins && JSON.stringify(n) > JSON.stringify(have))
+    )
+      byId.set(n.id, n)
   }
   const postits = [...byId.values()].filter((n) => !((gone[n.id] ?? -1) >= n.at && n.id in gone))
   const kept = Object.fromEntries(
@@ -476,10 +597,12 @@ export const toPanels = (d) => [
     v: 2,
     hasMods: d.mods !== null,
     zoom: d.zoom,
+    pan: d.pan,
     layouts: d.layouts,
     postits: d.postits,
     gone: d.gone,
     seeded: d.seeded,
+    bg: d.bg,
   },
 ]
 
@@ -491,10 +614,12 @@ export const fromPanels = (panels) => {
   return normalise({
     mods: meta.hasMods === true ? panels.filter((m) => m && m.id !== '__workspace') : null,
     zoom: meta.zoom,
+    pan: meta.pan,
     layouts: meta.layouts,
     postits: meta.postits,
     gone: meta.gone,
     seeded: meta.seeded,
+    bg: meta.bg,
   })
 }
 
@@ -502,10 +627,20 @@ export const fromPanels = (panels) => {
 const isBlank = (d) =>
   d.mods === null &&
   d.zoom === 1 &&
+  d.pan.x === 0 &&
+  d.pan.y === 0 &&
   d.postits.length === 0 &&
   Object.keys(d.gone).length === 0 &&
   Object.keys(d.layouts).length === 0 &&
+  d.bg === null &&
   d.seeded === false
+
+/* Where the browser keeps the document. Replaceable so a test can run two "devices" side by side in one process. */
+let storage = null
+const ls = () => storage ?? globalThis.localStorage
+export const useStorage = (s) => {
+  storage = s
+}
 
 const cache = new Map()
 const mine = new Set()
@@ -516,7 +651,7 @@ export const doc = (slug) => {
   if (cache.has(s)) return cache.get(s)
   let d = emptyDoc()
   try {
-    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
+    const raw = ls()?.getItem(KEY(s)) ?? ''
     if (raw !== '') d = normalise(JSON.parse(raw))
   } catch {
     d = emptyDoc()
@@ -527,13 +662,147 @@ export const doc = (slug) => {
 
 let keep = null
 let forget = null
+let look = null
+let changed = null
 let timer = null
+let readRev = null
+let keepIf = null
+let casOff = false
+let skew = 0
 const pending = new Map()
+const revs = new Map()
+const backoff = new Map()
 
-/** Tell this module how to put the document in the office. */
-export const persistence = ({ save: saveAway, reset: resetAway } = {}) => {
+/**
+ * The time a note is stamped with: this device's clock moved by how far it was from the office's last time the office said its
+ * own (migration 1040 returns `now`). A device with a wrong clock would otherwise stamp every edit in the past or the future
+ * and outrank or lose to every honest one. Zero until the office has answered, and ignored when the difference is implausible.
+ */
+let lastStamp = 0
+/* Never goes backwards on this device, even when learning the office's clock moves the skew down: a later edit of a note must be newer than the earlier one. */
+export const stamp = () => {
+  const t = Date.now() + skew
+  lastStamp = t > lastStamp ? t : lastStamp + 1
+  return lastStamp
+}
+const noteClock = (serverNow) => {
+  const n = Number(serverNow)
+  if (!Number.isFinite(n) || n < 1.5e12) return
+  const d = n - Date.now()
+  skew = Math.abs(d) < 5 * 365 * 24 * 3600 * 1000 ? d : 0
+}
+
+/**
+ * Tell this module how to put the document in the office.
+ *
+ * `fetch(slug)` reads the office's copy of one project's arrangement (the array `save` stores, or null) and `changed(slug)` is
+ * told when notes from another device were folded in, so the page can draw them. Both are optional: without them a save is
+ * not checked afterwards and nothing is announced.
+ */
+export const persistence = ({
+  save: saveAway,
+  reset: resetAway,
+  fetch: fetchAway,
+  changed: told,
+  readRev: readRevision,
+  saveIf: saveIfRevision,
+} = {}) => {
+  /*
+    `readRev(slug)` answers `{ panels, rev, now }` and `saveIf(slug, panels, rev)` answers `{ ok, rev }` or
+    `{ conflict, rev, panels }` (migration 1040, #442). Both or neither: a gateway that lacks them is detected on first use
+    and the page falls back to the merge-and-check loop below, which is what it did before they existed.
+  */
+  readRev = typeof readRevision === 'function' && typeof saveIfRevision === 'function' ? readRevision : null
+  keepIf = readRev === null ? null : saveIfRevision
+  casOff = false
   keep = typeof saveAway === 'function' ? saveAway : null
   forget = typeof resetAway === 'function' ? resetAway : null
+  look = typeof fetchAway === 'function' ? fetchAway : null
+  changed = typeof told === 'function' ? told : null
+}
+
+/*
+  THE STORED DOCUMENT IS ONE ROW, so a plain save is last writer wins, and two devices that each add a note inside the same
+  few seconds would leave only one of them in the office. There is no revision column to check against (that needs a backend
+  change, recorded in #439), so the guarantee is made from what the browser CAN do: after a save, read the office's copy back
+  and merge it with ours note by note (a note is kept when it is the newest copy of itself and nothing newer removed it). If the
+  office lacks anything this device holds, send the merged result, and check again; if this device lacks something the office
+  holds, take it and say so. Both devices run the same loop and the merge is the same on both, so they converge, and a note is
+  only lost if every device that held it is gone, which the browser's own copy (localStorage) makes unlikely.
+*/
+const HEAL_AFTER_MS = 2500
+const HEAL_EVERY_MS = 10000
+const healing = new Map()
+const lastHeal = new Map()
+const sameBg = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+const canon = (postits, gone) =>
+  JSON.stringify([
+    [...postits].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+    Object.entries(gone).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
+  ])
+
+const check = async (s) => {
+  if (look === null) return
+  let panels
+  try {
+    if (readRev !== null && !casOff) {
+      try {
+        const r = await readRev(s)
+        noteClock(r?.now)
+        panels = r?.panels ?? null
+      } catch (e) {
+        if (!unsupported(e)) throw e
+        casOff = true
+        panels = await look(s)
+      }
+    } else panels = await look(s)
+  } catch {
+    return
+  }
+  const there = fromPanels(panels) ?? emptyDoc()
+  const here = doc(s)
+  const merged = mergeNotes(here, there)
+  const bg = mergeBg(here.bg, there.bg)
+  const lacksHere =
+    canon(merged.postits, merged.gone) !== canon(here.postits, here.gone) || !sameBg(bg, here.bg)
+  const lacksThere =
+    canon(merged.postits, merged.gone) !== canon(there.postits, there.gone) || !sameBg(bg, there.bg)
+  if (lacksHere) {
+    const d = { ...here, ...merged, bg }
+    cache.set(s, d)
+    try {
+      ls()?.setItem(KEY(s), JSON.stringify(d))
+    } catch {
+      /* Cached in memory regardless. */
+    }
+    changed?.(s)
+  }
+  if (lacksThere) {
+    pending.set(s, doc(s))
+    if (timer !== null) globalThis.clearTimeout(timer)
+    timer = globalThis.setTimeout(sendNow, 700)
+  }
+}
+
+/** Compare this device's notes with the office's now (the open page asks about once a minute). */
+export const syncNow = (slug) => {
+  const s = slugOf(slug)
+  if (s === '' || look === null) return Promise.resolve()
+  lastHeal.set(s, Date.now())
+  return check(s)
+}
+
+const heal = (s) => {
+  if (look === null || healing.has(s)) return
+  const wait = Math.max(HEAL_AFTER_MS, (lastHeal.get(s) ?? 0) + HEAL_EVERY_MS - Date.now())
+  healing.set(
+    s,
+    globalThis.setTimeout(() => {
+      healing.delete(s)
+      lastHeal.set(s, Date.now())
+      void check(s)
+    }, wait),
+  )
 }
 
 const sendNow = () => {
@@ -542,10 +811,137 @@ const sendNow = () => {
     if (isBlank(d)) {
       if (forget !== null) void forget(s)
     } else if (keep !== null) {
-      void keep(s, toPanels(d))
+      void saveChecked(s)
     }
   }
   pending.clear()
+}
+
+/*
+  Read before writing, so a device that has been idle (and so is behind) does not overwrite what another device wrote since: the
+  office's copy is merged in first. At most once every ten seconds per project, because typing saves every 700ms and the read is the
+  whole studio payload; the check after the save covers the rest.
+*/
+const MAX_SWAPS = 6
+const unsupported = (e) =>
+  /unknown section|PGRST202|could not find the function|schema cache/i.test(String(e?.message ?? e))
+
+/** Fold the office's copy into this device's, drawing anything that arrived. */
+const foldIn = (s, panels) => {
+  const there = fromPanels(panels)
+  if (there === null) return
+  const here = doc(s)
+  const merged = mergeNotes(here, there)
+  const bg = mergeBg(here.bg, there.bg)
+  if (canon(merged.postits, merged.gone) === canon(here.postits, here.gone) && sameBg(bg, here.bg)) return
+  const d = { ...here, ...merged, bg }
+  cache.set(s, d)
+  try {
+    ls()?.setItem(KEY(s), JSON.stringify(d))
+  } catch {
+    /* Cached in memory regardless. */
+  }
+  changed?.(s)
+}
+
+/**
+ * Save by compare-and-swap: read the office's copy and its revision, fold it in, send naming that revision. If the office has
+ * moved on, it refuses and hands back its current copy, which is folded in and the save is tried again. Bounded; a save that
+ * is still being refused is kept and tried on the next tick, never dropped. Returns false when the office cannot do this.
+ */
+const swapSave = async (s) => {
+  let r
+  try {
+    r = await readRev(s)
+  } catch (e) {
+    if (unsupported(e)) casOff = true
+    return false
+  }
+  if (r === null || typeof r !== 'object') return false
+  noteClock(r.now)
+  for (let i = 0; i < MAX_SWAPS; i += 1) {
+    foldIn(s, r.panels)
+    const now = doc(s)
+    const blank = isBlank(now)
+    /* A reset is compare-and-swap too (an empty list); and a copy this build cannot read is never deleted by a blank one. */
+    if (blank && r.panels !== null && r.panels !== undefined && fromPanels(r.panels) === null) return true
+    let out
+    try {
+      out = await keepIf(s, blank ? [] : toPanels(now), Number(r.rev) || 0)
+    } catch (e) {
+      if (unsupported(e)) casOff = true
+      throw e
+    }
+    if (out === undefined) return true
+    noteClock(out?.now)
+    if (out?.conflict === true) {
+      r = { panels: out.panels, rev: out.rev }
+      continue
+    }
+    if (out?.ok === true || out?.reset === true) {
+      backoff.delete(s)
+      revs.set(s, Number(out.rev) || 0)
+      return true
+    }
+    return false
+  }
+  /* Still being refused after several tries: keep it and go again later, waiting longer each round (1.5 s, 3 s ... 60 s). */
+  const round = (backoff.get(s) ?? 0) + 1
+  backoff.set(s, round)
+  pending.set(s, doc(s))
+  if (timer !== null) globalThis.clearTimeout(timer)
+  timer = globalThis.setTimeout(sendNow, Math.min(60_000, 750 * 2 ** round))
+  return true
+}
+
+const saveChecked = async (s) => {
+  if (readRev !== null && !casOff) {
+    try {
+      if (await swapSave(s)) {
+        heal(s)
+        return
+      }
+    } catch {
+      /* Fell through to the plain save below only when the office lacks compare-and-swap. */
+      if (!casOff) return
+    }
+  }
+  try {
+    if (look !== null && Date.now() - (lastHeal.get(s) ?? 0) > HEAL_EVERY_MS) {
+      lastHeal.set(s, Date.now())
+      try {
+        const there = fromPanels(await look(s))
+        if (there !== null) {
+          const here = doc(s)
+          const merged = mergeNotes(here, there)
+          const bg = mergeBg(here.bg, there.bg)
+          if (
+            canon(merged.postits, merged.gone) !== canon(here.postits, here.gone) ||
+            !sameBg(bg, here.bg)
+          ) {
+            cache.set(s, { ...here, ...merged, bg })
+            try {
+              ls()?.setItem(KEY(s), JSON.stringify({ ...here, ...merged, bg }))
+            } catch {
+              /* Cached in memory regardless. */
+            }
+            changed?.(s)
+          }
+        }
+      } catch {
+        /* Could not look: save what is here; the check afterwards tries again. */
+      }
+    }
+    const now = doc(s)
+    if (isBlank(now)) {
+      if (forget !== null) await forget(s)
+    } else {
+      await keep(s, toPanels(now))
+    }
+    heal(s)
+  } catch {
+    /* A failed save is retried by the next refresh (adopt sends what the office lacks). */
+  }
 }
 
 /** Write the document to the browser now and to the office shortly after. */
@@ -557,16 +953,19 @@ const commit = (slug, mine_) => {
   */
   let d = mine_
   try {
-    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
-    if (raw !== '') d = { ...d, ...mergeNotes(d, normalise(JSON.parse(raw))) }
+    const raw = ls()?.getItem(KEY(s)) ?? ''
+    if (raw !== '') {
+      const stored = normalise(JSON.parse(raw))
+      d = { ...d, ...mergeNotes(d, stored, true), bg: mergeBg(d.bg, stored.bg, true) }
+    }
   } catch {
     /* Nothing readable to fold in. */
   }
   cache.set(s, d)
   mine.add(s)
   try {
-    if (isBlank(d)) globalThis.localStorage?.removeItem(KEY(s))
-    else globalThis.localStorage?.setItem(KEY(s), JSON.stringify(d))
+    if (isBlank(d)) ls()?.removeItem(KEY(s))
+    else ls()?.setItem(KEY(s), JSON.stringify(d))
   } catch {
     /* A viewer who cannot store it still has it for this session. */
   }
@@ -594,9 +993,37 @@ if (typeof globalThis.addEventListener === 'function') {
 /** Take the office's copy, unless this session has already changed it. */
 export const adopt = (slug, panels) => {
   const s = slugOf(slug)
-  if (s === '' || mine.has(s)) return false
+  if (s === '') return false
   const theirs = fromPanels(panels)
   if (theirs === null) return false
+  if (mine.has(s)) {
+    /*
+      This session has changed the arrangement, so the view, sizes and positions stay as it left them. Notes are
+      different: another device may have written some since, and the next save would erase them. Fold in only the notes,
+      and send the result when this session holds anything the office lacks.
+    */
+    const here = doc(s)
+    const merged = mergeNotes(here, theirs)
+    const bg = mergeBg(here.bg, theirs.bg)
+    const whole = canon(merged.postits, merged.gone)
+    const lacksHere = whole !== canon(here.postits, here.gone) || !sameBg(bg, here.bg)
+    /* A save that failed (offline) leaves notes only here: a refresh must send them, not just take what the office has. */
+    const lacksThere = whole !== canon(theirs.postits, theirs.gone) || !sameBg(bg, theirs.bg)
+    if (!lacksHere && !lacksThere) return false
+    const d = { ...here, ...merged, bg }
+    cache.set(s, d)
+    try {
+      ls()?.setItem(KEY(s), JSON.stringify(d))
+    } catch {
+      /* Cached in memory regardless. */
+    }
+    if (lacksThere) {
+      pending.set(s, d)
+      if (timer !== null) globalThis.clearTimeout(timer)
+      timer = globalThis.setTimeout(sendNow, 700)
+    }
+    return lacksHere
+  }
   /*
     The browser may hold notes the office never received (offline, a tab closed inside the save delay). Taking the office's
     copy whole would throw them away; fold them in, and send the result when it differs.
@@ -604,18 +1031,22 @@ export const adopt = (slug, panels) => {
   let d = theirs
   let ahead = false
   try {
-    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
+    const raw = ls()?.getItem(KEY(s)) ?? ''
     if (raw !== '') {
-      const merged = mergeNotes(theirs, normalise(JSON.parse(raw)))
-      ahead = JSON.stringify(merged.postits) !== JSON.stringify(theirs.postits)
-      d = { ...theirs, ...merged }
+      const stored = normalise(JSON.parse(raw))
+      const merged = mergeNotes(theirs, stored)
+      const bg = mergeBg(theirs.bg, stored.bg)
+      ahead =
+        canon(merged.postits, merged.gone) !== canon(theirs.postits, theirs.gone) ||
+        !sameBg(bg, theirs.bg)
+      d = { ...theirs, ...merged, bg }
     }
   } catch {
     d = theirs
   }
   cache.set(s, d)
   try {
-    globalThis.localStorage?.setItem(KEY(s), JSON.stringify(d))
+    ls()?.setItem(KEY(s), JSON.stringify(d))
   } catch {
     /* Cached in memory regardless. */
   }
@@ -632,6 +1063,11 @@ export const forgetAll = () => {
   cache.clear()
   mine.clear()
   pending.clear()
+  for (const t of healing.values()) globalThis.clearTimeout(t)
+  healing.clear()
+  lastHeal.clear()
+  backoff.clear()
+  revs.clear()
 }
 
 /* ------------------------------------------------------------- the modules --- */
@@ -640,7 +1076,7 @@ export const forgetAll = () => {
 export const layout = (slug) => {
   const d = doc(slug)
   const base = d.mods === null ? fromFractions(THIRDS, stage) : d.mods
-  return base.map((m) => clampRect(m, stage))
+  return base.map((m) => clampRect(m))
 }
 
 const materialised = (slug) => {
@@ -658,7 +1094,7 @@ const topZ = (d) =>
 export const place = (slug, id, rect) => {
   const d = materialised(slug)
   const z = topZ(d) + 1
-  d.mods = d.mods.map((m) => (m.id === id ? clampRect({ ...m, ...rect, id, z }, stage) : m))
+  d.mods = d.mods.map((m) => (m.id === id ? clampRect({ ...m, ...rect, id, z }) : m))
   commit(slug, d)
   return layout(slug)
 }
@@ -719,7 +1155,7 @@ export const autoArrange = (slug) => {
  * arrangement.
  */
 export const reset = (slug) => {
-  commit(slug, { ...doc(slug), mods: null, zoom: 1 })
+  commit(slug, { ...doc(slug), mods: null, zoom: 1, pan: { x: 0, y: 0 } })
 }
 
 /**
@@ -729,7 +1165,7 @@ export const reset = (slug) => {
  */
 export const customised = (slug) => {
   const d = doc(slug)
-  if (d.zoom !== 1) return true
+  if (d.zoom !== 1 || d.pan.x !== 0 || d.pan.y !== 0) return true
   if (d.mods === null) return false
   const was = fromFractions(THIRDS, stage)
   if (d.mods.length !== was.length) return true
@@ -749,6 +1185,28 @@ export const customised = (slug) => {
 /* ------------------------------------------------------------------- zoom --- */
 
 export const zoomOf = (slug) => doc(slug).zoom
+export const viewOf = (slug) => ({ zoom: doc(slug).zoom, ...doc(slug).pan })
+/** Store the view (zoom and where the origin sits). */
+export const setView = (slug, v) => {
+  const zoom = Math.round(clampZoom(v.zoom) * 1000) / 1000
+  commit(slug, { ...doc(slug), zoom, pan: cleanPan(v) })
+  return viewOf(slug)
+}
+
+/** The project's chosen background (a reference), or null when it never chose one. */
+export const bgOf = (slug) => doc(slug).bg
+
+/**
+ * Choose a background. Stored with the moment it was chosen, so the newer of two devices' choices wins; a project's notes,
+ * arrangement and view are carried through untouched. `null` is not accepted: going back to the default is a choice too
+ * ({ id: 'default' }), because a plain removal could not beat an older choice on another device.
+ */
+export const setBg = (slug, bg, now = stamp()) => {
+  const clean = cleanBg({ ...bg, at: now })
+  if (clean === null) return doc(slug).bg
+  commit(slug, { ...doc(slug), bg: clean })
+  return clean
+}
 
 export const setZoom = (slug, z) => {
   const zoom = Math.round(clampZoom(z) * 100) / 100
@@ -848,28 +1306,50 @@ export const postits = (slug) => {
       // Nowhere clear: no starter. The Note button in the toolbar still adds one, wherever its owner puts it.
       return []
     }
-    const starter = clampRect({ id: 'n_starter', ...spot, z: 7, text: '' }, stage)
+    const starter = clampRect({ id: 'n_starter', ...spot, z: 7, text: '' })
     return [{ ...starter, starter: true }]
   }
-  return d.postits.map((n) => clampRect(n, stage))
+  return d.postits.map((n) => clampRect(n))
 }
 
-export const addPostit = (slug) => {
+/**
+ * Where a new note goes: beside the one it was made from (right, then below, left, above) at the first spot that
+ * covers nothing, and failing that diagonally down and right of it. Pure, so it is decidable without a browser.
+ */
+export const spotNear = (origin, taken, size = POSTIT_DEFAULT, gap = 16) => {
+  const hits = (r) => taken.some((t) => crossing(r, t))
+  const tries = [
+    { x: origin.x + origin.w + gap, y: origin.y },
+    { x: origin.x, y: origin.y + origin.h + gap },
+    { x: origin.x - size.w - gap, y: origin.y },
+    { x: origin.x, y: origin.y - size.h - gap },
+  ]
+  for (const t of tries) {
+    const r = { ...t, ...size }
+    if (!hits(r)) return t
+  }
+  for (let i = 1; i < 40; i += 1) {
+    const r = { x: origin.x + 24 * i, y: origin.y + 24 * i, ...size }
+    if (!hits(r)) return { x: r.x, y: r.y }
+  }
+  return { x: origin.x + 24, y: origin.y + 24 }
+}
+
+/**
+ * Add a note. With `near` (a note's id) it is placed beside that note; with `at` ({x, y} in world pixels) it is put
+ * there, which is how the empty-canvas button drops one in the middle of what is on screen.
+ */
+export const addPostit = (slug, { near, at } = {}) => {
   const d = doc(slug)
   const z = topZ(d) + 1
   const offset = (d.postits.length % 6) * 22
-  const n = clampRect(
-    {
-      id: newId(),
-      x: stage.w - POSTIT_DEFAULT.w - 24 - offset,
-      y: 24 + offset,
-      ...POSTIT_DEFAULT,
-      z,
-      text: '',
-      at: Date.now(),
-    },
-    stage,
-  )
+  const all = postits(slug)
+  const origin = near === undefined ? undefined : all.find((n) => n.id === near)
+  let pos
+  if (origin !== undefined) pos = spotNear(origin, [...layout(slug), ...all])
+  else if (at !== undefined) pos = { x: Math.round(at.x), y: Math.round(at.y) }
+  else pos = { x: stage.w - POSTIT_DEFAULT.w - 24 - offset, y: 24 + offset }
+  const n = clampRect({ id: newId(), ...pos, ...POSTIT_DEFAULT, z, text: '', at: stamp() })
   commit(slug, { ...d, postits: [...d.postits, n], seeded: true })
   return n
 }
@@ -878,13 +1358,13 @@ export const addPostit = (slug) => {
 export const setPostit = (slug, id, patch) => {
   const d = doc(slug)
   if (id === 'n_starter' && !d.postits.some((n) => n.id === id)) {
-    const real = cleanPostit({ ...postits(slug)[0], ...patch, id: newId(), at: Date.now() })
+    const real = cleanPostit({ ...postits(slug)[0], ...patch, id: newId(), at: stamp() })
     commit(slug, { ...d, postits: [real], seeded: true })
     return real.id
   }
   commit(slug, {
     ...d,
-    postits: d.postits.map((n) => (n.id === id ? cleanPostit({ ...n, ...patch, at: Date.now() }) : n)),
+    postits: d.postits.map((n) => (n.id === id ? cleanPostit({ ...n, ...patch, at: stamp() }) : n)),
   })
   return id
 }
@@ -893,14 +1373,14 @@ export const movePostit = (slug, id, rect) => {
   const d = doc(slug)
   const z = topZ(d) + 1
   if (id === 'n_starter' && !d.postits.some((n) => n.id === id)) {
-    const real = cleanPostit({ ...postits(slug)[0], ...rect, id: newId(), z, at: Date.now() })
+    const real = cleanPostit({ ...postits(slug)[0], ...rect, id: newId(), z, at: stamp() })
     commit(slug, { ...d, postits: [real], seeded: true })
     return real.id
   }
   commit(slug, {
     ...d,
     postits: d.postits.map((n) =>
-      n.id === id ? cleanPostit({ ...clampRect({ ...n, ...rect, id, z }, stage), at: Date.now() }) : n,
+      n.id === id ? cleanPostit({ ...clampRect({ ...n, ...rect, id, z }, stage), at: stamp() }) : n,
     ),
   })
   return id
@@ -912,7 +1392,7 @@ export const restorePostit = (slug, note) => {
   if (d.postits.some((n) => n.id === note.id)) return false
   const gone = { ...d.gone }
   // Strictly newer than the removal it undoes, even inside the same millisecond.
-  const at = Math.max(Date.now(), (gone[note.id] ?? 0) + 1)
+  const at = Math.max(stamp(), (gone[note.id] ?? 0) + 1)
   delete gone[note.id]
   commit(slug, { ...d, postits: [...d.postits, cleanPostit({ ...note, at })], gone, seeded: true })
   return true
@@ -924,7 +1404,7 @@ export const removePostit = (slug, id) => {
   commit(slug, {
     ...d,
     postits: d.postits.filter((n) => n.id !== id),
-    gone: { ...d.gone, [id]: Date.now() },
+    gone: { ...d.gone, [id]: stamp() },
     seeded: true,
   })
 }

@@ -38,6 +38,7 @@
 */
 
 import * as icons from '../icons.js'
+import * as backdrop from './backdrop.js'
 import * as grid from './layout.js'
 import * as live from './livevoice.js'
 import { button, esc } from './parts.js'
@@ -548,9 +549,6 @@ const dock = (p) => {
     `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor"
       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
   return `<div class="bcdock" role="toolbar" aria-label="Workspace">
-    <button type="button" class="bcdockbtn" data-bc-newnote title="Pull out a new note">
-      ${ic('<path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/>')}<span>Note</span>
-    </button>
     <button type="button" class="bcdockbtn" data-bc-tidy title="Lightly tidy the arrangement">
       ${ic('<path d="M4 6h7M4 12h16M13 18h7"/>')}<span>Tidy</span>
     </button>
@@ -559,6 +557,9 @@ const dock = (p) => {
     </button>
     <button type="button" class="bcdockbtn" data-bc-viewreset title="Reset the view. Notes and everything in the modules are kept"${grid.customised(p.slug) ? '' : ' data-quiet="1"'}>
       ${ic('<path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/>')}<span>Reset view</span>
+    </button>
+    <button type="button" class="bcdockbtn" data-bc-fit title="Bring everything into view">
+      ${ic('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}<span>Fit</span>
     </button>
     <span class="bczoom" role="group" aria-label="Zoom">
       <button type="button" class="bcdockbtn bcdockicon" data-bc-zoom="out" aria-label="Zoom out">&minus;</button>
@@ -593,6 +594,10 @@ const offChips = (p) => {
 export const note = (n) => `<div class="bcpostit" data-bc-note-id="${esc(n.id)}"
     style="left:${String(n.x)}px;top:${String(n.y)}px;width:${String(n.w)}px;height:${String(n.h)}px;z-index:${String(n.z ?? 1)}">
     <div class="bcpostitbar" data-bc-note-grip tabindex="0" role="group" aria-label="Note handle: Alt and the arrow keys move this note, Alt Shift and the arrow keys resize it" aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown">
+      <button type="button" class="bcpostitplus" data-bc-note-add="${esc(n.id)}" aria-label="Add another note next to this one" title="Add another note">
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor"
+          stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
       <button type="button" class="bcpostitx" data-bc-note-del="${esc(n.id)}" aria-label="Remove this note" title="Remove this note">
         <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor"
           stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -746,9 +751,9 @@ export const compositionC = (p) => {
     wire.js re-measures and repaints the rectangles in place before the browser
     has painted anything. Once it has measured, the real size is reused.
   */
-  const z = grid.zoomOf(p.slug)
+  const view = grid.viewOf(p.slug)
   if (!grid.stageMeasured() && typeof innerWidth === 'number') {
-    grid.setStage((innerWidth - 170) / z, (innerHeight - 330) / z)
+    grid.setStage(innerWidth - 170, innerHeight - 330)
   }
   const st = grid.stageSize()
   const place = grid.layout(p.slug)
@@ -756,8 +761,8 @@ export const compositionC = (p) => {
   return `<div class="bchome bccomp bccomp--c">
     ${head(p, `<div class="bcworkbar">${offChips(p)}${dock(p)}</div>`)}
     <div class="bcworkspace">
-    <div class="bcpanes" data-bc-board="${esc(p.slug)}" style="height:${String(Math.round(st.h * z))}px">
-      <div class="bcstage" style="width:${String(st.w)}px;height:${String(st.h)}px;transform:scale(${String(z)})">
+    <div class="bcpanes" data-bc-board="${esc(p.slug)}" ${backdrop.attrsFor(grid.bgOf(p.slug), p.slug)} style="height:${String(st.h)}px;--bc-gx:${String(view.x)}px;--bc-gy:${String(view.y)}px;--bc-gz:${String(view.zoom)};--bc-gstep:${String(grid.gridStep(view.zoom))}px;${backdrop.styleFor(grid.bgOf(p.slug), p.slug)}">
+      <div class="bcstage" style="width:${String(st.w)}px;height:${String(st.h)}px;--bc-zoom:${String(view.zoom)};transform:translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})">
         ${place
           .map((r) => {
             const m = by.get(r.id)
@@ -769,7 +774,7 @@ export const compositionC = (p) => {
           .map((n) => note(n))
           .join('')}
         <div class="bcguides" aria-hidden="true"></div>
-        <button type="button" class="bcdockbtn bcphoneonly" data-bc-newnote>+ Note</button>
+        ${grid.postits(p.slug).length === 0 ? '<button type="button" class="bcdockbtn bcnoteempty" data-bc-newnote title="Pull out a note">+ Note</button>' : ''}
       </div>
     </div>
     </div>

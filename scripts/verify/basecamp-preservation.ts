@@ -265,6 +265,15 @@ const GLOBAL: Record<string, string> = {
   lately: '/activity',
 }
 for (const g of railGoes) {
+  if (g === 'portfolio') {
+    /* 8 October 2026, Grant: the Home screen is gone. Its job (choosing a project) is the hamburger menu. */
+    check(
+      'the portfolio destination is replaced by the project menu',
+      (await page.locator('[data-bc-menu]').count()) === 1 &&
+        (await page.locator('.bcmenupanel [data-bc-go^="/p/"]').count()) > 0,
+    )
+    continue
+  }
   const want = GLOBAL[g]
   if (want === undefined) {
     check(

@@ -1,5 +1,13 @@
 /*
-  Universal Jump (§7 of basecamp_clone.md).
+  THE COMMAND PALETTE (Cmd+K on a Mac, Ctrl+K elsewhere).
+
+  8 October 2026, Grant: remove Jump To. The "Jump to..." control in the top bar and its Shift+J shortcut are gone, and
+  the hamburger menu (bc/menu.js) is how a person moves between projects. This file keeps the OTHER thing that shared
+  its dialog: the command palette, which finds records and DOES things (workspace commands in plain words, "Ask the
+  team: ..."), and which Grant asked for separately. It no longer has a visible button of its own. The file name, the
+  bcjump ids and the group names below are history and are kept so the palette's tests and wiring stay one thing.
+
+  Universal Jump (§7 of basecamp_clone.md), as it was.
 
   Opened by clicking the centre shell control or by pressing Shift+J anywhere
   outside a text composition context. Filters projects, project tools, people
@@ -422,10 +430,6 @@ const paletteChord = (e) =>
 /** The keyboard map of §7.3, plus the global Shift+J of §7.1. */
 export const onKey = (e) => {
   if (!open) {
-    if (e.key === 'J' && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !composing(e.target)) {
-      e.preventDefault()
-      show()
-    }
     /* Cmd+K on a Mac, Ctrl+K elsewhere: from anywhere, including inside a text field, as a palette is. */
     if (paletteChord(e)) {
       e.preventDefault()

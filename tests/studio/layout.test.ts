@@ -153,19 +153,22 @@ describe('free placement', () => {
     expect((out.find((m) => m.id === 'schedule') as Rect).z).toBe(top)
   })
 
-  it('clamps into the stage and above the minimum rather than refusing', () => {
-    const wild = L.clampRect({ id: 'tasks', x: -50, y: 9999, w: 3, h: 99999 }, S) as Rect
-    expect(wild.x).toBe(0)
+  it('keeps negative positions, repairs sizes, and bounds only absurd values', () => {
+    const wild = L.clampRect({ id: 'tasks', x: -50, y: 9999, w: 3, h: 99999 }) as Rect
+    expect(wild.x).toBe(-50)
+    expect(wild.y).toBe(9999)
     expect(wild.w).toBe(L.MIN.w)
-    expect(wild.h).toBeLessThanOrEqual(S.h)
-    expect(wild.y + wild.h).toBeLessThanOrEqual(S.h)
+    expect(wild.h).toBe(L.MAX_SIZE)
+    const lost = L.clampRect({ id: 'tasks', x: Number.NaN, y: 1e12, w: 300, h: 300 }) as Rect
+    expect(lost.x).toBe(0)
+    expect(lost.y).toBe(L.REACH)
   })
 
-  it('never lets a module leave the stage (no infinite canvas)', () => {
-    const out = L.place('p', 'tasks', { x: 50000, y: 50000 }) as Rect[]
+  it('lets a module sit beyond the original stage (infinite canvas, 8 Oct 2026)', () => {
+    const out = L.place('p', 'tasks', { x: 5000, y: -3000 }) as Rect[]
     const t = out.find((m) => m.id === 'tasks') as Rect
-    expect(t.x + t.w).toBeLessThanOrEqual(S.w)
-    expect(t.y + t.h).toBeLessThanOrEqual(S.h)
+    expect(t.x).toBe(5000)
+    expect(t.y).toBe(-3000)
   })
 })
 

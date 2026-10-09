@@ -32,13 +32,17 @@ import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, toke
   presentations can be diffed against one another.
 */
 import * as bc from './bc/shell.js'
-import * as bcJump from './bc/jump.js'
 import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
 import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
+import * as backdropUi from './bc/backdrop-ui.js'
+import * as backdropStore from './bc/backdrop.js'
 import * as bcDocOrder from './bc/docorder.js'
 import * as bcWire from './bc/wire.js'
+import * as bcJump from './bc/jump.js'
+import * as bcGrip from './bc/dockgrip.js'
+import * as bcDictate from './bc/dockdictate.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
 import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme } from './appearance.js'
@@ -50,7 +54,7 @@ import * as config from './settings.js'
 import * as copy from './settings-copy.js'
 import * as settingsUi from './settings-ui.js'
 import { wireCall, unwireCall, syncCallButtons, callIsLive, toggleCall } from './call.js'
-import { GROWTH, hydrateUsage, say as sayAmount, USAGE } from './usage.js'
+import { GROWTH, hydrateUsage, say as sayAmount, USAGE, usageSource } from './usage.js'
 import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
 import * as panels from './panels.js'
@@ -70,6 +74,14 @@ const $ = (sel, root = document) => root.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
+/*
+  Whether the Settings and Usage payloads have been asked for (see needSettings). Declared at the top because a Settings
+  deep link opens the sheet during module evaluation, before any declaration further down has run: a let below the call
+  is a temporal-dead-zone throw that the page recovers from and never reports.
+*/
+let settingsAsked = null
+/** Whether the office's other reads and the poll have been started (false while signed in with no office yet). */
+let officeStarted = false
 
 /*
   Payloads that belong to one screen rather than to the whole shell.
@@ -344,7 +356,7 @@ const state = {
   // Which of AI Team's four you are looking at.
   sub: 'board',
   // Which pane of the project's own Settings is open (#36).
-  setpane: 'people',
+  setpane: 'automations',
   // Which card on the project map is open in its side panel (#25).
   mapPick: null,
   /*
@@ -544,6 +556,8 @@ let settingsCameFrom = null
 const sheet = (el, open) => {
   const wasOpen = !el.hidden
   el.hidden = !open
+  // A background that was only being previewed goes back to the project's own when the sheet goes away (#445).
+  if (!open && el.id === 'viewer' && wasOpen) backdropUi.cancel()
   if (el.id === 'settings') {
     el.classList.toggle('page', open)
     /*
@@ -1702,8 +1716,8 @@ function paintDock() {
   document.body.classList.toggle('docked', open)
   if (!open) {
     el.innerHTML = ''
-    /* Closing the dock must also stop a voice note recording inside it. */
-    if (state.experience === 'basecamp') bcWire.wireDockNote(el)
+    /* Closing the dock releases the microphone. */
+    if (state.experience === 'basecamp') bcDictate.release()
     return
   }
 
@@ -1787,8 +1801,6 @@ function paintDock() {
     carried across the innerHTML below and put back where they were.
   */
   const bcNote = state.experience === 'basecamp'
-  const keptMic = bcNote ? el.querySelector('[data-bc-note]') : null
-  const keptPanel = bcNote ? el.querySelector('[data-bc-notepanel]') : null
 
   el.innerHTML = `<div class="dockhead">
       <span style="flex:1;min-width:0">
@@ -1848,26 +1860,28 @@ function paintDock() {
         ? ''
         : `<form class="composer" data-dockform${bcNote ? ` data-bc-noteproject="${esc(p.slug)}"` : ''}>
       <div class="crow">
-        <textarea data-docksay rows="1" placeholder="${p.slug !== 'unnamed' ? `Ask the team about ${esc(p.name)}…` : 'Ask the team…'}"
+        <textarea data-docksay rows="1" placeholder="${bcNote ? 'Message the team…' : p.slug !== 'unnamed' ? `Ask the team about ${esc(p.name)}…` : 'Ask the team…'}"
                   aria-label="Message the team"></textarea>
-        ${bcNote ? bc.dockNoteButton() : ''}
+        ${bcNote ? bc.dockDictateButton(dictate.supported(), dictate.supported() ? dictate.disclosure() : dictate.why()) : ''}
         <button class="btn primary" type="submit">Send</button>
       </div>
-      ${bcNote ? '<div class="bcnote" data-bc-notepanel hidden></div>' : ''}
+      ${bcNote ? '<p class="dockdic t-meta" data-dockdic role="status" aria-live="polite"></p>' : ''}
     </form>`
     }`
-  if (keptMic !== null) el.querySelector('[data-bc-note]')?.replaceWith(keptMic)
-  if (keptPanel !== null) el.querySelector('[data-bc-notepanel]')?.replaceWith(keptPanel)
-  if (bcNote) bcWire.wireDockNote(el)
 
   const box = $('[data-docksay]', el)
   if (box) box.value = draft
+  if (bcNote) {
+    bcGrip.mount(el)
+    bcDictate.wire(el)
+  }
   const thread = $('[data-dockthread]', el)
   if (thread) thread.scrollTop = wasAtEnd ? thread.scrollHeight : (at ?? thread.scrollHeight)
   state.dockAtEnd = thread ? thread.scrollHeight - thread.scrollTop - thread.clientHeight < 40 : true
   wireDockKeyboard()
 
   $('[data-dock-close]', el)?.addEventListener('click', () => {
+    bcDictate.release()
     rememberDock(false)
     paintDock()
   })
@@ -1940,6 +1954,11 @@ function paintDock() {
 
   $('[data-dockform]', el)?.addEventListener('submit', (e) => {
     e.preventDefault()
+    /* Send while the microphone is open only stops it: half a sentence is never sent by accident. */
+    if (dictate.active()) {
+      dictate.stop()
+      return
+    }
     const text = String(box?.value ?? '').trim()
     if (text === '' || !p) return
     if (box) box.value = ''
@@ -4054,6 +4073,8 @@ function activeJobs(p) {
   broken Notion connection look like a bookmark.
 */
 function sources(p) {
+  // The "does not need" buttons below name the connectors the settings payload lists.
+  void needSettings()
   const list = p.sources ?? []
   if (list.length === 0) {
     return `<div class="tabbody">${emptyState({
@@ -5510,8 +5531,8 @@ const HELP_TOPICS = [
   {
     title: 'Find your way around',
     steps: [
-      'The home screen lists your projects. Press one to open it. Inside you will find its tasks, documents, contacts, sources and team.',
-      'Press Jump to… at the top (or Shift J) to find any project, task or document by name.',
+      'The menu at the top left lists your projects. Press one to open it. Inside you will find its tasks, documents, contacts, sources and team.',
+      'Use the same menu to create a project, or to open My Tasks and Activity.',
       'The three dots at the top right open Settings, which apply to all of Team HQ. A single project has its own settings, in its menu under Project settings.',
       'To leave Settings, press Back to workspace at the top left.',
     ],
@@ -6056,11 +6077,22 @@ function healthTab() {
 
   return [
     ui.section({ title: 'Is everything running?', body: summary }),
-    ui.section({
-      title: 'Cost',
-      note: `Spent in the last 30 days: ${sayAmount(spend?.month ?? 0, 'usd')}. The aim is about £0 a month on the free tiers. Test runs are not counted.`,
-      body: ui.card(USAGE.services.map(usageRow)),
-    }),
+    // Usage is read when Settings is first drawn, beside the settings payload, and can land after it or fail. Until it has
+    // answered for this office, the figures here are the prototype's invented ones, and a card of invented money is not shown.
+    canWrite() && !usageSource.live
+      ? ui.section({
+          title: 'Cost',
+          note:
+            usageSource.why === 'not asked yet'
+              ? 'Asking Team HQ what the team has spent.'
+              : 'What the team has spent could not be read just now. Close this and open it again in a moment.',
+          body: '',
+        })
+      : ui.section({
+          title: 'Cost',
+          note: `Spent in the last 30 days: ${sayAmount(spend?.month ?? 0, 'usd')}. The aim is about £0 a month on the free tiers. Test runs are not counted.`,
+          body: ui.card(USAGE.services.map(usageRow)),
+        }),
     ui.advanced({
       title: 'Details for the curious',
       hint: 'Models, conversation volume and where the team gets stuck',
@@ -7005,6 +7037,9 @@ function importSheet(p) {
 
 function settingsSheet() {
   const v = $('#settings')
+  // Opening Settings is what asks the office for it (see needSettings); the draw below says so until it answers. The sheet is
+  // hidden exactly when a person is opening it; a redraw while it is showing must not retry a failed read.
+  void needSettings(v.hidden)
   // An old id (governance, setup) resolves to the tab that now holds what it held.
   state.setting = config.tabId(state.setting)
   const tabs = config.TABS
@@ -12289,6 +12324,8 @@ function lookSheet(p, keepSearch = false) {
         </span>
       </div>
 
+      ${backdropUi.field(p)}
+
       <div class="field" style="margin-top:var(--s5);align-items:flex-start">
         <span class="t-label">Colour</span>
         <span class="huepick">
@@ -12339,6 +12376,7 @@ function lookSheet(p, keepSearch = false) {
     </button>`
 
   sheet(v, true)
+  backdropUi.wire(v, p)
   $('.close', v).addEventListener('click', () => { sheet(v, false) })
   v.addEventListener('click', (e) => { if (e.target === v) sheet(v, false) })
 
@@ -14153,13 +14191,106 @@ bcDocOrder.persistence({
   reset: (slug) => act('document_order_reset', { p_slug: slug }).catch(() => undefined),
 })
 
+/*
+  A project board that stays open learns about another device's notes about once a minute, without a reload or a pulse (a layout
+  write does not move the office's pulse). Only while the tab is visible and nobody is typing in a note.
+*/
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || Date.now() - lastNoteKey < 3000) return
+  const slug = state.project
+  if (slug && canWrite()) void bcGrid.syncNow(slug)
+}, 60_000)
+
+/* When somebody last typed in a note: another device's notes are drawn after they pause, never under their fingers. */
+let lastNoteKey = 0
+document.addEventListener(
+  'input',
+  (e) => {
+    if (e.target?.closest?.('.bcpostit')) lastNoteKey = Date.now()
+  },
+  true,
+)
+
 bcGrid.persistence({
+  /*
+    A Sample visitor is read-only: the gateway refuses every write from one. The arrangement, the view and the background
+    they choose stay in this browser (they still persist across a reload here) and are never sent, rather than being sent
+    to be refused. Found when a real Sample run pressed Reset view and the gateway was asked to reset a layout.
+  */
   save: (slug, panels) =>
-    act('dashboard_layout_set', { p_slug: slug, p_panels: panels, p_surface: 'basecamp' }).catch(
-      () => undefined,
-    ),
+    bcSession.isSample()
+      ? undefined
+      : act('dashboard_layout_set', { p_slug: slug, p_panels: panels, p_surface: 'basecamp' }).catch(
+          () => undefined,
+        ),
   reset: (slug) =>
-    act('dashboard_layout_reset', { p_slug: slug, p_surface: 'basecamp' }).catch(() => undefined),
+    bcSession.isSample()
+      ? undefined
+      : act('dashboard_layout_reset', { p_slug: slug, p_surface: 'basecamp' }).catch(() => undefined),
+  /* After a save, the office's copy is read back and merged note by note, so two devices cannot erase each other's notes. */
+  fetch: async (slug) => {
+    const data = await read('studio')
+    const p_ = (data?.projects ?? []).find((x) => x?.slug === slug)
+    return Array.isArray(p_?.layout_board) ? p_.layout_board : null
+  },
+  /*
+    Compare-and-swap (migration 1040, #442). The gateway section and the revision argument exist only once that migration is
+    applied; until then the read fails with "unknown section" and layout.js falls back to the merge-and-check loop above.
+  */
+  readRev: async (slug) => {
+    const r = await read('layout', undefined, { slug, surface: 'basecamp' })
+    /* A refusal for this one project (renamed, gone) or an empty answer is a failed read, not a missing feature: it must not switch compare-and-swap off. */
+    if (r === null || typeof r !== 'object') throw new Error('the office gave no arrangement')
+    if (typeof r.error === 'string') throw new Error(r.error)
+    if (typeof r.rev !== 'number') throw new Error('the office gave no revision')
+    return r
+  },
+  saveIf: (slug, panels, rev) =>
+    bcSession.isSample()
+      ? undefined
+      : act('dashboard_layout_set', {
+          p_slug: slug,
+          p_panels: panels,
+          p_surface: 'basecamp',
+          p_expected_rev: rev,
+        }),
+  /* Notes from another device arrived: draw them, but never under somebody who is typing in a note. */
+  changed: () => {
+    let tries = 0
+    const draw = () => {
+      if (Date.now() - lastNoteKey < 3000 && tries < 10) {
+        tries += 1
+        setTimeout(draw, 2000)
+        return
+      }
+      keepingPlace(() => {
+        render()
+      })
+    }
+    draw()
+  },
+})
+
+/*
+  A project's own background picture is also kept in the office (migration 1041, #445). A Sample visitor never uploads (the
+  gateway refuses it), so its picture stays in this browser; an office without the migration answers "unknown action", and
+  the picker says the picture is kept in this browser only.
+*/
+const blobBase64 = (blob) =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result).split(',')[1] ?? '')
+    r.onerror = () => reject(new Error('That picture could not be read.'))
+    r.readAsDataURL(blob)
+  })
+backdropStore.useRemote({
+  put: async (slug, blob) => {
+    if (bcSession.isSample()) throw new Error('a sample office does not keep pictures')
+    return act('project_background_put', { p_slug: slug, p_base64: await blobBase64(blob) })
+  },
+  get: (slug) => (bcSession.isSample() ? null : read('project_background', undefined, { slug })),
+  del: (slug) =>
+    bcSession.isSample() ? null : act('project_background_delete', { p_slug: slug }),
 })
 
 bcSession.adopt()
@@ -15020,6 +15151,28 @@ async function needTasks() {
   render()
 }
 
+/*
+  The Settings and Usage payloads, read when something that draws them is first drawn, not on every page load.
+
+  They were read at startup and again on every refresh, ten requests each time, for a screen most visits never open. The
+  consumers are the Settings sheet (every pane) and the Sources tab's "does not need" buttons, which name the connectors the
+  settings payload lists; each calls this. Memoised: the first call starts the read and every later one is the same promise.
+  Once asked, `refresh` keeps them current as it always did (see below), so a person who has opened Settings sees the same
+  freshness as before. A person who never does costs the office none of the ten reads.
+*/
+function needSettings(retry = false) {
+  // A read that failed is asked again when a PERSON opens Settings (the pane says to close it and open it again), and only
+  // then. It must never be asked again by a redraw: the read's own completion redraws, so a retry on every call is a loop that
+  // sends the six reads again and again for as long as the office cannot answer, which is when it can least afford them.
+  if (retry && settingsAsked !== null && config.settingsSource.state === 'failed') settingsAsked = null
+  if (settingsAsked !== null || !canWrite()) return settingsAsked
+  settingsAsked = Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
+    render()
+    if (!$('#settings').hidden) settingsSheet()
+  })
+  return settingsAsked
+}
+
 async function needLately() {
   if (latest.lately !== null) return
   try {
@@ -15055,13 +15208,24 @@ async function refresh() {
     return
   }
   await Promise.all([
-    hydrate(API, fresh),
-    // Both, together. Settings is a separate payload because it is a separate
-    // screen and most visits never open it — but a write can change either, so
-    // a refresh re-reads both rather than leaving one stale behind a tab.
-    config.hydrateSettings(read),
-    hydrateUsage(read),
+    hydrate(API, fresh).then(async () => {
+      // The office was created since the page opened (the set-up screen's refresh): start what live() held back.
+      if (!officeStarted && source.state !== 'no_office' && source.state !== 'refused' && source.state !== 'unreachable') {
+        await startOfficeReads(fresh)
+      }
+    }),
+    // Both, together, and only once something has asked for them (needSettings): a visit that never opened Settings or the
+    // Sources tab has nothing of theirs to keep fresh. A write can change either, so once asked a refresh re-reads both
+    // rather than leaving one stale behind a tab.
+    ...(settingsAsked === null ? [] : [config.hydrateSettings(read), hydrateUsage(read)]),
   ])
+  /*
+    Notes another device wrote since this one loaded (ADR-0068, P0 persistence): the board folds them in rather than
+    keeping a copy that would erase them on its next save. Sizes, positions and the view stay as this session left them.
+  */
+  for (const p_ of PROJECTS) {
+    if (Array.isArray(p_?.layout_board)) bcGrid.adopt(p_.slug, p_.layout_board)
+  }
 
   /*
     And the conversation, when one is on screen (#199).
@@ -15397,6 +15561,31 @@ async function live() {
   */
   await hydrate(API, token)
   /*
+    Signed in with no office yet: the studio payload has just said so and every other read would be refused, then polled for
+    ever. Stop here; the page shows the set-up screen. When the office is created `refresh` sees the state change and starts
+    the rest (startOfficeReads), so nothing is lost, only not asked in advance.
+  */
+  if (source.state === 'no_office') {
+    arrivalPending = false
+    render()
+    return
+  }
+  /*
+    A credential the office refused outright (hydrate has already cleared it): every other read would be refused the same way,
+    and the poll would ask again every twenty seconds with a token that will never work. Say so and stop; signing in again
+    reloads the page and starts fresh.
+  */
+  if (source.state === 'refused') {
+    arrivalPending = false
+    render()
+    return
+  }
+  await startOfficeReads(token)
+}
+
+async function startOfficeReads(token) {
+  officeStarted = true
+  /*
     How he chose to have it look, from the office (#124, ADR-0021).
 
     After the payload and before the redraw: the page has already applied this
@@ -15499,15 +15688,14 @@ async function live() {
       if (health.cannotThink.length > 0) { health.cannotThink = []; render() }
     }
   }
-  void readThinking()
+  // No read here: `pulse.watch` below primes with an immediate tick, and that tick runs this. Reading it here as well made
+  // the same request twice on every load.
 
   void read('workspace').then((w) => {
     panels.adoptHome(w)
     if (state.view === 'portfolio') render()
   }).catch(() => undefined)
-  void Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
-    render()
-  })
+  // The Settings and Usage payloads are NOT read here any more: see needSettings, called by what draws them.
   // What Settings may OFFER depends on who is looking, which is only known once the settings payload has arrived; if
   // the page is already open it is drawn again.
   document.addEventListener('hq:viewer', () => {
@@ -15529,6 +15717,17 @@ async function live() {
     the tab is hidden — both of which `pulse` already handles.
   */
   pulse.watch(API, token, refresh, () => { when.retime(document); void readThinking() })
+/*
+  Coming back to a tab or a device that has been away is when another device's notes are most likely to be waiting.
+  After a pause of half a minute or more, take them in (the same refresh the pulse runs).
+*/
+{
+  let hiddenAt = 0
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') hiddenAt = Date.now()
+    else if (hiddenAt !== 0 && Date.now() - hiddenAt > 30_000) void refresh()
+  })
+}
 }
 
 /*

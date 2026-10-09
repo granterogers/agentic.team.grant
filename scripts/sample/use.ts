@@ -286,7 +286,7 @@ try {
   })
   await step('the jump bar finds a project by a few letters', async () => {
     await go('/')
-    await page.keyboard.press('Shift+J')
+    await page.keyboard.press('Control+K')
     await sleep(500)
     await page.keyboard.type('japan')
     await eventually('offered', async () => (await body(page)).includes('Japan Spring Trip'))
