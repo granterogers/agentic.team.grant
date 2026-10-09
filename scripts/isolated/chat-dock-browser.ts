@@ -96,13 +96,27 @@ const CHROMIUM = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/ch
 const browser = await chromium.launch({ executablePath: CHROMIUM, args: ['--no-sandbox'] })
 
 type Turn = { message: string; session: string; said: string; status: number }
-type Seen = { pageErrors: string[]; turns: Turn[]; loseNext: boolean; delayNextMs: number }
+type Seen = {
+  pageErrors: string[]
+  turns: Turn[]
+  loseNext: boolean
+  delayNextMs: number
+  delayHistoryMs: number
+  historyDone: boolean
+}
 
 const DESKTOP = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
 const openPage = async (viewport = DESKTOP) => {
   const ctx = await browser.newContext({ viewport })
-  const seen: Seen = { pageErrors: [], turns: [], loseNext: false, delayNextMs: 0 }
+  const seen: Seen = {
+    pageErrors: [],
+    turns: [],
+    loseNext: false,
+    delayNextMs: 0,
+    delayHistoryMs: 0,
+    historyDone: false,
+  }
   await ctx.route(`${GW}/**`, async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
@@ -132,6 +146,13 @@ const openPage = async (viewport = DESKTOP) => {
       }),
     )
     const text = await res.text()
+    if (seen.delayHistoryMs > 0 && url.searchParams.get('section') === 'conversation') {
+      // The office answered the history read at once (what it knew THEN); the page hears it late, after the person has sent something.
+      const ms = seen.delayHistoryMs
+      seen.delayHistoryMs = 0
+      await new Promise((r) => setTimeout(r, ms))
+      seen.historyDone = true
+    }
     if (turn !== null) {
       turn.status = res.status
       seen.turns.push(turn)
@@ -178,7 +199,7 @@ const openPage = async (viewport = DESKTOP) => {
 
 /** What each step of `say` saw, kept so a red can say where a message went (#458). */
 const trace: string[] = []
-const say = async (page: Page, text: string): Promise<void> => {
+const say = async (page: Page, text: string, how: 'atomic' | 'press' = 'atomic'): Promise<void> => {
   const t0 = Date.now()
   const note = (what: string): void => {
     trace.push(`${String(Date.now() - t0)}ms ${what}`)
@@ -194,6 +215,20 @@ const say = async (page: Page, text: string): Promise<void> => {
     await page.locator('[data-bc-dock]').first().click({ force: true })
   }
   await page.waitForSelector('.dock [data-docksay]', { timeout: 10000 })
+  if (how === 'atomic') {
+    /*
+      ONE STEP IN THE PAGE. Putting the words in the live composer and submitting its form happen in a single synchronous script, so a
+      redraw of the dock (an answer, a retry or a history read landing) cannot fall between the two. Driving them as separate browser
+      actions let a redraw replace the composer after the words went in (the words lost) or while the button was being pressed (a click
+      on a node that was thrown away): the red this proof showed under load (#458). The real Send button is pressed by `press`.
+    */
+    const sent = await page.evaluate(
+      `((t) => { const b = document.querySelector('.dock [data-docksay]'); const f = document.querySelector('.dock [data-dockform]'); if (!b || !f) return false; b.value = t; f.requestSubmit(); return true })(${JSON.stringify(text)})`,
+    )
+    if (sent !== true) throw new Error('the dock has no composer to send from')
+    note('submitted in one step')
+    return
+  }
   /*
     SYNCHRONISE ON THE THING ASSERTED. A redraw of the dock (an answer or a retry landing) replaces the composer; a fill that resolved
     its element just before that lands on the node that was thrown away, and the words are not in the box a person would see (#458,
@@ -229,7 +264,7 @@ try {
     await page.waitForTimeout(800)
 
     // 1. one message, one command, the right place
-    await say(page, FIRST)
+    await say(page, FIRST, 'press')
     await page.waitForTimeout(2500)
     const c1 = await commandsFor(FIRST)
     check(
@@ -441,6 +476,44 @@ try {
     } finally {
       await o.close()
     }
+  }
+
+  // 4e. a message sent while the history read is still on its way stays on screen when that read lands (the read cannot contain it),
+  // once, and is not sent a second time
+  const late = await openPage(DESKTOP)
+  try {
+    late.seen.delayHistoryMs = 3000
+    await late.page.goto(`${APP}/p/${SLUG}/overview`, { waitUntil: 'domcontentloaded' })
+    await late.page.waitForSelector('.bctop', { timeout: 20000 })
+    await late.page.waitForSelector('[data-bc-dock]', { timeout: 20000 })
+    const EARLY = `[dock proof ${run}] sent before the history arrived`
+    await say(late.page, EARLY)
+    for (let waited = 0; waited < 12000 && !late.seen.historyDone; waited += 250)
+      await late.page.waitForTimeout(250)
+    await late.page.waitForTimeout(600)
+    const shown = await dockText(late.page)
+    check(
+      'the held history read did land after the message was sent',
+      late.seen.historyDone,
+      String(late.seen.historyDone),
+    )
+    check(
+      'a message sent while the history was still loading is still on screen once that read lands, and only once',
+      shown.split(EARLY).length - 1 === 1,
+      `${String(shown.split(EARLY).length - 1)} time(s) on screen`,
+    )
+    check(
+      'and it reached the office once (nothing to type again)',
+      (await commandsFor(EARLY)).length === 1,
+      String((await commandsFor(EARLY)).length),
+    )
+    check(
+      'no page error on the early send',
+      late.seen.pageErrors.length === 0,
+      late.seen.pageErrors.join(' | '),
+    )
+  } finally {
+    await late.close()
   }
 
   // 4d. a second project: the dock follows the page, so a message sent there belongs to THAT project and the first project's

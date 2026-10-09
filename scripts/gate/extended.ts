@@ -145,7 +145,7 @@ export const EXTENDED: readonly Proof[] = [
   ),
   p(
     'chat-dock-browser',
-    28,
+    30,
     'Team Chat dock, real page and real voice door: one typed message is one command for the right person and project, a lost response is retried under the same message name and filed once, and a second visit lands in the same conversation',
     { timeoutS: 420 },
   ),

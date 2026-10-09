@@ -130,6 +130,8 @@ const asBubble = (m) => ({
 export async function load(slug, projectId, token) {
   if (!projectId || !token) return null
   const began = session.epoch()
+  // When this read STARTED. A message sent after that cannot be in what comes back, so it must not be mistaken for one that has landed (#458).
+  const startedAt = Date.now()
   try {
     // A visitor reads only their own thread, never the office's ordinary conversation (which is empty for a sample).
     const url = session.isSample()
@@ -144,8 +146,12 @@ export async function load(slug, projectId, token) {
     if (!Array.isArray(body.data)) return null
     office.set(slug, body.data.map(asBubble))
     // What was in flight has landed, so the optimistic copy would now be a
-    // duplicate of it.
-    write(slug, (all()[slug] ?? []).filter((m) => m.inflight !== true))
+    // duplicate of it. Only what was sent BEFORE this read began: a message typed while the read was on its way is not in the answer,
+    // and dropping it made a sent message vanish from the screen until the next read (a person then types it again).
+    write(
+      slug,
+      (all()[slug] ?? []).filter((m) => m.inflight !== true || Date.parse(String(m.at)) >= startedAt),
+    )
     return thread(slug)
   } catch {
     return null
