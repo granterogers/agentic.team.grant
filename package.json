@@ -217,6 +217,7 @@
     "verify:oauth": "tsx scripts/verify/oauth.ts",
     "verify:portfolio": "tsx scripts/verify/portfolio.ts",
     "deploy:worker": "tsx scripts/deploy/worker.ts",
+    "release:services": "tsx scripts/release/bundle-manifest.ts",
     "deploy:google": "tsx scripts/deploy/google.ts",
     "telegram:login": "tsx scripts/telegram/login.ts",
     "telegram:bots": "tsx scripts/telegram/bots.ts",

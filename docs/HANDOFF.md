@@ -1202,8 +1202,15 @@ pending migrations (1023 to 1035) and the deployment risks: `docs/audit/V1-RELEA
 
 #443 fixed (a database blip while recording a handler failure is retried, a refusal never is) and closed; the Notion cause stays unproven. #444 mitigated: a backup-served answer is admitted on evidence,
 gets one second opinion from a different model, then a limitation composed in code; a backup-served turn asks before it writes or sends. The four mixed-version states were built and run
-(`docs/audit/V1-FINAL-RELEASE-GATE-2026-10-08.md` section 5): **migrate first**; the old worker and old hq-api run on the new schema, the new worker on the old schema degrades, the new hq-api on the old schema fails.
+(`docs/audit/V1-FINAL-RELEASE-GATE-2026-10-08.md` section 5): **migrate first**; the old worker and old hq-api run on the new schema, the new worker on the old schema degrades, the new hq-api on the old schema fails for one action only (corrected 9 October; `V1-PRODUCTION-RELEASE-PLAN-2026-10-09.md`).
 Critical 63 green (3,557 assertions), extended 71 green, sabotage 16 of 16, full mutation campaign run. Recommendation **B**. The smoke-test procedure, deployment order and rollback table are in that report; none is authorised.
+
+## 9 October 2026 - Version 1 production release plan (local only; nothing deployed, nothing read from production)
+
+`docs/audit/V1-PRODUCTION-RELEASE-PLAN-2026-10-09.md` (13 sections) and `V1-RELEASE-OPERATOR-CHECKLIST-2026-10-09.md`, with 19 preflight reads, 22 monitoring queries and a 64-function fingerprint file.
+Eleven migrations (1023 to 1035) and five deploys (worker, hq-api, voice, **signin**, page with `--allow-new=flow.js,studio/flow.js`); `npm run release:services` computes the list. Five migrations cannot be applied twice (#446).
+Open unknowns that decide the release: free-tier capacity (projected near 85 percent now), deliveries the redrive would resend (P05), live code identity of un-redeployed services, backup state. `verify:wired` red at both commits (#447).
+Recommendation **B**: the production reads come first, and none is authorised.
 
 ---
 

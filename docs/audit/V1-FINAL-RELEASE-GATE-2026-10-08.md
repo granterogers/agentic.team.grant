@@ -16,7 +16,7 @@ written (section 14) so that every step can be aborted and every deployed piece 
 |---|---|
 | Is the worker recovery lifecycle safe? | **Yes, on every path the replica can drive.** One real defect was found and fixed (#443, section 3): a database blip while a failure was being recorded left the job `running` with no reason. Recovery after a persistent outage, exhaustion, concurrent recovery and cross-office isolation were already correct and now have a proof each. Whether this is what hit the eleven `office.notion_sync` jobs is **UNPROVEN**. |
 | Can fallback models produce unsupported claims without being caught? | **Yes, some, and this is stated plainly.** The lexical half of the policy refuses the sentences observed so far and their neighbours, and a weak model keeps finding new wordings of admin commentary and offers; three more were found and closed in this phase alone (section 4). What does not depend on wording is the authority half: a turn a backup model served may not write, send or commit anything on its own, and cannot reach a human without a yes (mutation-proven, fails closed). So the residual risk is a worse sentence reaching him, not an unapproved action. |
-| Is the migration and deployment sequence compatible? | **Yes, in the order in section 7, and unsafe in exactly one other order.** New worker on the old schema degrades and is not supported; new hq-api on the old schema fails (`say_in_project` with `p_message_id` does not exist). Old worker and old hq-api on the new schema run and lose only the new behaviour. |
+| Is the migration and deployment sequence compatible? | **Yes, in the order in section 7, and unsafe in exactly one other order.** New worker on the old schema degrades and is not supported; new hq-api on the old schema fails for ONE action (`reminder_series_stop`, which needs 1034; **corrected 9 October**: this row first said `say_in_project` with `p_message_id` fails, but the shipped hq-api never sends that parameter, see `V1-PRODUCTION-RELEASE-PLAN-2026-10-09.md` section 4). Old worker and old hq-api on the new schema run and lose only the new behaviour. |
 | Are the user-facing journeys stable? | **Yes on the replica**: critical gate 63 of 63, extended 71 of 71, and the journeys named in the brief are each in a proof (section 9). Two proofs went red after 21:00 UTC because they read "tomorrow" in UTC while the Athens office is a day ahead; the product was right, the proofs are fixed. |
 | What remains unproven in production? | Section 11 and 12: migration duration and locks at production size; provider variance over days; the Notion cause; real Telegram and Slack doors; Supabase platform health under load; `check:callers` and the other production-reading checks (NOT RUN). |
 | Is a controlled live-provider smoke test now justified? | **Yes**, attended, with the abort and rollback triggers in section 14. |
@@ -107,8 +107,10 @@ is that plus 1023 to 1027, 1029, 1030, 1032 to 1035 in order; 1028 and 1031 do n
 What the cells show:
 * **Migrate first.** B is not a supported state. Its failures are `function app.jobs_owing_a_word` / `app.spent_today` / `app.say_in_project(..., text)`
   not existing and `column send_started_at does not exist`; the worker's own sweeps (`sweepOwedWords`, the redrive) are `.catch`-guarded, so B degrades instead of
-  crashing, `dequeue` and the lease sweep still work (`worker-failure-paths` is green in B), but the new behaviour is absent. A new hq-api against the old schema is
-  not degraded but broken for `say`: measured, `public.say_in_project(..., p_message_id => ...)` on the deployed schema answers "No function matches".
+  crashing, `dequeue` and the lease sweep still work (`worker-failure-paths` is green in B), but the new behaviour is absent. **Corrected 9 October:** the
+  sentence that stood here (a new hq-api on the old schema is "broken for `say`") confused a measured function signature with what the gateway sends. `public.say_in_project(..., p_message_id => ...)`
+  does not exist on the deployed schema, which is true, but the new hq-api's only change is a new action `reminder_series_stop` (1034) and the page's chat posts to the `voice` function, which
+  needs no function from 1023 to 1035. So a new hq-api on the old schema fails for that one action only, and new `voice`, `signin` and page run on the old schema.
 * **Old code on the new schema runs.** Five function signatures change (`app.over_budget`, `app.spent_today`, `app.record_delivery_failure`, `app.say_in_project`,
   `public.say_in_project`). The two that old callers use keep working because the new overload only *adds* defaulted parameters; measured: the old hq-api's `say`
   shape (no `p_message_id`) succeeds on `mig_s1` inside a rolled-back transaction, and the old worker's four-argument `record_delivery_failure` produced a backoff
@@ -131,7 +133,7 @@ What the cells show:
 | 1026 free tier watched | none | new table, RLS on |
 | 1027 task day and repeating reminder follow the office clock | new worker reads `app.office_timezone` | additive; old worker keeps UTC defaults |
 | 1029 a finished answer is redriven | **new worker** (`begin_delivery_send`, redrive) | old worker never sets `send_started_at`: sends behave as today, no ambiguity fence |
-| 1030 a replayed Team HQ message is one command | hq-api `p_message_id` | defaulted, old hq-api works; new hq-api needs it |
+| 1030 a replayed Team HQ message is one command | none of the deployed callers (corrected 9 October) | `say_in_project` gains a defaulted `p_message_id`: old callers work; the shipped hq-api and page do not send it |
 | 1032 failed or uncertain delivery owes one question | worker | trigger and functions are additive |
 | 1033 delivered only to a destination its own office holds | none | containment, in force for both workers |
 | 1034 completing a repeating reminder completes that time only | none beyond 1027 | trigger on `tasks.state`; additive columns |

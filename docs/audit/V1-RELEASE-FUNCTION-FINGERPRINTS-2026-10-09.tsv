@@ -1,0 +1,65 @@
+kind	identity	md5_before_first10	md5_after_first10
+changed	app.chores_for_credentials()	6e1be3fc13	136fbde0b3
+changed	app.claim_delivery(p_office uuid, p_channel text, p_dedupe_key text, p_account_ref text, p_target_ref text, p_purpose text, p_thread_ref text, p_staff_id uuid, p_correlation_id uuid, p_job_id uuid, p_lease interval)	16cbddcf2d	82261b61f0
+changed	app.conversation_history(p_office uuid, p_project_id uuid, p_limit integer, p_before timestamp with time zone)	212101d296	72f8f443d6
+changed	app.defer_over_budget()	0070f3edaf	ef506b4d53
+changed	app.delivery_refusal(p_job_id uuid, p_dedupe_key text, p_channel text, p_target_ref text)	1a395fc799	e456414945
+changed	app.dequeue_job(p_worker text, p_can_transcribe boolean, p_can_subprocess boolean, p_kinds text[], p_requested_by text)	644264215b	377486b3f0
+changed	app.free_tier_headroom()	bc1d9657b1	bc7a2e87d6
+changed	app.hq_answer_blocker(p_office uuid, p_blocker_id uuid, p_answer text, p_by text)	de5e8a363a	2fe4bdfb8c
+changed	app.hq_task_state(p_office uuid, p_task_id text, p_state text, p_reason text, p_by text)	eb2fa1fefa	843ac3f0fc
+changed	app.my_task_set(p_office uuid, p_task_id text, p_labels text[], p_remind_at timestamp with time zone, p_repeat_every interval, p_repeat_from text, p_clear text[], p_title text, p_detail text, p_priority integer, p_due_on date, p_project text)	3efa038ee3	291c0edef3
+changed	app.my_tasks(p_office uuid, p_bucket text, p_limit integer, p_query text, p_sort text, p_include_harness boolean)	7e60d84b86	c6632f2e74
+changed	app.my_tasks_counts(p_office uuid)	99d7b36a76	e37fa91a54
+changed	app.open_questions_for_reply(p_office uuid, p_command uuid)	9693f15000	5d8ee9831a
+changed	app.reminders_due(p_office uuid, p_grace interval)	6bb5c026d6	d926be3744
+changed	app.reminders_sent(p_office uuid, p_ids uuid[])	436323e071	2766eeeebe
+changed	app.resolve_indeterminate_delivery(p_office uuid, p_delivery_id uuid, p_message_ref text)	97913b0999	cadf85900b
+changed	app.retry_delivery(p_office uuid, p_delivery_id uuid)	9bf8677895	c67fda2dbf
+changed	app.studio_tasks(p_project_id uuid)	f17d28026c	3102c02c5a
+changed	app.tasks_repeat_on_done()	8f978a3562	099f2acce9
+changed	app.undelivered(p_project_id uuid, p_limit integer)	2edbed5f54	51d6bee187
+removed	app.over_budget(p_agent text)	8f86e29957	-
+removed	app.record_delivery_failure(p_office uuid, p_delivery_id uuid, p_error_code text, p_retryable boolean)	754a76fd12	-
+removed	app.say_in_project(p_office uuid, p_project_id uuid, p_text text, p_addressed_to text, p_addressed_also text[], p_by text)	ed1601baa5	-
+removed	app.spent_today(p_agent text)	7ecb6bc27a	-
+removed	public.say_in_project(p_office uuid, p_project_id uuid, p_text text, p_addressed_to text, p_addressed_also text[], p_by text)	b258d90043	-
+added	app.answer_delivery_attention(p_office uuid, p_blocker_id uuid, p_answer text, p_by text)	-	22af2b870a
+added	app.begin_delivery_send(p_office uuid, p_delivery_id uuid, p_attempt integer, p_lease interval)	-	b3a8b39c12
+added	app.budget_defers_kind(p_kind text)	-	0ee8426c7f
+added	app.capacity_days_to_limit(p_days date[], p_bytes bigint[], p_limit bigint)	-	f71ee0f398
+added	app.capacity_growth(p_days date[], p_bytes bigint[])	-	b3975cfadb
+added	app.capacity_level(p_percent numeric, p_previous integer)	-	110074964f
+added	app.capacity_reading(p_scope text, p_live bigint, p_limit bigint)	-	4161f66082
+added	app.capacity_sample()	-	3f9482dc95
+added	app.capacity_watch()	-	ba377df133
+added	app.chores_for_capacity()	-	ce960fc942
+added	app.claim_last_word(p_job_id uuid)	-	7655f1d66f
+added	app.deliveries_attention_trigger()	-	bd4cb459d5
+added	app.deliveries_to_redrive(p_limit integer)	-	4d17c87d33
+added	app.delivery_note(p_delivery uuid, p_action text, p_why text)	-	952b62f626
+added	app.delivery_words(p_error_code text)	-	58991a2d51
+added	app.destination_held_by_another_office(p_job uuid, p_channel text, p_target_ref text)	-	d39eda5ef9
+added	app.job_delivery_state(p_office uuid, p_job_id uuid)	-	35fbc3a7a2
+added	app.jobs_owing_a_word(p_limit integer, p_window interval)	-	927ce53e87
+added	app.office_timezone(p_office uuid)	-	b184e874bd
+added	app.over_budget(p_office uuid, p_agent text)	-	bffbc6cf71
+added	app.raise_delivery_attention(p_delivery uuid)	-	46ff34c6c0
+added	app.raise_missing_delivery_attention(p_max_age interval)	-	8f66eae00d
+added	app.record_delivery_failure(p_office uuid, p_delivery_id uuid, p_error_code text, p_retryable boolean, p_retry_after integer)	-	0afd0ef093
+added	app.reminder_finish(p_task uuid, p_delivered boolean)	-	9498b3b8e9
+added	app.reminder_next_at(p_office uuid, p_at timestamp with time zone, p_every interval, p_after timestamp with time zone)	-	5f6874f83c
+added	app.reminder_series(p_office uuid, p_include_harness boolean)	-	2c399937ec
+added	app.reminder_series_stop(p_office uuid, p_task_id text, p_by text)	-	d9a9f54182
+added	app.reminders_announced(p_office uuid, p_ids uuid[], p_job uuid)	-	24feb22bf4
+added	app.reminders_settle(p_office uuid)	-	09cc5f60fb
+added	app.reopen_duty_voice(p_job_id uuid)	-	ce55807923
+added	app.result_superseded(p_office uuid, p_job uuid, p_channel text, p_target_ref text)	-	3ad51eb6b6
+added	app.say_in_project(p_office uuid, p_project_id uuid, p_text text, p_addressed_to text, p_addressed_also text[], p_by text, p_message_id text)	-	06c20cc3bd
+added	app.settle_delivery_attention(p_job uuid)	-	ccd486a82c
+added	app.settle_lapsed_deliveries(p_max_age interval)	-	949dd6e359
+added	app.settle_last_word(p_job_id uuid)	-	f75b78ed0c
+added	app.spent_today(p_office uuid, p_agent text)	-	5ca54c9630
+added	app.tasks_series_survives_completion()	-	f96c11c74b
+added	public.reminder_series_stop(p_office uuid, p_task_id text, p_by text)	-	fadbf2e1d4
+added	public.say_in_project(p_office uuid, p_project_id uuid, p_text text, p_addressed_to text, p_addressed_also text[], p_by text, p_message_id text)	-	1b0e7e2386
