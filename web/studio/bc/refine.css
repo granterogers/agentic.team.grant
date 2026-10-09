@@ -124,6 +124,17 @@
   background-color: color-mix(in srgb, var(--bc-canvas) 94%, transparent);
 }
 
+/* The one offer in the Layouts menu that changes the arrangement: it says so by being the accent's, and spans the menu. */
+[data-experience='basecamp'] .bcpopfit {
+  width: 100%;
+  margin-top: 8px;
+  justify-content: center;
+  border-color: color-mix(in oklab, var(--bc-accent) 55%, transparent);
+  background: color-mix(in oklab, var(--bc-accent) 16%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcpopfit:hover { background: color-mix(in oklab, var(--bc-accent) 26%, transparent); }
+
 /* ---------------------------------------------------------------- 4. touch --- */
 
 /*

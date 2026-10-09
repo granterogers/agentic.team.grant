@@ -750,6 +750,12 @@ export const wireStage = (root, ctx) => {
             `<button type="button" class="bcpopbtn" data-preset="${esc(k)}">${esc(v.name)}</button>`,
         )
         .join('')}</div>
+      ${
+        grid.fitsWindow(slug)
+          ? ''
+          : `<button type="button" class="bcpopbtn bcpopfit" data-fit-window>Fit my arrangement to this window</button>
+             <p class="bcpopnote">Keeps its shape and saves the arrangement as it was under Your layouts first.</p>`
+      }
       <p class="bcpoplabel">Your layouts</p>
       ${
         names.length === 0
@@ -798,6 +804,13 @@ export const wireStage = (root, ctx) => {
         ctx.render()
       })
     }
+    p.querySelector('[data-fit-window]')?.addEventListener('click', () => {
+      glide()
+      grid.fitToWindow(slug)
+      view = grid.viewOf(slug)
+      shut()
+      ctx.render()
+    })
     for (const b of p.querySelectorAll('[data-load]')) {
       b.addEventListener('click', () => {
         glide()

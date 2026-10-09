@@ -1320,6 +1320,53 @@ export const deleteLayout = (slug, name) => {
   return true
 }
 
+/**
+ * An arrangement with its horizontal extent scaled to `width`, keeping its shape: order, overlaps and heights are kept, and the
+ * leftmost edge moves to 0. Pure, so the arithmetic is tested without a browser. The factor is bounded, so a degenerate
+ * arrangement cannot be blown up or crushed.
+ */
+export const scaleToWidth = (mods, width) => {
+  if (mods.length === 0 || !(width > 0)) return mods
+  const left = Math.min(...mods.map((m) => m.x))
+  const right = Math.max(...mods.map((m) => m.x + m.w))
+  const span = right - left
+  if (!(span > 0)) return mods
+  const k = Math.min(3, Math.max(0.35, width / span))
+  return mods.map((m) => clampRect({ ...m, x: Math.round((m.x - left) * k), w: Math.round(m.w * k) }))
+}
+
+const spanOf = (mods) =>
+  Math.max(...mods.map((m) => m.x + m.w)) - Math.min(...mods.map((m) => m.x))
+
+/**
+ * Does this page's arrangement already fit the window? A board that follows the window always does. One the person (or an older
+ * version) arranged at another width does not, once its horizontal extent differs from the window's by more than 8%.
+ */
+export const fitsWindow = (slug) => {
+  const d = doc(slug)
+  if (!frozen(d)) return true
+  const mods = layout(slug)
+  if (mods.length === 0) return true
+  return Math.abs(spanOf(mods) - stage.w) <= stage.w * 0.08
+}
+
+/**
+ * Adapt a saved arrangement to the window it is now opened in, without losing it: the arrangement as it was is saved first
+ * under a name of its own ("Before fitting", "Before fitting 2", ...), then the same arrangement is scaled to the window. The
+ * way back is Layouts, where the copy is listed. Returns the name of the copy, or '' when nothing needed doing.
+ */
+export const fitToWindow = (slug) => {
+  if (fitsWindow(slug)) return ''
+  const names = new Set(layoutNames(slug))
+  let kept = 'Before fitting'
+  for (let i = 2; names.has(kept); i += 1) kept = `Before fitting ${String(i)}`
+  saveLayout(slug, kept)
+  const d = doc(slug)
+  const mods = scaleToWidth(layout(slug), stage.w).map((m) => ({ ...m, placed: true }))
+  commit(slug, { ...d, mods, zoom: 1, pan: { x: 0, y: 0 } })
+  return kept
+}
+
 /** One of the built-in presets, as the arrangement. */
 export const applyPreset = (slug, key) => {
   const p = PRESETS[key]

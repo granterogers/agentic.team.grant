@@ -530,6 +530,98 @@ if (want('tokens')) {
   }
 }
 
+/* --------------------------------------------------------------------- fit --- */
+if (want('fit')) {
+  const { ctx, page, slug, errors } = await open({ w: 1700, h: 900 })
+  /* An arrangement an older version saved at a narrow window: three modules in 900px, owned by the person (placed). */
+  const seeded = { mods: [{ id: 'tasks', x: 20, y: 20, w: 400, h: 300, z: 1, tint: null, placed: true }, { id: 'board', x: 440, y: 20, w: 440, h: 300, z: 2, tint: null, placed: true }, { id: 'documents', x: 20, y: 340, w: 860, h: 280, z: 3, tint: null, placed: true }], zoom: 1, pan: { x: 0, y: 0 }, layouts: {}, postits: [], gone: {}, seeded: true, bg: null }
+  await page.evaluate(`localStorage.setItem('bc.stage.${slug.split('/').pop()}', ${JSON.stringify(JSON.stringify(seeded))})`)
+  await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-bc-board]')
+  await page.waitForTimeout(700)
+  const before = await rects(page)
+  check('the older arrangement is kept exactly as saved (3 modules, not re-flowed)', before.length === 3, JSON.stringify(before.map((r) => r.id)))
+  await press(page, '[data-bc-layouts]')
+  check('the Layouts menu offers to fit the arrangement to this window', (await page.locator('[data-fit-window]').count()) === 1)
+  await page.screenshot({ path: `${OUT}/fit-offer.png` })
+  await press(page, '[data-fit-window]')
+  await page.waitForTimeout(600)
+  const after = await rects(page)
+  const w = (l: typeof before): number => Math.max(...l.map((r) => r.x + r.w)) - Math.min(...l.map((r) => r.x))
+  check('after fitting, the arrangement is wider (it follows the wide window) and keeps its three modules', after.length === 3 && w(after) > w(before) * 1.3, `${String(Math.round(w(before)))} -> ${String(Math.round(w(after)))}`)
+  check('the order across the board is kept', JSON.stringify([...after].sort((a, b) => a.x - b.x).map((r) => r.id)) === JSON.stringify([...before].sort((a, b) => a.x - b.x).map((r) => r.id)))
+  await press(page, '[data-bc-layouts]')
+  check('the arrangement as it was is listed under Your layouts', (await page.locator('[data-load="Before fitting"]').count()) === 1)
+  check('and the offer is gone, because it now fits', (await page.locator('[data-fit-window]').count()) === 0)
+  await page.screenshot({ path: `${OUT}/fit-after.png` })
+  await press(page, '[data-load="Before fitting"]')
+  await page.waitForTimeout(500)
+  const back = await rects(page)
+  check('loading the saved copy gives back the original arrangement', back.length === 3 && Math.abs(w(back) - w(before)) <= 2, `${String(Math.round(w(back)))} vs ${String(Math.round(w(before)))}`)
+  check('no page errors', errors.length === 0, errors.join(' | '))
+  await ctx.close()
+}
+
+/* ------------------------------------------------------------------- looks --- */
+if (want('looks')) {
+  const { ctx, page, slug, errors } = await open({ scheme: 'dark', palette: 'slate' })
+  const read = (): Promise<any> =>
+    page.evaluate(`(() => { const s = getComputedStyle(document.documentElement); const m = document.querySelector('.bcstage [data-mod]'); const d = document.documentElement.dataset; return { look: d.look, glass: d.glass, depth: d.depth, canvas: s.getPropertyValue('--bc-canvas').trim(), surface: s.getPropertyValue('--bc-surface').trim(), accent: s.getPropertyValue('--bc-accent').trim(), depthVar: s.getPropertyValue('--bc-depth').trim(), mod: m ? getComputedStyle(m).backgroundColor : '', stored: JSON.parse(localStorage.getItem('studio.appearance') || '{}') } })()`)
+  const pane = async (): Promise<void> => {
+    await press(page, '[data-bc-settings]')
+    await page.waitForSelector('#settings .stg')
+    await press(page, '#settings [data-setting="appearance"]')
+    await page.waitForSelector('[data-look-pick]')
+  }
+  await pane()
+  const o = await read()
+  check('the default look is Original, soft glass, soft depth', o.look === 'original' && o.glass === 'soft' && o.depth === 'soft', JSON.stringify({ l: o.look, g: o.glass, d: o.depth }))
+  const seen = new Set<string>([o.canvas])
+  for (const look of ['silver', 'forest', 'graphite']) {
+    await press(page, `[data-look-pick="${look}"]`)
+    const r = await read()
+    check(`choosing ${look} changes the canvas and the surface and is stored`, r.look === look && !seen.has(r.canvas) && r.surface !== o.surface && r.stored.look === look, `${o.canvas} -> ${r.canvas}`)
+    seen.add(r.canvas)
+    check(`${look} leaves the accent alone (the accent is the other choice)`, r.accent === o.accent, `${o.accent} vs ${r.accent}`)
+    check(`the Settings page itself wears ${look} (its pressed card is the selected one)`, (await page.locator(`[data-look-pick="${look}"][aria-pressed="true"]`).count()) === 1)
+  }
+  await page.screenshot({ path: `${OUT}/looks-settings-graphite.png` })
+  await press(page, '[data-depth-pick="deep"]')
+  const deep = await read()
+  await press(page, '[data-depth-pick="flat"]')
+  const flat = await read()
+  check('depth scales the shadow scale (deep > soft > flat)', Number(deep.depthVar) > 1 && Number(flat.depthVar) < 1, `${flat.depthVar} / ${deep.depthVar}`)
+  await press(page, '[data-glass-pick="off"]')
+  check('Solid glass is stored', (await read()).stored.glass === 'off')
+  await press(page, '[data-glass-pick="rich"]')
+  check('Rich glass is stored', (await read()).stored.glass === 'rich')
+  /* Reload, navigate and reopen: every choice survives and shows on the board. */
+  await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-bc-board]')
+  await page.waitForTimeout(600)
+  const after = await read()
+  check('after a reload the look, the glass and the depth are still applied', after.look === 'graphite' && after.glass === 'rich' && after.depth === 'flat', JSON.stringify({ l: after.look, g: after.glass, d: after.depth }))
+  check('the board module wears the look (not the Original surface)', after.mod !== '' && after.surface !== o.surface)
+  /* Glass is real: an open menu blurs what is behind it, and the top bar does not swallow the blur. */
+  await press(page, '[data-bc-menu]')
+  await page.waitForTimeout(300)
+  const glass = (await page.evaluate(`(() => { const p = document.querySelector('.bcmenupanel:not([hidden])'); const t = document.querySelector('.bctop'); return { panel: p ? getComputedStyle(p).backdropFilter : '', bar: t ? getComputedStyle(t).backdropFilter : '' } })()`)) as any
+  check('an open menu on Rich glass blurs what is behind it', /blur\(2\d/.test(glass.panel), glass.panel)
+  check('while a menu is open the frosted top bar drops its own filter (so the menu can blur the board)', glass.bar === 'none', glass.bar)
+  await page.screenshot({ path: `${OUT}/looks-menu-rich-graphite.png` })
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+  const closed = (await page.evaluate(`getComputedStyle(document.querySelector('.bctop')).backdropFilter`)) as string
+  check('with the menu closed the top bar is frosted again', /blur/.test(closed), closed)
+  /* Back to Original: the screen is exactly the default again. */
+  await pane()
+  await press(page, '[data-look-pick="original"]')
+  const back = await read()
+  check('choosing Original restores the original canvas and surface', back.canvas === o.canvas && back.surface === o.surface, `${back.canvas} / ${back.surface}`)
+  check('no page errors', errors.length === 0, errors.join(' | '))
+  await ctx.close()
+}
+
 /* ------------------------------------------------------------------- phone --- */
 if (want('phone')) {
   for (const w of [360, 390, 430]) {
