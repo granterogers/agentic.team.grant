@@ -35,6 +35,22 @@ describe('the preflight statements', () => {
   })
 })
 
+describe('the R1b Needs me statements', () => {
+  const r1b = parsePreflight(
+    readFileSync('docs/audit/V1-R1B-NEEDS-ME-QUERIES-2026-10-09.sql', 'utf8'),
+  )
+  it('parses, and every one is a single plain select (or a read-only CTE)', () => {
+    expect(r1b.length).toBeGreaterThanOrEqual(8)
+    expect(r1b.filter((s) => !isPlainSelect(s.sql)).map((s) => s.id)).toEqual([])
+  })
+  it('none selects what a question says, who it is about or a secret', () => {
+    for (const s of r1b)
+      expect(s.sql).not.toMatch(
+        /\b(requested_action|why_needed|consequences_of_delay|resolution|approval_options|answered_by|dedupe_key\s*,|secret|vault|token|password)\b/i,
+      )
+  })
+})
+
 describe('the rule can refuse (controls)', () => {
   const refused: [string, string][] = [
     ['a write', 'insert into public.jobs (job_id) values (gen_random_uuid())'],
@@ -57,6 +73,16 @@ describe('the rule can refuse (controls)', () => {
 
   it('accepts an ordinary read (so the refusals are not a rule that refuses everything)', () => {
     expect(isPlainSelect("select count(*) as n from public.jobs where state = 'queued'")).toBe(true)
+  })
+
+  it('accepts a read-only CTE (with ... select), and still refuses one whose first word is not a read', () => {
+    expect(
+      isPlainSelect(
+        'with recursive c as (select 1 as n union all select n + 1 from c where n < 3) select count(*) from c',
+      ),
+    ).toBe(true)
+    expect(isPlainSelect('with c as (select 1) update public.jobs set state = c.state')).toBe(false)
+    expect(isPlainSelect('explain select 1')).toBe(false)
   })
 
   it('a quoted word is not a verb: a literal that says "delete" is still a read', () => {

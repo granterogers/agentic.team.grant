@@ -441,6 +441,28 @@ export async function restoreArchive(
     )
   }
 
+  // 3a'. constraints the target ALREADY held NOT VALID before this run (production holds some: a constraint added NOT VALID over rows
+  // that predate it). A restore puts such a key back as it found it and does not validate it; it validates the keys it dropped
+  // itself. Keys an interrupted run re-added NOT VALID are not in this set: those are validated, as before.
+  // An interrupted run's journal keeps each key's ORIGINAL definition, which says whether it was NOT VALID (pg_get_constraintdef ends
+  // with NOT VALID), so the journal, not the catalogue, decides those.
+  const interruptedNames = new Set(leftoverFks.map((f) => `${f.rel}.${f.name}`))
+  const keepNotValid = new Set(
+    (
+      (
+        await db.execute(`
+          select n.nspname || '.' || cl.relname as rel, c.conname as name from pg_catalog.pg_constraint c
+            join pg_catalog.pg_class cl on cl.oid = c.conrelid join pg_catalog.pg_namespace n on n.oid = cl.relnamespace
+           where n.nspname in ('public','app') and not c.convalidated order by 1, 2`)
+      ).rows as { rel: string; name: string }[]
+    )
+      .map((r) => `${r.rel}.${r.name}`)
+      .filter((k) => !interruptedNames.has(k))
+      .concat(
+        leftoverFks.filter((f) => /\sNOT VALID\s*$/i.test(f.def)).map((f) => `${f.rel}.${f.name}`),
+      ),
+  )
+
   // 3b. structure: the target must be what the rows were taken from
   const catalogue0 = await readCatalogue(db)
   const before = await structureOf(db)
@@ -626,7 +648,16 @@ export async function restoreArchive(
     const trigLeft = (
       await db.execute(`select rel, name, enabled from restore_state.triggers order by rel, name`)
     ).rows as { rel: string; name: string; enabled: string }[]
-    const orphans = await putBack(db, fksLeft, trigLeft, log, errors, !loadFailed)
+    const orphans = await putBack(
+      db,
+      fksLeft,
+      trigLeft,
+      log,
+      errors,
+      !loadFailed,
+      keepNotValid,
+      warnings,
+    )
     if (!loadFailed && orphans === 0 && fksLeft.length > 0)
       step(
         'cyclic foreign keys re-added and validated',
@@ -696,17 +727,29 @@ export async function restoreArchive(
       : verdict.errors.slice(0, 5).join('; '),
   )
 
-  const notValid = (
+  const notValidAll = (
     await db.execute(`
-      select c.conname as name, c.conrelid::regclass::text as rel from pg_catalog.pg_constraint c
-        join pg_catalog.pg_namespace n on n.oid = c.connamespace
-       where n.nspname in ('public','app') and not c.convalidated order by 1`)
+      select n.nspname || '.' || cl.relname as rel, c.conname as name from pg_catalog.pg_constraint c
+        join pg_catalog.pg_class cl on cl.oid = c.conrelid join pg_catalog.pg_namespace n on n.oid = cl.relnamespace
+       where n.nspname in ('public','app') and not c.convalidated order by 1, 2`)
   ).rows as { name: string; rel: string }[]
+  // A key the target held NOT VALID before the restore is left as it was (and named); any other left NOT VALID is a failure.
+  const notValid = notValidAll.filter((r) => !keepNotValid.has(`${r.rel}.${r.name}`))
+  const kept = notValidAll.filter((r) => keepNotValid.has(`${r.rel}.${r.name}`))
+  if (kept.length > 0)
+    warnings.push(
+      `${String(kept.length)} constraint(s) were NOT VALID in the target before the restore and are left so: ${kept
+        .slice(0, 6)
+        .map((r) => `${r.rel}.${r.name}`)
+        .join(', ')}`,
+    )
   step(
     'every constraint is validated',
     notValid.length === 0,
     notValid.length === 0
-      ? 'none left NOT VALID'
+      ? kept.length === 0
+        ? 'none left NOT VALID'
+        : `none left NOT VALID that the target had validated (${String(kept.length)} already NOT VALID before the restore, left as found)`
       : notValid
           .slice(0, 4)
           .map((r) => `${r.rel}.${r.name}`)
@@ -764,6 +807,63 @@ export async function restoreArchive(
 }
 
 /**
+ * Is every row that violates this same-office key named in `public.office_edge_exceptions`? Only the composite `(column, office_id)` keys
+ * 0658 added can be an exception, and only when the table exists in the target and names the edge as `<table>.<column>`. The comparison is
+ * by the violating rows themselves: a restored violation that is NOT recorded still fails.
+ */
+export async function recordedException(
+  db: SqlExecutor,
+  fk: { rel: string; name: string; def: string },
+): Promise<boolean> {
+  const m = /FOREIGN KEY \((\w+), office_id\) REFERENCES ([\w.]+)\((\w+), office_id\)/i.exec(fk.def)
+  if (m === null) return false
+  const [, col, parent, pcol] = m as unknown as [string, string, string, string]
+  const table = fk.rel.split('.')[1] ?? ''
+  const pk = (
+    await db.execute(
+      `select a.attname as k from pg_catalog.pg_index i join pg_catalog.pg_attribute a on a.attrelid = i.indrelid and a.attnum = any (i.indkey)
+        where i.indrelid = ${lit(qualify(fk.rel))}::regclass and i.indisprimary`,
+    )
+  ).rows as { k: string }[]
+  if (pk.length !== 1) return false
+  const child = pk[0]?.k ?? ''
+  try {
+    const r = (
+      await db.execute(
+        `select count(*)::int as bad,
+                (count(*) filter (where exists (select 1 from public.office_edge_exceptions x
+                                                where x.child_table = ${lit(table)} and x.edge = ${lit(`${table}.${col}`)}
+                                                  and x.child_id = c.${qi(child)}::text)))::int as recorded
+           from ${qualify(fk.rel)} c join ${qualify(parent.includes('.') ? parent : `public.${parent}`)} p on p.${qi(pcol)} = c.${qi(col)}
+          where p.office_id <> c.office_id`,
+      )
+    ).rows[0] as { bad: number; recorded: number }
+    // the violation is the recorded rows and nothing else; a missing parent is not a cross-office row and still fails validation
+    return r.bad > 0 && r.bad === r.recorded && (await onlyCrossOffice(db, fk, col, parent, pcol))
+  } catch {
+    return false
+  }
+}
+
+/** True when no row violates the key for a reason other than crossing offices (for instance, a parent that is absent). */
+async function onlyCrossOffice(
+  db: SqlExecutor,
+  fk: { rel: string; name: string },
+  col: string,
+  parent: string,
+  pcol: string,
+): Promise<boolean> {
+  const r = (
+    await db.execute(
+      `select count(*)::int as other from ${qualify(fk.rel)} c
+        where c.${qi(col)} is not null
+          and not exists (select 1 from ${qualify(parent.includes('.') ? parent : `public.${parent}`)} p where p.${qi(pcol)} = c.${qi(col)})`,
+    )
+  ).rows[0] as { other: number }
+  return r.other === 0
+}
+
+/**
  * Re-add journaled foreign keys NOT VALID then VALIDATE, and put each trigger back in its own prior state, then clear the
  * journal. Returns how many foreign keys failed validation. Failures go to `errors` and the journal is kept for them.
  */
@@ -779,6 +879,9 @@ async function putBack(
    * would make a run that repairs an interrupted one refuse itself.
    */
   validate = true,
+  /** `schema.table.constraint` names the target held NOT VALID before the restore: they go back NOT VALID and are not validated. */
+  keepNotValid: Set<string> = new Set(),
+  warnings: string[] = [],
 ): Promise<number> {
   let failed = 0
   for (const fk of fks) {
@@ -793,12 +896,25 @@ async function putBack(
           `alter table ${qualify(fk.rel)} add constraint ${qi(fk.name)} ${fk.def.replace(/\s+NOT VALID\s*$/i, '')} not valid`,
         )
       }
-      if (validate)
+      if (validate && !keepNotValid.has(`${fk.rel}.${fk.name}`))
         await db.execute(`alter table ${qualify(fk.rel)} validate constraint ${qi(fk.name)}`)
       await db.execute(
         `delete from restore_state.fks where rel = ${lit(fk.rel)} and name = ${lit(fk.name)}`,
       )
     } catch (error) {
+      // A key the PRODUCT left NOT VALID on purpose over one recorded row (migration 0658's same-office keys: the row is named in
+      // public.office_edge_exceptions, which is itself restored) is that recorded state coming back, not a restore fault. Anything
+      // not named there is a violation, as before.
+      if (await recordedException(db, fk)) {
+        keepNotValid.add(`${fk.rel}.${fk.name}`)
+        warnings.push(
+          `foreign key ${fk.rel}.${fk.name} is violated by a row the office recorded as a known exception (public.office_edge_exceptions); it is left NOT VALID, as in production`,
+        )
+        await db.execute(
+          `delete from restore_state.fks where rel = ${lit(fk.rel)} and name = ${lit(fk.name)}`,
+        )
+        continue
+      }
       failed += 1
       errors.push(
         `foreign key ${fk.rel}.${fk.name} is violated by the restored rows: ${String((error as Error).message).slice(0, 200)}`,

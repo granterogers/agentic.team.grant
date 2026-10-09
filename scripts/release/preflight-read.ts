@@ -24,8 +24,17 @@ const args = process.argv.slice(2)
 const only = (args.find((a) => a.startsWith('--only=')) ?? '').slice(7).split(',').filter(Boolean)
 const noHealth = args.includes('--no-health')
 
-const load = (): { id: string; sql: string }[] =>
-  parsePreflight(readFileSync('docs/audit/V1-RELEASE-PREFLIGHT-QUERIES-2026-10-09.sql', 'utf8'))
+// A different statement file may be named, but only one under docs/audit/: the same single-select rule and the same read-only endpoint apply.
+const fileArg = (args.find((a) => a.startsWith('--file=')) ?? '').slice(7)
+const FILE =
+  fileArg !== '' && /^docs\/audit\/[\w.-]+\.sql$/.test(fileArg)
+    ? fileArg
+    : 'docs/audit/V1-RELEASE-PREFLIGHT-QUERIES-2026-10-09.sql'
+if (fileArg !== '' && FILE !== fileArg) {
+  console.error('--file must be a .sql file directly under docs/audit/')
+  process.exit(2)
+}
+const load = (): { id: string; sql: string }[] => parsePreflight(readFileSync(FILE, 'utf8'))
 
 const post = async (
   sql: string,
@@ -76,7 +85,12 @@ for (const q of queries) {
     continue
   }
   const r = await post(q.sql, 20000)
-  const body = r.text.length > 3500 ? `${r.text.slice(0, 3500)} ...[clipped]` : r.text
+  const clip = args.includes('--full')
+    ? Number.POSITIVE_INFINITY
+    : FILE.includes('R1')
+      ? 14000
+      : 3500
+  const body = r.text.length > clip ? `${r.text.slice(0, clip)} ...[clipped]` : r.text
   console.log(
     `\n${q.id} http ${String(r.status)} ${String(r.ms)} ms at ${new Date().toISOString()}\n${body}`,
   )

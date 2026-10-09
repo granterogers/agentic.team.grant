@@ -24,7 +24,14 @@
       "version": "v899",
       "note": "9 October, Team HQ release (revisioned layout saves, project backgrounds); rollback bundle v897 captured by that release into .out/rollback-release/hq-api.v897 (gitignored, may no longer exist)"
     },
-    "mcp": { "version": "v664" },
+    "mcp": { "version": "v665" },
+    "liveReading": {
+      "at": "2026-10-09T15:34Z",
+      "by": "docs/audit/V1-R1B-R1C-RELEASE-VERIFICATION-2026-10-09.md (read-only R1b)",
+      "versions": "worker v976, hq-api v899, voice v659, signin v130, voice-token v688, mcp v665, telegram-webhook v699, slack-events v677, google-oauth v647, hq-api-basecamp v112, voice-basecamp v108 (the version number is NOT the identity: the bundle sha256 is, see the report section 7)",
+      "worker": "v976, bundle sha256 941f7e73080a41e5..., code equals 9310116",
+      "page": "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41, 273 of 273 files byte-identical to main b8ea3c0's web/studio tree"
+    },
     "page": {
       "deployment": "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41",
       "rollback": [
@@ -41,7 +48,7 @@
       "telegram-webhook": "v698",
       "slack-events": "v676",
       "google-oauth": "v646",
-      "note": "version numbers as of the 6 October record; they advanced then only because setting the worker's secrets re-versions every function; no code changed. Not re-read since: UNKNOWN whether a later secrets write re-versioned them again, and UNKNOWN until scripts/forensics/capture-functions.ts is run that they hold 9310116's code"
+      "note": "SUPERSEDED for the numbers by liveReading (9 Oct read: signin v130, voice v659, voice-token v688, telegram-webhook v699, slack-events v677, google-oauth v647; each bundle captured and word-level identical to 9310116's source). Older note: version numbers as of the 6 October record; they advanced then only because setting the worker's secrets re-versions every function; no code changed. Not re-read since: UNKNOWN whether a later secrets write re-versioned them again, and UNKNOWN until scripts/forensics/capture-functions.ts is run that they hold 9310116's code"
     }
   },
   "duties": { "drive-index": "off", "calendar-event-sync": "off" },

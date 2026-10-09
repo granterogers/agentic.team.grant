@@ -6,7 +6,8 @@
  */
 export const isPlainSelect = (sql: string): boolean => {
   const s = sql.trim().replace(/;\s*$/, '')
-  if (!/^select\b/i.test(s)) return false
+  // A read-only CTE (`with ... select`) is a select; the verb list below still refuses one that writes.
+  if (!/^(select|with)\b/i.test(s)) return false
   if (s.includes(';')) return false
   return !/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|call|do|pg_sleep|nextval|setval|set_config|lock)\b/i.test(
     s.replace(/'[^']*'/g, "''"),
@@ -23,7 +24,7 @@ export const parsePreflight = (text: string): { id: string; sql: string }[] => {
     buf = []
   }
   for (const line of text.split('\n')) {
-    const m = /^-- (P\d\d[a-z]?) /.exec(line)
+    const m = /^-- ([A-Z]\d\d[a-z]?) /.exec(line)
     if (m !== null) {
       flush()
       id = m[1] ?? ''
