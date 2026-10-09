@@ -20,6 +20,8 @@
 
 > **THIRD RUN (security gate): read `V1-SECURITY-STABILITY-RELEASE-GATE-2026-10-09.md`.** #457 is a confirmed REPLICA vulnerability (cross-office and anonymous reads through 12 of the 14 public views) with production reachability UNKNOWN. The fix is `migrations/1053_a_public_key_reaches_no_view.sql` (revoke-only, not applied): the pending set is now **1042 to 1053 (12 files)**; 1053 is independent and may be applied first and alone (`migrate:one`) if the bounded read R-A says the views are reachable, with `npm run check:anon-exposure` afterwards. #458 (chat dock) is fixed (focus, draft, vanished bubble, harness race); extended gate 73/73 in ten consecutive runs, critical 68/68. The ten-step attended checklist is section 10 of that report. Recommendation B.
 
+> **R-A RESULT (9 October 2026, 18:43 UTC): #457 IS CONFIRMED REACHABLE in production** (schema `public` exposed, view owner bypasses RLS, anon SELECT, anonymous HEAD on `delivery_health` answered 200). **The release is ON HOLD until 1053 is applied alone** (`migrate:one`, a separate approval; independent of 1042 to 1052) and verified with `check:anon-exposure`. See sections 13 to 15 of `V1-SECURITY-STABILITY-RELEASE-GATE-2026-10-09.md`.
+
 **NOT AUTHORISED. NOTHING HERE HAS BEEN RUN IN PRODUCTION.** Reasoning and evidence: `V1-PRODUCTION-RELEASE-PLAN-2026-10-09.md` (section numbers below refer to it).
 SQL files: `V1-RELEASE-PREFLIGHT-QUERIES-…sql` (P01 to P19), `V1-RELEASE-MONITORING-QUERIES-…sql` (M01 to M21), `V1-RELEASE-FUNCTION-FINGERPRINTS-…tsv`.
 Run each SQL with `ALLOW_PRODUCTION_CHECKS=1 npm run qq -- "<statement>"`. Grant sets `ALLOW_PRODUCTION_CHECKS` and `ALLOW_PRODUCTION_WRITES` per command; the agent never does. Never print a secret.
