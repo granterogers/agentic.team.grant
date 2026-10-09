@@ -2507,9 +2507,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
         args[action.personBy] = principal
       }
     }
-    const missing = action.required.filter(
-      (k) => args[k] === undefined || args[k] === null || String(args[k]).trim() === '',
-    )
+    const missing = action.required.filter((k) => {
+      // An empty list of panels is a RESET (ADR-0021) and, with p_expected_rev, a compare-and-swap reset: it is present, not missing.
+      if (actionName === 'dashboard_layout_set' && k === 'p_panels' && Array.isArray(args[k]))
+        return false
+      return args[k] === undefined || args[k] === null || String(args[k]).trim() === ''
+    })
     if (missing.length > 0) {
       return json({ error: `missing: ${missing.join(', ')}` }, 400)
     }
