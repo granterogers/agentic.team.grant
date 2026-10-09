@@ -92,7 +92,7 @@ import {
   EMPTY_CAPABILITY,
   toolNames,
 } from '../agents/capability.ts'
-import { capabilityLies } from '../agents/capability-claims.ts'
+import { capabilityCorrection, capabilityLies } from '../agents/capability-claims.ts'
 import { clauses, split } from '../agents/clauses.ts'
 import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import { bodyHoldsDraft } from '../agents/consequence.ts'
@@ -7337,22 +7337,17 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         attempt failed is reported by `capabilityClaims` and corrected by
         nobody, because those three sentences are true.
       */
-      // The description opens with a capital because it is written for the
-      // Governance page; mid-sentence it needs to read as prose.
-      const lowerFirst = (t: string): string =>
-        t === '' ? t : `${t.charAt(0).toLowerCase()}${t.slice(1)}`
+      // The description is a label in the sentence, not part of its grammar: the registry holds verb phrases and noun
+      // phrases, and `capabilityCorrection` reads correctly for both.
       const cannotReally = capabilityLies(said, cap)[0] ?? null
       const denied = contradictsReality(said, reach)
       const answerC =
         cannotReally === null
           ? said
-          : cannotReally.verdict === 'false_denial'
-            ? `${said}\n\n(Correction, from the system rather than from me: this office CAN ` +
-              `${lowerFirst(cannotReally.what)}. If I said otherwise above, ignore it — say the ` +
-              `word and I will start it.)`
-            : `${said}\n\n(Correction, from the system rather than from me: I cannot ` +
-              `${lowerFirst(cannotReally.what)} — that is switched off here. If I offered it ` +
-              `above, ignore the offer.)`
+          : `${said}\n\n${capabilityCorrection(
+              cannotReally.verdict === 'false_denial' ? 'false_denial' : 'false_offer',
+              cannotReally.what,
+            )}`
       const answer0 =
         denied === null
           ? answerC

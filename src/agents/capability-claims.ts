@@ -519,3 +519,24 @@ export function capabilityLies(reply: string, cap: Capability): readonly Capabil
     (v) => v.verdict === 'false_denial' || v.verdict === 'false_offer',
   )
 }
+
+/**
+ * The sentence the system appends to an answer that misstated what the office can do.
+ *
+ * `what` is the first sentence of a registry description, written for the Governance page, and the registry holds BOTH
+ * shapes: a verb phrase ("Send email") and a noun phrase ("Any action that incurs cost"). The first draft of this sentence
+ * ran the description straight after "I cannot", so a real answer read "I cannot any action that incurs cost". The
+ * description is therefore quoted as a label in brackets and never made part of the grammar, which is correct for both.
+ * No issue or section number belongs in a string a model or a person reads.
+ */
+export function capabilityCorrection(
+  verdict: 'false_denial' | 'false_offer',
+  what: string,
+): string {
+  const label = what.trim().replace(/[.\s]+$/, '')
+  return verdict === 'false_denial'
+    ? `(Correction, from the system rather than from me: this office CAN do that (${label}). ` +
+        `If I said otherwise above, ignore it — say the word and I will start it.)`
+    : `(Correction, from the system rather than from me: I cannot do that, because it is switched off here (${label}). ` +
+        `If I offered it above, ignore the offer.)`
+}
