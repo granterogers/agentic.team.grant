@@ -1264,6 +1264,11 @@ Eleven migrations (1023 to 1035) and five deploys (worker, hq-api, voice, **sign
 Open unknowns that decide the release: free-tier capacity (projected near 85 percent now), deliveries the redrive would resend (P05), live code identity of un-redeployed services, backup state. `verify:wired` red at both commits (#447).
 Recommendation **B**: the production reads come first, and none is authorised.
 
+## 9 October 2026 (security gate) - #457 public views and #458 chat dock (local and replica only; nothing deployed, nothing read from production)
+
+`docs/audit/V1-SECURITY-STABILITY-RELEASE-GATE-2026-10-09.md`. **#457:** 14 views in `public` are selectable by `anon` and `authenticated` (owner `postgres`, no `security_invoker`); 0642 and `check:anon-exposure` covered tables only. On a replica with synthetic offices, anon and another office read rows through 12 of the 14 while the tables refuse them; two are refused only because `app.harness_job` is not executable. **Production reachability is unknown and was not probed**; a three-step read-only request (R-A) is prepared. Fix: `migrations/1053_a_public_key_reaches_no_view.sql` (not applied; rollback and re-apply shown), critical proof `public-views-closed` (red without the fix), views now covered by `check:anon-exposure`.
+**#458:** a harness race plus three product defects (a redraw dropped keystrokes, closing threw the draft away, a message sent during a history read vanished from the screen), all fixed with regressions that go red without the fix. Critical 68/68, extended 73/73 ten times running, unit 6,751 pass. Recommendation **B**; the one thing that must not wait is R-A (or applying 1053).
+
 ---
 
 ## 4 October 2026 (run 2, last stretch) - production frozen, local and replica work only
