@@ -52,7 +52,7 @@ Graphite; accents slate, clay, moss (gallery). Not every surface was run in ever
 | Settings > Appearance: Look, Accent, Scheme, Materials | 1440 and 390, both schemes | Verified | yes | new; persistence in the QA suite |
 | Component gallery (17 live components) | 12 appearances | Verified | yes (2) | |
 | Empty project (all modules empty) | writer, 1440 and 390 x 2 | Verified | yes | |
-| Confirmation dialogs | none | **Not inspected** | | `sure()` is reached only by destructive presses; no lab path yet |
+| Confirmation dialogs (confirm, danger confirm, ask) | 1440 and 390 x 2 | Verified | yes | opened through the dialog module the product uses, with the product's own wording; the lab's first fixture had a placeholder the real call does not, and the audit caught that one as cut off on a phone |
 | Tooltips | none | **Not inspected** | | titles only; native |
 | Notifications / undo bar | none | **Not inspected** | | needs a write that offers undo |
 | Voice controls (microphone, live voice, dictation) | button states only | **Partially verified** | | the buttons are measured; a real microphone is not testable here |

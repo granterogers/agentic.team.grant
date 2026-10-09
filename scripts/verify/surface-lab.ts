@@ -213,6 +213,19 @@ for (const dev of devices) {
         await go('/p/riverside'); if (await tryPress(page, '.bcstage [data-mod="schedule"] [data-bc-expand], .bcstage [data-mod="schedule"] [data-expand]')) await record(page, 'empty-schedule-maximised', context, errors, '.bcexp .bcexpbox'); else blocked('empty-schedule-maximised', context, 'no expand control')
       }
 
+      if (want('dialogs')) {
+        const dialog = async (name: string, call: string): Promise<void> => {
+          await go(slug)
+          await page.evaluate(`import('/settings-ui.js').then((m) => { window.__dlg = ${call} })`)
+          await page.waitForSelector('.stg-confirmbox', { timeout: 4000 }).catch(() => null)
+          await record(page, name, context, errors, '.stg-confirmbox')
+          await page.keyboard.press('Escape'); await settle(page, 300)
+        }
+        await dialog('confirm-dialog', `m.confirmDialog({ title: 'Move this document?', body: 'Move "WS01 - Legacy Opening Assessment" out of Legacy Coaching Course and into Wellness?', confirmLabel: 'Move it' })`)
+        await dialog('confirm-dialog-danger', `m.confirmDialog({ title: 'Remove this automation?', body: '"Summarise anything new in the transcripts and say what changed." will be removed. Pausing it keeps it.', confirmLabel: 'Remove it', danger: true })`)
+        await dialog('ask-dialog', `m.askDialog({ title: 'Why not?', body: 'The team is shown your reason, and so are you if it asks again.', label: 'Your reason (a sentence of at least eight characters)', confirmLabel: 'Decline' })`)
+      }
+
       if (want('chat')) {
         await go(slug)
         if (await tryPress(page, '[data-bc-chat], [data-bc-dock], .bcdocktoggle')) await record(page, 'chat-dock', context, errors, '.dock')
