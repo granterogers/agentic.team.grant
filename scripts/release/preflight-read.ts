@@ -10,6 +10,7 @@
  */
 import '../../src/safety/require-production-checks.ts'
 import { readFileSync } from 'node:fs'
+import { isPlainSelect, parsePreflight } from './plain-select.ts'
 
 const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN ?? ''
@@ -23,46 +24,8 @@ const args = process.argv.slice(2)
 const only = (args.find((a) => a.startsWith('--only=')) ?? '').slice(7).split(',').filter(Boolean)
 const noHealth = args.includes('--no-health')
 
-type Q = { id: string; sql: string }
-
-/** Statements are the lines after a `-- Pnn` comment, up to the next blank line; comments are dropped. */
-const load = (): Q[] => {
-  const text = readFileSync('docs/audit/V1-RELEASE-PREFLIGHT-QUERIES-2026-10-09.sql', 'utf8')
-  const out: Q[] = []
-  let id = ''
-  let buf: string[] = []
-  const flush = (): void => {
-    if (id !== '' && buf.length > 0) out.push({ id, sql: buf.join(' ').trim() })
-    buf = []
-  }
-  for (const line of text.split('\n')) {
-    const m = /^-- (P\d\d[a-z]?) /.exec(line)
-    if (m !== null) {
-      flush()
-      id = m[1] ?? ''
-      continue
-    }
-    if (line.startsWith('--')) continue
-    if (line.trim() === '') {
-      // the id is kept until the next label; a following statement without a label is ignored
-      flush()
-      continue
-    }
-    buf.push(line)
-  }
-  flush()
-  return out
-}
-
-/** One statement, a select, no second statement, nothing that can write or has a side effect. */
-export const isPlainSelect = (sql: string): boolean => {
-  const s = sql.trim().replace(/;\s*$/, '')
-  if (!/^select\b/i.test(s)) return false
-  if (s.includes(';')) return false
-  return !/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|call|do|pg_sleep|nextval|setval|set_config|lock)\b/i.test(
-    s.replace(/'[^']*'/g, "''"),
-  )
-}
+const load = (): { id: string; sql: string }[] =>
+  parsePreflight(readFileSync('docs/audit/V1-RELEASE-PREFLIGHT-QUERIES-2026-10-09.sql', 'utf8'))
 
 const post = async (
   sql: string,

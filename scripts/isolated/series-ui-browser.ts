@@ -28,6 +28,7 @@ import { isolated } from './guard.ts'
 const dbName = process.argv[2] ?? 'bq'
 const SABOTAGE = process.argv.includes('--sabotage-stop')
 const DUMP = process.argv.includes('--dump')
+const SHOTS = process.argv.find((a) => a.startsWith('--shots='))?.slice('--shots='.length)
 const db = await isolated(dbName)
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const one = async (sql: string): Promise<Record<string, unknown>> =>
@@ -298,6 +299,12 @@ try {
         /next/i.test(sectionRow) && /every/i.test(sectionRow),
         sectionRow.replace(/\s+/g, ' ').slice(0, 120),
       )
+      // The page as a person sees it, for a person to look at (the PNG is the evidence for the layout, the checks are for the behaviour).
+      if (SHOTS !== undefined)
+        await page.screenshot({
+          path: `${SHOTS}/my-tasks-repeating-${vp.name.replace(/\W+/g, '-')}.png`,
+          fullPage: false,
+        })
       check(
         `${vp.name}: control: the section does not list a series that is already on Today's list (no duplicate row)`,
         (await page.locator(`[data-bc-series-list] [data-bc-mystopseries="${series}"]`).count()) ===
