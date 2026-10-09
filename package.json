@@ -341,6 +341,7 @@
     "sample:chat-status": "tsx scripts/sample/chat-status.ts",
     "sample:product": "tsx scripts/sample/product.ts",
     "sample:release-acceptance": "tsx scripts/sample/release-acceptance.ts",
+    "sample:release-browser": "tsx scripts/sample/release-browser.ts",
     "sample:shots": "tsx scripts/sample/settings-shots-live.ts",
     "verify:sample-settings": "tsx scripts/sample/settings-live.ts",
     "verify:account-lifecycle": "tsx scripts/p6/account-lifecycle.ts",

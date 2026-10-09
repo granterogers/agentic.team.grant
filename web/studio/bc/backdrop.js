@@ -200,6 +200,7 @@ const forget = (slug) => {
 
 /** Keep a processed picture for a project. */
 export const customPut = async (slug, rec) => {
+  pullFailedAt.delete(slug)
   await tx('readwrite', (s) => s.put({ slug, ...rec, at: Date.now() }))
   forget(slug)
   mine.set(slug, {
@@ -225,6 +226,8 @@ export const customPut = async (slug, rec) => {
 let remoteAdapter = null
 const REMOTE_WAIT_MS = 15_000
 export const useRemote = (a) => {
+  pullFailedAt.clear()
+  pulling.clear()
   remoteAdapter = a !== null && typeof a === 'object' && typeof a.put === 'function' ? a : null
 }
 
@@ -256,8 +259,31 @@ export const customKeep = async (slug, rec) => {
   return { rev, remote, reason }
 }
 
+/*
+  The board is wired again on every redraw, so a pull must not start again while one is running, and a pull that failed (offline,
+  damaged picture) is not retried for a minute: otherwise each redraw would ask the office and download the picture again.
+*/
+const pulling = new Map()
+const pullFailedAt = new Map()
+const PULL_RETRY_MS = 60_000
+const customPull = (slug) => {
+  const running = pulling.get(slug)
+  if (running !== undefined) return running
+  const failed = pullFailedAt.get(slug)
+  if (failed !== undefined && Date.now() - failed < PULL_RETRY_MS) return Promise.resolve(null)
+  const p = pullOnce(slug)
+    .then((info) => {
+      if (info === null) pullFailedAt.set(slug, Date.now())
+      else pullFailedAt.delete(slug)
+      return info
+    })
+    .finally(() => pulling.delete(slug))
+  pulling.set(slug, p)
+  return p
+}
+
 /** Take the office's copy into this browser. Resolves the info the painter uses, or null (nothing there, offline, damaged). */
-const customPull = async (slug) => {
+const pullOnce = async (slug) => {
   if (remoteAdapter === null || typeof remoteAdapter.get !== 'function') return null
   let meta
   try {
