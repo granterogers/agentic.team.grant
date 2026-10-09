@@ -247,6 +247,7 @@ describe('the redrive', () => {
   const due = {
     job_id: 'j1',
     output_id: 'o1',
+    office_id: '11111111-1111-1111-1111-111111111111',
     kind: 'office.pursue',
     correlation_id: 'c1',
     project_id: null,
@@ -269,6 +270,19 @@ describe('the redrive', () => {
     expect(job.jobId).toBe('j1')
     expect(output.body).toBe('Done.')
     expect(outputId).toBe('o1')
+  })
+
+  it("reads the stored output through the delivery's own job AND that job's office, never by output id alone", async () => {
+    const { db, log } = dbWith([due])
+    await redriveLapsedDeliveries(
+      db,
+      vi.fn(async () => ({ delivered: true, note: 'ok' })),
+    )
+    const read = log.find((s) => s.includes('from public.outputs')) ?? ''
+    expect(read).toMatch(/j\.office_id\s*=\s*'11111111-1111-1111-1111-111111111111'::uuid/)
+    expect(read).toMatch(/j\.job_id\s*=\s*'j1'::uuid/)
+    // CONTROL: the detector is not satisfied by an unscoped read of the same table.
+    expect("select body from public.outputs where output_id = 'o1'::uuid").not.toMatch(/office_id/)
   })
 
   it('with no notifier it settles and sends nothing', async () => {
