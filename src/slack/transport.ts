@@ -136,6 +136,7 @@ export class SlackTransport implements Transport {
 }
 
 const toTransportError = (error: unknown): TransportError => {
-  if (error instanceof SlackApiError) return new TransportError(error.code, error.kind)
+  if (error instanceof SlackApiError)
+    return new TransportError(error.code, error.kind, error.retryAfter)
   throw error
 }

@@ -73,8 +73,8 @@ await db.execute(
 )
 const step = String(
   (
-    await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, decline_option, originating_agent, work_can_continue)
-      values ((select project_id from public.jobs where job_id = ${lit(child)}::uuid), ${lit(child)}::uuid, 'Write the summary into Notion', 'it is outside the office', 'waits',
+    await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, decline_option, originating_agent, work_can_continue)
+      values (app.job_office(${lit(child)}::uuid), (select project_id from public.jobs where job_id = ${lit(child)}::uuid), ${lit(child)}::uuid, 'Write the summary into Notion', 'it is outside the office', 'waits',
               array['Yes, do it', 'No, leave it'], 'No, leave it', 'chief-of-staff', false) returning blocker_id::text as id`)
   ).id,
 )

@@ -13,6 +13,7 @@
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import { raiseBlocker } from '../../src/inference/record.ts'
 import type { Job } from '../../src/jobs/worker.ts'
+import { scopeOf } from './fixtures-jobs.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'mixed')
@@ -34,8 +35,8 @@ let seq = 0
 const say = async (chat: string, said: string): Promise<Job> => {
   seq += 1
   const cmd = await one(`insert into public.inbound_commands
-    (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values ('teamhq', ${lit(`${chat}:${String(seq)}`)}, 'grant', ${lit(said)},
+    (${scopeOf('real').cols}, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (${scopeOf('real').vals}, 'teamhq',${lit(`${chat}:${String(seq)}`)}, 'grant', ${lit(said)},
             ${lit(`teamhq:mixed:${run}.${String(seq)}`)}, 'grant') returning command_id::text as id`)
   const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
   const v = (typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v) as { job_id: string }
@@ -59,8 +60,8 @@ const attempt = async (said: string, waiting: boolean) => {
   if (waiting) {
     const child = String(
       (
-        await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id)
-        select 'office.pursue', requested_by, project_id, 'mx-' || gen_random_uuid(), correlation_id, job_id
+        await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id)
+        select office_id, 'office.pursue', requested_by, project_id, 'mx-' || gen_random_uuid(), correlation_id, job_id
           from public.jobs where job_id = ${lit(before.jobId)}::uuid returning job_id::text as id`)
       ).id,
     )

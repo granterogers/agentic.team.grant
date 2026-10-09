@@ -94,11 +94,63 @@ export class AllCandidatesFailedError extends Error {
   }
 }
 
+/**
+ * The provider did not answer inside the per-request deadline (M1).
+ *
+ * Its own class, because it is neither a refusal (nothing was said) nor a malformed reply (nothing was read) nor an
+ * empty completion (no call finished). It is transient and retryable: the next model in the chain is tried at once,
+ * and a late answer from the aborted request is discarded, never applied.
+ */
+export class ProviderTimeoutError extends Error {
+  constructor(
+    readonly model: string,
+    readonly afterMs: number,
+  ) {
+    super(`${model} did not answer within ${String(afterMs)}ms and was abandoned`)
+    this.name = 'ProviderTimeoutError'
+  }
+}
+
+/**
+ * Per-request deadline, in milliseconds, and the arithmetic it has to satisfy (M1).
+ *
+ * One call walks at most `DEFAULT_MAX_ATTEMPTS` (4) models, so a chain of pure timeouts costs at most
+ * 4 x 25s = 100s, and `DEFAULT_CHAIN_BUDGET_MS` enforces that ceiling even if somebody later raises either number.
+ * That must stay under both limits that can end a turn:
+ *   - the edge runtime's wall clock (150s on the plan this runs on; supabase/functions/worker passes
+ *     `deadlineMs` 60s only to stop STARTING jobs, it does not bound a running one), and
+ *   - the job lease (`jobs.lease_seconds`, 300s). The heartbeat renews the lease every 60s while the handler runs,
+ *     which is exactly why the lease alone never bounded a hung provider: it kept being renewed.
+ * 25s is above the slowest healthy answer measured for this chain's reasoning models at the budgets the handlers
+ * ask for (maxTokens up to 2,400) and well under the 150s ceiling, so a slow-but-alive model is not abandoned and a
+ * hung one costs a quarter of the turn rather than all of it. A handler that makes several calls in one turn is still
+ * bounded per call; the per-job bound is the job's own attempt budget.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 25_000
+export const DEFAULT_CHAIN_BUDGET_MS = 100_000
+
+/** Below this a fresh attempt could not finish, so the chain stops rather than start one it must abort at once. */
+const MIN_ATTEMPT_MS = 1_000
+
+export interface RouterOptions {
+  /** Per-request deadline. Injectable so tests need not wait. */
+  readonly requestTimeoutMs?: number
+  /** Whole-call ceiling across every model tried. */
+  readonly chainBudgetMs?: number
+}
+
 export interface CompletionRequest {
   /** Conversation, in the provider's chat format. */
   readonly messages: readonly { role: string; content: string }[]
   /** Optional explicit model. Omit to take the highest-priority usable one. */
   readonly model?: string
+  /**
+   * Models NOT to try for this call: ones that already answered this request and were found inadequate (#444). The chain
+   * continues with the rest, so a second opinion is a different model and never the same one again.
+   */
+  readonly skipModels?: readonly string[]
+  /** A tighter ceiling for THIS call's whole chain (never looser than the router's own): a second opinion must not double the wall-clock cost. */
+  readonly chainBudgetMs?: number
   readonly maxTokens?: number
   /**
    * Sampling temperature, when the caller needs the SAME answer twice.
@@ -145,6 +197,12 @@ export interface CompletionResult {
   readonly promptTokens: number
   readonly completionTokens: number
   /**
+   * Where this answer sat in the allow-list's measured order, and what was tried first (#444). `rank` 0 is the first choice
+   * today; anything above it is a fallback, which is a fact about this call and says nothing about the model's brand. Absent
+   * for a caller-named model, which is a decision somebody made.
+   */
+  readonly servedBy?: { readonly rank: number; readonly tried: readonly string[] }
+  /**
    * What the provider reported for this response, in US dollars.
    *
    * Zero on a free model, and zero is no longer the only legal value: a cost
@@ -178,11 +236,20 @@ interface ProviderRow {
  * The database is passed in rather than imported so tests drive it with a fake
  * executor, and so the same router works over either transport (ADR-0007).
  */
-/** How many different models one request may be tried against. */
-export const DEFAULT_MAX_ATTEMPTS = 3
+/**
+ * How many different models one request may be tried against.
+ *
+ * Four, deliberately: the documented chain is gpt-oss-120b, qwen3.7-flash, mistral-small-3.2 and then the free tier,
+ * and with three the fourth was unreachable inside one call whatever happened to the first three. Each attempt is now
+ * bounded by the per-request timeout and the whole call by the chain budget, which is what made it safe to take the
+ * cap off the last rung (M1).
+ */
+export const DEFAULT_MAX_ATTEMPTS = 4
 
 export class ProviderRouter {
   private readonly maxAttempts: number
+  private readonly requestTimeoutMs: number
+  private readonly chainBudgetMs: number
   /**
    * The key, once resolved from the vault.
    *
@@ -202,8 +269,11 @@ export class ProviderRouter {
     // provider, and a router that walks the whole registry on a bad afternoon
     // turns one slow job into thirty seconds of requests nobody asked for.
     maxAttempts: number = DEFAULT_MAX_ATTEMPTS,
+    options: RouterOptions = {},
   ) {
     this.maxAttempts = Math.max(1, maxAttempts)
+    this.requestTimeoutMs = Math.max(1, options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS)
+    this.chainBudgetMs = Math.max(1, options.chainBudgetMs ?? DEFAULT_CHAIN_BUDGET_MS)
   }
 
   /**
@@ -279,9 +349,15 @@ export class ProviderRouter {
     jobId: string | undefined,
     model: string,
     why: string,
+    rank = 0,
   ): Promise<void> {
-    if (jobId === undefined || jobId === '' || why === '') return
-    const detail = JSON.stringify({ chose: model, because: why }).replace(/'/g, "''")
+    // A fallback is always recorded (the authority half reads it); a first choice only when there is a reason to give.
+    if (jobId === undefined || jobId === '' || (why === '' && rank === 0)) return
+    const detail = JSON.stringify({
+      chose: model,
+      because: why,
+      ...(rank > 0 ? { fallback: true, rank } : {}),
+    }).replace(/'/g, "''")
     await this.db
       .execute(
         `select app.job_trace_add(app.job_office('${jobId.replace(/'/g, "''")}'::uuid), '${jobId.replace(/'/g, "''")}'::uuid, 'decision',
@@ -349,20 +425,45 @@ export class ProviderRouter {
 
     // A named model is honoured exactly, or it fails. See above.
     if (request.model !== undefined) {
-      return this.attempt(provider, models, request, request.model)
+      return this.attempt(
+        provider,
+        models,
+        request,
+        request.model,
+        Math.min(this.requestTimeoutMs, this.chainBudgetMs),
+      )
     }
 
-    const candidates = models.slice(0, this.maxAttempts).map((m) => m.model_id)
+    const skip = new Set(request.skipModels ?? [])
+    const ordered = models.map((m) => m.model_id)
+    const planned = ordered.filter((m) => !skip.has(m)).slice(0, this.maxAttempts)
+    const startedChain = Date.now()
+    const budgetMs = Math.max(
+      1,
+      Math.min(this.chainBudgetMs, request.chainBudgetMs ?? this.chainBudgetMs),
+    )
+    const tried: string[] = []
     let lastError: Error = new NoUsableModelError()
 
-    for (const [index, model] of candidates.entries()) {
+    for (const [index, model] of planned.entries()) {
+      // The chain has a ceiling of its own, so a run of timeouts cannot outlast the wall clock above it.
+      const remaining = budgetMs - (Date.now() - startedChain)
+      if (index > 0 && remaining < MIN_ATTEMPT_MS) break
+      tried.push(model)
       try {
-        const result = await this.attempt(provider, models, request, model)
+        const result = await this.attempt(
+          provider,
+          models,
+          request,
+          model,
+          Math.max(1, Math.min(this.requestTimeoutMs, remaining)),
+        )
         // Traced after it worked, not before it was tried: the interesting
         // fact is which model ANSWERED, and a model that threw and was failed
         // over from is already recorded in `inference_usage` with its outcome.
-        await this.explainChoice(request.jobId, model, why.get(model) ?? '')
-        return result
+        const rank = ordered.indexOf(model)
+        await this.explainChoice(request.jobId, model, why.get(model) ?? '', rank)
+        return { ...result, servedBy: { rank, tried: [...skip, ...tried.slice(0, -1)] } }
       } catch (error) {
         // Non-negotiable: these end the call rather than advancing it.
         // `PaidCallPreventedError` covers both "this model is not on the
@@ -373,7 +474,6 @@ export class ProviderRouter {
         if (error instanceof PaidCallPreventedError) throw error
         if (error instanceof ProviderUnavailableError) throw error
         lastError = error as Error
-        if (index === candidates.length - 1) break
       }
     }
 
@@ -381,8 +481,8 @@ export class ProviderRouter {
     // Wrapping a lone `EmptyCompletionError` in "all 1 candidate(s) failed"
     // would cost every caller the ability to tell an empty completion from a
     // rate limit, in exchange for no information at all.
-    if (candidates.length <= 1) throw lastError
-    throw new AllCandidatesFailedError(candidates, lastError)
+    if (tried.length <= 1) throw lastError
+    throw new AllCandidatesFailedError(tried, lastError)
   }
 
   private async attempt(
@@ -390,6 +490,7 @@ export class ProviderRouter {
     models: AllowedModel[],
     request: CompletionRequest,
     chosenModel: string,
+    timeoutMs: number,
   ): Promise<CompletionResult> {
     // §6: breaker state lives in the database, so a restart does not forget an
     // outage and every worker sees the same breaker.
@@ -441,23 +542,54 @@ export class ProviderRouter {
     }
     let payload: ProviderResponse
     let startedAt = Date.now()
+    // The key is resolved BEFORE the deadline starts: a slow vault read is not the provider hanging.
+    const bearer = await this.key(provider)
     try {
       // The clock starts here and not a line earlier: what is being measured
       // is how long the provider takes, not how long this function takes to
       // resolve a key. `app.model_speed` reads the result and it is the basis
       // for any future "which model answers Grant" decision (0150).
       startedAt = Date.now()
-      const response = await this.fetchImpl(`${provider.base_url}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${await this.key(provider)}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
+      const read = await this.callWithDeadline(model, timeoutMs, async (signal) => {
+        const response = await this.fetchImpl(`${provider.base_url}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${bearer}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal,
+        })
+        // The body is read inside the deadline too: a provider that sends headers and then stalls is hung.
+        const parsed: unknown = await response.json()
+        return { status: response.status, parsed }
       })
-      payload = (await response.json()) as ProviderResponse
+      if (typeof read.parsed !== 'object' || read.parsed === null || Array.isArray(read.parsed)) {
+        throw new SyntaxError('provider response was not a JSON object')
+      }
+      payload = read.parsed as ProviderResponse
+      // An HTTP failure that carried no `error` object is still a failure: without this a bare 500 body
+      // reads as an empty completion and RECORDS A SUCCESS against the breaker.
+      if (read.status >= 400 && payload.error === undefined) {
+        payload = {
+          ...payload,
+          error: { code: read.status, message: `HTTP ${String(read.status)}` },
+        }
+      }
     } catch (error) {
       await this.recordFailure(provider.provider, (error as Error).message)
+      // One usage row per real call that left the building, honest about what is unknown: no tokens were read and
+      // no cost was reported (null, not zero), so the row says estimated. An aborted request is recorded ONCE,
+      // here; the late answer it may still produce is never read.
+      await this.account(
+        provider.provider,
+        model,
+        error instanceof SyntaxError ? 'malformed_response' : 'transport_error',
+        request,
+        { prompt: 0, completion: 0 },
+        Date.now() - startedAt,
+        null,
+      )
       throw error
     }
 
@@ -561,6 +693,37 @@ export class ProviderRouter {
       promptTokens: payload.usage?.prompt_tokens ?? 0,
       completionTokens: payload.usage?.completion_tokens ?? 0,
       cost: costUsd,
+    }
+  }
+
+  /**
+   * Run one provider request under a hard deadline.
+   *
+   * Two mechanisms, both needed: the AbortSignal tells a real `fetch` to drop the socket, and the race releases
+   * this caller even when the transport (or a test double) ignores the signal. Whichever settles first wins and
+   * the other is discarded: a response that arrives after the deadline is never read by anything, so a late answer
+   * cannot be applied twice or recorded as a second call.
+   */
+  private async callWithDeadline<T>(
+    model: string,
+    timeoutMs: number,
+    run: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new ProviderTimeoutError(model, timeoutMs))
+        controller.abort()
+      }, timeoutMs)
+    })
+    const running = run(controller.signal)
+    // If the deadline wins, whatever `running` later does (resolve OR reject with the abort) must not surface.
+    running.catch(() => undefined)
+    try {
+      return await Promise.race([running, deadline])
+    } finally {
+      clearTimeout(timer)
     }
   }
 

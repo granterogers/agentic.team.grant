@@ -29,6 +29,10 @@
 > so they do not read as stripes when zoomed out. Cross-device custom pictures are PLANNED only (`docs/ux/canvas-background-storage-plan.md`, #445; browser-only today). iPhone acceptance sequence: `docs/ux/iphone-acceptance-2026-10-09.md` (NOT yet run on a device).
 > Not merged to main, not deployed to production. Still open: #442; real-device dictation and touch; custom pictures on other devices (backend). The verbatim original specification is `docs/spec/team-hq-ux-overhaul-2026-10-08-verbatim.md`.
 >
+> **WHAT IS DEPLOYED is recorded in `docs/ops/deployment-state.json`, not in the dated entries below.** Entries from 4 to 6 October
+> describe the state of play on their own day and several say "nothing deployed" or "770 applied"; those were true then and are
+> superseded by the 6 October final deployment and the later 7 and 9 October releases (see the record). This file does not restate those numbers.
+>
 > ## 2026-10-06 (later) - TEAM HQ RECONCILED WITH THE SAMPLE (branch `integration/team-hq-ux-v2`, from `8c2e4209`, NOT merged, NOTHING deployed)
 >
 > The Team HQ UX work was already in `main`; the audit found the old UX branch held one documentation commit and nothing else, so this branch is a
@@ -1216,6 +1220,28 @@ pushed. **Written:** 2026-09-05, revised 2026-09-09.
 [`new-environment.md`](new-environment.md) first — it is four commands and the
 two variables an environment needs, so the first thousand tokens go into work
 rather than rediscovery.
+
+---
+
+## 8 October 2026 - Version 1 release candidate (local only; nothing deployed)
+
+Branch `claude/deep-systems-audit-3cwbtc`. Selective delegation on Telegram, Slack and Team HQ, #440 and #441 fixed (migration 1035), bounded Notion sync, real-model acceptance R1 to R17.
+Critical gate 61 green, extended 71 green, 65 mutations run (64 caught, 1 declared equivalent). Recommendation B (a separately authorised live smoke test). Full evidence, the fourteen answers, the
+pending migrations (1023 to 1035) and the deployment risks: `docs/audit/V1-RELEASE-CANDIDATE-2026-10-08.md`. Open: Issues #443 (worker failure path), #444 (fallback models), #440/#441 until deployed.
+
+## 8 October 2026 (later) - Version 1 final release gate (local only; nothing deployed)
+
+#443 fixed (a database blip while recording a handler failure is retried, a refusal never is) and closed; the Notion cause stays unproven. #444 mitigated: a backup-served answer is admitted on evidence,
+gets one second opinion from a different model, then a limitation composed in code; a backup-served turn asks before it writes or sends. The four mixed-version states were built and run
+(`docs/audit/V1-FINAL-RELEASE-GATE-2026-10-08.md` section 5): **migrate first**; the old worker and old hq-api run on the new schema, the new worker on the old schema degrades, the new hq-api on the old schema fails for one action only (corrected 9 October; `V1-PRODUCTION-RELEASE-PLAN-2026-10-09.md`).
+Critical 63 green (3,557 assertions), extended 71 green, sabotage 16 of 16, full mutation campaign run. Recommendation **B**. The smoke-test procedure, deployment order and rollback table are in that report; none is authorised.
+
+## 9 October 2026 - Version 1 production release plan (local only; nothing deployed, nothing read from production)
+
+`docs/audit/V1-PRODUCTION-RELEASE-PLAN-2026-10-09.md` (13 sections) and `V1-RELEASE-OPERATOR-CHECKLIST-2026-10-09.md`, with 19 preflight reads, 22 monitoring queries and a 64-function fingerprint file.
+Eleven migrations (1023 to 1035) and five deploys (worker, hq-api, voice, **signin**, page with `--allow-new=flow.js,studio/flow.js`); `npm run release:services` computes the list. Five migrations cannot be applied twice (#446).
+Open unknowns that decide the release: free-tier capacity (projected near 85 percent now), deliveries the redrive would resend (P05), live code identity of un-redeployed services, backup state. `verify:wired` red at both commits (#447).
+Recommendation **B**: the production reads come first, and none is authorised.
 
 ---
 

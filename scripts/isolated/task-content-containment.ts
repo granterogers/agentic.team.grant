@@ -30,14 +30,14 @@ const jsonOf = (v: unknown) =>
 const project = String(
   jsonOf(
     (
-      await one(`select app.hq_create_project(app.test_office(), ${lit(`Tasks ${run}`)}, 'upload', ${lit(`tasks-${run}`)},
+      await one(`select app.hq_create_project(app.operator_office(), ${lit(`Tasks ${run}`)}, 'upload', ${lit(`tasks-${run}`)},
         ${lit(`Tasks ${run}`)}, true) as v`)
     ).v,
   ).project_id,
 )
 const cmd = await one(`set local application_name = 'PostgREST 14.5';
-  insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-  values ('voice', ${lit(`verify-379t-${run}/x:1`)}, 'grant', 'harness asks for a task', ${lit(`voice:turn:verify-379t-${run}.1`)}, 'grant')
+  insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+  values (app.operator_office(), app.unnamed_project(app.operator_office()), 'voice', ${lit(`verify-379t-${run}/x:1`)}, 'grant', 'harness asks for a task', ${lit(`voice:turn:verify-379t-${run}.1`)}, 'grant')
   returning command_id::text as id`)
 const harnessJob = String(
   jsonOf((await one(`select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)).v).job_id,
@@ -54,9 +54,9 @@ const realJob = await realParent(db)
   app.task_add, by contrast, already relabels a harness job's task.
 */
 const blockerTask = async (title: string, job: string) => {
-  await db.execute(`insert into public.blockers (job_id, project_id, requested_action, why_needed, consequences_of_delay,
+  await db.execute(`insert into public.blockers (office_id, job_id, project_id, requested_action, why_needed, consequences_of_delay,
       approval_options, originating_agent, work_can_continue)
-    values (${lit(job)}::uuid, ${lit(project)}::uuid, ${lit(title)}, 'An isolated proof needs an answer before it can go on.', 'The isolated proof stays paused until somebody answers it.',
+    values (app.operator_office(), ${lit(job)}::uuid, ${lit(project)}::uuid, ${lit(title)}, 'An isolated proof needs an answer before it can go on.', 'The isolated proof stays paused until somebody answers it.',
             array['Go ahead'], 'chief-of-staff', false)`)
   await db.execute(
     `update public.tasks set due_on = current_date + 2, assigned_to_human = false where title = ${lit(title)}`,

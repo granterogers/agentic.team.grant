@@ -53,7 +53,12 @@ describe('NotionClient', () => {
       .fn()
       .mockResolvedValueOnce(respond(429, { code: 'rate_limited' }, { 'retry-after': '86400' }))
       .mockResolvedValueOnce(respond(200, {}))
-    await new NotionClient('ntn_x', { fetchImpl, sleep, maxRetryAfterSeconds: 30 }).call('/x')
+    await new NotionClient('ntn_x', {
+      fetchImpl,
+      sleep,
+      maxRetryAfterSeconds: 30,
+      callDeadlineMs: 120_000,
+    }).call('/x')
     expect(sleep).toHaveBeenCalledWith(30_000)
   })
 

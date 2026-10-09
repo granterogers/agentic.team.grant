@@ -48,23 +48,26 @@ const project = await one(`
   select project_id::text as id from public.projects
    where status = 'active' and not is_fixture order by created_at limit 1`)
 
-/** A job that looks like real work, created and abandoned in one transaction. */
+/**
+ * A job that looks like real work, created and abandoned in one transaction. A BACKGROUND kind on purpose: since 1025 a
+ * person's conversation (office.instruction) is never parked by the budget, so it cannot be the subject of a deferral.
+ */
 const REAL_JOB = `
-  insert into public.jobs (project_id, correlation_id, kind, state, requested_by,
+  insert into public.jobs (office_id, project_id, correlation_id, kind, state, requested_by,
                            recipient_agent, priority, idempotency_key)
-  values ('${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'queued',
+  values (app.operator_office(), '${String(project.id)}'::uuid, gen_random_uuid(), 'office.notice', 'queued',
           'teamhq:grant', 'research-director', 5, 'budget-suite-' || gen_random_uuid()::text);`
 
 {
   const r = await rolled(`${REAL_JOB}
     update public.system_config set value = to_jsonb(0)
      where key = 'budget.pence_for_the_office_per_day';
-    insert into public.jobs (project_id, correlation_id, kind, state, requested_by,
+    insert into public.jobs (office_id, project_id, correlation_id, kind, state, requested_by,
                              recipient_agent, finished_at, trace_pence, idempotency_key)
-    values ('${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
+    values (app.operator_office(), '${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
             'teamhq:grant', 'research-director', app.now_utc(), 5,
             'budget-spent-' || gen_random_uuid()::text);
-    select coalesce(app.over_budget('research-director'), '(under)') as r;`)
+    select coalesce(app.over_budget(app.operator_office(), 'research-director'), '(under)') as r;`)
   check(
     'over the office limit, the answer is a sentence and not a boolean',
     String(r.r),
@@ -76,12 +79,12 @@ const REAL_JOB = `
   const r = await rolled(`${REAL_JOB}
     update public.system_config set value = to_jsonb(1)
      where key = 'budget.pence_per_agent_per_day';
-    insert into public.jobs (project_id, correlation_id, kind, state, requested_by,
+    insert into public.jobs (office_id, project_id, correlation_id, kind, state, requested_by,
                              recipient_agent, finished_at, trace_pence, idempotency_key)
-    values ('${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
+    values (app.operator_office(), '${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
             'teamhq:grant', 'research-director', app.now_utc(), 9,
             'budget-spent-' || gen_random_uuid()::text);
-    select coalesce(app.over_budget('research-director'), '(under)') as r;`)
+    select coalesce(app.over_budget(app.operator_office(), 'research-director'), '(under)') as r;`)
   check(
     'and the per-agent limit names the agent',
     String(r.r),
@@ -93,9 +96,9 @@ const REAL_JOB = `
   const r = await rolled(`${REAL_JOB}
     update public.system_config set value = to_jsonb(0)
      where key = 'budget.pence_for_the_office_per_day';
-    insert into public.jobs (project_id, correlation_id, kind, state, requested_by,
+    insert into public.jobs (office_id, project_id, correlation_id, kind, state, requested_by,
                              recipient_agent, finished_at, trace_pence, idempotency_key)
-    values ('${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
+    values (app.operator_office(), '${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
             'teamhq:grant', 'research-director', app.now_utc(), 5,
             'budget-spent-' || gen_random_uuid()::text);
     select app.defer_over_budget();
@@ -117,9 +120,9 @@ const REAL_JOB = `
   const r = await rolled(`${REAL_JOB}
     update public.system_config set value = to_jsonb(0)
      where key = 'budget.pence_for_the_office_per_day';
-    insert into public.jobs (project_id, correlation_id, kind, state, requested_by,
+    insert into public.jobs (office_id, project_id, correlation_id, kind, state, requested_by,
                              recipient_agent, finished_at, trace_pence, idempotency_key)
-    values ('${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
+    values (app.operator_office(), '${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
             'teamhq:grant', 'research-director', app.now_utc(), 5,
             'budget-spent-' || gen_random_uuid()::text);
     select app.defer_over_budget();
@@ -143,13 +146,13 @@ const REAL_JOB = `
   const r = await rolled(`${REAL_JOB}
     update public.system_config set value = to_jsonb(1)
      where key = 'budget.pence_for_the_office_per_day';
-    insert into public.jobs (project_id, correlation_id, kind, state, requested_by,
+    insert into public.jobs (office_id, project_id, correlation_id, kind, state, requested_by,
                              recipient_agent, finished_at, trace_pence, idempotency_key)
-    select '${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
+    select app.operator_office(), '${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
            'teamhq:grant', 'research-director', app.now_utc(), 0,
            'budget-free-' || g::text || '-' || gen_random_uuid()::text
       from generate_series(1, 40) g;
-    select coalesce(app.over_budget('research-director'), '(under)') as r;`)
+    select coalesce(app.over_budget(app.operator_office(), 'research-director'), '(under)') as r;`)
   check('CONTROL: forty free jobs do not touch the budget', String(r.r), String(r.r) === '(under)')
 }
 
@@ -166,12 +169,12 @@ const REAL_JOB = `
   const r = await rolled(`
     update public.system_config set value = to_jsonb(1)
      where key = 'budget.pence_for_the_office_per_day';
-    insert into public.jobs (project_id, correlation_id, kind, state, requested_by,
+    insert into public.jobs (office_id, project_id, correlation_id, kind, state, requested_by,
                              recipient_agent, finished_at, trace_pence, idempotency_key)
-    values ('${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
+    values (app.operator_office(), '${String(project.id)}'::uuid, gen_random_uuid(), 'office.instruction', 'complete',
             'verify:budget-probe', 'research-director', app.now_utc(), 900,
             'budget-harness-' || gen_random_uuid()::text);
-    select coalesce(app.over_budget('research-director'), '(under)') as r;`)
+    select coalesce(app.over_budget(app.operator_office(), 'research-director'), '(under)') as r;`)
   check(
     'CONTROL: a suite spending money is not the office spending money',
     String(r.r),

@@ -112,7 +112,9 @@ describe('and the ways a provider breaks a client', () => {
       fetchImpl: server(() => reply({ error: { message: 'no tools for you' }, jsonrpc: '2.0' })),
     })
     expect(found.ok).toBe(false)
-    expect(found.error).toBe('no tools for you')
+    // Remote text is not reflected: the provider's sentence reaches nobody, only the fact and a status.
+    expect(found.error).not.toContain('no tools for you')
+    expect(found.error).toContain('refused to list its tools')
     // It still learned who the server was, which is worth keeping.
     expect(found.serverName).toBe('a-server')
   })
@@ -150,6 +152,8 @@ describe('and the ways a provider breaks a client', () => {
       Promise.reject(new Error('getaddrinfo ENOTFOUND'))) as unknown as typeof fetch
     const found = await discoverTools('https://example.test/mcp', { fetchImpl: broken })
     expect(found.ok).toBe(false)
-    expect(found.error).toContain('ENOTFOUND')
+    // The runtime's own message can carry an address or a header, so it is replaced by a fixed phrase.
+    expect(found.error).not.toContain('ENOTFOUND')
+    expect(found.error).toContain('could not be reached')
   })
 })

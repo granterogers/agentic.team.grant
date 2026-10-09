@@ -11,6 +11,7 @@
  * and this path add, and it joins the SAME `alsoConvened` mechanism a routed
  * roster uses rather than a second one. These tests are about that join.
  */
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { SqlExecutor, SqlResult } from '../../src/db/executor.ts'
 import { speaker } from '../../src/handlers/instruction.ts'
@@ -45,10 +46,70 @@ const db: SqlExecutor = {
 
 describe('#26 — a selection Grant made himself', () => {
   it('one person, and nobody else — unchanged', async () => {
-    const who = await speaker(db, 'chief-of-staff', 'what is open?', null, null, [])
-    expect(who.slug).toBe('chief-of-staff')
+    // A specialist whose bot he opened. (This case was written with the chief as the person; the chief is the router
+    // and is no longer a "direct" address on her own: see agents/addressing.ts and the next test.)
+    const who = await speaker(db, 'finance-director', 'what is open?', null, null, [])
+    expect(who.slug).toBe('finance-director')
     expect(who.alsoConvened).toEqual([])
-    expect(who.convened).toEqual(['chief-of-staff'])
+    expect(who.convened).toEqual(['finance-director'])
+    expect(who.reason).toContain('addressed directly')
+  })
+
+  it('the chief alone is NOT a direct address: she routes, so the roster is consulted', async () => {
+    const asked: string[] = []
+    const spy: SqlExecutor = {
+      kind: 'fake',
+      execute: (sql: string): Promise<SqlResult> => {
+        asked.push(sql)
+        return db.execute(sql)
+      },
+    }
+    const who = await speaker(spy, 'chief-of-staff', 'what is open?', null, null, [])
+    expect(who.reason).not.toContain('addressed directly')
+    expect(
+      asked.some((s) => s.includes('who_knows_about') || s.includes('public.staff where active')),
+    ).toBe(true)
+  })
+
+  it('a turn the office settles in code stays with the chief, and the roster is not consulted at all', async () => {
+    const asked: string[] = []
+    const spy: SqlExecutor = {
+      kind: 'fake',
+      execute: (sql: string): Promise<SqlResult> => {
+        asked.push(sql)
+        return db.execute(sql)
+      },
+    }
+    const who = await speaker(
+      spy,
+      'chief-of-staff',
+      'remind me to call Mum',
+      null,
+      null,
+      [],
+      null,
+      false,
+      true,
+    )
+    expect(who.slug).toBe('chief-of-staff')
+    expect(who.convened).toEqual([])
+    expect(who.reason).toContain('settled in code')
+    expect(asked.some((s) => s.includes('who_knows_about'))).toBe(false)
+  })
+
+  it('...but settled-in-code does not override a specialist whose bot he opened (control)', async () => {
+    const who = await speaker(
+      db,
+      'finance-director',
+      'remind me to call Mum',
+      null,
+      null,
+      [],
+      null,
+      false,
+      true,
+    )
+    expect(who.slug).toBe('finance-director')
     expect(who.reason).toContain('addressed directly')
   })
 
@@ -94,5 +155,98 @@ describe('#26 — a selection Grant made himself', () => {
     const who = await speaker(db, 'finance-director', 'the same question again', null, null, [])
     expect(who.slug).toBe('finance-director')
     expect(who.alsoConvened).toEqual([])
+  })
+})
+
+describe('selective delegation on every interface (owner decisions, 7 and 8 October 2026)', () => {
+  const watch = (): { spy: SqlExecutor; asked: string[] } => {
+    const asked: string[] = []
+    return {
+      asked,
+      spy: {
+        kind: 'fake',
+        execute: (sql: string): Promise<SqlResult> => {
+          asked.push(sql)
+          return db.execute(sql)
+        },
+      },
+    }
+  }
+  const lookedUpSubjects = (asked: string[]): boolean =>
+    asked.some((s) => s.includes('who_knows_about'))
+
+  const ask = (addressedTo: string | null, said: string, hisWords: string | null, spy = db) =>
+    speaker(spy, addressedTo, said, null, null, [], null, false, false, hisWords)
+
+  it.each([
+    ['chief-of-staff', 'how is the venue hire going?'],
+    [null, 'how is the venue hire going?'],
+    [null, "What's the status of the venue contract?"],
+  ])('a routine request (%s, %s) is hers: nobody convened, no subject lookup', async (to, said) => {
+    const { spy, asked } = watch()
+    const who = await ask(to, said, said, spy)
+    expect(who.slug).toBe('chief-of-staff')
+    expect(who.convened).toEqual([])
+    expect(who.alsoConvened).toEqual([])
+    expect(who.reason).toContain('routine request')
+    expect(lookedUpSubjects(asked)).toBe(false)
+  })
+
+  it('the decision reads HIS words: a model rewrite that sounds investigative convenes nobody, and his own words that are, do', async () => {
+    const rewritten = 'Investigate and compare the venue contract risk and recommend options'
+    const quiet = watch()
+    const a = await ask(null, rewritten, 'what about the venue thing?', quiet.spy)
+    expect(a.reason).toContain('routine request')
+    expect(lookedUpSubjects(quiet.asked)).toBe(false)
+    const loud = watch()
+    await ask(
+      null,
+      'tell me about the venue',
+      'Research the alternatives and give me a recommendation',
+      loud.spy,
+    )
+    expect(lookedUpSubjects(loud.asked)).toBe(true)
+  })
+
+  it('forwarded words (passed as an empty request) are never a request for the team', async () => {
+    const { spy, asked } = watch()
+    const who = await ask(null, 'Investigate the deposit and research alternatives', '', spy)
+    expect(who.reason).toContain('routine request')
+    expect(lookedUpSubjects(asked)).toBe(false)
+  })
+
+  it('NO selection when the caller has no turn (hisWords null): the literal roster path, as before', async () => {
+    const { spy, asked } = watch()
+    const who = await ask(null, 'how is the venue hire going?', null, spy)
+    expect(who.reason).not.toContain('routine request')
+    expect(lookedUpSubjects(asked)).toBe(true)
+  })
+
+  it.each([
+    'ask the team how the venue hire is going',
+    'Research the alternatives and give me a recommendation',
+    'Investigate why the deposit was refused',
+  ])('a request for the team or an investigation reaches the roster: %s', async (said) => {
+    const { spy, asked } = watch()
+    const who = await ask('chief-of-staff', said, said, spy)
+    expect(who.reason).not.toContain('routine request')
+    expect(lookedUpSubjects(asked)).toBe(true)
+  })
+
+  it('a specialist he addressed directly still answers directly, whatever he asked (selective delegation never overrides an address)', async () => {
+    const who = await ask(
+      'finance-director',
+      'how is the venue hire going?',
+      'how is the venue hire going?',
+    )
+    expect(who.slug).toBe('finance-director')
+    expect(who.reason).toContain('addressed directly')
+  })
+
+  it('WIRED: the handler passes his words (turn.kept), and an empty string when forwarded, to the one decision', () => {
+    const source = readFileSync('src/handlers/instruction.ts', 'utf8')
+    expect(source).toMatch(/forwarded \? '' : turn\.kept,\s*\n\s*\)/)
+    expect(source).toMatch(/if \(hisWords !== null\) \{/)
+    expect(source).not.toMatch(/channel === 'telegram'/)
   })
 })

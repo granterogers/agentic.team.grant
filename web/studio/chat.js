@@ -297,8 +297,28 @@ export const projectIdOf = (slug) => {
     : undefined
 }
 
-/** One session per visit, so the office can group the turns of a conversation. */
+/**
+ * One id per page visit. It is the DEDUPE and containment identity of a turn, not the conversation: the office derives
+ * the conversation (person + office + project) from the verified login, so a reload, a second tab or another device
+ * keeps the thread (H1). Do not store this or send anything else as an identity; the shape is pinned by check:voice-sessions.
+ */
 const SESSION = `s${Math.random().toString(36).slice(2, 12)}`
+
+/**
+ * A name for ONE user message, minted when it is sent and kept for any retry of that same message (a retry after a
+ * timeout is the same message; the same words typed again later are a new one with a new name). Plain characters and
+ * bounded, because the office checks the shape and ignores anything else; it carries no meaning of its own, and the
+ * office scopes it to the signed-in person, office and project, so it needs no secrecy.
+ */
+export function newMessageId() {
+  let r = ''
+  try {
+    r = globalThis.crypto.randomUUID().replace(/-/g, '')
+  } catch {
+    r = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+  }
+  return `m${Date.now().toString(36)}${r}`.slice(0, 64)
+}
 
 export function send(slug, text, context, to, also = []) {
   const now = new Date().toISOString()
@@ -338,6 +358,9 @@ export function send(slug, text, context, to, also = []) {
     at: now, pending: true, inflight: true,
     waiting: 'sending', since: startedAt(),
     said: text, to: to ?? null,
+    // This message's own name, minted once HERE and reused by every retry, so the office files a replay of it once.
+    // The visit it was sent from travels with it: the office keys a turn on both.
+    messageId: newMessageId(), visit: SESSION,
     // And who else was asked, or a retry sends the request to fewer people
     // than the first attempt did (#375).
     also: Array.isArray(also) ? also : [],
@@ -378,6 +401,17 @@ function mark(slug, id, patch) {
 
 export async function ask(slug, text, context, token, to, also, onState) {
   const pendingId = thread(slug).at(-1)?.id
+  // The waiting row carries the message's name and the visit it was first sent from (a retry reuses both, so the
+  // office sees the same message). A row with none (a direct ask) gets a fresh name for this attempt.
+  const waitingRow = thread(slug).at(-1)
+  const messageId =
+    typeof waitingRow?.messageId === 'string' && waitingRow.messageId !== ''
+      ? waitingRow.messageId
+      : newMessageId()
+  const visit =
+    typeof waitingRow?.visit === 'string' && /^s[a-z0-9]{1,10}$/.test(waitingRow.visit)
+      ? waitingRow.visit
+      : SESSION
   /*
     Sending, then waiting.
 
@@ -461,7 +495,8 @@ export async function ask(slug, text, context, token, to, also, onState) {
             }
           : {
               said: text,
-              session: SESSION,
+              session: visit,
+              message: messageId,
               // The thread's project, so the office files it there and nowhere else.
               project: projectIdOf(slug),
               to: staffSlug(to),

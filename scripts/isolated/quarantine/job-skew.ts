@@ -1,16 +1,19 @@
 /**
+ * QUARANTINED (see ./README.md): never run by a gate. It needs a database built from a fixed historical range of
+ * migrations, and nothing replaced it: the worker-versus-schema skew matrix is an open gap.
+ *
  * Run 4 - version skew: NEW worker code on the OLD schema (before 0619 and 0620).
  *
- *   npx tsx scripts/isolated/job-skew.ts <db built from production + 0613..0618>
+ *   npx tsx scripts/isolated/quarantine/job-skew.ts <db built from production + 0613..0618>
  *
  * The worker is deployed after the migration, but a rollback of the schema, a second region or a runner on
  * stale code can put the new code in front of the old database. It must fail SAFE: keep every guarantee the
  * old schema can carry, and switch off - not crash on - the ones it cannot. The other direction (old code on
  * the new schema) is a job carrying no claim, proved in job-lifecycle.ts.
  */
-import { startHeartbeat } from '../../src/jobs/fence.ts'
-import { dequeue, type Handler, type HandlerOutput, runJob } from '../../src/jobs/worker.ts'
-import { isolated } from './guard.ts'
+import { startHeartbeat } from '../../../src/jobs/fence.ts'
+import { dequeue, type Handler, type HandlerOutput, runJob } from '../../../src/jobs/worker.ts'
+import { isolated } from '../guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'skew_old')
 const run = Date.now().toString(36)

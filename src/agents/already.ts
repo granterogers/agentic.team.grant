@@ -100,3 +100,25 @@ export async function alreadyPursuing(
     return null
   }
 }
+
+/**
+ * The sentence for a REPEATED request that found the specialists already on the work (the structural case, where
+ * `enqueue_child_once` handed back a live child that belongs to an earlier turn).
+ *
+ * It states only what is true: somebody is on it and nothing was started. It never claims a hand-off, and it names
+ * the way to get a separate look, because refusing to duplicate is only safe when asking for a duplicate is easy.
+ * `names` are the people's names (never slugs or job ids: this is read by a person and by a model).
+ */
+export function alreadyWithSentence(names: readonly string[]): string {
+  const unique = [...new Set(names.map((n) => n.trim()).filter((n) => n !== ''))]
+  const who =
+    unique.length === 0
+      ? 'Somebody is'
+      : unique.length === 1
+        ? `${unique[0]} is`
+        : `${unique.slice(0, -1).join(', ')} and ${unique[unique.length - 1]} are`
+  return (
+    `${who} already on that, so I have not started it a second time. ` +
+    'Say the word if you want somebody else to take a separate look.'
+  )
+}

@@ -59,7 +59,7 @@ describe('and the office resolves it towards the deferral', () => {
     */
     expect(withoutComments).toMatch(
       // Wrapped since ledger R4b; the wired call is still firstOfHis over personalTaskRequest.
-      /const deferred = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => \{\s*const got = personalTaskRequest\((?:resolveElliptical\()?text\b[^\n]*\n/,
+      /const deferred = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => \{\s*const got = personalTaskRequest\(\s*(?:resolveElliptical\()?text\b[^\n]*\n/,
     )
     /*
       The guard the artifact reader actually falls through, bounded at both

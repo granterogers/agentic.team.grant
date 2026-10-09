@@ -311,21 +311,31 @@ export async function fireDueDuties(db: SqlExecutor): Promise<readonly string[]>
     dispatcher is not — a budget that throws must not stop the queue from
     draining work Grant is waiting on.
   */
+  /*
+    Per office since 1025: the function holds an over-budget office's OWN
+    background work and no other office's, and never parks a person's
+    conversation. A failure is still not fatal, but it is no longer silent: it
+    comes back in the list the pass logs, because a budget that cannot be
+    applied for days looks exactly like a budget nobody has reached.
+  */
+  const budget: string[] = []
   try {
     await db.execute('select app.defer_over_budget()')
-  } catch {
-    // Left unreported. The next tick tries again, and a budget that cannot be
-    // applied is a worse reason to stop the office than the spend it prevents.
+  } catch (error) {
+    budget.push(`budget could not be applied: ${(error as Error).message.slice(0, 120)}`)
   }
   try {
     const { rows } = await db.execute('select * from app.dispatch_due_responsibilities()')
     // `duty_slug`, not `slug`: inside plpgsql an OUT column named `job_id`
     // shadowed `jobs.job_id` and Postgres refused the whole call (0099), so
     // every OUT column here is prefixed.
-    return (rows as { duty_slug: string; outcome: string }[])
-      .filter((r) => r.outcome === 'fired')
-      .map((r) => r.duty_slug)
+    return [
+      ...budget,
+      ...(rows as { duty_slug: string; outcome: string }[])
+        .filter((r) => r.outcome === 'fired')
+        .map((r) => r.duty_slug),
+    ]
   } catch (error) {
-    return [`duties could not be dispatched: ${(error as Error).message.slice(0, 120)}`]
+    return [...budget, `duties could not be dispatched: ${(error as Error).message.slice(0, 120)}`]
   }
 }

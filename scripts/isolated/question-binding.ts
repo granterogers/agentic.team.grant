@@ -39,12 +39,12 @@ const child = async (parent: string) =>
     ).c,
   ).match(/[0-9a-f-]{36}/)?.[0] as string
 const project = async () =>
-  String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
+  String((await one(`select app.unnamed_project(app.operator_office())::text as p`)).p)
 const ask = async (job: string, what: string, ageMinutes = 0) =>
   String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option, created_at)
-        values (${lit(await project())}::uuid, ${lit(job)}::uuid, ${lit(`${what} ${run}`)}, 'isolated', 'nothing', array['Yes, do it','No, leave it'], 'chief-of-staff', false, 'No, leave it', app.now_utc() - ${lit(`${String(ageMinutes)} minutes`)}::interval)
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option, created_at)
+        values (app.operator_office(), ${lit(await project())}::uuid, ${lit(job)}::uuid, ${lit(`${what} ${run}`)}, 'isolated', 'nothing', array['Yes, do it','No, leave it'], 'chief-of-staff', false, 'No, leave it', app.now_utc() - ${lit(`${String(ageMinutes)} minutes`)}::interval)
         returning blocker_id::text as id`)
     ).id,
   )
@@ -64,8 +64,8 @@ const deliver = async (
   msg += 1
   const id = String(
     (
-      await one(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref, thread_ref, created_at)
-        values (${lit(opts.channel ?? 'telegram')}, ${lit(`qb-${crypto.randomUUID()}`)}, ${lit(opts.account ?? BOT)}, ${lit(opts.chat ?? chatNow)}, ${lit(opts.purpose ?? 'result')}, ${lit(job)}::uuid, 'sent',
+      await one(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref, thread_ref, created_at)
+        values (app.operator_office(), ${lit(opts.channel ?? 'telegram')},${lit(`qb-${crypto.randomUUID()}`)}, ${lit(opts.account ?? BOT)}, ${lit(opts.chat ?? chatNow)}, ${lit(opts.purpose ?? 'result')}, ${lit(job)}::uuid, 'sent',
                 app.now_utc() + interval '1 hour', app.now_utc() - ${lit(`${String(opts.ago ?? 0)} minutes`)}::interval, ${lit(String(msg))}, ${opts.threadRef === undefined || opts.threadRef === null ? 'null' : lit(opts.threadRef)}, app.now_utc() - ${lit(`${String(opts.ago ?? 0)} minutes`)}::interval)
         returning delivery_id::text as id`)
     ).id,
@@ -110,8 +110,8 @@ let chatNow = CHAT
 const turn = async (text: string, context?: Record<string, unknown>, account = BOT) => {
   const key = `telegram:message:${account}:${chatNow}:${String(Math.floor(Math.random() * 9_000_000) + 1_000_000)}`
   const cmd = await one(`${DOOR}
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, context)
-    values ('telegram', ${lit(`${chatNow}:${key.split(':').pop()}`)}, ${lit(chatNow)}, ${lit(text)}, ${lit(key)}, 'grant', ${lit(JSON.stringify(context ?? {}))}::jsonb)
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject, context)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram', ${lit(`${chatNow}:${key.split(':').pop()}`)}, ${lit(chatNow)}, ${lit(text)}, ${lit(key)}, 'grant', ${lit(JSON.stringify(context ?? {}))}::jsonb)
     returning command_id::text as id`)
   const enq = await one(`${DOOR} select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
   const v = typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v
@@ -241,8 +241,8 @@ const root = await realParent(db)
   ] as const) {
     const d = String(
       (
-        await one(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
-          values ('telegram', ${lit(`qb-${crypto.randomUUID()}`)}, ${lit(acct)}, ${lit(CHAT)}, 'result', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(same)}) returning delivery_id::text as id`)
+        await one(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
+          values (app.operator_office(), 'telegram', ${lit(`qb-${crypto.randomUUID()}`)}, ${lit(acct)}, ${lit(CHAT)}, 'result', ${lit(job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), ${lit(same)}) returning delivery_id::text as id`)
       ).id,
     )
     await one(
@@ -252,8 +252,8 @@ const root = await realParent(db)
   const press = async (account: string) => {
     const key = `telegram:callback:${account}:${crypto.randomUUID().slice(0, 8)}`
     const c =
-      await one(`${DOOR} insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, callback_action, subject)
-      values ('telegram', ${lit(`${CHAT}:${same}`)}, ${lit(CHAT)}, '', ${lit(key)}, 'approve', 'grant') returning command_id::text as id`)
+      await one(`${DOOR} insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, callback_action, subject)
+      values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram', ${lit(`${CHAT}:${same}`)}, ${lit(CHAT)}, '', ${lit(key)}, 'approve', 'grant') returning command_id::text as id`)
     const rows = (await db.execute(PENDING(500))).rows as {
       command_id: string
       delivery_id: string | null
@@ -360,9 +360,12 @@ const root = await realParent(db)
   })
   void d1
   const slackTurn = async (threadTs: string | null) => {
+    // The key is the shape the Slack adapter writes (slack:message:<channel>:<10 digits>.<6 digits>); the earlier
+    // truncated-uuid key is no door, so the office rightly bound nothing to it and the checks read an empty answer.
+    const ts = `17900${String(10000 + Math.floor(Math.random() * 89999))}.${String(100000 + Math.floor(Math.random() * 899999))}`
     const cmd = await one(`${DOOR}
-      insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, context)
-      values ('slack', ${lit(`C0SLACK1:1790000${String(Math.floor(Math.random() * 999999))}.000200`)}, 'U0GRANT', 'yes', ${lit(`slack:message:C0SLACK1:${crypto.randomUUID().slice(0, 10)}`)}, 'grant', ${lit(JSON.stringify(threadTs === null ? {} : { thread_ts: threadTs }))}::jsonb)
+      insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject, context)
+      values (app.operator_office(), app.unnamed_project(app.operator_office()), 'slack', ${lit(`C0SLACK1:${ts}`)}, 'U0GRANT', 'yes', ${lit(`slack:message:C0SLACK1:${ts}`)},'grant', ${lit(JSON.stringify(threadTs === null ? {} : { thread_ts: threadTs }))}::jsonb)
       returning command_id::text as id`)
     return String(cmd.id)
   }
@@ -466,8 +469,8 @@ const root = await realParent(db)
         ? `voice:turn:s${session}.${String(Math.floor(Math.random() * 9000) + 1000)}`
         : `teamhq:message:${crypto.randomUUID().replace(/-/g, '')}`
     const cmd = await one(`${DOOR}
-      insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-      values (${lit(channel)}, ${lit(`${session}:${crypto.randomUUID().slice(0, 8)}`)}, 'grant', ${lit(text)}, ${lit(key)}, 'grant')
+      insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+      values (app.operator_office(), app.unnamed_project(app.operator_office()), ${lit(channel)}, ${lit(`${session}:${crypto.randomUUID().slice(0, 8)}`)}, 'grant', ${lit(text)}, ${lit(key)}, 'grant')
       returning command_id::text as id`)
     const enq = await one(
       `${DOOR} select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`,
@@ -542,8 +545,8 @@ const root = await realParent(db)
         ? `voice:turn:s${session}.${String(Math.floor(Math.random() * 9000) + 1000)}`
         : `teamhq:message:${crypto.randomUUID().replace(/-/g, '')}`
     const cmd = await one(`${DOOR}
-      insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, received_at)
-      values (${lit(channel)}, ${lit(`${session}:${crypto.randomUUID().slice(0, 8)}`)}, 'grant', ${lit(text)}, ${lit(key)}, 'grant', app.now_utc() - ${lit(`${String(ageHours)} hours`)}::interval)
+      insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject, received_at)
+      values (app.operator_office(), app.unnamed_project(app.operator_office()), ${lit(channel)}, ${lit(`${session}:${crypto.randomUUID().slice(0, 8)}`)}, 'grant', ${lit(text)}, ${lit(key)}, 'grant', app.now_utc() - ${lit(`${String(ageHours)} hours`)}::interval)
       returning command_id::text as id`)
     const enq = await one(
       `${DOOR} select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`,
@@ -630,8 +633,8 @@ const root = await realParent(db)
   const q = await ask(j, 'F5 real question')
   await deliver(j, { blocker: q })
   const cmd =
-    await one(`insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, synthetic)
-    values ('telegram', ${lit(`${chatNow}:9999`)}, ${lit(chatNow)}, 'yes', ${lit(`telegram:message:${BOT}:${chatNow}:9999`)}, 'grant', true) returning command_id::text as id`)
+    await one(`insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject, synthetic)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram', ${lit(`${chatNow}:9999`)}, ${lit(chatNow)}, 'yes', ${lit(`telegram:message:${BOT}:${chatNow}:9999`)}, 'grant', true) returning command_id::text as id`)
   const rows = await forNext(String(cmd.id))
   const harnessJob = String((await one(`select app.harness_job(${lit(j)}::uuid)::text as h`)).h)
   check(
@@ -657,14 +660,14 @@ const root = await realParent(db)
   )
   const orphan = String(
     (
-      await one(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, state, lease_expires_at, sent_at, message_ref)
-    values ('telegram', ${lit(`qb-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(chatNow)}, 'notice', 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '8') returning delivery_id::text as id`)
+      await one(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, state, lease_expires_at, sent_at, message_ref)
+    values (app.operator_office(), 'telegram', ${lit(`qb-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(chatNow)}, 'notice', 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '8') returning delivery_id::text as id`)
     ).id,
   )
   const nullJobBlocker = String(
     (
-      await one(`insert into public.blockers (project_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
-    values (app.unnamed_project(app.test_office()), ${lit(`F9 ${run}`)}, 'isolated', 'nothing', array['Yes','No'], 'chief-of-staff', false, 'No') returning blocker_id::text as id`).catch(
+      await one(`insert into public.blockers (office_id, project_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, decline_option)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()),${lit(`F9 ${run}`)}, 'isolated', 'nothing', array['Yes','No'], 'chief-of-staff', false, 'No') returning blocker_id::text as id`).catch(
         () => ({ id: '' }),
       )
     ).id,

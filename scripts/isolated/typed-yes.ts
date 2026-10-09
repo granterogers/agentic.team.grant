@@ -27,25 +27,25 @@ const turn = async (text: string, context?: Record<string, unknown>) => {
   const key = realTelegramKey()
   const msg = key.split(':').pop() ?? '1'
   const cmd = await one(`${DOOR}
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, context)
-    values ('telegram', ${lit(`${CHAT}:${msg}`)}, ${lit(CHAT)}, ${lit(text)}, ${lit(key)}, 'grant', ${lit(JSON.stringify(context ?? {}))}::jsonb)
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject, context)
+    values (app.operator_office(), app.unnamed_project(app.operator_office()), 'telegram',${lit(`${CHAT}:${msg}`)}, ${lit(CHAT)}, ${lit(text)}, ${lit(key)}, 'grant', ${lit(JSON.stringify(context ?? {}))}::jsonb)
     returning command_id::text as id`)
   const enq = await one(`${DOOR} select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
   const v = typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v
   return { command: String(cmd.id), job: String((v as { job_id: string }).job_id) }
 }
 const ask = async (job: string, sentTo: string | null) => {
-  const proj = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
+  const proj = String((await one(`select app.unnamed_project(app.operator_office())::text as p`)).p)
   const b = String(
     (
-      await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-        values (${lit(proj)}::uuid, ${lit(job)}::uuid, ${lit(`Typed yes proof ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'isolated', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false)
+      await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+        values (app.operator_office(), ${lit(proj)}::uuid, ${lit(job)}::uuid, ${lit(`Typed yes proof ${run} ${crypto.randomUUID().slice(0, 6)}`)}, 'isolated', 'nothing happens until answered', array['Yes','No'], 'chief-of-staff', false)
         returning blocker_id::text as id`)
     ).id,
   )
   if (sentTo !== null) {
-    await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
-      values ('telegram', ${lit(`typed-yes-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(sentTo)}, 'blocker', ${lit(job)}::uuid, ${lit(b)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
+    await db.execute(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, blocker_id, state, lease_expires_at, sent_at, message_ref)
+      values (app.operator_office(), 'telegram', ${lit(`typed-yes-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(sentTo)}, 'blocker', ${lit(job)}::uuid, ${lit(b)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4242')`)
   }
   return b
 }
@@ -140,8 +140,8 @@ const settleAll = () =>
   const prev = await turn('an eighth thing that needs a go-ahead')
   const q = await ask(prev.job, null)
   // the question's own message failed; a later PROGRESS note of the same job was sent
-  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
-    values ('telegram', ${lit(`typed-yes-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'progress', ${lit(prev.job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4243')`)
+  await db.execute(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
+    values (app.operator_office(), 'telegram', ${lit(`typed-yes-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'progress', ${lit(prev.job)}::uuid, 'sent', app.now_utc() + interval '1 hour', app.now_utc(), '4243')`)
   const next = await turn('yes')
   const got = await forNext(next.command)
   check(
@@ -153,8 +153,8 @@ const settleAll = () =>
   const prev2 = await turn('a ninth thing that needs a go-ahead')
   await ask(prev2.job, CHAT)
   const other = await turn('an unrelated question from him')
-  await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
-    values ('telegram', ${lit(`typed-yes-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'result', ${lit(other.job)}::uuid, 'sent', app.now_utc() + interval '1 hour', clock_timestamp(), '4244')`)
+  await db.execute(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, purpose, job_id, state, lease_expires_at, sent_at, message_ref)
+    values (app.operator_office(), 'telegram', ${lit(`typed-yes-${crypto.randomUUID()}`)}, ${lit(BOT)}, ${lit(CHAT)}, 'result', ${lit(other.job)}::uuid, 'sent', app.now_utc() + interval '1 hour', clock_timestamp(), '4244')`)
   const next2 = await turn('yes')
   const got2 = await forNext(next2.command)
   check(
@@ -189,12 +189,14 @@ const settleAll = () =>
 }
 // ---- the control: a channel with no delivery record (the dashboard's own chat) is answered as it always was ---------------------
 {
-  const chat = `dash-${run}`
   const mk = async (text: string) => {
-    const dk = `teamhq:chat:proof-${run}-${crypto.randomUUID().slice(0, 8)}`
+    // The dashboard turn exactly as app.say_in_project writes it: the key is teamhq:message:<hex>, which the
+    // production adapter shape recognises (1023: a turn from no recognised door answers nothing). The old
+    // fixture's teamhq:chat:proof-... key is no door, so the office rightly bound nothing to it.
+    const dk = `teamhq:message:${crypto.randomUUID().replace(/-/g, '')}`
     const cmd = await one(`${DOOR}
-      insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-      values ('teamhq', ${lit(`${chat}:${crypto.randomUUID().slice(0, 8)}`)}, 'grant', ${lit(text)}, ${lit(dk)}, 'grant')
+      insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key)
+      values (app.operator_office(), app.unnamed_project(app.operator_office()), 'teamhq', ${lit(dk)}, app.office_actor(app.operator_office()), ${lit(text)}, ${lit(dk)})
       returning command_id::text as id`)
     const enq = await one(
       `${DOOR} select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`,

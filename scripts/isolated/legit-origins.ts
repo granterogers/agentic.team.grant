@@ -22,6 +22,7 @@ import { toCanonicalCommand as fromTelegram } from '../../src/channels/telegram.
 import { containmentRefusal } from '../../src/jobs/containment.ts'
 import { toCanonicalCommand as fromSlack } from '../../src/slack/events.ts'
 import { toCanonicalInteraction } from '../../src/slack/interactions.ts'
+import { scopeOf } from './fixtures-jobs.ts'
 import { isolated } from './guard.ts'
 import { postTurn, startDoor } from './voice-door.ts'
 
@@ -57,7 +58,7 @@ await db.execute(`insert into public.telegram_bots (bot_id, username, staff_slug
 const project = String(
   jsonOf(
     (
-      await one(`select app.hq_create_project(app.test_office(), ${lit(`Legit ${run}`)}, 'upload', ${lit(`legit-${run}`)},
+      await one(`select app.hq_create_project(app.operator_office(), ${lit(`Legit ${run}`)}, 'upload', ${lit(`legit-${run}`)},
     ${lit(`Legit ${run}`)}, true) as v`)
     ).v,
   ).project_id as string,
@@ -69,8 +70,8 @@ const store = async (
 ): Promise<{ command: string; job: string | null }> => {
   const cols = Object.keys(row)
   const cmd = await one(`${DOOR}
-    insert into public.inbound_commands (${cols.join(', ')})
-    select ${cols.join(', ')} from jsonb_populate_record(null::public.inbound_commands, ${lit(JSON.stringify(row))}::jsonb)
+    insert into public.inbound_commands (${scopeOf('real').cols}, ${cols.join(', ')})
+    select ${scopeOf('real').vals}, ${cols.join(', ')} from jsonb_populate_record(null::public.inbound_commands, ${lit(JSON.stringify(row))}::jsonb)
     returning command_id::text as id`)
   const enq = jsonOf(
     (await one(`${DOOR} select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)).v,
@@ -162,8 +163,8 @@ const reaches = async (what: string, job: string | null) => {
     BOT,
   ) as unknown as Record<string, unknown>
   const cbRow =
-    await one(`${DOOR} insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, callback_action, subject)
-    values ('telegram', ${lit(String(cb.origin_ref))}, ${lit(String(cb.actor))}, '', ${lit(String(cb.dedupe_key))}, ${lit(String(cb.callback_action))}, 'grant')
+    await one(`${DOOR} insert into public.inbound_commands (${scopeOf('real').cols}, origin_channel, origin_ref, actor, instruction, dedupe_key, callback_action, subject)
+    values (${scopeOf('real').vals}, 'telegram', ${lit(String(cb.origin_ref))}, ${lit(String(cb.actor))}, '', ${lit(String(cb.dedupe_key))}, ${lit(String(cb.callback_action))}, 'grant')
     returning command_id::text as id, dedupe_key as k`)
   check(
     'Telegram button press: the adapter key is what production writes',
@@ -204,8 +205,8 @@ const reaches = async (what: string, job: string | null) => {
     actions: [{ action_id: 'feedback.useful', value: 'x' }],
   } as never) as unknown as Record<string, unknown>
   const pr =
-    await one(`${DOOR} insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, callback_action, subject)
-    values ('slack', ${lit(String(press.origin_ref))}, ${lit(String(press.actor))}, '', ${lit(String(press.dedupe_key))}, ${lit(String(press.callback_action))}, 'grant')
+    await one(`${DOOR} insert into public.inbound_commands (${scopeOf('real').cols}, origin_channel, origin_ref, actor, instruction, dedupe_key, callback_action, subject)
+    values (${scopeOf('real').vals}, 'slack', ${lit(String(press.origin_ref))}, ${lit(String(press.actor))}, '', ${lit(String(press.dedupe_key))}, ${lit(String(press.callback_action))}, 'grant')
     returning command_id::text as id, dedupe_key as k`)
   check(
     'Slack button: the adapter key is what production writes',
@@ -223,7 +224,7 @@ const reaches = async (what: string, job: string | null) => {
   const said = jsonOf(
     (
       await one(
-        `${DOOR} select app.say_in_project(app.test_office(), ${lit(project)}::uuid, ${lit(`Legit chat ${run}`)}) as v`,
+        `${DOOR} select app.say_in_project(app.operator_office(), ${lit(project)}::uuid, ${lit(`Legit chat ${run}`)}) as v`,
       )
     ).v,
   )
@@ -243,8 +244,8 @@ const reaches = async (what: string, job: string | null) => {
   // Two documents: the office reads a NEW one only in a project that already had one, and only past 600 characters.
   const words = `An isolated proof document ${run}. `.repeat(30)
   const addDoc = (ref: string) =>
-    one(`insert into public.documents (project_id, title, connector, external_ref, content, content_chars, content_fingerprint, fetched_at, added_by)
-      values (${lit(project)}::uuid, ${lit(`Legit doc ${ref}`)}, 'upload', ${lit(ref)}, ${lit(words)}, ${String(words.length)},
+    one(`insert into public.documents (office_id, project_id, title, connector, external_ref, content, content_chars, content_fingerprint, fetched_at, added_by)
+      values (app.operator_office(), ${lit(project)}::uuid, ${lit(`Legit doc ${ref}`)}, 'upload', ${lit(ref)}, ${lit(words)}, ${String(words.length)},
               encode(extensions.digest(${lit(words)}, 'sha256'), 'hex'), app.now_utc(), 'grant')
       returning document_id::text as id`)
   await addDoc(`legit-a-${run}`)
@@ -252,7 +253,7 @@ const reaches = async (what: string, job: string | null) => {
   const sent = jsonOf(
     (
       await one(
-        `${DOOR} select app.send_to_agent(app.test_office(), 'document', ${lit(String(doc.id))}::uuid, 'review') as v`,
+        `${DOOR} select app.send_to_agent(app.operator_office(), 'document', ${lit(String(doc.id))}::uuid, 'review') as v`,
       )
     ).v,
   )
@@ -265,8 +266,8 @@ const reaches = async (what: string, job: string | null) => {
 
 /* A scheduled duty */
 {
-  await db.execute(`insert into public.responsibilities (slug, staff_id, description, job_kind, period_minutes)
-    values (${lit(`legit-duty-${run}`)}, (select staff_id from public.staff where slug = 'chief-of-staff'),
+  await db.execute(`insert into public.responsibilities (office_id, slug, staff_id, description, job_kind, period_minutes)
+    values (app.operator_office(), ${lit(`legit-duty-${run}`)}, (select staff_id from public.staff where slug = 'chief-of-staff'),
             'A scheduled duty made for the isolated containment proof of issue 379.', 'office.notion_sync', 60)`)
   await db.execute('select * from app.dispatch_due_responsibilities()')
   const d = await one(

@@ -58,9 +58,17 @@ describe('the prohibition on promising exists and is gated on the rows', () => {
     said the work was done, or the reverse.
   */
   it('the sentence and the permission read one computation', () => {
-    expect(withoutComments).toContain('sayWhatHappened(outcome)')
-    expect(withoutComments).toContain('contractFor(outcome)')
+    // The two final readers take the SAME outcome (named, not matched by spelling: the Version 1 acceptance suite made
+    // that name `outcomeNow` when a draft that IS the answer counts as landed), and it is derived from the one literal.
+    const said = /sayWhatHappened\((\w+)\)/.exec(withoutComments)?.[1]
+    const may = /const may = contractFor\((\w+)\)/.exec(withoutComments)?.[1]
+    expect(said).toBeDefined()
+    expect(may).toBe(said)
     expect(withoutComments.match(/const outcome: CanonicalOutcome = \{/g) ?? []).toHaveLength(1)
+    if (said !== 'outcome')
+      expect(withoutComments).toMatch(
+        new RegExp(`const ${said}: CanonicalOutcome = [\\s\\S]{0,160}\\.\\.\\.outcome`),
+      )
   })
 
   /*

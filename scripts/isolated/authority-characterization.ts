@@ -28,14 +28,14 @@ const project = async (label: string): Promise<string> =>
   String(
     json(
       (
-        await one(`select app.hq_create_project(app.test_office(), ${lit(`Authority ${label} ${run}`)}, 'upload', ${lit(`authority-${label}-${run}`)},
+        await one(`select app.hq_create_project(app.operator_office(),${lit(`Authority ${label} ${run}`)}, 'upload', ${lit(`authority-${label}-${run}`)},
           ${lit(`Authority ${label} ${run}`)}, true) as v`)
       ).v,
     ).project_id,
   )
 const setDial = (p: string, level: string) =>
   db.execute(
-    `insert into public.autonomy_settings (project_id, level, set_by, reason) values (${lit(p)}::uuid, ${lit(level)}, 'grant', 'characterisation')`,
+    `insert into public.autonomy_settings (office_id, project_id, level, set_by, reason) values (app.operator_office(), ${lit(p)}::uuid, ${lit(level)}, 'grant', 'characterisation')`,
   )
 const job = async (p: string, by: string, kind = 'office.instruction'): Promise<string> =>
   by.startsWith('telegram:')
@@ -50,8 +50,8 @@ const job = async (p: string, by: string, kind = 'office.instruction'): Promise<
       ).match(/[0-9a-f-]{36}/)?.[0] ?? '')
     : String(
         (
-          await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-        values (${lit(kind)}, ${lit(by)}, ${lit(p)}::uuid, 'ac-' || gen_random_uuid(), gen_random_uuid())
+          await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+        values (app.operator_office(), ${lit(kind)}, ${lit(by)}, ${lit(p)}::uuid, 'ac-' || gen_random_uuid(), gen_random_uuid())
         returning job_id::text as id`)
         ).id,
       )
@@ -129,7 +129,7 @@ for (const [level, want] of Object.entries(EXPECT)) {
   const p = await project('standing')
   await setDial(p, 'suggest')
   await db.execute(
-    `select app.grant_standing(app.test_office(), 'notebook.write', ${lit(p)}::uuid, 'characterisation', 'grant', null)`,
+    `select app.grant_standing(app.operator_office(),'notebook.write', ${lit(p)}::uuid, 'characterisation', 'grant', null)`,
   )
   const up = await mayAct(db as never, { projectId: p, tool: 'notebook.write' })
   check(

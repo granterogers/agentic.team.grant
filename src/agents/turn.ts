@@ -33,6 +33,7 @@
  * touches the database. What was said and what it means are computed elsewhere
  * (`understand`, the recognisers) and the handler keeps that separate.
  */
+import { withoutQuotedMaterial } from './quoted-material.ts'
 import { type Retraction, readRetraction } from './retraction.ts'
 import { spokenAnswer } from './spoken-answer.ts'
 
@@ -154,8 +155,10 @@ export const keptOf = (
   answer: AnswerClause | null,
 ): HumanWords => {
   const afterRetraction = retraction === null ? cleaned : retraction.kept
-  if (answer !== null && answer.remainder !== '') return answer.remainder
-  return asHumanWords(afterRetraction)
+  // What he pasted is his CONTENT, never his request: the doers read the turn with it taken out (quoted-material.ts).
+  if (answer !== null && answer.remainder !== '')
+    return asHumanWords(withoutQuotedMaterial(answer.remainder))
+  return asHumanWords(withoutQuotedMaterial(afterRetraction))
 }
 
 export const buildTurn = (input: TurnInput): Turn => {

@@ -8,8 +8,15 @@ NAME=${1:-p3_attack}
 case "$NAME" in p3_attack*) ;; *) echo "REFUSED: $NAME is not a p3_attack clone" >&2; exit 2;; esac
 P="psql -h ${ISOLATED_PG_SOCKET:-/tmp/pgs} -p ${ISOLATED_PG_PORT:-55432} -U postgres -q"
 $P -d postgres -c "drop database if exists $NAME"
-$P -d postgres -c "create database $NAME template post"
+# ISOLATED_TEMPLATE names the candidate to clone (the gate passes its own); `post` is only ever a template, never modified.
+$P -d postgres -c "create database $NAME template ${ISOLATED_TEMPLATE:-post}"
 $P -d "$NAME" -c "insert into auth.users(id,email) select gen_random_uuid(), e from (values ('grant.e.rogers@gmail.com'),('verify.operator@example.com')) v(e) where not exists (select 1 from auth.users u where lower(u.email) = v.e)"
+# `post` already holds every migration (see p2-attack.sh); replay only onto a template that predates 0654.
+if [ "$($P -d "$NAME" -tA -c "select to_regclass('public.offices') is not null")" = "t" ]; then
+  echo "template already holds 0654 and later: nothing to replay (P3_SKIP has no effect on it)"
+  echo "$NAME ready: $($P -d "$NAME" -tA -c 'select count(*) from public.offices') office(s)"
+  exit 0
+fi
 for f in "$ROOT"/migrations/0[6-9][0-9][0-9]_*.sql; do
   [ -e "$f" ] || continue
   n=$(basename "$f" | cut -c1-4)

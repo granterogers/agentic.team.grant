@@ -63,8 +63,9 @@ describe('his own words reach the recognisers', () => {
 
 describe('one clause is either a change or a new thing', () => {
   it('a recognised change vetoes both create readers', () => {
+    // Reads his own words through firstOfHis, with the office's day and zone passed in (Z1).
     expect(withoutComments).toMatch(
-      /const changesHis = isBranch \? null : firstOfHis\(personalTaskChange\)/,
+      /const changesHis = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => personalTaskChange\(text, nowAt, officeTz\)\)/,
     )
     /*
       Bounded by the statement, not by a reading that happens to follow it.
@@ -81,7 +82,7 @@ describe('one clause is either a change or a new thing', () => {
     // Wrapped since ledger R4b (a title from a rewrite must be grounded in his
     // words), so the property is asserted rather than the exact expression.
     expect(withoutComments).toMatch(
-      /const deferred = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => \{\s*const got = personalTaskRequest\((?:resolveElliptical\()?text\b[^\n]*\n/,
+      /const deferred = isBranch\s*\?\s*null\s*:\s*firstOfHis\(\(text\) => \{\s*const got = personalTaskRequest\(\s*(?:resolveElliptical\()?text\b[^\n]*\n/,
     )
     const asked =
       /const asked =([\s\S]*?)taskRequest\(text, classifyIntent\(text\)(?:, turn\.kept|, `\$\{turn\.kept\} \$\{hisLastTurn\}`)?\)/.exec(
@@ -97,7 +98,7 @@ describe('one clause is either a change or a new thing', () => {
       decline to create AND decline to change.
     */
     expect(withoutComments).toMatch(/: changesHis\n/)
-    expect(withoutComments.match(/firstOfHis\(personalTaskChange\)/g)).toHaveLength(1)
+    expect(withoutComments.match(/firstOfHis\(\(text\) => personalTaskChange\(/g)).toHaveLength(1)
   })
 })
 

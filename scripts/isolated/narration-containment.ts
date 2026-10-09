@@ -18,6 +18,7 @@
 import { SlackClient } from '../../src/slack/api.ts'
 import { narrateHandoffs, narrateOutcomes } from '../../src/slack/narrate.ts'
 import { SlackOffice } from '../../src/slack/office.ts'
+import { scopeOf } from './fixtures-jobs.ts'
 import { isolated } from './guard.ts'
 import { realTelegramKey, registerBot } from './real-telegram.ts'
 
@@ -34,8 +35,9 @@ const check = (what: string, ok: boolean, detail: string) => {
 
 const TEAM = 'T0ISOLATED'
 const FLOOR = 'C0FLOOR0001'
-await db.execute(`insert into public.slack_workspaces (team_id, team_name, bot_user_id)
-  values (${lit(TEAM)}, 'Isolated office', 'U0ISOLATED') on conflict do nothing`)
+// the workspace belongs to the operator's office (the office whose real turns the control proves still narrate)
+await db.execute(`insert into public.slack_workspaces (office_id, team_id, team_name, bot_user_id)
+  values (app.operator_office(), ${lit(TEAM)}, 'Isolated office', 'U0ISOLATED') on conflict do nothing`)
 await db.execute(`insert into public.slack_channel_map (channel_id, team_id, channel_name, purpose)
   values (${lit(FLOOR)}, ${lit(TEAM)}, 'the_floor', 'general') on conflict do nothing`)
 
@@ -63,8 +65,8 @@ const office = new SlackOffice(db, slack)
 const turn = async (channel: string, key: string, ref: string): Promise<string> => {
   const cmd = await one(`
     set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values (${lit(channel)}, ${lit(ref)}, 'grant', ${lit(`Narration proof ${run}`)}, ${lit(key)}, 'grant')
+    insert into public.inbound_commands (${scopeOf('real').cols}, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (${scopeOf('real').vals}, ${lit(channel)}, ${lit(ref)}, 'grant', ${lit(`Narration proof ${run}`)}, ${lit(key)}, 'grant')
     returning command_id::text as id`)
   const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
   const v = (typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v) as { job_id: string }

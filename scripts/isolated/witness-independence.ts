@@ -10,6 +10,7 @@
  * Grant's own traffic and the operator's own notices.
  */
 import { provenanceSql } from '../leak-witness.ts'
+import { scopeOf } from './fixtures-jobs.ts'
 import { isolated } from './guard.ts'
 import { realTelegramKey, registerBot } from './real-telegram.ts'
 
@@ -27,8 +28,8 @@ const check = (what: string, ok: boolean, detail: string) => {
 const turn = async (channel: string, key: string, ref: string): Promise<string> => {
   const cmd = await one(`
     set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values (${lit(channel)}, ${lit(ref)},
+    insert into public.inbound_commands (${scopeOf('real').cols}, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (${scopeOf('real').vals}, ${lit(channel)}, ${lit(ref)},
             -- The adapter writes the sender's own id; for a private Telegram chat that is the chat (#381).
             ${lit(channel === 'telegram' ? (ref.split(':')[0] ?? '') : 'grant')},
             ${lit(`Witness proof ${run}`)}, ${lit(key)}, 'grant')
@@ -55,12 +56,12 @@ const forged = await turn(
 )
 const orphan = String(
   (
-    await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-      values (gen_random_uuid(), ${lit(`orphan:${run}`)}, 'office.instruction', 'telegram:grant') returning job_id::text as v`)
+    await one(`insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+      values (app.operator_office(), gen_random_uuid(), ${lit(`orphan:${run}`)}, 'office.instruction', 'telegram:grant') returning job_id::text as v`)
   ).v,
 )
-await db.execute(`insert into public.responsibilities (slug, staff_id, description, job_kind, period_minutes)
-  values (${lit(`wit-duty-${run}`)}, (select staff_id from public.staff where slug = 'chief-of-staff'),
+await db.execute(`insert into public.responsibilities (office_id, slug, staff_id, description, job_kind, period_minutes)
+  values (app.operator_office(), ${lit(`wit-duty-${run}`)}, (select staff_id from public.staff where slug = 'chief-of-staff'),
           'A scheduled duty made for the isolated witness proof of issue 379.', 'office.chores', 60)`)
 await db.execute('select * from app.dispatch_due_responsibilities()')
 const duty = String(
@@ -87,8 +88,8 @@ check(
 
 const since = String((await one(`select app.now_utc()::text as t`)).t)
 const sent = (key: string, job: string | null, target = 'C0FLOOR0001', channel = 'slack') =>
-  db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
-    values (${lit(channel)}, ${lit(key)}, 'acct', ${lit(target)}, ${job === null ? 'null' : `${lit(job)}::uuid`}, 'notice', 'sent', ${lit(`m-${key}`)}, app.now_utc(), app.now_utc())`)
+  db.execute(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
+    values (${job === null ? 'app.operator_office()' : `app.job_office(${lit(job)}::uuid)`}, ${lit(channel)}, ${lit(key)}, 'acct', ${lit(target)}, ${job === null ? 'null' : `${lit(job)}::uuid`}, 'notice', 'sent', ${lit(`m-${key}`)}, app.now_utc(), app.now_utc())`)
 await sent(`narration:${harness}`, null) //            #378 exactly: no job on the row
 await sent(`result:${run}:${harness}`, harness) //     the row names a harness job
 await sent(`outcome:${child}`, child) //               a child of harness work

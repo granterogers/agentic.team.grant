@@ -26,7 +26,9 @@ const inRollback = async (body: string): Promise<Record<string, unknown>> => {
       declare c uuid; e jsonb; r jsonb; pr uuid; v jsonb;
       begin
         perform set_config('application_name', 'PostgREST 14.5', true);
-        pr := (app.hq_create_project(app.test_office(), ${lit(`History real ${run}`)}, 'upload',
+        -- a REAL project is the operator's; the test office's turns are harness by construction (0602), which is the
+        -- other half of this proof and is asserted above
+        pr := (app.hq_create_project(app.operator_office(), ${lit(`History real ${run}`)}, 'upload',
                  ${lit(`hreal-${run}`)}, ${lit(`History real ${run}`)}, true) ->> 'project_id')::uuid;
         ${body}
         raise exception 'ROLLED-BACK:%', r::text;
@@ -55,12 +57,12 @@ const mk = async (n: string) =>
 const o = await testOrigins(db, 'isolated:history')
 const good = await mk(`Fixture conversation ${run}`)
 await o.declare('teamhq', good)
-await db.execute(`insert into public.jobs (correlation_id, project_id, kind, requested_by, idempotency_key)
-  values (gen_random_uuid(), ${lit(good)}::uuid, 'verification.conversation', 'grant', ${lit(`h:${run}:1`)})`)
+await db.execute(`insert into public.jobs (office_id, correlation_id, project_id, kind, requested_by, idempotency_key)
+  values ((select office_id from public.projects where project_id = ${lit(good)}::uuid), gen_random_uuid(), ${lit(good)}::uuid, 'verification.conversation', 'grant', ${lit(`h:${run}:1`)})`)
 check('declared BEFORE work: the declaration is accepted', true, 'declared, then the job')
 const bad = await mk(`Fixture conversation ${run} late`)
-await db.execute(`insert into public.jobs (correlation_id, project_id, kind, requested_by, idempotency_key)
-  values (gen_random_uuid(), ${lit(bad)}::uuid, 'verification.conversation', 'grant', ${lit(`h:${run}:2`)})`)
+await db.execute(`insert into public.jobs (office_id, correlation_id, project_id, kind, requested_by, idempotency_key)
+  values ((select office_id from public.projects where project_id = ${lit(bad)}::uuid), gen_random_uuid(), ${lit(bad)}::uuid, 'verification.conversation', 'grant', ${lit(`h:${run}:2`)})`)
 let refused = ''
 try {
   await o.declare('teamhq', bad)
@@ -86,10 +88,10 @@ check(
   `${String(own.length)} shown`,
 )
 const studio = await inRollback(`
-  v := app.say_in_project(app.test_office(), pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
-  e := app.say_in_project(app.test_office(), pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
+  v := app.say_in_project(app.operator_office(), pr, ${lit(`Said for real from the studio ${run}`)}, 'research-director');
+  e := app.say_in_project(app.operator_office(), pr, ${lit(`Addressed for real to nobody ${run}`)}, 'nobody-at-all');
   r := jsonb_build_object('origin', app.job_origin((v ->> 'job')::uuid), 'nobody_ok', e ->> 'ok',
-                          'history', app.conversation_history(app.test_office(), pr, 100));`)
+                          'history', app.conversation_history(app.operator_office(), pr, 100));`)
 const h = (studio.history ?? []) as Msg[]
 const said = h.find((m) => String(m.body).includes(`Said for real from the studio ${run}`))
 check(

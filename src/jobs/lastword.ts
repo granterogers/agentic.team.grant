@@ -15,6 +15,13 @@
  * the rule one layer further out than the fix reached: *"Anything that can end
  * a turn with no answer has to say so somewhere he looks."*
  *
+ * TWO ROADS, ONE ONCE (1024). The first version spoke only for a job that failed INSIDE `runJob`, because the drain
+ * called it after `runJob` returned; a job failed by SQL (`app.recover_stalled_jobs` on an expired lease at the last
+ * attempt, `app.settle_exhausted_jobs` at the attempt ceiling) was never asked about, and said to be covered by a comment
+ * that was only true of the one road. It is now asked of the STATE, not the call site: `sweepOwedWords` drains
+ * `app.jobs_owing_a_word` every tick whoever failed the job, and the inline call after `runJob` stays as the prompt
+ * path. `app.claim_last_word` makes the pair say it once.
+ *
  * Three decisions worth keeping:
  *
  * **Who is owed is decided in SQL** (`app.owed_a_word`), not here, so every
@@ -88,7 +95,7 @@ export function parkedNotice(): string {
   )
 }
 
-export type LastWordOutcome = 'told' | 'nobody owed' | 'could not'
+export type LastWordOutcome = 'told' | 'nobody owed' | 'already handled' | 'could not'
 
 /**
  * Tell the person who asked that their turn died.
@@ -129,6 +136,20 @@ export async function lastWord(
     if (r === undefined) return 'nobody owed'
   } catch {
     return 'could not'
+  }
+
+  /*
+    ONCE (1024). Two roads reach here for one death - the inline call after `runJob` and the per-tick sweep - and two
+    workers can tick together, so "nothing delivered yet" is not "nobody has tried": a notifier that suppresses leaves no
+    delivery row. The claim is atomic in SQL, refuses a try already in flight, bounds the retries and refuses once told.
+    A claim that cannot be made (the function missing on a database from before 1024) is treated as won, because the
+    older behaviour of speaking is the safe side of a missing guard.
+  */
+  try {
+    const { rows } = await db.execute(`select app.claim_last_word(${lit(job.jobId)}::uuid) as won`)
+    if ((rows[0] as { won?: boolean } | undefined)?.won === false) return 'already handled'
+  } catch {
+    /* no claim function: speak, as before 1024 */
   }
 
   /*
@@ -207,6 +228,8 @@ export async function lastWord(
   const output: HandlerOutput = {
     announce: true,
     body,
+    // A notice by kind: what the person is owed here is a sentence, not an answer to be labelled "not reviewed".
+    notice: {},
     confidence: 'high',
     contradictions: null,
     evidence: 'inferred',
@@ -250,8 +273,63 @@ export async function lastWord(
 
   try {
     await notify(job, output, outputId)
-    return 'told'
   } catch {
     return 'could not'
   }
+  // The notifier answered without throwing: that is told, whether or not a dedupe seam then declined to send.
+  await db.execute(`select app.settle_last_word(${lit(job.jobId)}::uuid)`).catch(() => undefined)
+  return 'told'
+}
+
+/** What `app.jobs_owing_a_word` hands back: enough to rebuild the job the notifier is given. */
+export interface OwingJob {
+  readonly job_id: string
+  readonly correlation_id: string
+  readonly project_id: string | null
+  readonly kind: string
+  readonly office_id: string | null
+}
+
+/**
+ * Every user-visible turn that ended `failed` and was never told, however the job died (1024).
+ *
+ * Asked of the state each tick, so a death by an expired lease or by exhausted attempts - which never pass through
+ * `runJob` - speaks exactly as one that did. Never throws and never exceeds `limit`; one job that cannot be told does
+ * not stop the next. Returns how many were told, for a log line and for a test.
+ */
+export async function sweepOwedWords(
+  db: SqlExecutor,
+  notify: Notifier | undefined,
+  limit = 20,
+): Promise<number> {
+  if (notify === undefined) return 0
+  let owing: readonly OwingJob[]
+  try {
+    const { rows } = await db.execute(
+      `select job_id::text as job_id, correlation_id::text as correlation_id, project_id::text as project_id,
+              kind, office_id::text as office_id
+         from app.jobs_owing_a_word(${String(Math.max(0, Math.trunc(limit)))})`,
+    )
+    owing = rows as unknown as readonly OwingJob[]
+  } catch {
+    return 0
+  }
+  let told = 0
+  for (const r of owing.slice(0, Math.max(0, limit))) {
+    const job: Job = {
+      jobId: r.job_id,
+      kind: r.kind,
+      correlationId: r.correlation_id,
+      projectId: r.project_id,
+      idempotencyKey: '',
+      attempt: 0,
+      ...(r.office_id === null ? {} : { officeId: r.office_id }),
+    }
+    try {
+      if ((await lastWord(db, job, notify)) === 'told') told += 1
+    } catch {
+      /* an apology that fails must not stop the next one */
+    }
+  }
+  return told
 }

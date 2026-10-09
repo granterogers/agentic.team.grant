@@ -3631,6 +3631,21 @@ const bubble = (m) => {
             ? `<button type="button" class="linky" data-retry-send="${esc(String(m.job))}">Try again</button>`
             : ''}
         </span>` : ''}
+        <!--
+          Possibly not delivered (1032). The send began and the provider never said how it ended, so the answer MAY
+          have arrived: the line says that and not the opposite, and warns that sending again could show it twice.
+          The same question is on the Needs me list. Plain words in this comment, because it is inside a template
+          literal.
+        -->
+        ${m.delivery === 'unconfirmed' ? `<span class="t-meta undeliv">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 8v5M12 16.5v.1M12 3.2L1.8 20.8h20.4z"/></svg>
+          This may not have reached you. The service did not say whether it arrived, so it was not sent again.
+          ${canWrite() && m.job !== null
+            ? `<button type="button" class="linky" data-retry-send="${esc(String(m.job))}">Send it again</button>`
+            : ''}
+        </span>` : ''}
         ${m.delivery === 'sending' ? '<span class="t-meta pendmark">Still going out…</span>' : ''}
       </div>
     </div>`
@@ -8656,6 +8671,12 @@ function myEditor(t) {
           : `<button class="btn small quiet" type="button" data-my-unsub="${esc(t.id)}">
                Take out of its parent</button>`
       }
+      ${
+        t.repeats !== null && t.repeats !== undefined && t.repeats.series === true
+          ? `<button class="btn small quiet" type="button" data-my-stop-series="${esc(t.id)}"
+               data-name="${esc(t.title ?? '')}">Stop repeating</button>`
+          : ''
+      }
       <button class="gobtn danger" type="button" data-my-delete="${esc(t.id)}"
         data-name="${esc(t.title ?? '')}"
         data-kids="${String(Array.isArray(t.subtasks) ? t.subtasks.length : 0)}">Delete</button>
@@ -9792,6 +9813,36 @@ function drawShell() {
         'Saved.',
       )
       if (ok?.ok === true) {
+        mine.editing = null
+        forgetMine()
+        void needMine(mine.bucket)
+        render()
+      }
+    })
+  }
+
+  /*
+    Ending a recurring reminder (migration 1034). Ticking one off completes that time only, so ending the series is its own
+    press, confirmed first because it stops every later reminder; the row is cancelled and the dashboard keeps its undo.
+  */
+  for (const b of root.querySelectorAll('[data-my-stop-series]')) {
+    b.addEventListener('click', async () => {
+      if (
+        !(await sure(
+          `Stop “${b.dataset.name}” repeating? It will not remind you again.`,
+          'Stop repeating',
+          { title: 'Stop this recurring reminder?', danger: true },
+        ))
+      ) {
+        return
+      }
+      const done = await attempt(
+        b,
+        'Stopping…',
+        () => act('reminder_series_stop', { p_task_id: b.dataset.myStopSeries }),
+        'Stopped.',
+      )
+      if (done) {
         mine.editing = null
         forgetMine()
         void needMine(mine.bucket)

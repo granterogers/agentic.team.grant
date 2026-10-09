@@ -54,14 +54,79 @@ import { howComposed } from '../agents/provenance.ts'
 import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
-import { NotionClient } from '../notion/api.ts'
-import { syncNotion } from '../notion/sync.ts'
+import { NotionApiError, NotionClient } from '../notion/api.ts'
+import { listSharedWithin, syncNotion } from '../notion/sync.ts'
 import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count, list } from '../text/plain.ts'
 import { sayAs } from '../text/voice.ts'
 
-export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null = null): Handler {
+/**
+ * What is said when Notion refuses the sync for a reason retrying cannot change. Composed in code, never by a model:
+ * the moment an integration fails is when a model is least trustworthy to word things, and a reworded notice defeats
+ * the once-a-day dedupe. The wording follows Grant's rules for incident notices: what happened to HIM first, what still
+ * works, then what to do, and never "press" something that is not there.
+ */
+export const refusedNotice = (
+  error: NotionApiError,
+): Pick<HandlerOutput, 'body' | 'announce' | 'topic'> =>
+  error.kind === 'auth'
+    ? {
+        body:
+          'Notion has stopped accepting the connection I use to read your notes, so I cannot sync your pages right now.\n\n' +
+          'What this affects: new and changed Notion pages will not show up in Team HQ until it is fixed.\n' +
+          'What still works: everything already saved, including the Notion pages I had already read.\n\n' +
+          'What to do: open Team HQ, go to Settings, then Setting up, and connect Notion again.',
+        announce: true,
+        topic: 'notion.token_refused',
+      }
+    : {
+        body:
+          `Notion turned down my request to read your pages (HTTP ${String(error.status)}), and trying again will not change that, so nothing was synced.\n\n` +
+          'What still works: everything already saved. I will try again at the next sync.',
+        announce: true,
+        topic: 'notion.sync_refused',
+      }
+
+/**
+ * How long one run may keep STARTING reads of Notion, and the arithmetic that has to hold.
+ *
+ * The edge worker stops starting jobs at 60 s into its pass (DEADLINE_MS) and the runtime's wall clock is 150 s, so the
+ * worst case is a job that starts at 60 s and has 90 s. What it can spend, in order:
+ *
+ *    reads started                RUN_BUDGET_MS            25 s   (nothing new is started after this)
+ *  + the one call in flight       NOTION_CALL_DEADLINE_MS  20 s   (api.ts bounds a call, retries and Retry-After waits
+ *                                                                  included, to this; it used to be up to 170 s)
+ *  + the filing writes            WRITES_ALLOWANCE_MS      10 s   (a handful of statements; the edge worker's own
+ *                                                                  connection answers in milliseconds, the Management
+ *                                                                  API in about 1.5 s each)
+ *  + the voice, if it is used     VOICE_BUDGET_MS          10 s   (skipped once the budget is spent)
+ *  = 65 s of the 90 s, a margin of 25 s.
+ *
+ * The first version of this was 60 s with a 20 s request and unbounded Retry-After waits: 59 + 60 + 20 = 139 s of 150,
+ * a margin of about 10 s and no bound at all on the waits, which is the margin a slow database write alone can spend.
+ */
+export const RUN_BUDGET_MS = 25_000
+/** The most one call to Notion may take in total, waits included (see `RUN_BUDGET_MS`). */
+export const NOTION_CALL_DEADLINE_MS = 20_000
+/** The most one page may take, so one huge page cannot use the whole run and starve those behind it. */
+export const PAGE_BUDGET_MS = 15_000
+/** What the announcement's wording may take before the plain sentence is used instead. */
+export const VOICE_BUDGET_MS = 10_000
+
+export interface NotionSyncOptions {
+  readonly runBudgetMs?: number
+  /** Milliseconds, monotonic enough for a budget. A test passes its own. */
+  readonly clock?: () => number
+}
+
+export function notionSyncHandler(
+  db: SqlExecutor,
+  router: ProviderRouter | null = null,
+  options: NotionSyncOptions = {},
+): Handler {
+  const runBudgetMs = options.runBudgetMs ?? RUN_BUDGET_MS
+  const clock = options.clock ?? Date.now
   return {
     kind: 'office.notion_sync',
     handle: async (job: Job): Promise<HandlerOutput> => {
@@ -147,16 +212,60 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
       }
 
       // Summed across projects, because the duty runs once and reports once.
-      const client = new NotionClient(token)
-      const result = { added: 0, changed: 0, shared: 0, skipped: [] as string[] }
+      const client = new NotionClient(token, { callDeadlineMs: NOTION_CALL_DEADLINE_MS })
+      const result = { added: 0, changed: 0, shared: 0, skipped: [] as string[], deferred: 0 }
+      let listingCut = false
       const filed: string[] = []
-      for (const project of attached) {
-        const one = await syncNotion(db, { jobId: job.jobId }, client, project.id)
-        result.added += one.added
-        result.changed += one.changed
-        result.shared += one.shared
-        result.skipped.push(...one.skipped)
-        if (one.added > 0 || one.changed > 0) filed.push(project.name)
+      /*
+        BOUNDED BY CONSTRUCTION. The edge worker has a wall-clock limit and only declines to START a job past its deadline,
+        so a run with no bound of its own could outlive the host, die mid-run and be retried into the same crawl until five
+        attempts were spent. The workspace is listed ONCE for all the projects (it used to be listed, and every page's block
+        tree fetched, once per attached project), and the whole run reads for at most `runBudgetMs`. What it did not reach
+        is read first next time: finished pages are skipped while Notion says they are unedited, so progress is the
+        documents themselves and needs no cursor to lose.
+      */
+      const startedAt = clock()
+      const budget = { expired: () => clock() - startedAt >= runBudgetMs }
+      try {
+        // The listing may use half the budget, so a workspace too big to list quickly cannot leave nothing to read with.
+        const listed = await listSharedWithin(client, {
+          expired: () => clock() - startedAt >= runBudgetMs / 2,
+        })
+        const shared = listed.objects
+        listingCut = !listed.complete
+        for (const project of attached) {
+          if (budget.expired()) {
+            result.deferred += shared.length
+            continue
+          }
+          const one = await syncNotion(db, { jobId: job.jobId }, client, project.id, {
+            shared,
+            budget,
+            pageBudgetMs: Math.min(PAGE_BUDGET_MS, runBudgetMs),
+            clock,
+          })
+          result.added += one.added
+          result.changed += one.changed
+          result.shared += one.shared
+          result.skipped.push(...one.skipped)
+          result.deferred += one.deferred
+          if (one.added > 0 || one.changed > 0) filed.push(project.name)
+        }
+      } catch (error) {
+        /*
+          A refusal that no retry can change is REPORTED, not thrown (M2).
+
+          A revoked or removed integration (401) and a request Notion will never accept (a 4xx, as an API-version
+          drift produces) were thrown from here, so each run retried the same doomed call to the job's attempt
+          ceiling, failed, wrote an impediment nobody reads and said nothing to anybody; two hours later the duty fired
+          again, for ever. A duty that cannot work says so, once a day (topic, so `app.say_once` holds the repeats),
+          and completes. Anything TRANSIENT (429, 5xx, a timeout, a malformed reply) still throws, because the next
+          attempt can succeed.
+        */
+        if (error instanceof NotionApiError && error.kind !== 'transient') {
+          return { ...base, ...refusedNotice(error) } satisfies HandlerOutput
+        }
+        throw error
       }
       const project = {
         name: filed.length > 0 ? filed.join(' and ') : attached.map((a) => a.name).join(' and '),
@@ -176,7 +285,15 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
         (result.skipped.length === 0
           ? ''
           : `\n\n${count(result.skipped.length, 'page was', 'pages were')} left out: ` +
-            `${result.skipped.slice(0, 4).join('; ')}.`)
+            `${result.skipped.slice(0, 4).join('; ')}.`) +
+        // Said in the run's own report so a partial pass is never mistaken for a complete one.
+        (result.deferred === 0
+          ? ''
+          : `\n\n${count(result.deferred, 'page was', 'pages were')} not read this time; ` +
+            'they come first at the next sync.') +
+        (listingCut
+          ? '\n\nThe list of shared pages was cut short by the time limit, so this pass saw only part of it.'
+          : '')
 
       const announce = parts.length > 0 || result.skipped.length > 0
       /*
@@ -201,26 +318,44 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
         Hoisting the body out of the literal makes the sequence what it always
         had to be: spend the model, THEN ask the record what was spent.
       */
-      const body = announce
-        ? await sayAs(db, router, 'operations-director', {
-            purpose:
-              `Tell ${currentPerson().name} what came in from their Notion pages. They write notes ` +
-              'there; this is you noticing them, not announcing a milestone.',
-            facts: [
-              `${String(result.shared)} page(s) are shared with the integration`,
-              `${String(result.added)} were new`,
-              `${String(result.changed)} had changed since last time`,
-              `they are filed under the project "${String(project.name)}"`,
-              ...(result.skipped.length === 0
-                ? []
-                : [`these were left out: ${result.skipped.slice(0, 4).join('; ')}`]),
-            ],
-            fallback: plain,
-            // #268: attributed, so the call lands under this job KIND rather than under (unattributed).
-            job: { jobId: job.jobId, correlationId: job.correlationId },
-            words: 50,
-          })
-        : plain
+      // Wording the notice is the one step here that waits on a model, and the router's own ceiling for a call is far
+      // above what is left of the host's clock. A run whose budget is already spent, or a model that is slow, gets the
+      // plain sentence, which is what the fallback is for.
+      const voiced = <T>(speak: Promise<T>, fallback: T): Promise<T> => {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const late = new Promise<T>((resolve) => {
+          timer = setTimeout(() => resolve(fallback), VOICE_BUDGET_MS)
+        })
+        speak.catch(() => undefined)
+        return Promise.race([speak, late]).finally(() => clearTimeout(timer))
+      }
+      const body =
+        announce && clock() - startedAt < runBudgetMs
+          ? await voiced(
+              sayAs(db, router, 'operations-director', {
+                purpose:
+                  `Tell ${currentPerson().name} what came in from their Notion pages. They write notes ` +
+                  'there; this is you noticing them, not announcing a milestone.',
+                facts: [
+                  `${String(result.shared)} page(s) are shared with the integration`,
+                  `${String(result.added)} were new`,
+                  `${String(result.changed)} had changed since last time`,
+                  `they are filed under the project "${String(project.name)}"`,
+                  ...(result.skipped.length === 0
+                    ? []
+                    : [`these were left out: ${result.skipped.slice(0, 4).join('; ')}`]),
+                  ...(result.deferred === 0
+                    ? []
+                    : [`${String(result.deferred)} page(s) are still to be read at the next sync`]),
+                ],
+                fallback: plain,
+                // #268: attributed, so the call lands under this job KIND rather than under (unattributed).
+                job: { jobId: job.jobId, correlationId: job.correlationId },
+                words: 50,
+              }),
+              plain,
+            )
+          : plain
 
       return {
         ...base,

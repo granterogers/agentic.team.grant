@@ -1,4 +1,7 @@
 #!/bin/bash
+# QUARANTINED (see ./README.md): never run. It edits copies of source files in the shared working tree and restores them
+# from a backup directory every run shares; use scripts/gate/sabotage.ts (clone databases) instead.
+#
 # The final policy's sabotage: break each consequential boundary on purpose, and the suite that guards it must go RED.
 #
 #   scripts/isolated/policy-sabotage.sh [template-db]     # default: cand
@@ -8,7 +11,7 @@
 # failure, (4) restore, (5) run it again and require green. Source files are restored from a backup taken first, and
 # restored again by the trap if the script dies. Nothing here touches production.
 set -u
-ROOT=$(cd "$(dirname "$0")/../.." && pwd); cd "$ROOT"
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd); cd "$ROOT"
 TPL=${1:-cand}  # GROUP=1..7 runs one group
 P="psql -h ${ISOLATED_PG_SOCKET:-/tmp/pgs} -p ${ISOLATED_PG_PORT:-55432} -U postgres -q"
 declare -a TOUCHED=()

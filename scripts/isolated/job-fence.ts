@@ -25,8 +25,8 @@ const KIND = 'research.summarise'
 const newJob = async (): Promise<string> =>
   String(
     (
-      await one(`insert into public.jobs (kind, requested_by, idempotency_key, correlation_id, announce)
-        values (${lit(KIND)}, ${lit(scope)}, ${lit(`fence-${run}-${crypto.randomUUID()}`)}, gen_random_uuid(), false)
+      await one(`insert into public.jobs (office_id, kind, requested_by, idempotency_key, correlation_id, announce)
+        values (app.test_office(), ${lit(KIND)}, ${lit(scope)}, ${lit(`fence-${run}-${crypto.randomUUID()}`)}, gen_random_uuid(), false)
         returning job_id::text as id`)
     ).id,
   )

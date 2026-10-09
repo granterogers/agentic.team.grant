@@ -1,0 +1,156 @@
+/**
+ * What the office says back after it files a personal task or a reminder.
+ *
+ * Deep systems audit, 6 October 2026 (R1 / R3). The sentence is a claim about
+ * what is stored, so it is composed here from the STORED facts and nothing
+ * else: the date, the time and the zone the reminder is for, whether the time
+ * was his or the office's default, and whether a repeat was kept, could not be
+ * kept, or was refused. A sentence that promised a repeat the writer did not
+ * record, or a time in a zone the office did not use, is the fabrication the
+ * coherence gate exists to catch and is cheaper not to make.
+ *
+ * The three older shapes are unchanged, word for word, so nothing that matched
+ * them stops matching.
+ */
+
+import { localClock, localIsoDay } from './office-time.ts'
+
+export interface ReminderFacts {
+  readonly title: string
+  /** ISO date the task is on, or null. */
+  readonly due: string | null
+  /** ISO instant the reminder is for, or null (no reminder). */
+  readonly remindAt: string | null
+  /** The time is the office's default because he named none. */
+  readonly defaulted: boolean
+  /** The default time had already gone today; the reminder is for now. */
+  readonly immediate: boolean
+  /** The repeat as said back ("every Monday"), when one was asked for and the office keeps it. */
+  readonly repeatLabel: string | null
+  /** True when the repeat is stored, false when storing it failed, null when none was asked for. */
+  readonly repeatStored: boolean | null
+  /**
+   * A reminder SERIES (a repeat with a reminder time and no due date): it moves to its next time when it is delivered,
+   * ticking it off completes that time only, and ending the series is a separate explicit act (1034). Optional so every
+   * older caller reads as before (a repeating task).
+   */
+  readonly series?: boolean
+  /** The words of a repeat that cannot be kept, when he asked for one. */
+  readonly repeatUnsupported: string | null
+  /** The office's zone, named in the sentence so a time is never ambiguous. */
+  readonly timeZone: string
+}
+
+export function reminderSentence(f: ReminderFacts): string {
+  const parts: string[] = []
+  // A series has no due date; its first reminder's day is what the sentence names.
+  const day =
+    f.due === null && f.series === true && f.remindAt !== null
+      ? localIsoDay(new Date(f.remindAt), f.timeZone)
+      : f.due
+  const on = day === null ? '' : ` for ${day}`
+  const head =
+    day === null
+      ? `That is on your list — "${f.title}", no date on it yet.`
+      : `That is on your list${on} — "${f.title}".`
+  parts.push(head)
+  if (f.remindAt !== null) {
+    if (f.immediate) {
+      parts.push(
+        'You did not say a time, and nine o’clock has already passed today, so I will remind you ' +
+          'at the next check, within about fifteen minutes.',
+      )
+    } else {
+      const at = localClock(new Date(f.remindAt), f.timeZone)
+      parts.push(`I will remind you around ${at} (${f.timeZone}).`)
+      if (f.defaulted) parts.push('You did not say a time, so I used 09:00.')
+    }
+  }
+  if (f.repeatLabel !== null) {
+    if (f.repeatStored === true && f.series === true) {
+      parts.push(
+        `It repeats ${f.repeatLabel}. Ticking one off completes that time only and the next still comes; ` +
+          `to end the series, say “stop the ${f.title} reminder”.`,
+      )
+    } else if (f.repeatStored === true) {
+      parts.push(
+        `It repeats ${f.repeatLabel}. The next one is made when you tick this one off, ` +
+          'so tick each one when it is done.',
+      )
+    } else {
+      parts.push(
+        `I could not record that it repeats ${f.repeatLabel}, so this is a one-off. ` +
+          'Say it again and I will retry.',
+      )
+    }
+  }
+  if (f.repeatUnsupported !== null) {
+    parts.push(
+      `I did not record “${f.repeatUnsupported}” as a repeat, so this is a one-off: I can keep ` +
+        'every day, every week, every other week or a named weekday.',
+    )
+  }
+  return parts.join(' ')
+}
+
+/** "Monday 2026-10-12 at 09:00 (Europe/Athens)": the day named, the zone named, so a time is never ambiguous. */
+const when = (iso: string, timeZone: string): string => {
+  const at = new Date(iso)
+  const weekday = new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'long' }).format(at)
+  return `${weekday} ${localIsoDay(at, timeZone)} at ${localClock(at, timeZone)} (${timeZone})`
+}
+
+/**
+ * What the office says after he completes a recurring reminder (migration 1034). It is composed from what the database
+ * returned, so it claims only what happened: the time was recorded as done, or it had not come yet and was skipped; and in
+ * both cases the series is still on.
+ */
+export function seriesDoneSentence(f: {
+  readonly title: string
+  readonly occurrence: 'recorded' | 'skipped'
+  readonly nextAt: string | null
+  readonly skippedAt: string | null
+  readonly timeZone: string
+}): string {
+  const next = f.nextAt === null ? '' : ` The next one is ${when(f.nextAt, f.timeZone)}.`
+  const head =
+    f.occurrence === 'skipped'
+      ? `Done for this time — “${f.title}” had not come round yet${f.skippedAt === null ? '' : ` (${when(f.skippedAt, f.timeZone)})`}, so I have skipped it and it will not remind you for that one.`
+      : `Done for this time — I have marked this one of “${f.title}” as done.`
+  return `${head}${next} The reminder is still repeating; to end it for good, say “stop the ${f.title} reminder”.`
+}
+
+/** What the office says after a recurring reminder is stopped. */
+export function seriesStoppedSentence(f: {
+  readonly title: string
+  readonly undoOffered: boolean
+}): string {
+  return (
+    `Stopped — “${f.title}” will not remind you again.` +
+    (f.undoOffered ? ' If that was a mistake you can undo it from the dashboard.' : '')
+  )
+}
+
+/** What the office says when it did not stop anything, and why. Never a guess. */
+export function seriesNotStoppedSentence(f: {
+  readonly reason: 'none' | 'many' | 'nothing_recurring'
+  readonly name: string | null
+  readonly titles: readonly string[]
+}): string {
+  if (f.reason === 'nothing_recurring') {
+    return 'I have not stopped anything — you have no recurring reminders on your list.'
+  }
+  if (f.reason === 'many') {
+    const names = f.titles
+      .slice(0, 5)
+      .map((t) => `“${t}”`)
+      .join(', ')
+    return `I have not stopped anything yet. Which recurring reminder do you mean — ${names}?`
+  }
+  const named = f.name === null ? '' : ` matching “${f.name}”`
+  const have = f.titles
+    .slice(0, 5)
+    .map((t) => `“${t}”`)
+    .join(', ')
+  return `I have not stopped anything — I could not find one recurring reminder${named}. Your recurring reminders: ${have}.`
+}

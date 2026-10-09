@@ -19,8 +19,9 @@
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import { raiseBlocker } from '../../src/inference/record.ts'
 import type { Job } from '../../src/jobs/worker.ts'
+import { markShown, realTurn } from './fixtures-approvals.ts'
 import { isolated } from './guard.ts'
-import { chatFor, markShown } from './shown.ts'
+import { chatFor } from './shown.ts'
 
 const db = await isolated(process.argv[2] ?? 'openq')
 const run = Date.now().toString(36)
@@ -40,14 +41,12 @@ const handler = instructionHandler({ db, router })
 let seq = 0
 const turn = async (channel: string, chat: string, said: string): Promise<Job> => {
   seq += 1
-  const cmd = await one(`
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values (${lit(channel)}, ${lit(`${chat}:${String(seq)}`)}, 'grant', ${lit(said)},
-            ${lit(`${channel}:openq_proof:${run}.${String(seq)}`)}, 'grant')
-    returning command_id::text as id`)
-  const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
-  const v = (typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v) as { job_id?: string }
-  if (v.job_id === undefined) throw new Error(`enqueue refused: ${JSON.stringify(enq.v)}`)
+  // The turn as the production adapter writes it (a recognised dedupe key, the PostgREST door), not a made-up key.
+  const v = await realTurn(db, {
+    channel: channel === 'telegram' ? 'telegram' : 'teamhq',
+    text: said,
+    chat,
+  }).then((t) => ({ job_id: t.job }))
   const j = await one(`select job_id::text as id, kind, correlation_id::text as c,
       project_id::text as p, idempotency_key as k from public.jobs where job_id = ${lit(v.job_id)}::uuid`)
   return {
@@ -105,8 +104,8 @@ for (const channel of CHANNELS) {
        turn started, a CHILD of it (conversation_before counts exactly those). */
     const child = String(
       (
-        await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id)
-          select 'office.pursue', requested_by, project_id, 'openq-' || gen_random_uuid(), correlation_id, job_id
+        await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id, parent_job_id)
+          select office_id, 'office.pursue', requested_by, project_id, 'openq-' || gen_random_uuid(), correlation_id, job_id
             from public.jobs where job_id = ${lit(asking.jobId)}::uuid
           returning job_id::text as id`)
       ).id,

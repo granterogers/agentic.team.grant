@@ -27,6 +27,7 @@
  */
 
 import type { TransportFailureKind } from '../channels/delivery.ts'
+import { failedBeforeSending } from '../channels/network-failure.ts'
 
 export interface TelegramResponse {
   readonly ok: boolean
@@ -160,6 +161,11 @@ export class TelegramClient {
           await this.sleep(250 * waits)
           continue
         }
+        // Failed before any request bytes left (DNS, refused, TLS, connect timeout): definitely not sent, so retryable
+        // even for a write. Anything else on a write may have landed and stays indeterminate.
+        if (!idempotent && failedBeforeSending(error)) {
+          throw new TelegramApiError(`network_before_send:${detail}`, 'retryable', method)
+        }
         throw new TelegramApiError(
           idempotent ? `network_error:${detail}` : `indeterminate:${detail}`,
           idempotent ? 'retryable' : 'indeterminate',
@@ -233,6 +239,9 @@ export class TelegramClient {
       })
     } catch (error) {
       const detail = redact(error instanceof Error ? error.message : String(error))
+      if (failedBeforeSending(error)) {
+        throw new TelegramApiError(`network_before_send:${detail}`, 'retryable', method)
+      }
       throw new TelegramApiError(`indeterminate:${detail}`, 'indeterminate', method)
     }
 

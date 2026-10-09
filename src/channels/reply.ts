@@ -95,6 +95,29 @@ async function originOf(db: SqlExecutor, job: Job): Promise<Origin | null> {
   }
 }
 
+/**
+ * The text of a reply, as the person reads it.
+ *
+ * A NOTICE IS NOT AN UNREVIEWED ANSWER. The caption says an answer was drafted and nobody checked it; a notice
+ * (`HandlerOutput.notice`: the last word a failed turn owes, an incident) is composed in code and drafts nothing, so
+ * telling the person not to rely on it was a caption about a thing that is not there (Version 1 acceptance, journey J:
+ * the one apology after every provider failed was followed by it). Decided by the output's KIND, as the pager and Slack
+ * already do, never by matching the sentence; a genuine unreviewed model answer keeps its caption.
+ */
+export function replyText(
+  output: Pick<HandlerOutput, 'body' | 'notice'>,
+  context: Pick<ResultContext, 'reviewed'>,
+): string {
+  const heading = output.notice?.heading ?? ''
+  return (
+    (heading === '' ? '' : `<b>${escapeHtml(heading)}</b>\n\n`) +
+    escapeHtml(output.body.trim()) +
+    (context.reviewed || output.notice !== undefined
+      ? ''
+      : '\n\n<i>⚠️ not reviewed yet — I would not rely on this as it stands</i>')
+  )
+}
+
 export function replyChannel(db: SqlExecutor): {
   readonly name: string
   readonly surface: string
@@ -135,11 +158,7 @@ export function replyChannel(db: SqlExecutor): {
         blockerId: context.blockerId,
         staffId: null,
         body: {
-          text:
-            escapeHtml(output.body.trim()) +
-            (context.reviewed
-              ? ''
-              : '\n\n<i>⚠️ not reviewed yet — I would not rely on this as it stands</i>'),
+          text: replyText(output, context),
           /*
             The buttons, which this path has never sent.
 

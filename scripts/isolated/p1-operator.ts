@@ -25,8 +25,10 @@ const S_GRANT = `aaa.bbb.${'g'.repeat(70)}`
 const S_SECOND = `aaa.bbb.${'s'.repeat(70)}`
 const S_HARNESS = `aaa.bbb.${'h'.repeat(70)}`
 const S_STRANGER = `aaa.bbb.${'x'.repeat(70)}`
-const SECOND_EMAIL = 'p1-second-person@example.com'
-const SECOND_KEY = 'p1-second-person'
+// One per run: an office is retired, never deleted (0654), so a fixed identity could be provisioned once per database.
+const RUN = Date.now().toString(36)
+const SECOND_EMAIL = `p1-second-person-${RUN}@example.com`
+const SECOND_KEY = `p1-second-person-${RUN}`
 
 // The second person exists for this run only, and is removed in the finally block below.
 const grantRow = (
@@ -37,9 +39,16 @@ const harnessRow = (
 ).rows[0] as { email: string } | undefined
 if (grantRow === undefined || harnessRow === undefined) throw new Error('replica has no members')
 
+// A second PERSON is a login, a member row and an office, which the product creates together through
+// app.provision_person_office (0863). The first version of this fixture inserted only the member row: the gateway then
+// resolves the session's office from the AUTH USER ID (0654/P3), found no login and no office, and answered 503
+// "could not check who you are" to everything the second person did - the fixture was not a person any more.
 await db.execute(
-  `insert into public.office_members (email, note, owner_key, kind)
-   values (${lit(SECOND_EMAIL)}, 'p1-operator proof', ${lit(SECOND_KEY)}, 'person') on conflict do nothing`,
+  `insert into auth.users (id, email) select gen_random_uuid(), ${lit(SECOND_EMAIL)}
+    where not exists (select 1 from auth.users u where lower(u.email) = ${lit(SECOND_EMAIL)})`,
+)
+await db.execute(
+  `select app.provision_person_office('p1-operator second person', ${lit(SECOND_EMAIL)}, ${lit(SECOND_KEY)})`,
 )
 
 // The operator list is a fact the DATABASE holds; assert the starting point before attacking it.
@@ -132,7 +141,9 @@ try {
     if (m.status === 403 && m.body.error === 'person_required') machine += 1
     else leaked.push(`machine:${action}:${String(m.status)}`)
     const x = await act(S_STRANGER, action)
-    if (x.status === 401) stranger += 1
+    // A verified login that is nobody's member is told 'no_office' (403, can_create) since self-service accounts (P4):
+    // still a refusal that runs nothing, just a kinder one than 401. Anything else is a leak.
+    if (x.status === 401 || (x.status === 403 && x.body.error === 'no_office')) stranger += 1
     else leaked.push(`stranger:${action}:${String(x.status)}`)
     // The operator passes the gate: anything but 403 means the request reached argument validation or beyond.
     const o = await act(S_GRANT, action, {})
@@ -152,7 +163,7 @@ try {
     `${String(machine)}/${String(n)}`,
   )
   check(
-    'a stranger is refused all of them (401)',
+    'a stranger is refused all of them (401, or 403 no_office for a confirmed login with no office)',
     stranger === n,
     `${String(stranger)}/${String(n)}`,
   )
@@ -181,13 +192,25 @@ try {
       !(await operatorNow('verify-operator')),
       'person join',
     )
-    const via = await act(S_HARNESS, 'approve_tool', {
-      p_request_id: '00000000-0000-0000-0000-000000000000',
-    })
+    // An action that is STILL operator-only. (This probed approve_tool, which P3 moved out of OPERATOR_ONLY: a request
+    // for reach is answered in ONE office by that office's own person, so the operator gate never applied to it and
+    // the gateway rightly let it through to the database.)
+    const via = await act(S_HARNESS, 'set_setting', {})
     check(
       'and the gateway still refuses it',
       refusedAnyway(via),
       `http ${String(via.status)} ${String(via.body.error ?? '')}`,
+    )
+    // approve_tool is office-scoped now, so what protects it is the database: a harness member cannot approve reach.
+    const approve = await act(S_HARNESS, 'approve_tool', {
+      p_request_id: '00000000-0000-0000-0000-000000000000',
+    })
+    check(
+      'a harness member cannot approve reach either (refused by the gateway or by the database, never approved)',
+      refusedAnyway(approve) ||
+        (approve.body.approved !== true &&
+          typeof (approve.body.result as { error?: unknown } | undefined)?.error === 'string'),
+      `http ${String(approve.status)} ${JSON.stringify(approve.body).slice(0, 110)}`,
     )
   } finally {
     await db.execute(`delete from public.deployment_operators where owner_key = 'verify-operator'`)
@@ -291,6 +314,16 @@ try {
 } finally {
   await db.execute(`delete from public.deployment_operators where owner_key = ${lit(SECOND_KEY)}`)
   await db.execute(`delete from public.office_members where owner_key = ${lit(SECOND_KEY)}`)
+  // The office provisioned above is RETIRED, the way the product retires one (offices are never deleted, 0654).
+  try {
+    await db.execute(
+      `update public.offices set state = 'disabled', disabled_at = now() where auth_user_id in (select id from auth.users where lower(email) = ${lit(SECOND_EMAIL)})`,
+    )
+  } catch (e) {
+    console.log(
+      `      retiring the second office was refused: ${String((e as Error).message).slice(0, 140)}`,
+    )
+  }
   const left = Number(
     (
       await db.execute(

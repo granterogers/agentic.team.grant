@@ -30,20 +30,23 @@
  * process never runs is not a recovery mechanism.
  */
 
+import { loadConsequenceEvidence } from '../agents/consequence.ts'
 import { type Domain, howComposed } from '../agents/provenance.ts'
 import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
 import { metadataProblems, reviewRequired } from '../agents/quality.ts'
 import { withoutStrayQuotes } from '../agents/stray-quotes.ts'
 import { withJobScope } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { retryOnLinkFailure } from '../db/link-failure.ts'
 import { personOfJob, withPerson } from '../office/person.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
 import { redactDeep } from '../text/secrets.ts'
 import type { Plan } from '../tools/plan.ts'
 import { plannedWrites, summarise } from '../tools/plan.ts'
 import { containmentRefusal, type Reach } from './containment.ts'
+import { redriveLapsedDeliveries } from './delivery-redrive.ts'
 import { assertHeld, callerArgs, fenceClause, StaleWorkerError, startHeartbeat } from './fence.ts'
-import { lastWord } from './lastword.ts'
+import { lastWord, sweepOwedWords } from './lastword.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -203,7 +206,11 @@ export interface HandlerOutput {
    * says "tap the button" with no button is the defect this field exists to prevent.
    */
   readonly notice?: {
-    readonly heading: string
+    /**
+     * A heading above the paragraphs. Absent when the sentence stands alone: the last word a failed turn owes the person
+     * (`src/jobs/lastword.ts`) is a notice by KIND, not by furniture, and needs no heading to say it did not get through.
+     */
+    readonly heading?: string
     readonly link?: { readonly label: string; readonly url: string }
   }
   /**
@@ -1168,7 +1175,17 @@ const runJobHeld = async (
       job.lost = true
       throw new StaleWorkerError(job.jobId, job.leasedBy ?? '', job.attempt)
     }
-    await assertHeld(db, job)
+    /*
+      THE DATABASE CAN BLIP AT THE ONE MOMENT A FAILURE IS BEING RECORDED (#443).
+
+      The handler threw, so the next two writes are about THIS failure: is the claim still mine, and move the job to
+      retrying or failed with the reason. If the link times out for a second or two, the job used to stay `running` with a
+      reason that said nothing about the failure, and the lease had to lapse (five minutes) before the recovery sweep
+      moved it. Both are idempotent records of something that already happened, so each is tried again on a LINK failure
+      only (`retryOnLinkFailure`): a stale claim, a refused transition or anything else is rethrown at once, and an outage
+      that outlasts the retries still ends in the lease sweep, as before.
+    */
+    await retryOnLinkFailure(() => assertHeld(db, job))
     const retryable = await mayRetry(db, job)
     /*
       Recognise it (#132).
@@ -1246,11 +1263,13 @@ const runJobHeld = async (
         /* Recording a failure must never be a second failure. */
       }
     }
-    await moveJob(
-      db,
-      job,
-      retryable ? 'retrying' : 'failed',
-      `handler threw: ${(error as Error).message.slice(0, 180)}`,
+    await retryOnLinkFailure(() =>
+      moveJob(
+        db,
+        job,
+        retryable ? 'retrying' : 'failed',
+        `handler threw: ${(error as Error).message.slice(0, 180)}`,
+      ),
     )
     return {
       jobId: job.jobId,
@@ -1301,7 +1320,11 @@ const runJobHeld = async (
     .then((r) => (r.rows[0] as { had?: boolean } | undefined)?.had)
     .catch(() => undefined)
 
+  // The recorded results of this job's tree: what a claim of consequence is checked against.
+  const consequences = await loadConsequenceEvidence(db, job.jobId)
+
   const problems = metadataProblems({
+    ...(consequences === undefined ? {} : { consequences }),
     confidence: output.confidence,
     evidence: output.evidence,
     sources: output.sources,
@@ -2068,6 +2091,16 @@ export const drain = async (
     await db.execute('select * from app.settle_exhausted_jobs()').catch(() => undefined)
   }
 
+  /*
+    THE ROAD THE INLINE CALL BELOW CANNOT SEE (1024). A job failed by the two sweeps above - an expired lease on its
+    last attempt, no attempts left - never passes through `runJob`, so the call after `runJob` never meets it and its
+    person heard nothing. The question is asked of the state, here, after both sweeps so a death they just caused is
+    told in the same tick. `app.claim_last_word` makes this and the inline call say it once. Never fatal.
+  */
+  if (options.recover !== false) {
+    await sweepOwedWords(db, options.notify).catch(() => undefined)
+  }
+
   // And put back anything a previous worker parked for want of a handler THIS
   // one holds. Beside the stall sweep because it is the same kind of thing: a
   // job that can proceed now and will not without being told. Never fatal —
@@ -2167,6 +2200,12 @@ export const drain = async (
   await askUnasked(db, options.notify).catch((error: unknown) => {
     console.error(`asking sweep failed: ${String((error as Error).message).slice(0, 200)}`)
   })
+  // And any finished answer whose send failed retryably and whose backoff is over (N1). Never fatal.
+  if (options.recover !== false) {
+    await redriveLapsedDeliveries(db, options.notify).catch((error: unknown) => {
+      console.error(`delivery redrive failed: ${String((error as Error).message).slice(0, 200)}`)
+    })
+  }
   for (let i = 0; i < max; i++) {
     if (options.stopStartingAfter?.() === true) break
     const job = await dequeue(
@@ -2189,14 +2228,18 @@ export const drain = async (
     }
 
     /*
-      THE ONE PLACE A DEAD TURN CAN STILL SPEAK.
+      THE PROMPT PATH FOR A TURN THAT DIED INSIDE `runJob`.
 
-      Every terminal failure in this file - the coherence gate, the output
-      refusal, the handler that threw, the notifying contradiction - arrives
-      here as one result, so the apology is wired once rather than at six
-      gates that would drift. `app.owed_a_word` decides whether anybody is
-      owed anything; a duty, a retry, a child branch and a turn that already
-      answered all come back empty.
+      Every terminal failure that happens in this file - the coherence gate,
+      the output refusal, the handler that threw, the notifying contradiction -
+      arrives here as one result, so the apology is wired once rather than at
+      six gates that would drift. It is NOT every terminal failure: a job
+      failed by SQL (`app.recover_stalled_jobs`, `app.settle_exhausted_jobs`)
+      never returns through `runJob`, and is told by `sweepOwedWords` at the
+      top of the tick instead (1024). Both go through `app.claim_last_word`, so
+      a death seen twice is told once. `app.owed_a_word` decides whether
+      anybody is owed anything; a duty, a retry, a child branch and a turn that
+      already answered all come back empty.
 
       Grant sent a 17-second voice note on 8 September, the transcription path
       threw, and he was told nothing at all. That is what this is for.

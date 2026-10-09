@@ -11,7 +11,7 @@
  */
 
 import { pauseJob } from '../../src/jobs/checkpoint.ts'
-import { lastWord, parkedNotice } from '../../src/jobs/lastword.ts'
+import { lastWord, parkedNotice, sweepOwedWords } from '../../src/jobs/lastword.ts'
 import { dequeue, drain, type Handler, type Job, type Reviewer } from '../../src/jobs/worker.ts'
 import { isolated } from './guard.ts'
 import { realParent } from './real-telegram.ts'
@@ -129,8 +129,8 @@ const park = (id: string, reason: string, resumable: boolean) =>
 {
   const j = await claimReal()
   await db.execute(
-    `insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-     values ((select project_id from public.jobs where job_id = ${lit(j.jobId)}::uuid), ${lit(j.jobId)}::uuid, 'Send it?', 'it leaves the building', 'waits', array['Yes','No'], 'chief-of-staff', false)`,
+    `insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+     values (app.job_office(${lit(j.jobId)}::uuid), (select project_id from public.jobs where job_id = ${lit(j.jobId)}::uuid),${lit(j.jobId)}::uuid, 'Send it?', 'it leaves the building', 'waits', array['Yes','No'], 'chief-of-staff', false)`,
   )
   await park(j.jobId, 'needs_reconciliation', false)
   check(
@@ -142,8 +142,8 @@ const park = (id: string, reason: string, resumable: boolean) =>
 {
   const id = String(
     (
-      await one(`insert into public.jobs (kind, requested_by, idempotency_key, correlation_id, announce)
-      values ('research.summarise', 'duty:parked-control', ${lit(`parked-${Date.now()}`)}, gen_random_uuid(), false) returning job_id::text as id`)
+      await one(`insert into public.jobs (office_id, kind, requested_by, idempotency_key, correlation_id, announce)
+      values (app.operator_office(), 'research.summarise', 'duty:parked-control', ${lit(`parked-${Date.now()}`)}, gen_random_uuid(), false) returning job_id::text as id`)
     ).id,
   )
   const d = await dequeue(
@@ -176,8 +176,8 @@ const park = (id: string, reason: string, resumable: boolean) =>
   // Harness traffic: a test turn parked for good owes nobody a word, so no output row and no announce flip is made.
   const key = `teamhq:verifyparked:${Date.now().toString(36)}.1`
   const cmd = await one(`set local application_name = 'PostgREST 14.5';
-    insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-    values ('teamhq', ${lit(`verify-parked:${Date.now()}`)}, 'verify-parked', 'a test turn', ${lit(key)}, 'verify-parked')
+    insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+    values (app.test_office(), app.unnamed_project(app.test_office()), 'teamhq', ${lit(`verify-parked:${Date.now()}`)}, 'verify-parked', 'a test turn', ${lit(key)}, 'verify-parked')
     returning command_id::text as id`)
   const enq = await one(
     `set local application_name = 'PostgREST 14.5'; select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`,
@@ -294,6 +294,25 @@ const park = (id: string, reason: string, resumable: boolean) =>
     // Earlier cases left paused jobs that the sweep may wake; a tick test is about ONE job, so clear the others.
     await db.execute(
       `update public.jobs set state = 'cancelled' where state in ('paused', 'queued', 'retrying')`,
+    )
+    /*
+      And earlier sections of THIS file deliberately leave a FAILED real turn that was never told (the "turn that FAILED is
+      still owed a word" control). 1024's tick drains every such turn each pass (sweepOwedWords), so without this the
+      next drive says that old turn's apology as well and "told once" reads 2: the proof counting its own debris, the
+      suite-takes-its-own-earlier-work defect CLAUDE.md records. Tell them now, to a notifier nobody reads, and assert
+      that nothing is owed before the one job under test begins.
+    */
+    await sweepOwedWords(
+      db,
+      async () => ({ note: 'flush: debris from an earlier section' }) as never,
+    )
+    const debris = Number(
+      (await one(`select count(*)::int as n from app.jobs_owing_a_word(100)`)).n,
+    )
+    check(
+      'before the drive, no earlier turn is still owed a word (the count is of one job only)',
+      debris === 0,
+      `${debris} owed`,
     )
     await realParent(db)
     const told: string[] = []

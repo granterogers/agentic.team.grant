@@ -14,6 +14,7 @@
  */
 import { instructionHandler } from '../../src/handlers/instruction.ts'
 import type { Job } from '../../src/jobs/worker.ts'
+import { realTurn } from './fixtures-approvals.ts'
 import { isolated } from './guard.ts'
 
 const db = await isolated(process.argv[2] ?? 'fwdw')
@@ -31,20 +32,25 @@ const handler = instructionHandler({
   router: { complete: async () => ({ content: '{}', model: 'isolated/stand-in' }) } as never,
 })
 
-let seq = 0
+const chats = new Map<string, string>()
 const say = async (
   chat: string,
   said: string,
   forwarded: boolean,
 ): Promise<Job & { commandId: string }> => {
-  seq += 1
-  const cmd = await one(`insert into public.inbound_commands
-    (origin_channel, origin_ref, actor, instruction, dedupe_key, subject, context)
-    values ('teamhq', ${lit(`${chat}:${String(seq)}`)}, 'grant', ${lit(said)},
-            ${lit(`teamhq:fwdw:${run}.${String(seq)}`)}, 'grant', ${lit(JSON.stringify(forwarded ? { forwarded: true } : {}))}::jsonb)
-    returning command_id::text as id`)
-  const enq = await one(`select app.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`)
-  const v = (typeof enq.v === 'string' ? JSON.parse(enq.v) : enq.v) as { job_id: string }
+  // A turn as the Telegram adapter writes it (recognised key, PostgREST door), one numeric chat per conversation:
+  // the dashboard's single conversation would thread every case into the last one. The flag is the same one both
+  // doors set (`context.forwarded`).
+  if (!chats.has(chat)) chats.set(chat, String(700_000_000 + chats.size))
+  const cmd = { id: '' }
+  const real = await realTurn(db, {
+    channel: 'telegram',
+    text: said,
+    chat: chats.get(chat),
+    context: forwarded ? { forwarded: true } : {},
+  })
+  cmd.id = real.command
+  const v = { job_id: real.job }
   const j = await one(`select job_id::text as id, kind, correlation_id::text as c,
     project_id::text as p, idempotency_key as k from public.jobs where job_id = ${lit(v.job_id)}::uuid`)
   return {
@@ -83,10 +89,15 @@ const task = async (id: string) =>
 
 // The seed says "tomorrow", so the move target must be a weekday that is NOT tomorrow, whatever day the suite runs
 // (a fixed "Friday" was a no-op on every Thursday and the control read the product as broken).
-const dayAfterNext = new Date(Date.now() + 2 * 86400000).toLocaleDateString('en-GB', {
-  weekday: 'long',
-  timeZone: 'UTC',
-})
+// "Tomorrow" is the OFFICE's tomorrow (1027), so the day after next is read on the office's clock too: after 21:00 UTC the
+// Athens office is already a day ahead of UTC and a UTC weekday would name tomorrow.
+const dayAfterNext = String(
+  (
+    await one(
+      `select trim(to_char((now() at time zone app.office_timezone(app.operator_office()))::date + 2, 'Day')) as d`,
+    )
+  ).d,
+)
 
 // ---- change a task he already has ---------------------------------------------------------------------------------
 for (const [label, sentence, changed] of [

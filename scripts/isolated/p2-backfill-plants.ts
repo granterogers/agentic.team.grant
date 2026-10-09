@@ -9,6 +9,7 @@
  * control run with no plant must apply every wave, otherwise "it aborted" proves nothing.
  */
 import { execFileSync } from 'node:child_process'
+import { readdirSync } from 'node:fs'
 
 const SOCK = process.env.ISOLATED_PG_SOCKET ?? '/tmp/pgs'
 const PORT = process.env.ISOLATED_PG_PORT ?? '55432'
@@ -52,9 +53,30 @@ const WAVES = [
   '0659_wave_3_account_level_carriers_have_an_owner',
 ]
 
+// The plants are applied to the schema AS IT WAS BEFORE 0654, because the proof replays 0654..0659 itself. `post` is the
+// whole candidate (it already holds those waves, so replaying them fails on "offices already exists" and the proof
+// can never reach a plant). The template is therefore `pre` plus every migration below 0654, built once and reused;
+// P2_PLANT_TEMPLATE names an existing one, P2_PLANT_DB the working clone (parallel runs).
+const TEMPLATE = process.env.P2_PLANT_TEMPLATE ?? 'p2_plant_template'
+const WORK_DB = process.env.P2_PLANT_DB ?? 'p2_plant'
+const ensureTemplate = () => {
+  const have = psql('postgres', ['-c', `select 1 from pg_database where datname = '${TEMPLATE}'`])
+  if (have.ok && have.out.trim() === '1') return
+  const c = psql('postgres', ['-c', `create database ${TEMPLATE} template pre`])
+  if (!c.ok) throw new Error(c.out)
+  const names = readdirSync(new URL('../../migrations/', import.meta.url))
+    .filter((f) => /^\d{4}_.*\.sql$/.test(f) && f.slice(0, 4) > '0598' && f.slice(0, 4) < '0654')
+    .sort()
+  for (const f of names) {
+    const r = psql(TEMPLATE, ['-1', '-f', file(f.replace(/\.sql$/, ''))])
+    if (!r.ok) throw new Error(`building ${TEMPLATE}: ${f}: ${r.out.slice(0, 200)}`)
+  }
+}
+
 const fresh = (db: string) => {
+  ensureTemplate()
   psql('postgres', ['-c', `drop database if exists ${db}`])
-  const c = psql('postgres', ['-c', `create database ${db} template post`])
+  const c = psql('postgres', ['-c', `create database ${db} template ${TEMPLATE}`])
   if (!c.ok) throw new Error(c.out)
   psql(db, [
     '-c',
@@ -115,7 +137,7 @@ for (const run of [
   { name: 'CONTROL: no plant at all', sql: '', stopsAt: '', mustName: '' } as Plant,
   ...plants,
 ]) {
-  const db = 'p2_plant'
+  const db = WORK_DB
   fresh(db)
   for (const w of WAVES.slice(0, 3)) psql(db, ['-f', file(w)])
   if (run.sql !== '') {
@@ -165,7 +187,7 @@ for (const run of [
       `stamped rows: ${stamped.out.trim()}`,
     )
 }
-psql('postgres', ['-c', 'drop database if exists p2_plant'])
+psql('postgres', ['-c', `drop database if exists ${WORK_DB}`])
 console.log(
   failed === 0
     ? '\nevery plant was refused, and the control passed'

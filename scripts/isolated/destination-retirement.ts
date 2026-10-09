@@ -30,8 +30,8 @@ const fixture = (n: number) => `-7${String(Date.now()).slice(-9)}${String(n).pad
 // A harness job (a child of a harness turn) and its grandchild.
 const harness = String(
   (
-    await one(`insert into public.jobs (correlation_id, idempotency_key, kind, requested_by)
-      values (gen_random_uuid(), ${lit(`ret:${run}`)}, 'research.conclusion', 'verify:retirement') returning job_id::text as v`)
+    await one(`insert into public.jobs (office_id, correlation_id, idempotency_key, kind, requested_by)
+      values (app.test_office(), gen_random_uuid(), ${lit(`ret:${run}`)}, 'research.conclusion', 'verify:retirement') returning job_id::text as v`)
   ).v,
 )
 const grandchild =
@@ -132,8 +132,8 @@ check(
 )
 
 // A send that the guard never allowed, forced in as if something had bypassed it.
-await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
-  values ('telegram', ${lit(`ret:${run}:bypass`)}, 'acct', ${lit(A)}, ${lit(harness)}::uuid, 'result', 'sent', 'm-bypass', app.now_utc(), app.now_utc())`)
+await db.execute(`insert into public.deliveries (office_id, channel, dedupe_key, account_ref, target_ref, job_id, purpose, state, message_ref, sent_at, lease_expires_at)
+  values (app.job_office(${lit(harness)}::uuid), 'telegram', ${lit(`ret:${run}:bypass`)}, 'acct', ${lit(A)}, ${lit(harness)}::uuid, 'result', 'sent', 'm-bypass', app.now_utc(), app.now_utc())`)
 
 const traced = (await db.execute(provenanceSql(`${lit(since)}::timestamptz`))).rows as {
   key: string

@@ -29,8 +29,10 @@
 
 import { PaidCallPreventedError } from '../providers/guards.ts'
 import {
+  AllCandidatesFailedError,
   EmptyCompletionError,
   NoUsableModelError,
+  ProviderTimeoutError,
   ProviderUnavailableError,
 } from '../providers/router.ts'
 
@@ -77,6 +79,19 @@ const rateLimited = (message: string): boolean => {
  * as surely as it rules out a missing blocker.
  */
 export const classifyFailure = (error: unknown): FailureClassification => {
+  // A failover that ran out of models is classified by what stopped the LAST one, which is what a caller can act on.
+  if (error instanceof AllCandidatesFailedError) return classifyFailure(error.cause)
+
+  if (error instanceof ProviderTimeoutError) {
+    return {
+      nature: 'transient',
+      // `transport_error` is the closest value `inference_usage.outcome` permits; the class, not the column, is what
+      // tells a timeout from a refused connection.
+      outcome: 'transport_error',
+      summary: `${error.model} did not answer within ${String(Math.round(error.afterMs / 1000))}s`,
+    }
+  }
+
   if (error instanceof PaidCallPreventedError) {
     return {
       nature: 'systemic',

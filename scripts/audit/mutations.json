@@ -1,0 +1,746 @@
+{
+  "_about": "Security-control mutation manifest. Each entry breaks ONE control in a throwaway checkout; the unit suite must go red. `old` must occur exactly once in `file` or the sabotage did not land and is reported as such (never as a catch). `critical` marks a consequential boundary; `severity` is what a surviving mutation would mean for the missing tripwire (not for production).",
+  "mutations": [
+    {
+      "id": "M1",
+      "critical": true,
+      "severity": "high",
+      "file": "supabase/functions/telegram-webhook/index.ts",
+      "old": "if (!secretMatches(request.headers.get('X-Telegram-Bot-Api-Secret-Token'), WEBHOOK_SECRET)) {",
+      "new": "if (false) {",
+      "invariant": "Telegram webhook refuses a request without the shared secret",
+      "expect": "tests/functions/webhook-authentication.test.ts"
+    },
+    {
+      "id": "M2",
+      "critical": true,
+      "severity": "high",
+      "file": "supabase/functions/slack-events/index.ts",
+      "old": "if (!verified.ok) return unauthorized()",
+      "new": "if (false) return unauthorized()",
+      "invariant": "Slack events refuses a bad or stale signature",
+      "expect": "tests/functions/webhook-authentication.test.ts"
+    },
+    {
+      "id": "M2b",
+      "critical": true,
+      "severity": "high",
+      "file": "supabase/functions/slack-events/index.ts",
+      "old": "if (SIGNING_SECRET === '') return unauthorized()",
+      "new": "",
+      "invariant": "Slack events fails closed with no signing secret (defence in depth beside the signature check)",
+      "expect": "tests/functions/webhook-authentication.test.ts"
+    },
+    {
+      "id": "M3",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/approval-gate.ts",
+      "old": "if (decision.verdict === 'refuse') return",
+      "new": "if (false) return",
+      "invariant": "a recorded yes does not outrank a policy that says refuse",
+      "expect": "tests/handlers/approval-gate-refusals.test.ts"
+    },
+    {
+      "id": "M4",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/approval-gate.ts",
+      "old": "if (check.state === 'none') return { ok: false, why: 'nothing has been approved' }",
+      "new": "",
+      "invariant": "no approval means no start",
+      "expect": "tests/handlers/approval-gate-refusals.test.ts"
+    },
+    {
+      "id": "M4b",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/approval-gate.ts",
+      "old": "if (check.state === 'forged' || check.state === 'mismatch') {",
+      "new": "if (false) {",
+      "invariant": "a forged or mismatched approval does not start work",
+      "expect": "tests/handlers/approval-gate-refusals.test.ts"
+    },
+    {
+      "id": "M5",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/handlers/notebook.ts",
+      "old": "const start = await mayStart(db, job, approval, 'notebook.write')",
+      "new": "const start = { ok: true } as const",
+      "invariant": "notebook write consumes the approval gate's answer",
+      "expect": "tests/architecture/every-external-kind-is-gated-or-named.test.ts"
+    },
+    {
+      "id": "M6",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/perform.ts",
+      "old": "hits.filter((h) => !isUntrusted(h.connector))",
+      "new": "hits.filter(() => true)",
+      "invariant": "outside material does not travel into a later plan step",
+      "expect": "tests/agents/perform-untrusted-fence.test.ts"
+    },
+    {
+      "id": "M7",
+      "critical": true,
+      "severity": "high",
+      "file": "src/knowledge/retrieval.ts",
+      "old": "connector !== null && UNTRUSTED_CONNECTORS.has(connector.toLowerCase())",
+      "new": "false",
+      "invariant": "isUntrusted recognises outside connectors",
+      "expect": "tests/knowledge/untrusted-context.test.ts"
+    },
+    {
+      "id": "M8",
+      "critical": true,
+      "severity": "high",
+      "file": "src/knowledge/retrieval.ts",
+      "old": "if (isUntrusted(hit.connector)) theirs.push(piece)",
+      "new": "if (!isUntrusted(hit.connector)) theirs.push(piece)",
+      "invariant": "contextBlock fences outside material and not trusted material",
+      "expect": "tests/knowledge/untrusted-context.test.ts"
+    },
+    {
+      "id": "M9",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/knowledge/retrieval.ts",
+      "old": "  'browser',\n  'gmail',\n",
+      "new": "  'browser',\n",
+      "invariant": "gmail is an outside connector",
+      "expect": "tests/knowledge/untrusted-context.test.ts"
+    },
+    {
+      "id": "M10",
+      "critical": true,
+      "severity": "high",
+      "file": "src/safety/production-gate.ts",
+      "old": "(flag(env, ENV_CHECKS) && flag(env, ENV_WRITES))",
+      "new": "(flag(env, ENV_CHECKS) || flag(env, ENV_WRITES))",
+      "invariant": "a production WRITE needs both flags",
+      "expect": "tests/safety/production-gate.test.ts"
+    },
+    {
+      "id": "M11",
+      "critical": true,
+      "severity": "high",
+      "file": "src/safety/production-gate.ts",
+      "old": "const flag = (env: Env, name: string): boolean => env[name] === '1'",
+      "new": "const flag = (env: Env, name: string): boolean => env[name] !== undefined",
+      "invariant": "only the literal 1 is the production flag",
+      "expect": "tests/safety/production-gate.test.ts"
+    },
+    {
+      "id": "M12",
+      "critical": true,
+      "severity": "high",
+      "file": "src/safety/production-gate.ts",
+      "old": "if (PRODUCTION_HOST.some((re) => re.test(host))) return true",
+      "new": "",
+      "invariant": "a production host is recognised",
+      "expect": "tests/safety/production-gate.test.ts"
+    },
+    {
+      "id": "M13",
+      "critical": true,
+      "severity": "high",
+      "file": "scripts/deploy/edge-function.ts",
+      "old": "import '../../src/safety/require-production-writes.ts'\n",
+      "new": "",
+      "invariant": "a deploy script imports the production-writes gate",
+      "expect": "tests/safety/production-gate-coverage.test.ts"
+    },
+    {
+      "id": "M14",
+      "critical": true,
+      "severity": "high",
+      "file": "scripts/migrate.ts",
+      "old": "import '../src/safety/require-production-writes.ts'\n",
+      "new": "",
+      "invariant": "the migration runner imports the production-writes gate",
+      "expect": "tests/safety/production-gate-coverage.test.ts"
+    },
+    {
+      "id": "M15",
+      "critical": true,
+      "severity": "high",
+      "file": "src/jobs/containment.ts",
+      "old": "if (origin === 'trusted' || origin === 'internal') return null",
+      "new": "if (origin === 'trusted' || origin === 'internal' || origin === 'harness') return null",
+      "invariant": "harness work is contained",
+      "expect": "tests/jobs/containment.test.ts"
+    },
+    {
+      "id": "M16",
+      "critical": true,
+      "severity": "high",
+      "file": "src/jobs/containment.ts",
+      "old": "? { reach: 'external', service: 'an unclassified destination' }",
+      "new": "? { reach: 'internal', service: 'an unclassified destination' }",
+      "invariant": "an unclassified kind is treated as external",
+      "expect": "tests/jobs/containment.test.ts"
+    },
+    {
+      "id": "M17",
+      "critical": true,
+      "severity": "high",
+      "file": "src/jobs/worker.ts",
+      "old": "if (contained !== null) {",
+      "new": "if (false) {",
+      "invariant": "the worker cancels contained work before the handler runs",
+      "expect": "tests/jobs/worker-refuses-contained-work.test.ts"
+    },
+    {
+      "id": "M18",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/slack/notifier.ts",
+      "old": "import type { SlackOffice } from './office.ts'",
+      "new": "import type { SlackOffice } from './office.ts'\nvoid fetch('https://slack.com/api/chat.postMessage')",
+      "invariant": "no module sends to Slack outside the delivery path",
+      "expect": "tests/jobs/containment.test.ts"
+    },
+    {
+      "id": "M19",
+      "critical": true,
+      "severity": "high",
+      "file": "src/slack/signature.ts",
+      "old": "Math.abs(nowSeconds - timestamp) > MAX_SKEW_SECONDS",
+      "new": "(nowSeconds - timestamp) > MAX_SKEW_SECONDS",
+      "invariant": "a far-future Slack timestamp is stale",
+      "expect": "tests/slack/signature.test.ts"
+    },
+    {
+      "id": "M20",
+      "critical": true,
+      "severity": "high",
+      "file": "src/slack/signature.ts",
+      "old": "return constantTimeEquals(expected, headers.signature) ? OK : fail('signature_mismatch')",
+      "new": "return OK",
+      "invariant": "the Slack signature is compared",
+      "expect": "tests/slack/signature.test.ts"
+    },
+    {
+      "id": "M21",
+      "critical": false,
+      "severity": "low",
+      "equivalent": true,
+      "file": "src/channels/telegram.ts",
+      "old": "  if (expected === '') return false\n",
+      "new": "",
+      "invariant": "EQUIVALENT MUTANT, expected to survive: with no configured secret the next line already refuses an empty presented value and a non-empty one hashes differently from the empty secret, so the line is defence in depth with no observable effect",
+      "expect": "tests/channels/telegram.test.ts"
+    },
+    {
+      "id": "M22",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/text/secrets.ts",
+      "old": "/xox[abeprs]-[A-Za-z0-9-]{6,}/g",
+      "new": "/xox[abeprs]-[A-Za-z0-9-]{60,}/g",
+      "invariant": "Slack tokens are redacted",
+      "expect": "tests/text/secrets.test.ts"
+    },
+    {
+      "id": "M23",
+      "critical": true,
+      "severity": "high",
+      "file": "supabase/functions/hq-api/index.ts",
+      "old": "(sessionOffice ?? null)",
+      "new": "(new URL(request.url).searchParams.get('office') ?? sessionOffice ?? null)",
+      "invariant": "the office is the verified credential's, never a query parameter",
+      "expect": "tests/gateway/office-from-credential.test.ts"
+    },
+    {
+      "id": "M23b",
+      "critical": true,
+      "severity": "high",
+      "file": "supabase/functions/hq-api/index.ts",
+      "old": "(sessionOffice ?? null)",
+      "new": "(request.headers.get('x-office-id') ?? sessionOffice ?? null)",
+      "invariant": "the office is the verified credential's, never a header",
+      "expect": "tests/gateway/office-from-credential.test.ts"
+    },
+    {
+      "id": "M24",
+      "critical": true,
+      "severity": "high",
+      "file": "supabase/functions/hq-api/index.ts",
+      "old": "      if (!operator) {",
+      "new": "      if (false) {",
+      "invariant": "operator-only actions refuse a non-operator",
+      "expect": "tests/gateway/operator-only.test.ts"
+    },
+    {
+      "id": "M24b",
+      "critical": true,
+      "severity": "high",
+      "file": "supabase/functions/hq-api/index.ts",
+      "old": "    if (!mayRead) {",
+      "new": "    if (false) {",
+      "invariant": "operator-only sections refuse a non-operator",
+      "expect": "tests/gateway/operator-only.test.ts"
+    },
+    {
+      "id": "M25",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/handlers/instruction.ts",
+      "old": "select app.enqueue_child_once(\n                      app.job_office(",
+      "new": "select app.enqueue_child(\n                      app.job_office(",
+      "invariant": "a repeated instruction starts one child, not two",
+      "expect": "tests/agents/one-live-attempt.test.ts"
+    },
+    {
+      "id": "M26",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/handlers/extract-tasks.ts",
+      "old": "          isUntrusted(s.connector)\n            ? `## ${s.title}",
+      "new": "          false\n            ? `## ${s.title}",
+      "invariant": "task extraction fences outside material in the user turn",
+      "expect": "tests/handlers/extract-tasks.test.ts"
+    },
+    {
+      "id": "M26b",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/handlers/extract-tasks.ts",
+      "old": "const outside = sources.some((s) => isUntrusted(s.connector))",
+      "new": "const outside = false",
+      "invariant": "task extraction tells the model outside material is present",
+      "expect": "tests/handlers/extract-tasks.test.ts"
+    },
+    {
+      "id": "M25b",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/handlers/instruction.ts",
+      "old": "${deliberate === null ? 'app.enqueue_child_once' : 'app.enqueue_child'}",
+      "new": "${'app.enqueue_child'}",
+      "invariant": "a plan is started once unless deliberately repeated",
+      "expect": "tests/agents/one-live-attempt.test.ts"
+    },
+    {
+      "id": "M27",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/addressing.ts",
+      "old": "  if (to !== CHIEF_OF_STAFF) return true\n  return (input.alsoAddressed ?? []).some((x) => x !== '' && x !== CHIEF_OF_STAFF)",
+      "new": "  return true",
+      "invariant": "a message to the chief's bot is routed by her (the team can be convened); only a specialist's bot is a direct address",
+      "expect": "tests/agents/addressing.test.ts"
+    },
+    {
+      "id": "M27b",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "const byName = direct ? addressedTo : null",
+      "new": "const byName = addressedTo === null || addressedTo === '' ? null : addressedTo",
+      "invariant": "speaker() reads the stored addressee through the one definition of 'directly addressed', not as 'addressed_to is non-empty'",
+      "expect": "tests/functions/telegram-addressing.test.ts"
+    },
+    {
+      "id": "M27c",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/handlers/instruction.ts",
+      "old": "if (settledInCode && !direct) {",
+      "new": "if (false) {",
+      "invariant": "a reminder or personal task typed to the chief stays with the chief and costs no roster or model call",
+      "expect": "tests/handlers/speaker.test.ts"
+    },
+    {
+      "id": "M28",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "if (scope === 'routine') {",
+      "new": "if (false) {",
+      "invariant": "a routine request typed to the chief on Telegram is hers: no subject lookup, no convened specialist, no roster model call (selective delegation)",
+      "expect": "tests/handlers/speaker.test.ts"
+    },
+    {
+      "id": "M28b",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/delegation-scope.ts",
+      "old": "  if (ASKS_FOR_TEAM.some((re) => re.test(said))) return 'team'",
+      "new": "  if (false) return 'team'",
+      "invariant": "an explicit request for the team on Telegram is never answered as a routine one: he asked for who, and the office never overrides it",
+      "expect": "tests/handlers/speaker.test.ts"
+    },
+    {
+      "id": "M30",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/agents/capability-claims.ts",
+      "old": "const scope = offerAt === null ? clause : clause.slice(offerAt.index)",
+      "new": "const scope = clause",
+      "invariant": "an offer's object follows the offer: naming email before 'I'll pull the wording' is not an offer to send email",
+      "expect": "tests/agents/a-capability-denied-is-checkable.test.ts"
+    },
+    {
+      "id": "M31",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/turn.ts",
+      "old": "return asHumanWords(withoutQuotedMaterial(afterRetraction))",
+      "new": "return asHumanWords(afterRetraction)",
+      "invariant": "what he pasted into a typed message is content, never his request: the readers that act do not read it",
+      "expect": "tests/agents/quoted-material.test.ts"
+    },
+    {
+      "id": "M31b",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "const retractionRead = retractionOf(asHumanWords(withoutPaste))",
+      "new": "const retractionRead = retractionOf(cleanedWords)",
+      "invariant": "'ignore all previous instructions' inside a pasted email is not his change of mind (it made the stranger's sentence his request)",
+      "expect": "tests/agents/quoted-material.test.ts"
+    },
+    {
+      "id": "M32",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/agents/mine.ts",
+      "old": "  I_MUST.test(sentence) && !ASKING_WHETHER_I_MUST.test(sentence)",
+      "new": "  I_MUST.test(sentence)",
+      "invariant": "a question about what he must do ('When do I have to pay the deposit?') is never filed as a task on his list",
+      "expect": "tests/agents/a-question-about-a-duty-is-not-a-task.test.ts"
+    },
+    {
+      "id": "M33",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/agents/own-task.ts",
+      "old": "const open = ANYONE.exec(text) ?? COLLECTIVE.exec(text)",
+      "new": "const open = ANYONE.exec(text)",
+      "invariant": "'Ask the team to X' reaches each specialist as X (the work), not as an instruction to pass on",
+      "expect": "tests/agents/own-task.test.ts"
+    },
+    {
+      "id": "M34",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "const decided = route(routedText, scan)",
+      "new": "const decided = route(instruction, scan)",
+      "invariant": "the routing decision is classified from the text the roster was chosen from (a stripped delegation frame must not make a team roster read unconfident and fail the turn)",
+      "expect": "tests/agents/own-task.test.ts"
+    },
+    {
+      "id": "M35",
+      "critical": false,
+      "severity": "high",
+      "file": "src/agents/delegation-scope.ts",
+      "old": "const said = withoutQuotedMaterial(input.instruction)",
+      "new": "const said = input.instruction",
+      "invariant": "an email he pasted that says 'investigate' is not him asking for an investigation (delegation reads his words, not pasted material)",
+      "expect": "tests/agents/delegation-scope.test.ts"
+    },
+    {
+      "id": "M36",
+      "critical": false,
+      "severity": "high",
+      "file": "src/agents/delegation-scope.ts",
+      "old": "  if (INVESTIGATIVE.test(body)) return 'complex'",
+      "new": "",
+      "invariant": "a short request that is investigative by its nature ('Investigate why X') is eligible for specialists; length is not what decides",
+      "expect": "tests/agents/delegation-scope.test.ts"
+    },
+    {
+      "id": "M37",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "forwarded ? '' : turn.kept,",
+      "new": "turn.kept,",
+      "invariant": "forwarded words are content and never a request for the team: the selective-delegation decision reads nothing from a forwarded turn",
+      "expect": "tests/handlers/speaker.test.ts"
+    },
+    {
+      "id": "M38",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "...(draftIsTheAnswer ? { landed: outcome.landed + 1 } : {}),",
+      "new": "...(draftIsTheAnswer || findingsAreTheAnswer ? { landed: outcome.landed + 1 } : {}),",
+      "invariant": "a findings answer drops the disclaimer sentence but never counts as a landed row, so the permission to promise or claim completion is unchanged",
+      "expect": "tests/handlers/findings-do-not-widen-permission.test.ts"
+    },
+    {
+      "id": "M39",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "actedAlready || isBranch || teamIsTheWork || requests.length === 0",
+      "new": "actedAlready || isBranch || requests.length === 0",
+      "invariant": "a request whose team has been convened is not also pursued by the planner: no plan say-back in place of the hand-off note, no source dump after the synthesis",
+      "expect": "tests/handlers/team-is-the-work.test.ts"
+    },
+    {
+      "id": "M40",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/handlers/instruction.ts",
+      "old": "const teamIsTheWork = branchesStarted.length > 0 && requests.every(answersByFindings)",
+      "new": "const teamIsTheWork = branchesStarted.length > 0",
+      "invariant": "only a findings-only request is left to its team: a request that also asks for tasks or a draft still plans, and its outward steps still park for a yes",
+      "expect": "tests/handlers/team-is-the-work.test.ts"
+    },
+    {
+      "id": "M41",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/jobs/worker.ts",
+      "old": "await retryOnLinkFailure(() => assertHeld(db, job))",
+      "new": "await assertHeld(db, job)",
+      "invariant": "the claim check in a handler failure path survives a database blip, so the failure is recorded rather than left to the lease sweep",
+      "expect": "tests/db/link-failure.test.ts"
+    },
+    {
+      "id": "M42",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/jobs/worker.ts",
+      "old": "await retryOnLinkFailure(() =>\n      moveJob(\n        db,\n        job,\n        retryable ? 'retrying' : 'failed',\n        `handler threw: ${(error as Error).message.slice(0, 180)}`,\n      ),\n    )",
+      "new": "await moveJob(\n      db,\n      job,\n      retryable ? 'retrying' : 'failed',\n      `handler threw: ${(error as Error).message.slice(0, 180)}`,\n    )",
+      "invariant": "the move to retrying or failed, with the handler reason, survives a database blip",
+      "expect": "tests/db/link-failure.test.ts"
+    },
+    {
+      "id": "M43",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "if ((completion.servedBy?.rank ?? 0) > 0 && keptRequest !== null) {",
+      "new": "if ((completion.servedBy?.rank ?? 0) > 99 && keptRequest !== null) {",
+      "invariant": "a backup model's answer is checked against the evidence before it is delivered",
+      "expect": "tests/handlers/fallback-wiring.test.ts"
+    },
+    {
+      "id": "M44",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/approval.ts",
+      "old": "await fallbackServedTurn(db, judged)",
+      "new": "false",
+      "invariant": "a turn a backup model helped work out asks before it changes anything",
+      "expect": "tests/agents/fallback-authority.test.ts"
+    },
+    {
+      "id": "M45",
+      "critical": true,
+      "severity": "medium",
+      "file": "src/providers/router.ts",
+      "old": "const planned = ordered.filter((m) => !skip.has(m)).slice(0, this.maxAttempts)",
+      "new": "const planned = ordered.slice(0, this.maxAttempts)",
+      "invariant": "a second opinion is a different model: the one that was found inadequate is never asked again",
+      "expect": "tests/handlers/fallback-wiring.test.ts"
+    },
+    {
+      "id": "M46",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/fallback-policy.ts",
+      "old": "if (INFERENCE.test(s) && contentRatio(s, established) < 0.6) {",
+      "new": "if (INFERENCE.test(s) && contentRatio(s, established) < -1) {",
+      "invariant": "an inference a backup model draws must rest on words the turn held",
+      "expect": "tests/agents/fallback-policy.test.ts"
+    },
+    {
+      "id": "M47",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/fallback-policy.ts",
+      "old": "(held && BLOCKER_FRAMING.test(answer)) ||",
+      "new": "",
+      "invariant": "a blocker raised against a plain question over held evidence is not an answer to it",
+      "expect": "tests/agents/fallback-policy.test.ts"
+    },
+    {
+      "id": "M49",
+      "critical": true,
+      "severity": "high",
+      "file": "src/handlers/instruction.ts",
+      "old": "if ((redo.servedBy?.rank ?? 0) > 0 && !admit(rewritten).ok) return ''",
+      "new": "",
+      "invariant": "a rewrite a backup model wrote after the promise gate is admitted on evidence like the answer it replaces",
+      "expect": "tests/handlers/fallback-wiring.test.ts"
+    },
+    {
+      "id": "M48",
+      "critical": true,
+      "severity": "high",
+      "file": "src/agents/fallback-policy.ts",
+      "old": "|| UNCONDITIONAL_BLOCKER.test(answer)",
+      "new": "",
+      "invariant": "a precondition or an unasked task raised against a plain question is refused even when nothing relevant was held",
+      "expect": "tests/agents/fallback-policy.test.ts"
+    },
+    {
+      "id": "M29",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/sync.ts",
+      "old": "    if (budget?.expired() === true || transientInARow >= MAX_CONSECUTIVE_TRANSIENT) {\n      deferred += 1\n      continue\n    }",
+      "new": "",
+      "invariant": "a Notion sync run stops reading when its budget is spent, so it cannot outlive the host's wall-clock limit and be retried into the same crawl",
+      "expect": "tests/notion/sync-handler.test.ts"
+    },
+    {
+      "id": "M29b",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/sync.ts",
+      "old": "    if (fresh.has(object.id)) {",
+      "new": "    if (false) {",
+      "invariant": "a page Notion says is unedited since it was read costs no request, so a continuation resumes instead of restarting",
+      "expect": "tests/notion/sync-handler.test.ts"
+    },
+    {
+      "id": "M29c",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/handlers/notion-sync.ts",
+      "old": "        for (const project of attached) {\n          if (budget.expired()) {\n            result.deferred += shared.length",
+      "new": "        for (const project of attached) {\n          await listSharedWithin(client, { expired: () => false })\n          if (budget.expired()) {\n            result.deferred += shared.length",
+      "invariant": "the workspace is listed once per run, not once per attached project",
+      "expect": "tests/notion/sync-handler.test.ts"
+    },
+    {
+      "id": "N1",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/api.ts",
+      "old": "Math.min(this.requestTimeoutMs, left())",
+      "new": "this.requestTimeoutMs",
+      "invariant": "one Notion call is bounded as a whole: an attempt gets only what the call deadline has left, so a 429 wait followed by a hang cannot stretch a call past it",
+      "expect": "tests/notion/call-bounds.test.ts"
+    },
+    {
+      "id": "N2",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/api.ts",
+      "old": "if (seconds * 1_000 < left()) {",
+      "new": "if (true) {",
+      "invariant": "a Retry-After that cannot fit before the call deadline is not waited out",
+      "expect": "tests/notion/call-bounds.test.ts"
+    },
+    {
+      "id": "N3",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/sync.ts",
+      "old": "if (isDatabaseLinkFailure(error)) throw error",
+      "new": "if (false) throw error",
+      "invariant": "a database connection failure ends the Notion sync and names itself instead of being recorded as a page left out for every remaining page",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N4",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/sync.ts",
+      "old": "    'GET',\n    guardOf(budget),\n",
+      "new": "    'GET',\n",
+      "invariant": "the run budget is asked before every cursor page of a page's block tree, so a long flat page cannot outlive the host",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N5",
+      "critical": false,
+      "severity": "high",
+      "file": "src/handlers/notion-sync.ts",
+      "old": "export const RUN_BUDGET_MS = 25_000",
+      "new": "export const RUN_BUDGET_MS = 60_000",
+      "invariant": "the run budget plus one call in flight, the writes and the voice leave at least 20 s of the 90 s a last-started job has before the 150 s wall clock",
+      "expect": "tests/notion/handler-bounds.test.ts"
+    },
+    {
+      "id": "N6",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/sync.ts",
+      "old": "if (error.kind === 'transient') {",
+      "new": "if (false) {",
+      "invariant": "a transient Notion failure on a page defers it (read again next run) and a run of them stops the pass; it is never reported as a page left out",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N7",
+      "critical": false,
+      "severity": "high",
+      "file": "src/jobs/fence.ts",
+      "old": "Promise.race([renewal, tooLate])",
+      "new": "renewal",
+      "invariant": "a lease renewal the database never answers counts as failed, so one hung query cannot silence every later renewal and let the lease lapse under a working handler",
+      "expect": "tests/jobs/heartbeat.test.ts"
+    },
+    {
+      "id": "N8",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/sync.ts",
+      "old": "return renamed ? 'changed' : 'unchanged'",
+      "new": "return 'unchanged'",
+      "invariant": "a page renamed in Notion with the same body is a change, and its stored title follows",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N9",
+      "critical": false,
+      "severity": "high",
+      "file": "src/notion/sync.ts",
+      "old": "Number.isFinite(now) && stored === now) same.add(o.id)",
+      "new": "Number.isFinite(now) && stored <= now) same.add(o.id)",
+      "invariant": "a page is skipped only while its stored edit time EQUALS Notion's, so a page edited by one millisecond is read again and never missed",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N10",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/sync.ts",
+      "old": "clock() - startedPage >= pageCap }",
+      "new": "false }",
+      "invariant": "one page may use only its own share of the run, so a page too large for any run is named and does not starve the pages behind it",
+      "expect": "tests/notion/sync-resume.test.ts"
+    },
+    {
+      "id": "N11",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/notion/api.ts",
+      "old": "if (page.next_cursor === cursor)",
+      "new": "if (false)",
+      "invariant": "a cursor handed back unchanged is a loop and ends the listing instead of running until the clock does",
+      "expect": "tests/notion/call-bounds.test.ts"
+    },
+    {
+      "id": "N12",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/handlers/notion-sync.ts",
+      "old": "runBudgetMs / 2",
+      "new": "runBudgetMs * 1000",
+      "invariant": "the workspace listing may use only half the run budget, so a workspace too big to list quickly still leaves time to read pages",
+      "expect": "tests/notion/handler-bounds.test.ts"
+    },
+    {
+      "id": "N13",
+      "critical": false,
+      "severity": "medium",
+      "file": "src/db/link-failure.ts",
+      "old": "if (LINK_TEXT.test(message) || LINK_SQLSTATE.test(message)) return true",
+      "new": "if (false) return true",
+      "invariant": "a database connection timeout is recognised as the link and not as one page's problem",
+      "expect": "tests/db/link-failure.test.ts"
+    }
+  ]
+}

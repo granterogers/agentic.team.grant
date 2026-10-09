@@ -33,6 +33,7 @@
  * attach it to if the order were reversed.
  */
 
+import { stoppedPartWay } from '../agents/pause-words.ts'
 import type { Step } from '../agents/plan.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { type Outcome, runSteps } from '../jobs/checkpoint.ts'
@@ -300,13 +301,11 @@ export function planHandler(db: SqlExecutor): Handler {
       if (run.kind === 'paused') {
         // A pause is an outcome, not a failure: the attempt is not burned, and the job says where it
         // stopped and what a person has to check.
-        return done(
-          `I stopped part way through the plan, at "${run.at}": ${run.pause.detail} ${run.pause.resumeWhen}`,
-          [`job:${job.jobId}`],
-        )
+        // In plain words (pause-words.ts): the plan's own step codes are not for the person.
+        return done(stoppedPartWay(run.pause), [`job:${job.jobId}`])
       }
       if (run.kind === 'stopped') {
-        return done(`Stopped at "${run.at}", as you asked.`, [`job:${job.jobId}`])
+        return done('Stopped, as you asked.', [`job:${job.jobId}`])
       }
 
       const last = steps.length === 0 ? undefined : run.outcomes[stepName(steps.length - 1)]

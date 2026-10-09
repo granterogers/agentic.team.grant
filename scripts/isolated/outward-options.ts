@@ -32,8 +32,8 @@ const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Reco
 const dutyJob = async (project: string): Promise<string> =>
   String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-        values ('google.write_calendar_tasks', 'duty:isolated-b5', ${lit(project)}::uuid,
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+        values (app.operator_office(), 'google.write_calendar_tasks','duty:isolated-b5', ${lit(project)}::uuid,
                 'b5-' || gen_random_uuid(), gen_random_uuid()) returning job_id::text as id`)
     ).id,
   )
@@ -41,7 +41,7 @@ const freshProject = async (label: string): Promise<string> =>
   String(
     json(
       (
-        await one(`select app.hq_create_project(app.test_office(), ${lit(`Outward ${label} ${run}`)}, 'upload', ${lit(`outward-${label}-${run}`)},
+        await one(`select app.hq_create_project(app.operator_office(),${lit(`Outward ${label} ${run}`)}, 'upload', ${lit(`outward-${label}-${run}`)},
           ${lit(`Outward ${label} ${run}`)}, true) as v`)
       ).v,
     ).project_id,

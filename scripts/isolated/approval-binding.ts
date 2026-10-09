@@ -86,7 +86,7 @@ const projectWithNotebook = async (label: string): Promise<string> => {
   const made = json(
     (
       await one(
-        `select app.hq_create_project(app.test_office(), ${lit(name)}, 'notebooklm', ${lit(`nb-fixture-${label}-${run}`)}, ${lit(name)}, true) as v`,
+        `select app.hq_create_project(app.operator_office(), ${lit(name)}, 'notebooklm', ${lit(`nb-fixture-${label}-${run}`)}, ${lit(name)}, true) as v`,
       )
     ).v,
   )
@@ -125,8 +125,8 @@ const jobRow = async (
     }
   }
   const r =
-    await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id, pinned_config, parent_job_id)
-      values (${lit(kind)}, ${lit(by)}, ${lit(p)}::uuid, 'ab-' || gen_random_uuid(), gen_random_uuid(),
+    await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id, pinned_config, parent_job_id)
+      values ((select pj.office_id from public.projects pj where pj.project_id = ${lit(p)}::uuid), ${lit(kind)},${lit(by)}, ${lit(p)}::uuid, 'ab-' || gen_random_uuid(), gen_random_uuid(),
               ${lit(JSON.stringify(config))}::jsonb, ${parent === null ? 'null' : `${lit(parent)}::uuid`})
       returning job_id::text as id, correlation_id::text as cid, idempotency_key as k`)
   return {
@@ -331,7 +331,7 @@ const verdict = async (job: string) =>
   const a = await approvedGeneration({ kind: 'slides', instructions: `observe ${run}` })
   const p2 = await projectWithNotebook('observe')
   await db.execute(
-    `insert into public.autonomy_settings (project_id, level, set_by, reason) values (${lit(p2)}::uuid, 'observe', 'grant', 'proof')`,
+    `insert into public.autonomy_settings (office_id, project_id, level, set_by, reason) values (app.operator_office(), ${lit(p2)}::uuid, 'observe', 'grant', 'proof')`,
   )
   // The same approval, on a project the dial has since set to observe.
   await db.execute(
@@ -480,7 +480,7 @@ const verdict = async (job: string) =>
   )
   const p3 = await projectWithNotebook('observe2')
   await db.execute(
-    `insert into public.autonomy_settings (project_id, level, set_by, reason) values (${lit(p3)}::uuid, 'observe', 'grant', 'proof')`,
+    `insert into public.autonomy_settings (office_id, project_id, level, set_by, reason) values (app.operator_office(), ${lit(p3)}::uuid, 'observe', 'grant', 'proof')`,
   )
   const watched = await jobRow(p3, 'notebook.add_source', {
     url: `${url}-watched`,
@@ -520,9 +520,12 @@ const verdict = async (job: string) =>
   const slug = String(
     (await one(`select slug from public.projects where project_id = ${lit(project)}::uuid`)).slug,
   )
+  // The door now refuses a client its office has not registered (0680 onward), so the fixture registers one.
+  await db.execute(`insert into public.mcp_clients (client_id, display_name, token_sha256, scopes, kind, office_id)
+    values (${lit(client)}, 'binding proof assistant', md5(${lit(client)}) || md5(${lit(`${client}x`)}), array['read','write'], 'claude', app.operator_office())`)
   const r = json(
     (
-      await one(`select app.mcp_enqueue(${lit(client)}, ${lit(slug)}, 'notebook.generate',
+      await one(`select app.mcp_enqueue(app.operator_office(),${lit(client)},${lit(slug)}, 'notebook.generate',
         '{"kind":"slides","instructions":"x","approved_by":"grant","approval":"00000000-0000-0000-0000-000000000000","approval_next":"office.execute_plan","command_id":"x","origin_namespace":"verify"}'::jsonb) as r`)
     ).r,
   )

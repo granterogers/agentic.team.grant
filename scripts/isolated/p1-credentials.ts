@@ -208,8 +208,8 @@ try {
   const turn = async (subject: string) => {
     const key = realTelegramKey()
     const cmd = await one(`set local application_name = 'PostgREST 14.5';
-      insert into public.inbound_commands (origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
-      values ('telegram', ${lit(`${CHAT}:${key.split(':').pop() ?? '1'}`)}, ${lit(CHAT)}, 'a turn for a credential proof', ${lit(key)}, ${lit(subject)})
+      insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
+      values (${lit(operatorOffice)}::uuid, app.unnamed_project(${lit(operatorOffice)}::uuid), 'telegram',${lit(`${CHAT}:${key.split(':').pop() ?? '1'}`)}, ${lit(CHAT)}, 'a turn for a credential proof', ${lit(key)}, ${lit(subject)})
       returning command_id::text as id`)
     const enq = await one(
       `set local application_name = 'PostgREST 14.5'; select public.enqueue_inbound(${lit(String(cmd.id))}::uuid) as v`,
@@ -263,8 +263,8 @@ try {
   // A child inherits its root: the second person's turn cannot launder authority through a child job.
   const child = String(
     (
-      await one(`insert into public.jobs (kind, requested_by, parent_job_id, idempotency_key, correlation_id, pinned_config)
-    select 'office.instruction', requested_by, job_id, 'p1c-' || gen_random_uuid(), gen_random_uuid(), pinned_config from public.jobs where job_id = ${lit(secondsTurn)}::uuid returning job_id::text as id`)
+      await one(`insert into public.jobs (kind, requested_by, parent_job_id, idempotency_key, correlation_id, pinned_config, office_id, project_id)
+    select 'office.instruction', requested_by, job_id, 'p1c-' || gen_random_uuid(), gen_random_uuid(), pinned_config, office_id, project_id from public.jobs where job_id = ${lit(secondsTurn)}::uuid returning job_id::text as id`)
     ).id,
   )
   check(

@@ -357,7 +357,7 @@ export function slackChannel(
           body:
             output.notice === undefined
               ? output.body
-              : `*${output.notice.heading}*\n\n${output.body}${
+              : `${(output.notice.heading ?? '') === '' ? '' : `*${output.notice.heading}*\n\n`}${output.body}${
                   output.notice.link === undefined
                     ? ''
                     : `\n\n<${output.notice.link.url}|${output.notice.link.label}>`
@@ -367,8 +367,10 @@ export function slackChannel(
             evidence: output.evidence,
             sources: output.sources,
             contradictions: output.contradictions,
-            reviewed: context.reviewed,
-            routine: context.routine,
+            // A notice is composed in code and drafted by nobody, so it has no answer's "unreviewed" label or
+            // provenance line: the kind says so (as on Telegram), not the wording.
+            reviewed: context.reviewed || output.notice !== undefined,
+            routine: context.routine || output.notice !== undefined,
           },
           correlationId: job.correlationId,
           // Nothing to rate, undo or mute on a notice: the incident layer decides when it is said again.

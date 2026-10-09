@@ -1617,6 +1617,11 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     careful.
   */
   my_task_delete: { fn: 'my_task_delete', office: true, required: ['p_task_id'] },
+  /*
+    Ending a recurring reminder is its own act (1034): ticking a series off completes that time only. Cancels the row
+    through hq_task_state, so the product's own undo offer comes back in the answer.
+  */
+  reminder_series_stop: { fn: 'reminder_series_stop', office: true, required: ['p_task_id'] },
   my_task_reparent: { fn: 'my_task_reparent', office: true, required: ['p_task_id'] },
   /*
     Connecting a task provider, and letting it go (#259, Phase 2).

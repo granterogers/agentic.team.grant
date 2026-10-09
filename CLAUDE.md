@@ -34,8 +34,10 @@ its one failure an expectation the authoring session had written itself.
 **ORIGINAL ARCHITECTURE AUDIT: CLOSED.** Technical findings were closed at `4053433f`; Grant's seven final policy
 decisions (Vikunja, Slack channels, Notion, Slack rotation, learning, cross-project retrieval, proactive autonomy) were
 implemented in 0640-0646 and verified in production. `docs/policy/FINAL-POLICY-IMPLEMENTATION.md` is canonical and
-ADR-0059 records the decisions; `docs/architecture-run-5/DECISION-389.md` is the superseded options paper. The next
-phase is multi-user architecture research against this clean baseline; it has not begun.
+ADR-0059 records the decisions; `docs/architecture-run-5/DECISION-389.md` is the superseded options paper. The
+multi-user phase that followed (P0 to P4, the public Sample, Team HQ UX v2) is recorded in `docs/HANDOFF.md`; what is
+deployed is in `docs/ops/deployment-state.json`, and the 6 October 2026 deep systems audit and its second wave are in
+`docs/audit/`.
 
 ### The standing rule that replaces the campaign
 
@@ -423,6 +425,7 @@ npm run verify:wired                                            # if UI changed
 npm run verify:hq && npm run verify:ui && npm run verify:talk  # if UI changed (verify:talk is Team HQ, simulated audio; see below)
 npm run shots                                                   # capture web/studio
 npm run gate:safe -- --part=static && npm run gate:safe -- --part=production && npm run gate:safe -- --part=identity   # the gate that is safe to run (#414)
+npm run verify:critical                                         # the replica proofs that guard tenant isolation, approvals, jobs, delivery, tasks, provenance (docs/testing/CRITICAL-GATE.md). Local, no production, about 90 s
 ```
 
 **`npm run gate:safe` is the gate to run.** No model calls, serialised, foreground, one health reading first, and Grant plus
@@ -446,7 +449,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **Production's ledger holds 802 entries (checked 9 October 2026).** `main`'s own UX migrations 0906 to 1022 were applied on 6 October; the efficiency workstream then applied its own `1023_the_health_reading_asks_the_cheap_question_first` and `1027_the_pulse_reads_each_table_once` (7 October; those files live on `claude/efficiency-deep-optimization`, not on `main`); and this release applied `1040_a_layout_save_can_say_which_revision_it_was_made_from` and `1041_a_project_background_picture_is_an_upload_the_office_can_authorise` (#442, #445, ADR-0070). Applied files are immutable. **Other branches use 1023 to 1035**: take a free number (`1040` upward) and read `app.schema_migrations` before choosing one. Never `npm run migrate` from a branch that is behind production's ledger; use `npm run migrate:one -- <file>`.
+`npm run migrate` applies plain SQL from `migrations/`. **What is deployed, and how many migrations are applied, is recorded in ONE place: `docs/ops/deployment-state.json`** (machine-readable, held against `migrations/applied.json` and the migrations directory by `npm run check:deployment-state`, and updated in the same commit as any deploy record). This file does not restate those numbers, because it did (770 applied, 28 unapplied) and was wrong a day later; a release plan that copied 798 from the 6 October record was wrong the same way once production moved to 802 on 9 October. History that is safe to state because applied files are immutable: `main`'s UX migrations 0906 to 1022 were applied on 6 October; the efficiency workstream then applied its own `1023_the_health_reading_asks_the_cheap_question_first` and `1027_the_pulse_reads_each_table_once` (7 October; those files live on `claude/efficiency-deep-optimization`, not on `main`); and the Team HQ release applied `1040_a_layout_save_can_say_which_revision_it_was_made_from` and `1041_a_project_background_picture_is_an_upload_the_office_can_authorise` (#442, #445, ADR-0070). **Other branches use 1023 to 1035**: take a free number (`1042` upward) and read `app.schema_migrations` before choosing one. Never `npm run migrate` from a branch that is behind production's ledger; use `npm run migrate:one -- <file>`. The Sample's `0897` to `0905` files are applied and immutable (`main`'s two files that collided with 0897/0900 are `0906` and `0907`; see the numbering-collision trap below and `docs/multi-user/PUBLIC-SAMPLE.md`).
 
 ## Testing signed in, without Grant's office
 
@@ -4237,8 +4240,10 @@ Each of these cost real time. They are here so they cost it once.
 
 - **A DEFAULT IS AN IDENTITY.** `office_members.owner_key` defaulted to `'grant'`, so a member added by the obvious
   one-line insert spoke as Grant, decided his approvals and - once an operator list keyed on that name existed - WAS the
-  operator. No code had to be wrong for that to be true. 47 functions still carry a `default 'grant'` person; a new reach
-  from the machine key to one fails `check:machine-key` until it is pinned with a reason (0652, multi-user P1).
+  operator. No code had to be wrong for that to be true. When this was written 47 functions carried a `default 'grant'`
+  person and a new reach to one failed `check:machine-key` until pinned with a reason (0652, multi-user P1); the
+  deep systems audit (A-5) found no function's latest definition carrying one and `PINNED` empty, so treat the count as
+  history and re-run `check:machine-key` for the present.
 - **A source-reading test that asserts a NAME stayed green when the gate was removed.** `voice-token` was gated by
   `resolveSpeaker(bearerOf(request)` and the first test looked for that text and for the 401 line; replacing the condition
   with `false` left it green. What discriminated was loading the real handler under a stubbed `Deno` and counting the
@@ -4769,6 +4774,69 @@ Each of these cost real time. They are here so they cost it once.
 - **A number you chose is not free because your branch does not use it, and a page you were told is live may be another branch's.** The #442/#445 migrations were written as 1023 and 1024; production already held a different 1023 and a 1027 from another workstream, and four other branches use 1023 to 1035. Found only by reading `app.schema_migrations` before applying; the files were renumbered (1040, 1041) while still pending. The same release found production's PAGE was the efficiency branch's `app.js`, not `main`'s: deploying a main-based page would have silently rolled that work back. Before any deploy, compare the live bytes of the files that could differ (`curl` and `md5sum` against `origin/main` and against the other branches that deploy) and the live function bundle (`scripts/forensics/capture-functions.ts`); carry the other workstream's diff in, never overwrite it.
 - **A proof that calls the SQL function directly cannot see the gateway in front of it.** `layout-cas.ts` proved an empty-list compare-and-swap reset on the replica; through the deployed gateway it was a 400, because the generic required-argument check treats `[]` as missing. Only the production acceptance run (`npm run sample:release-acceptance`) found it. Prove a write path through the layer a browser calls.
 - **A pull that starts on every redraw downloads on every redraw.** The board is wired again on each render; the custom-background pull asked the office (and fetched the picture) each time until it was made one-at-a-time with a one-minute negative cache. A harness that waits a fixed pause for an asynchronous cache fill reports a defect that is only its own timing: wait for the cache to hold it.
+
+- **Second-wave audit lessons (6 October 2026, `docs/audit/SECOND-WAVE-2026-10-06.md`).** (1) **A surviving mutation proves a missing
+  tripwire, not a vulnerability**: nine of twelve first-run mutations at security call sites survived (the webhook secret check, the approval
+  gate's refusals, the office binding, the worker's containment branch) because the functions were tested and the CALLS that make them matter were
+  matched by source regexes; keep the two claims apart. `npx tsx scripts/audit/mutation-campaign.ts` runs the manifest in a git-backed throwaway
+  worktree, refuses a red baseline, and reports an unlanded anchor as such. (2) **A file-level check hides a handler-level gap**: a gate counted
+  as present because a NEIGHBOURING handler in the same file had one. Judge the block. (3) **A conversation thread keyed on a channel name is shared
+  by every producer of that name**: the dashboard and an external assistant were both `teamhq`, so an assistant's "yes" answered the owner's
+  question (D1, 1023). A turn from no recognised door binds nothing. (4) **A cap checked after a loop is not a cap**; lazy patterns with no closer are
+  quadratic; a second line of defence hides a removed first one, so pin both halves (B-01). (5) **Fix a failure at the state, not at each writer**:
+  a `failed` turn nobody was told about is a state (1024); (6) a **deployment-wide counter used as per-office** let one office park another's work
+  (1025). (7) **An isolated proof that is not in a gate rots silently**: 43 of 96 are red by stale fixtures. (8) **A lint failure can be toolchain
+  drift**: pin the formatter exactly. (9) **One record for what is deployed**: `docs/ops/deployment-state.json`, held by `check:deployment-state`.
+
+- **Version 1 reliability run lessons (7 October 2026, `docs/audit/V1-RELIABILITY-ACCEPTANCE-2026-10-07.md`).** (1) **The proofs that matter most
+  were red only because nothing ran them**: `npm run verify:critical` (55+ proofs, each justified in one line in `scripts/gate/critical.ts`, each on its
+  own fresh clone, a proof that asserts nothing or falls below its floor is red) is now the gate; a new replica proof is ONE `p(...)` line, and the
+  registry check refuses an unregistered file in `scripts/isolated/`. The gate was shown to catch 15 deliberate sabotages (`npm run verify:gate-sabotage`);
+  the one it first missed had no proof asserting it. (2) **A reminder is not a task with a date**: only an explicit "remind me" gets a default time
+  (09:00 in the OFFICE's zone, `offices.timezone`, never a hard-coded city); a reminder-only repeat is one row that advances in place when its delivery is
+  recorded sent, a repeating task makes the next one when ticked. (3) **A state change must veto creation**: "Mark X done" matched `taskRequest` as a create.
+  (4) **Claims of consequence require evidence of consequence**: `src/agents/consequence.ts` decides whether a sentence IS a claim and recorded rows decide
+  whether it is TRUE, per verb class; no phrasing list can be complete. (5) **A finished answer needs an ending**: a retryable failure is redriven with
+  bounded backoff, a failure after the request may have left the process parks as indeterminate rather than risk a duplicate (`docs/delivery/DELIVERY-STATE-MACHINE.md`).
+  (6) **A conversation key is derived by the server from the verified person, never named by the page** (`src/auth/conversation-key.ts`), and an
+  idempotency id from the page is scoped to that person so it can never dedupe against anybody else's. (7) **Every model request has a deadline and the
+  chain has a budget** (`src/providers/router.ts`). (8) **A journey suite found what unit tests could not**: one office's job could be delivered to
+  ANOTHER office's Telegram chat (1033). Drive whole journeys through the real doors, worker and delivery with a stub model and a fake transport
+  (`scripts/isolated/v1-acceptance-a.ts`, `-b.ts`), and state beside each what the stub model stands in for. (9) **An agent's "pre-existing red" is a claim**:
+  four proofs were reported as failing identically before and after; run by the lead on fresh clones every one was green.
+
+- **Decisions and evidence of 7 October 2026 (`docs/audit/V1-DECISIONS-AND-EVIDENCE-2026-10-07.md`).** (1) **A comment about how the data is shaped was
+  false for months, and it hid the fact that Telegram never delegated.** 0082 said the chief's bot is registered *with a null `staff_slug`*; a
+  read-only production read of `public.telegram_bots` showed the ONLY enabled bot is the pager and carries `chief-of-staff` (the seven director bots are all
+  disabled). The webhook stores the bot's slug as `addressed_to`, and `speaker()` treated any non-empty `addressed_to` as "addressed directly, convene
+  nobody", so every instruction typed to the chief bot was answered alone. Two concepts shared one column: **which bot receives the reply** (reply routing,
+  unchanged, still the stored `addressed_to`) and **whether a specialist was addressed directly** (`src/agents/addressing.ts`, the one definition: the chief
+  routes, a specialist is addressed). (2) **Completing a recurring reminder completes THAT time only** (Grant's decision): the series stays open, an
+  occurrence completed before it fires is skipped, and stopping it is a separate explicit act (`app.reminder_series_stop`, "stop the Monday finance
+  reminder", a "Stop repeating" button); the decision lives at the `tasks.state` trigger because ten writers set that column. (3) **A failed or uncertain
+  delivery of a finished answer puts ONE question on his Needs me list** (a blocker, `on_answer.kind = 'delivery.decide'`): send it again, it arrived,
+  or dismiss. An uncertain one is never auto-resent, and nothing is sent on a second channel because policy does not clearly permit it. (4) **Backup
+  retention policy is RECORDED, not executed**: the newest 7 days that each have a verified backup, plus the newest verified backup from each of the previous 8 ISO weeks
+  (`docs/ops/backup-retention-policy.md`, `src/backup/retention.ts`, a pure planner); deletion needs the attended flag AND both production-write flags AND
+  Grant's separate approval of the exact list. (5) **A proof that passes in the morning and fails after 11:00 UTC is a clock-dependent proof**:
+  `e2e-duties-budget` seeded a 07:00 briefing into offices on both sides of the date line, so one of the two was correctly not due for seven hours of
+  every UTC day. Anchor a fixture to local midnight, or pin the clock.
+
+- **Final stabilisation run lessons (8 October 2026, `docs/audit/V1-RELEASE-CANDIDATE-2026-10-08.md`).** (1) **Two mechanisms each answering one request is a class,
+  and only a real model found it**: the planner also pursued a request whose team was convened, so a plan say-back replaced the hand-off note and a verbatim source dump
+  followed the synthesis. A scripted model whose planner returns `{}` can never exercise it; `message-ordering` O6 now scripts a plan. Only a findings-only request is left to its team: one that
+  also asks for a change still plans. (2) **Fixing a disclaimer by counting the answer as a landed row widens the permission to promise**: sentence and permission must read one set of rows, and the disclaimer alone is
+  dropped. (3) **A new wait in one handler goes stale in every proof that assumed it never waits** (`fan-in-waits`, two settle loops); change the proof's subject, never its assertion. (4) **A real-model trial that repeats one question
+  tests the repeat detector**, correctly answered "you asked me that a moment ago"; vary the ask per trial. (5) **Fallback models answer the same routine question worse**: 3 of 7 off-target when the primary was refused; the reading was right
+  (`understood_as`), the answering model drifted (Issue #444). (6) **Capture provenance for every real-model denial**, so the next occurrence is localised rather than guessed at.
+
+- **Final release gate lessons (8 October 2026, `docs/audit/V1-FINAL-RELEASE-GATE-2026-10-08.md`).** (1) **A mixed-version claim is only as good as the cell that ran it**: the previous report called the old worker on the new schema "by reading"; building the four replicas
+  (deployed schema rebuilt from the repository to 1022, plus 1023 to 1035; old `src`/`supabase` from `9310116` or the head) showed it runs, and that the real hazard was the other way round (the new WORKER on the old schema; a first reading blamed the new hq-api, which only gains one action, see the 9 October plan). Compare the SET of reds between cells, not the counts:
+  every red in C was also red in A, which is what "the migration broke nothing" means. A function whose signature gains defaulted parameters keeps old callers working; one that loses its old overload does not. (2) **A noun is not a verb**: `cancel\w*` read "cancellation" as a request to
+  change something and switched the unasked-offer checks off for a plain question. Match verb forms, not stems. (3) **A guard gated on "held" is blind exactly when retrieval found nothing relevant**, which is when a weak model is most likely to ask for something instead; the strongest framings apply unconditionally.
+  (4) **A model can write the answer in more than one place**: the promise gate's rewrite called the router with no admission check, so a backup model's text reached him unchecked. Grep every `router.complete` when a check is meant to cover "what a backup writes". (5) **A mutation that survives after you restructure the line it targets is a missing control, not
+  a bad mutation**: M47 survived until a test needed the held-evidence branch alone. (6) **Make the gate say what it was told**: `fallback_answer_admitted` records read-only, held passages and the model, so an admitted answer can be audited; without it one admitted sentence took three runs to explain. (7) **Two proofs read "tomorrow" in UTC while the office is in Athens**, so they went red after 21:00 UTC and
+  the product was right; ask the database for the office's day. (8) **`pkill -f` matches the shell that runs it** (exit 144), a gate-sabotage run and a mutation run each exceed ten minutes, and the harness moves them to the background: run them as their own call and wait.
 
 ---
 

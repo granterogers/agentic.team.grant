@@ -315,7 +315,7 @@ describe('the router enforces the envelope when asked, and only then', () => {
     expect(String((failure as Error).message)).not.toContain('PRIVATE-REASONING-7731')
   })
 
-  it('failover is bounded: five models that all ignore the format cost at most three calls', async () => {
+  it('failover is bounded: five models that all ignore the format cost at most four calls', async () => {
     const { impl } = scripted([() => reply('x/any:free', 'no tags here')])
     const models = ['a', 'b', 'c', 'd', 'e'].map((m) => model(`${m}/m:free`))
     const failure = await new ProviderRouter(new FakeDb(models), 'k', impl)
@@ -325,9 +325,10 @@ describe('the router enforces the envelope when asked, and only then', () => {
         (e: unknown) => e,
       )
     expect(failure).toBeInstanceOf(AllCandidatesFailedError)
-    expect((failure as AllCandidatesFailedError).candidates).toHaveLength(3)
+    // M1: the documented chain is four deep (was three).
+    expect((failure as AllCandidatesFailedError).candidates).toHaveLength(4)
     expect((failure as AllCandidatesFailedError).cause).toBeInstanceOf(NoAnswerEnvelopeError)
-    expect((impl as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(3)
+    expect((impl as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(4)
   })
 
   it('CONTROL: without the flag nothing is sent or stripped, so every existing caller is unchanged', async () => {

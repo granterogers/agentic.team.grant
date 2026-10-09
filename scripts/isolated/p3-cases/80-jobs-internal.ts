@@ -1718,7 +1718,7 @@ async function scans(c: Ctx, e: Env): Promise<void> {
     '',
   )
 
-  // the budget is a deployment limit: it may delay a queued job and never moves it
+  // the budget is counted per office (1025): it may delay a queued job and never moves it
   const bA = await job(A, pa, 'budget')
   const bB = await job(B, pb, 'budget')
   await wq(`select app.defer_over_budget()`)

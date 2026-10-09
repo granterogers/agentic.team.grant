@@ -46,9 +46,18 @@
  * purpose and every widening below is argued for.
  */
 
+import { calendarDateIn } from './due.ts'
 import { withoutOpeningAffirmation } from './intent.ts'
 import { mentionsWithoutAsking } from './not-a-request.ts'
-import { REMIND_TIME_WORDS, remindAtFor, spokenToDigits } from './remind-at.ts'
+import { localDay, localIsoDay, OPERATOR_TIMEZONE, wallClock, weekdayOf } from './office-time.ts'
+import { type Recurrence, recurrenceOf, withoutTheRepeat } from './recurrence.ts'
+import {
+  clockOf,
+  defaultReminderAt,
+  REMIND_TIME_WORDS,
+  remindAtFor,
+  spokenToDigits,
+} from './remind-at.ts'
 import { DANGLING_AFTER_A_DATE, PROJECT_ADJUNCT } from './request.ts'
 /*
   The office reminding him. The verb is "remind" and the object is HIM, which
@@ -94,6 +103,24 @@ const I_MUST = new RegExp(
     `|\\bi${APOS}(?:m\\s+going\\s+to|ll)\\s+(?:need\\s+to|have\\s+to)\\b`,
   'i',
 )
+
+/*
+  A QUESTION ABOUT WHAT HE MUST DO IS NOT A COMMITMENT TO DO IT.
+
+  "When do I have to pay the venue deposit, and how much is it?" matched `I_MUST` and was filed as a task titled
+  "When do pay the venue deposit, and how much is it?" - found by the first controlled real-model run, in one of five
+  ways of asking the same question. The same shape is every natural question about an obligation: "Do I need to call the
+  accountant?", "What do I need to bring on Friday?", "Why do I have to renew the licence?". A task nobody asked for sits
+  on the list he is supposed to trust, so this is the expensive direction.
+
+  The mark of the question is the auxiliary in front of the "I" (do I, should I, must I, will I, can I): a statement of
+  need ("I need to call the accountant") never has one. Read per SENTENCE, so a question and a real commitment in one
+  message ("When do I need to be there? Also I need to call Kevin tomorrow.") still files the second.
+*/
+const ASKING_WHETHER_I_MUST =
+  /\b(?:do|does|did|should|shall|must|will|would|can|could|am|have|had)\s+(?:i|we)\s+(?:really\s+|actually\s+|also\s+)?(?:need|have|want|ought|must|gotta|meant|remember)\b/i
+const isMust = (sentence: string): boolean =>
+  I_MUST.test(sentence) && !ASKING_WHETHER_I_MUST.test(sentence)
 
 /*
   THE OVERLAP, and why there is no guard for it.
@@ -256,6 +283,18 @@ export interface PersonalTask {
    * null. Optional so every older reader of this shape is unchanged.
    */
   readonly remindAt?: string | null
+  /**
+   * The reminder time is the office's default (nine, office time) because he
+   * asked to be reminded on a day and named no time (R1). Optional like
+   * `remindAt`; absent means he said a time, or there is no reminder.
+   */
+  readonly remindDefaulted?: boolean
+  /** The default time had already passed today, so the reminder is for now (R1). */
+  readonly remindImmediate?: boolean
+  /** The repeat he asked for and the office can keep, when he asked for one (R3). */
+  readonly repeat?: Recurrence | null
+  /** The words of a repeat he asked for that the office cannot keep, so the reply can say so (R3). */
+  readonly repeatUnsupported?: string | null
 }
 
 /*
@@ -271,14 +310,9 @@ const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 
 
 const iso = (d: Date): string => d.toISOString().slice(0, 10)
 
-/** The calendar day an instant falls on in Grant's zone. */
-const localIso = (instant: string, timeZone = 'Europe/Athens'): string =>
-  new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(instant))
+/** The calendar day an instant falls on in the office's zone. */
+const localIso = (instant: string, timeZone = OPERATOR_TIMEZONE): string =>
+  localIsoDay(new Date(instant), timeZone)
 
 const SMALL: Readonly<Record<string, number>> = {
   a: 1,
@@ -303,13 +337,35 @@ const addMonths = (from: Date, n: number): Date => {
   return out
 }
 
-export function whenFor(said: string, now: Date = new Date()): string | null {
-  const base = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+export function whenFor(
+  said: string,
+  now: Date = new Date(),
+  timeZone = OPERATOR_TIMEZONE,
+): string | null {
+  /*
+    TODAY is the office's calendar day, not the server's (Z1). At 23:30 UTC it is
+    already tomorrow in Athens and already today in New York, and a "tomorrow"
+    read off the UTC date was a day out for one of them. `base` is a bare
+    calendar date from here on, so the arithmetic below is plain UTC date maths
+    on a day that was chosen in the right zone.
+  */
+  const local = localDay(now, timeZone)
+  const base = new Date(Date.UTC(local.y, local.m, local.d))
   if (/\btoday\b|\bthis\s+evening\b|\btonight\b/i.test(said)) return iso(base)
   if (/\btomorrow\b/i.test(said)) {
     base.setUTCDate(base.getUTCDate() + 1)
     return iso(base)
   }
+  /*
+    A date written out: "on 15 October", "October 15th", "2026-10-15". The same
+    reader `dueOn` uses, so "by 15 October" and "remind me on 15 October" agree.
+    Before the weekday, because "Friday 16 October" is the 16th and the next
+    Friday is a different day when they disagree. A date that does not exist
+    (31 February) is NOT a date: null, and the words stay in the title.
+  */
+  const written = calendarDateIn(said, now, timeZone)
+  if (written === null) return null
+  if (written !== undefined) return written.on
   const weekday = /\b(?:on\s+|next\s+|this\s+)?(sun|mon|tues?|wednes?|thurs?|fri|satur)day\b/i.exec(
     said,
   )
@@ -422,6 +478,14 @@ const stripFraming = (said: string): string =>
       one of two identical bugs standing.
     */
     .replace(new RegExp(`${MAKE_A_TASK.source}\\b[^.?!]{0,12}?\\b(?:on\\s+)?to\\s+`, 'i'), ' ')
+    /*
+      "Create a task called PAY NOW" is a task called "PAY NOW", not one called "Called PAY NOW": the naming word is part
+      of the frame. Found by the first controlled real-model run, in a sentence a person can type in plain English.
+    */
+    .replace(
+      new RegExp(`${MAKE_A_TASK.source}\\s*(?:called|named|titled|entitled)\\b\\s*:?\\s*`, 'i'),
+      ' ',
+    )
     .replace(MAKE_A_TASK, ' ')
     /*
       "Make me a note to ring Kevin" is a task called "Ring Kevin".
@@ -580,7 +644,7 @@ const requestSentences = (said: string): string | null => {
   const carriers = sentences.filter(
     (x) =>
       (REMIND_ME.test(x) && !REMIND_SOMEBODY_ELSE.test(x)) ||
-      I_MUST.test(x) ||
+      isMust(x) ||
       ADD_COLON.test(x) ||
       ((MAKE_A_TASK.test(x) ||
         MAKE_AN_ITEM_TO.test(x) ||
@@ -591,7 +655,11 @@ const requestSentences = (said: string): string | null => {
   return carriers.length === 0 || carriers.length === sentences.length ? null : carriers.join(' ')
 }
 
-export function personalTaskRequest(text: string, now: Date = new Date()): PersonalTask | null {
+export function personalTaskRequest(
+  text: string,
+  now: Date = new Date(),
+  timeZone = OPERATOR_TIMEZONE,
+): PersonalTask | null {
   const said = text.trim()
   if (said === '') return null
   if (REMIND_ME_A_QUESTION.test(said)) return null
@@ -600,7 +668,7 @@ export function personalTaskRequest(text: string, now: Date = new Date()): Perso
   if (mentionsWithoutAsking(said)) return null
   const remind = REMIND_ME.test(said) && !REMIND_SOMEBODY_ELSE.test(said)
   const commit =
-    I_MUST.test(said) ||
+    sentencesOf(said).some(isMust) ||
     ADD_COLON.test(said) ||
     ((MAKE_A_TASK.test(said) ||
       MAKE_AN_ITEM_TO.test(said) ||
@@ -620,27 +688,139 @@ export function personalTaskRequest(text: string, now: Date = new Date()): Perso
   */
   const carried = requestSentences(said)
   const asked = carried === null ? said : carried
-  const title = stripFraming(asked.replace(/^(?:also|and|then|plus)[,\s]+/i, ''))
+  /*
+    A REPEAT is read from the sentence that asked, and its words leave the
+    title only when the office can keep it (R3). One it cannot keep ("every
+    month") stays in the title, where he can read it, and is reported back so
+    the reply can say it was not recorded rather than dropping it.
+  */
+  const repeating = recurrenceOf(asked)
+  const rec = repeating !== null && 'every' in repeating ? repeating : null
+  const unsupported =
+    repeating !== null && 'unsupported' in repeating ? repeating.unsupported : null
+  /*
+    A date written out ("on 15 October") is in the due column once `whenFor`
+    has read it, so its words leave the title the way "on Friday" does; the
+    reader that resolves it is the one that says which words they were.
+  */
+  /*
+    A repeat the office cannot keep is neither a date nor part of the work: the
+    weekday inside "every first Monday" must not become a due date, and its
+    words must not mangle the title ("Every first to run the report"). So it is
+    read out of the text the dates come from, and put back on the END of the
+    title in brackets, where he can read what he asked for and the reply says
+    it was not recorded.
+  */
+  const unsaid = (text: string): string =>
+    unsupported === null ? text : text.replace(unsupported, ' ').replace(/\s{2,}/g, ' ')
+  const dateSaid = unsaid(said)
+  const askedSans = unsaid(asked)
+  const written = rec === null ? calendarDateIn(askedSans, now, timeZone) : undefined
+  const escaped = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const titled =
+    rec !== null
+      ? withoutTheRepeat(asked, rec)
+      : written
+        ? askedSans.replace(
+            new RegExp(`(?:\\b(?:on|by|before|until|for)\\s+)?${escaped(written.from)}`, 'i'),
+            ' ',
+          )
+        : askedSans
+  const base = stripFraming(titled.replace(/^(?:also|and|then|plus)[,\s]+/i, ''))
+  const title = unsupported === null || base.length < 3 ? base : `${base} (${unsupported})`
   /*
     A title of nothing is not a task. "Remind me" on its own is a sentence with
     no work in it, and filing an empty row would be the placeholder this
     repository keeps refusing to ship — CLAUDE.md's card with nothing in it.
   */
-  if (title.length < 3) return null
+  if (base.length < 3) return null
 
   /*
     The time, when he said one (ledger R24), and the day it lands on when he
     gave a time and no day: "remind me at 3pm" is a reminder TODAY, and a task
     with no date sits in the Inbox where a reminder is the wrong place for it.
   */
-  const day = whenFor(said, now)
-  const remindAt = remindAtFor(said, day, now)
+  const cased = title.charAt(0).toUpperCase() + title.slice(1)
+  if (rec !== null) {
+    const first = firstOccurrence(rec, clockOf(said), now, timeZone)
+    const said_a_time = clockOf(said) !== null
+    /*
+      Two shapes, by what he asked for. "Remind me every Monday to X" is a REMINDER SERIES: a reminder time and a repeat
+      and NO due date, one row that moves to its next occurrence when it is delivered and that ticking off ENDS.
+      A repeating COMMITMENT ("I need to review the books every Monday") is a repeating TASK: it has a due date and
+      ticking it off makes the next occurrence. A due date invented for the series would turn it into the second kind.
+    */
+    return {
+      title: cased,
+      due: remind ? null : localIsoDay(first, timeZone),
+      because: remind ? 'reminder' : 'commitment',
+      // A repeating COMMITMENT with no time said is a dated, repeating to-do, not a reminder.
+      remindAt: remind || said_a_time ? first.toISOString() : null,
+      remindDefaulted: remind && !said_a_time,
+      repeat: rec,
+      repeatUnsupported: null,
+    }
+  }
+  const day = whenFor(dateSaid, now, timeZone)
+  let remindAt = remindAtFor(dateSaid, day, now, timeZone)
+  /*
+    R1. "Remind me on Friday to ring the venue" gave a due date and no remind_at,
+    so the duty that sends reminders had nothing to read and the reminder he
+    asked for never arrived. When he asks to be REMINDED, and names a day and no
+    time, the time is nine in the morning, office time. Not for a commitment:
+    "I need to send the form by Friday" is a due date and nothing else, and a
+    time he did not ask for would make the duty announce it.
+  */
+  let defaulted = false
+  let immediate = false
+  if (remind && remindAt === null && day !== null) {
+    const d = defaultReminderAt(day, now, timeZone)
+    remindAt = d.at
+    defaulted = true
+    immediate = d.immediate
+  }
   return {
-    title: title.charAt(0).toUpperCase() + title.slice(1),
-    due: day ?? (remindAt === null ? null : localIso(remindAt)),
+    title: cased,
+    due: day ?? (remindAt === null ? null : localIso(remindAt, timeZone)),
     because: remind ? 'reminder' : 'commitment',
     remindAt,
+    remindDefaulted: defaulted,
+    remindImmediate: immediate,
+    repeat: null,
+    repeatUnsupported: unsupported,
   }
+}
+
+/**
+ * The first time a repeating reminder is for: the next moment that is on the
+ * named weekday (if one was named) at the time of day he said, else at nine.
+ *
+ * "Every Monday at 4pm" said on Monday at 17:00 is next Monday; said at 10:00 it
+ * is today. A repeat with no weekday and a period of a week or more ("weekly",
+ * "every 2 weeks") starts one period from today, because there is no day to
+ * land on and "today" would be the one day he cannot have meant. Everything is
+ * worked out on the office's wall clock, so a daily nine o'clock stays nine
+ * across a change of clocks.
+ */
+const firstOccurrence = (
+  rec: Recurrence,
+  clock: { hh: number; mm: number } | null,
+  now: Date,
+  timeZone: string,
+): Date => {
+  const hh = clock?.hh ?? 9
+  const mm = clock?.mm ?? 0
+  const today = localDay(now, timeZone)
+  if (rec.weekday === null && rec.days >= 7) {
+    return wallClock(today.y, today.m, today.d + rec.days, hh, mm, timeZone)
+  }
+  for (let ahead = 0; ahead <= 14; ahead++) {
+    if (rec.weekday !== null && weekdayOf(today.y, today.m, today.d + ahead) !== rec.weekday)
+      continue
+    const at = wallClock(today.y, today.m, today.d + ahead, hh, mm, timeZone)
+    if (at.getTime() > now.getTime()) return at
+  }
+  return wallClock(today.y, today.m, today.d + 1, hh, mm, timeZone)
 }
 
 /* ------------------------------------------------------- changing your mind */
@@ -756,7 +936,7 @@ const URGENCY: ReadonlyArray<readonly [RegExp, number]> = [
   exact words out loud", not part of them.
 */
 const RENAME =
-  /\b(?:call\s+(?:it|that|this)|rename\s+(?:it|that|this)(?:\s+to)?|make\s+(?:it|that|this)\s+called|change\s+(?:the\s+)?(?:wording|title|name)(?:\s+of\s+(?:it|that|this))?\s+to)\s+(.{2,120}?)\s*$/i
+  /\b(?:call\s+(?:it|that|this)|rename\s+(?:it|that|this|the\s+[a-z0-9'’ -]{2,40}?\s+(?:one|task|to-?do|reminder))(?:\s+to)?|make\s+(?:it|that|this)\s+called|change\s+(?:the\s+)?(?:wording|title|name)(?:\s+of\s+(?:it|that|this))?\s+to)\s+(.{2,120}?)\s*$/i
 
 /** The quotes round a dictated title, in a matched pair only. */
 const unquote = (t: string): string =>
@@ -769,6 +949,7 @@ const unquote = (t: string): string =>
 export function personalTaskChange(
   text: string,
   now: Date = new Date(),
+  timeZone = OPERATOR_TIMEZONE,
 ): PersonalTaskChange | null {
   const said = text.trim()
   if (said === '') return null
@@ -777,7 +958,7 @@ export function personalTaskChange(
     order matters: "actually, remind me Monday to ring them" carries both a
     referent-ish word and a date, and it is plainly a NEW task.
   */
-  if (personalTaskRequest(said, now) !== null) return null
+  if (personalTaskRequest(said, now, timeZone) !== null) return null
   if (!CHANGING.test(said)) return null
 
   const matched: string[] = []
@@ -795,7 +976,7 @@ export function personalTaskChange(
   */
   let residue = said
 
-  const due = whenFor(said, now)
+  const due = whenFor(said, now, timeZone)
   if (due !== null) {
     matched.push('a new date')
     residue = residue.replace(WHEN_WORDS, ' ')
@@ -895,6 +1076,14 @@ const DONE_FORMS: readonly RegExp[] = [
   ),
   new RegExp(String.raw`\b(?:tick|cross|check)\s+off\s+${REFERENT_OBJECT}(?=[\s.,!;]|$)`, 'i'),
   new RegExp(String.raw`\b(?:complete|finish|close)\s+${REFERENT_OBJECT}(?=[\s.,!;]|$)`, 'i'),
+  /*
+    "Tick off roofer." (R2). The tick-list idiom carries its own object, with no
+    "task" or "one" after it. Last, so a pronoun or a "the X one" is read by the
+    forms above and only a bare name reaches here; `pickByName` still has to
+    find exactly one open task by every word of it, and the reply says so when
+    it finds none, so a name that matches nothing changes nothing.
+  */
+  /\b(?:tick|cross)\s+off\s+(?:the\s+)?(?<name>[a-z0-9'’ -]{2,60}?)(?=[\s]*[.,!;]|\s*$)/i,
 ]
 const CANCEL_FORMS: readonly RegExp[] = [
   new RegExp(
@@ -909,6 +1098,9 @@ const CANCEL_FORMS: readonly RegExp[] = [
   /\bforget(?:\s+about)?\s+the\s+(?<name>[a-z0-9'’ -]{2,60}?)\s+(?:one|task|to-?do|reminder|item)(?=[\s.,!;]|$)/i,
 ]
 
+const CREATES_A_TASK =
+  /\b(?:add|create|make|put|raise|log|set\s+up|open|file|stick)\s+(?:me\s+|us\s+)?(?:a|an|another|new|one\s+more)\s+(?:[a-z-]+\s+){0,2}?(?:task|to-?do|reminder)s?\b/i
+
 export function taskStateChange(text: string): TaskStateChange | null {
   const said = withoutOpeningAffirmation(String(text ?? '').trim())
   if (said === '') return null
@@ -917,6 +1109,17 @@ export function taskStateChange(text: string): TaskStateChange | null {
   // A prohibition is not a request: "don't delete that one yet", "can you not
   // delete that one" (ledger R34).
   if (/\b(?:don'?t|do\s+not|never|not\s+yet|no\s+need\s+to|not)\b/i.test(said)) return null
+  /*
+    A sentence that is itself a request for a NEW task or reminder is not a
+    state change, whatever verb is inside its object (R2): "add a task to
+    cancel the venue task" and "remind me to cross off the roofer" CREATE a
+    task whose title mentions one. The same order `personalTaskChange` keeps
+    ("a sentence that is itself a new task is not a change"), stated once here
+    so the create readers and this one cannot both claim a sentence. The
+    indefinite noun is what separates "add a task to X" from "mark the X task
+    done", which names a task that already exists.
+  */
+  if (personalTaskRequest(said) !== null || CREATES_A_TASK.test(said)) return null
   for (const [forms, state] of [
     [DONE_FORMS, 'done'],
     [CANCEL_FORMS, 'cancelled'],
@@ -965,6 +1168,111 @@ export function pickByName<T extends { readonly title: string }>(
     return words.every((w) => title.includes(w))
   })
   return fits.length === 1 ? (fits[0] ?? null) : null
+}
+
+/**
+ * "Stop the Monday finance reminder", "cancel the recurring reminder to review my finances", "end that recurring
+ * reminder", "stop reminding me about the finances every Monday": a RECURRING REMINDER ended on purpose.
+ *
+ * Owner decision, 7 October 2026: ticking a recurring reminder completes THAT TIME only, so the series needs its own
+ * explicit way to stop, said in his own words. It is read from his words (never a paraphrase) and the handler resolves WHICH
+ * series; this reading only says that a series is being ended and what distinguishes it.
+ *
+ * Which verbs, and why they differ. `stop`, `end` and `turn off` have no other reading beside the noun "reminder" here
+ * (`taskStateChange` never read them), so they claim the sentence. `cancel`, `delete`, `remove`, `drop` and `scrap` already
+ * cancel a task by name through `taskStateChange`, and a one-off reminder is still cancelled there: they claim a sentence
+ * only when it SAYS the reminder repeats ("recurring", "repeating", "standing", "every Monday"), so this does not take
+ * "cancel the roofer reminder" away from the reader that handles it.
+ */
+export interface SeriesStopRequest {
+  /** What distinguishes the series ("monday finance", "review my finances"), or null for a bare referent. */
+  readonly name: string | null
+}
+
+const SERIES_REPEATING =
+  /\b(?:recurring|repeating|repeats?|regular|standing|ongoing|weekly|daily|fortnightly|every|each)\b/i
+const SERIES_STOP_HARD = String.raw`(?:stop|end|turn\s+off|switch\s+off|discontinue)`
+const SERIES_STOP_SOFT = '(?:cancel|delete|remove|drop|scrap|kill|ditch|bin)'
+const SERIES_REMINDER_OBJECT = new RegExp(
+  String.raw`\b(${SERIES_STOP_HARD}|${SERIES_STOP_SOFT})\s+(?!(?:by|at|in|over|up|out)\b)(?<rest>[^.!?;]{0,100}?\breminders?\b[^.!?;]{0,100})`,
+  'i',
+)
+const SERIES_NAGGING = new RegExp(
+  String.raw`\b${SERIES_STOP_HARD}\s+(?:reminding|nagging|pinging|prompting|messaging|texting|bugging)\s+me\s+(?<rest>(?:every|each|about|to|of|that|on)\b[^.!?;]{2,120})`,
+  'i',
+)
+// Words that carry the schedule or the sentence's frame, not the series' name.
+const SERIES_NOISE: ReadonlySet<string> = new Set(
+  (
+    'the my our that this those these all one it last a an to about for of on and please ' +
+    'reminder reminders recurring repeating repeats repeat regular standing ongoing weekly daily ' +
+    'fortnightly every each me week day other morning afternoon evening from now anymore any more again'
+  ).split(' '),
+)
+
+export function seriesStopRequest(text: string): SeriesStopRequest | null {
+  const said = withoutOpeningAffirmation(String(text ?? '').trim())
+  if (said === '') return null
+  if (said.endsWith('?') && !/^(?:can|could|would|will)\s+you\b/i.test(said)) return null
+  if (/\b(?:don'?t|do\s+not|never|not\s+yet|no\s+need\s+to|not)\b/i.test(said)) return null
+  // A request for a NEW reminder or task ("remind me every Monday to stop the printers") is not this.
+  if (personalTaskRequest(said) !== null || CREATES_A_TASK.test(said)) return null
+  const nagging = SERIES_NAGGING.exec(said)
+  const object = nagging === null ? SERIES_REMINDER_OBJECT.exec(said) : null
+  const hit = nagging ?? object
+  if (hit === null) return null
+  const rest = String(hit.groups?.rest ?? '')
+  if (object !== null) {
+    const verb = String(object[1]).toLowerCase()
+    const hard = new RegExp(`^${SERIES_STOP_HARD}$`, 'i').test(verb.replace(/\s+/g, ' '))
+    if (
+      !hard &&
+      !SERIES_REPEATING.test(rest) &&
+      !/\b(?:mon|tues?|wednes|thurs?|fri|satur|sun)day\b/i.test(rest)
+    ) {
+      return null
+    }
+  }
+  // Taken back in the same breath: "stop the Monday reminder, actually no".
+  const after = said.slice((hit.index ?? 0) + hit[0].length)
+  if (
+    /(?:^|[,;:—-])\s*(?:actually|no|wait|hang\s+on|on\s+second\s+thoughts?|scratch\s+that|forget\s+(?:it|that))\b/i.test(
+      `${rest} ${after}`,
+    )
+  ) {
+    return null
+  }
+  const words = rest
+    .toLowerCase()
+    .replace(/[^a-z0-9'’ -]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w !== '' && !SERIES_NOISE.has(w))
+  return { name: words.length === 0 ? null : words.join(' ') }
+}
+
+/** One of the series on his list that a name picks: exactly one, or none, or several (never a guess). */
+export interface SeriesCandidate {
+  readonly id: string
+  readonly title: string
+  readonly every?: string
+  readonly weekday?: string | null
+}
+export function pickSeries<T extends SeriesCandidate>(
+  name: string | null,
+  list: readonly T[],
+): { readonly one: T | null; readonly many: readonly T[] } {
+  if (name === null)
+    return list.length === 1 ? { one: list[0] ?? null, many: list } : { one: null, many: list }
+  const words = name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2)
+  if (words.length === 0) return { one: list.length === 1 ? (list[0] ?? null) : null, many: list }
+  const fits = list.filter((c) => {
+    const hay = `${c.title} ${c.weekday ?? ''}`.toLowerCase()
+    return words.every((w) => hay.includes(w))
+  })
+  return { one: fits.length === 1 ? (fits[0] ?? null) : null, many: fits }
 }
 
 /**

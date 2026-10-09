@@ -40,13 +40,22 @@ const member = async (owner: string) =>
     (await one(`select email from public.office_members where owner_key = ${lit(owner)}`)).email,
   )
 
-const makeProject = async (label: string, fixture: boolean): Promise<string> => {
+// A REAL project is the PERSON's: it lives in Grant's office, which is where his session acts. (The first version made
+// every project in the test office, so since offices were bound to sessions (0654/P3) Grant's own session was, correctly,
+// told "no such contact" for a project that was never his, and the positive controls could not pass.) A fixture project is
+// the test office's. `testReal` is a real-NAMED project in the TEST office: the machine key and the test member act there.
+const makeProject = async (
+  label: string,
+  fixture: boolean,
+  office: 'person' | 'test' = fixture ? 'test' : 'person',
+): Promise<string> => {
   const name = fixture ? `fixture-p1storage-${label}-${run}` : `P1 storage ${label} ${run}`
+  const officeSql = office === 'person' ? 'app.operator_office()' : 'app.test_office()'
   return String(
     json(
       (
         await one(
-          `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`p1storage-${label}-${run}`)}, ${lit(name)}, true) as v`,
+          `select app.hq_create_project(${officeSql}, ${lit(name)}, 'upload', ${lit(`p1storage-${label}-${run}`)}, ${lit(name)}, true) as v`,
         )
       ).v,
     ).project_id,
@@ -66,6 +75,8 @@ try {
   const realA = await makeProject('a', false)
   const realB = await makeProject('b', false)
   const fixture = await makeProject('fixture', true)
+  const testReal = await makeProject('testreal', false, 'test')
+  const contactT = await makeContact(testReal, `T ${run}`)
   const contactA = await makeContact(realA, `A ${run}`)
   const contactB = await makeContact(realB, `B ${run}`)
   const contactF = await makeContact(fixture, `F ${run}`)
@@ -186,20 +197,31 @@ try {
     `${String(hFixture.writes.length)} write(s)`,
   )
 
-  const mKey = await act(TOKEN, 'contact_photo', photo(realA, contactA))
-  const mBad = await act(TOKEN, 'contact_photo', photo(realB, contactA))
+  // The machine key acts in the TEST office, so its valid target is a project there.
+  const mKey = await act(TOKEN, 'contact_photo', photo(testReal, contactT))
+  const mBad = await act(TOKEN, 'contact_photo', photo(realB, contactT))
+  const mForeign = await act(TOKEN, 'contact_photo', photo(realA, contactA))
   check(
-    'the machine key (a service, no principal) is still served for a valid target...',
-    reached(mKey, `${realA}/contacts/${contactA}.png`),
+    'the machine key (a service, no principal) is still served for a valid target in its own (test) office...',
+    reached(mKey, `${testReal}/contacts/${contactT}.png`),
     `${String(mKey.writes.length)} write(s)`,
   )
   check('...and refused for a mismatched one', refusal(mBad), `http ${String(mBad.status)}`)
+  check(
+    "...and refused for the person's own project (another office) with zero writes",
+    refusal(mForeign),
+    `http ${String(mForeign.status)}, ${String(mForeign.writes.length)} write(s)`,
+  )
 
   const stranger = await act(S_STRANGER, 'contact_photo', photo(realA, contactA))
+  // 401, or 403 no_office: a verified login that is nobody's member is told it has no office (self-service accounts, P4).
+  const strangerRefused = (o: Out) =>
+    (o.status === 401 || (o.status === 403 && o.body.error === 'no_office')) &&
+    o.writes.length === 0
   check(
-    'an unauthenticated stranger is refused (401) with zero storage writes',
-    stranger.status === 401 && stranger.writes.length === 0,
-    `http ${String(stranger.status)}`,
+    'an unauthenticated stranger is refused (401, or 403 no_office) with zero storage writes',
+    strangerRefused(stranger),
+    `http ${String(stranger.status)} ${String(stranger.body.error ?? '')}`,
   )
 
   const stillOurs = (
@@ -238,9 +260,9 @@ try {
   )
   const upStranger = await act(S_STRANGER, 'document_upload', upload(realA))
   check(
-    'an unauthenticated stranger is refused (401) with zero storage writes',
-    upStranger.status === 401 && upStranger.writes.length === 0,
-    `http ${String(upStranger.status)}`,
+    'an unauthenticated stranger is refused (401, or 403 no_office) with zero storage writes',
+    strangerRefused(upStranger),
+    `http ${String(upStranger.status)} ${String(upStranger.body.error ?? '')}`,
   )
   const upMachine = await act(TOKEN, 'document_upload', upload(realA))
   check(

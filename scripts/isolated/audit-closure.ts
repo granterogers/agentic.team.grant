@@ -7,6 +7,7 @@
  * whose autonomy dial was set can be deleted). The real functions against the replica.
  */
 import { execFile } from 'node:child_process'
+import { scopeOf } from './fixtures-jobs.ts'
 import { isolated } from './guard.ts'
 import { realParent } from './real-telegram.ts'
 
@@ -19,7 +20,12 @@ const check = (what: string, ok: boolean, detail: string) => {
   results.push({ ok })
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what} - ${detail}`)
 }
-const project = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
+// The REAL (operator) office: B11 is about what a job in a person's own office is allowed to claim, so the roots below
+// are built in it, with the office's catch-all project beside them (the two columns must agree, `jobs_project_id_same_office`).
+const real = scopeOf('real')
+const project = String(
+  (await one(`select app.unnamed_project(app.operator_office())::text as p`)).p,
+)
 const may = async (job: string, tool = 'drive.ingest') =>
   JSON.parse(
     String(
@@ -33,8 +39,8 @@ const may = async (job: string, tool = 'drive.ingest') =>
 const rootJob = async (requestedBy: string, kind = 'verify.ask') =>
   String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-        values (${lit(kind)}, ${lit(requestedBy)}, ${lit(project)}::uuid, ${lit(`ac-${run}-${crypto.randomUUID()}`)}, gen_random_uuid())
+      await one(`insert into public.jobs (${real.cols}, kind, requested_by, idempotency_key, correlation_id)
+        values (${real.vals}, ${lit(kind)}, ${lit(requestedBy)}, ${lit(`ac-${run}-${crypto.randomUUID()}`)}, gen_random_uuid())
         returning job_id::text as id`)
     ).id,
   )
@@ -153,7 +159,8 @@ const kid = String(
     check('a fixture project could be created for the delete proof', false, 'no project')
   } else {
     await db.execute(
-      `insert into public.autonomy_settings (project_id, level, set_by, reason) values (${lit(String(p.id))}::uuid, 'observe', 'verify:audit-closure', 'the delete proof')`,
+      `insert into public.autonomy_settings (office_id, project_id, level, set_by, reason)
+        values ((select office_id from public.projects where project_id = ${lit(String(p.id))}::uuid), ${lit(String(p.id))}::uuid, 'observe', 'verify:audit-closure', 'the delete proof')`,
     )
     const del = JSON.parse(
       String((await one(`select app.project_delete(${lit(slug)}, true)::text as r`)).r),
@@ -189,7 +196,8 @@ const kid = String(
     String(await ok(team)),
   )
   await db.execute(
-    `insert into public.slack_app_credentials (slack_app_id, team_id, app_name) values (${lit(`A0${team.slice(2)}`)}, ${lit(team)}, 'audit proof')`,
+    // The deployment's own Slack app belongs to the operator's office.
+    `insert into public.slack_app_credentials (office_id, slack_app_id, team_id, app_name) values (app.operator_office(), ${lit(`A0${team.slice(2)}`)}, ${lit(team)}, 'audit proof')`,
   )
   const results2 = [
     await ok(team),
@@ -286,7 +294,7 @@ const kid = String(
   )
   const req = String(
     (
-      await one(`insert into public.tool_requests (tool, asked_by, what_for) values ('audit.proof.tool', 'chief-of-staff', 'the race proof for the final audit reconciliation, finding D23 of the original audit')
+      await one(`insert into public.tool_requests (office_id, tool, asked_by, what_for) values (app.operator_office(), 'audit.proof.tool', 'chief-of-staff', 'the race proof for the final audit reconciliation, finding D23 of the original audit')
         returning request_id::text as id`)
     ).id,
   )
@@ -363,8 +371,9 @@ const kid = String(
     JSON.stringify(k).slice(0, 90),
   )
   const nm = `fixture audit inherit ${run}`
+  // The explicit project must sit in the PARENT's office (the real one): a child cannot be given another office's project.
   await one(
-    `select app.hq_create_project(app.test_office(), ${lit(nm)}, 'upload', ${lit(`inh-${run}`)}, ${lit(nm)}, true)::text as r`,
+    `select app.hq_create_project(app.operator_office(),${lit(nm)}, 'upload', ${lit(`inh-${run}`)}, ${lit(nm)}, true)::text as r`,
   )
   const other = String(
     (
@@ -394,12 +403,12 @@ const kid = String(
 {
   const client = `audit-${run}`
   await db.execute(
-    `insert into public.mcp_clients (client_id, display_name, token_sha256, scopes) values (${lit(client)}, 'audit proof', ${lit('a'.repeat(64))}, array['read','write'])`,
+    `insert into public.mcp_clients (office_id, kind, client_id, display_name, token_sha256, scopes) values (app.operator_office(), 'other', ${lit(client)}, 'audit proof', ${lit('a'.repeat(64))}, array['read','write'])`,
   )
   const viaMcp = await rootJob(`mcp:${client}`)
   const readOnly = `audit-ro-${run}`
   await db.execute(
-    `insert into public.mcp_clients (client_id, display_name, token_sha256, scopes) values (${lit(readOnly)}, 'audit read-only', ${lit('b'.repeat(64))}, array['read'])`,
+    `insert into public.mcp_clients (office_id, kind, client_id, display_name, token_sha256, scopes) values (app.operator_office(), 'other', ${lit(readOnly)}, 'audit read-only', ${lit('b'.repeat(64))}, array['read'])`,
   )
   const viaRo = await rootJob(`mcp:${readOnly}`)
   const a = await may(viaMcp, 'notebook.write')
@@ -421,7 +430,7 @@ const kid = String(
 {
   const name = `Audit real ${run}`
   await one(
-    `select app.hq_create_project(app.test_office(), ${lit(name)}, 'upload', ${lit(`real-${run}`)}, ${lit(name)}, true)::text as r`,
+    `select app.hq_create_project(app.operator_office(), ${lit(name)}, 'upload', ${lit(`real-${run}`)}, ${lit(name)}, true)::text as r`,
   )
   const real = String(
     (
@@ -432,7 +441,7 @@ const kid = String(
   )
   const fxName = `fixture task ${run}`
   await one(
-    `select app.hq_create_project(app.test_office(), ${lit(fxName)}, 'upload', ${lit(`fxt-${run}`)}, ${lit(fxName)}, true)::text as r`,
+    `select app.hq_create_project(app.operator_office(), ${lit(fxName)}, 'upload', ${lit(`fxt-${run}`)}, ${lit(fxName)}, true)::text as r`,
   )
   const fx = String(
     (
@@ -445,14 +454,17 @@ const kid = String(
     String(
       (
         await one(
-          `select (app.task_add(p_office => app.test_office(), p_project => ${lit(project)}::uuid, p_title => ${lit(title)}, p_added_by => 'grant')) ->> 'id' as id`,
+          `select (app.task_add(p_office => app.operator_office(), p_project => ${lit(project)}::uuid, p_title => ${lit(title)}, p_added_by => 'grant')) ->> 'id' as id`,
         )
       ).id,
     )
   const t1 = await mkTask(real, `Real task ${run}`)
   const refusal = String(
-    (await one(`select app.hq_task_state(${lit(t1)}, 'done', null, 'verify-operator')::text as r`))
-      .r,
+    (
+      await one(
+        `select app.hq_task_state(app.operator_office(), ${lit(t1)}, 'done', null, 'verify-operator')::text as r`,
+      )
+    ).r,
   )
   const still = await one(
     `select state::text as s from public.tasks where task_id = ${lit(t1)}::uuid`,
@@ -463,7 +475,9 @@ const kid = String(
     `${String(still.s)}; ${refusal.slice(0, 100)}`,
   )
   const t2 = await mkTask(real, `Real task two ${run}`)
-  await one(`select app.hq_task_state(${lit(t2)}, 'done', null, 'grant')::text as r`)
+  await one(
+    `select app.hq_task_state(app.operator_office(), ${lit(t2)}, 'done', null, 'grant')::text as r`,
+  )
   const did = await one(
     `select state::text as s, completed_by from public.tasks where task_id = ${lit(t2)}::uuid`,
   )
@@ -478,8 +492,8 @@ const kid = String(
     const j = await rootJob(asker)
     const b = String(
       (
-        await one(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
-          values (${lit(real)}::uuid, ${lit(j)}::uuid, ${lit(`q ${run} ${asker}`)}, 'closure fixture', 'nothing', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
+        await one(`insert into public.blockers (office_id, project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue)
+          values (app.operator_office(), ${lit(real)}::uuid,${lit(j)}::uuid, ${lit(`q ${run} ${asker}`)}, 'closure fixture', 'nothing', array['Yes, do it','No, leave it'], 'chief-of-staff', false) returning blocker_id::text as id`)
       ).id,
     )
     const t = String(
@@ -490,7 +504,11 @@ const kid = String(
       ).id,
     )
     const r = String(
-      (await one(`select app.hq_task_state(${lit(t)}, 'done', null, ${lit(by)})::text as r`)).r,
+      (
+        await one(
+          `select app.hq_task_state(app.operator_office(), ${lit(t)}, 'done', null, ${lit(by)})::text as r`,
+        )
+      ).r,
     )
     const st = await one(
       `select state::text as s from public.tasks where task_id = ${lit(t)}::uuid`,
@@ -511,7 +529,9 @@ const kid = String(
   )
   if (fx !== real) {
     const t3 = await mkTask(fx, `Fixture task ${run}`)
-    await one(`select app.hq_task_state(${lit(t3)}, 'done', null, 'verify-operator')::text as r`)
+    await one(
+      `select app.hq_task_state(app.operator_office(), ${lit(t3)}, 'done', null, 'verify-operator')::text as r`,
+    )
     const f3 = await one(
       `select state::text as s from public.tasks where task_id = ${lit(t3)}::uuid`,
     )

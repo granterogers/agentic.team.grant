@@ -60,3 +60,9 @@ for f in $(cd "$ROOT/migrations" && ls [0-9][0-9][0-9][0-9]_*.sql | sort); do
   n=${f%%_*}; [ "$n" \> "0599" ] || continue
   $P -d post -v ON_ERROR_STOP=1 -1 -f "$ROOT/migrations/$f" >/dev/null; echo "post: $f"
 done
+# Which migration files `post` holds, recorded as the COMMENT on the marker table (not as a table of its own: a new table in
+# `public` is a product table to check:ownership and check:office-edges, which refused it). The gate (scripts/gate/run.ts)
+# builds its candidate as `post` plus every migration file NOT in this list, so a rebuilt replica never has a migration applied to
+# it twice. A `post` built before this existed has no such comment and is taken to hold every migration up to 1026.
+NAMES=$(cd "$ROOT/migrations" && ls [0-9][0-9][0-9][0-9]_*.sql | sort | tr '\n' ' ')
+$P -d post -c "comment on table public.isolated_replica_marker is 'migrations: ${NAMES}'"

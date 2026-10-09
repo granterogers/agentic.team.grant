@@ -130,8 +130,8 @@ const make = async (by: string): Promise<Job> => {
           ).match(/[0-9a-f-]{36}/)?.[0],
         }
       : await one(`
-    with j as (insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-               values ('verify.ask', '${by}', app.unnamed_project(app.test_office()), 'r46-' || gen_random_uuid(), gen_random_uuid())
+    with j as (insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+               values (app.test_office(), 'verify.ask','${by}', app.unnamed_project(app.test_office()), 'r46-' || gen_random_uuid(), gen_random_uuid())
                returning job_id)
     select job_id::text as id from j`)
   const got = await dequeue(db, 'r46', false, false, ['verify.ask'], by)

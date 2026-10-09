@@ -9,7 +9,8 @@
       "!coverage",
       "!package-lock.json",
       "!infra",
-      "!docs/ops/evidence"
+      "!docs/ops/evidence",
+      "!.claude/worktrees"
     ]
   },
   "formatter": {

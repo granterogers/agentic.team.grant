@@ -75,9 +75,9 @@ let answering = false
 */
 let gen = 0
 
-// One session per visit. It groups the turns of a conversation in
-// `origin_ref`, which is what conversation memory reads. Shared between the
-// call and the typing box on purpose: they are one conversation.
+// One id per visit: the turn's dedupe and containment identity. The conversation itself is derived by the office from
+// the verified login and the project (H1), so the call and the typing box are one conversation, and it survives a
+// reload, a second tab and another device.
 let session = 's' + Math.random().toString(36).slice(2, 12)
 
 /*

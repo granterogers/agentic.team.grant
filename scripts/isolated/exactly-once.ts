@@ -37,8 +37,8 @@ const job = async (): Promise<string> => {
   const p = String((await one(`select app.unnamed_project(app.test_office())::text as p`)).p)
   return String(
     (
-      await one(`insert into public.jobs (kind, requested_by, project_id, idempotency_key, correlation_id)
-        values ('office.pursue', 'duty:exactly-once-proof', ${lit(p)}::uuid, 'eo-' || gen_random_uuid(), gen_random_uuid())
+      await one(`insert into public.jobs (office_id, kind, requested_by, project_id, idempotency_key, correlation_id)
+        values (app.test_office(), 'office.pursue', 'duty:exactly-once-proof', ${lit(p)}::uuid, 'eo-' || gen_random_uuid(), gen_random_uuid())
         returning job_id::text as id`)
     ).id,
   )

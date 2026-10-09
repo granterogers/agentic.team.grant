@@ -125,3 +125,52 @@ describe('a frame that names a kind of person is addressed to whoever was chosen
     expect(ownTask(said as string, who as Speaking)).toBe(said)
   })
 })
+
+describe('the routing decision is recorded against the text the roster was chosen from', () => {
+  it('WIRED: the roster is chosen from the whole sentence, so the row is classified from it, not from the stripped one', () => {
+    const source = readFileSync('src/handlers/instruction.ts', 'utf8')
+    expect(source).toMatch(
+      /const routedText = instruction\s*\n\s*instruction = ownTask\(instruction, who\)/,
+    )
+    expect(source).toMatch(/const decided = route\(routedText, scan\)/)
+    expect(source).not.toMatch(/const decided = route\(instruction, scan\)/)
+  })
+})
+
+describe('a frame that addresses the team collectively is addressed to each member who answers (real-model run)', () => {
+  const quality: Speaking = {
+    slug: 'quality-director',
+    name: 'Grace',
+    title: 'Quality & Risk Director',
+  }
+  it.each([
+    [
+      'Ask the team to look at the venue contract risk and the budget impact and give me a recommendation.',
+      'Look at the venue contract risk and the budget impact and give me a recommendation.',
+    ],
+    [
+      'Please get the specialists to check which tasks are blocked.',
+      'Check which tasks are blocked.',
+    ],
+    [
+      'Have the whole team review the launch plan for anything unfinished.',
+      'Review the launch plan for anything unfinished.',
+    ],
+    ['Ask the team which supplier is the riskiest.', 'Tell me which supplier is the riskiest.'],
+  ])('%s', (said, expected) => {
+    expect(ownTask(said, quality)).toBe(expected)
+  })
+
+  it.each([
+    // the chief of staff convenes the team: for her this is the request itself
+    ['Ask the team to look at the venue contract risk and give me a recommendation.', claire],
+    // nothing follows, or somebody else is named as well
+    ['Ask the team.', quality],
+    ['Ask the team and Emma to review it.', quality],
+    // a statement, not a delegation frame
+    ['The team asked to review the launch plan, so go ahead.', quality],
+    ["What is on the team's calendar this week?", quality],
+  ])('left whole: %s', (said, who) => {
+    expect(ownTask(said as string, who as Speaking)).toBe(said)
+  })
+})

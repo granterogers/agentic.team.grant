@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "_about": "THE canonical, machine-readable record of what is deployed. Human documents (CLAUDE.md, docs/HANDOFF.md, the deployment-readiness notes) DEFER to this file and must not restate these numbers. It records what existing evidence proves at the time named below; it is never read from production by a check, and it is updated in the same commit as any deploy record. `npm run check:deployment-state` (local, no production contact) holds it against migrations/applied.json and the committed migrations directory.",
+  "recorded": {
+    "at": "2026-10-09",
+    "by": "the 6 October production deployment record, the 8 October efficiency closeout (docs/performance/efficiency-cycle-closeout-2026-10-08.md on claude/efficiency-deep-optimization) and the 9 October Team HQ release record (docs/ux/deploy-442-445.md); reconciled on the integration branch, no new production reading",
+    "evidence": "docs/ops/deployment-readiness-2026-10-05.md section 13; docs/ux/deploy-442-445.md; docs/audit/V1-INTEGRATION-RELEASE-CANDIDATE-2026-10-09.md section 5",
+    "shippedCommit": "9310116c41748268b43e5d8dc02a6feb195b78f1",
+    "shippedCommitMeans": "the worker and every function except hq-api were last deployed from this commit's code on 6 October; it is an ancestor of main. hq-api v899 and the page were deployed on 9 October from the Team HQ release branch (commits up to 9e2f3349, merged to main as b8ea3c0a).",
+    "isLiveProductionReading": false
+  },
+  "migrations": {
+    "ledger": "migrations/applied.json",
+    "appliedAtRecord": 802,
+    "highestAppliedAtRecord": "1041",
+    "note": "The pending set is DERIVED: every committed migration file whose name is not in the ledger. It is not stored here, so it cannot go stale. The 802 are: the 798 of the 6 October record, the efficiency workstream's 1023_the_health_reading_asks_the_cheap_question_first and 1027_the_pulse_reads_each_table_once (7 October), and 1040 and 1041 (9 October). The reliability migrations are authored 1023 to 1035 on claude/deep-systems-audit-3cwbtc and are renumbered 1042 to 1052 here, because production already held a different 1023 and 1027."
+  },
+  "components": {
+    "worker": {
+      "version": "v975",
+      "note": "last deployed 6 October from 9310116; the 7 to 9 October releases did not redeploy it (efficiency closeout and the Team HQ release record say so); not re-read since"
+    },
+    "hq-api": {
+      "version": "v899",
+      "note": "9 October, Team HQ release (revisioned layout saves, project backgrounds); rollback bundle v897 captured by that release into .out/rollback-release/hq-api.v897 (gitignored, may no longer exist)"
+    },
+    "mcp": { "version": "v664" },
+    "page": {
+      "deployment": "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41",
+      "rollback": [
+        "dpl_7Lfbc (id truncated in the release record)",
+        "dpl_DhcRv (id truncated in the release record)",
+        "dpl_Dj7erfTXZYqDJhEgxQ9eTBzsnc8H"
+      ],
+      "note": "dpl_Dj7er... was the efficiency workstream's page (7 October) that production served before the Team HQ release; dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx (the 6 October page) is kept as an older rollback by the efficiency closeout"
+    },
+    "notRedeployed": {
+      "signin": "v129",
+      "voice": "v658",
+      "voice-token": "v687",
+      "telegram-webhook": "v698",
+      "slack-events": "v676",
+      "google-oauth": "v646",
+      "note": "version numbers as of the 6 October record; they advanced then only because setting the worker's secrets re-versions every function; no code changed. Not re-read since: UNKNOWN whether a later secrets write re-versioned them again, and UNKNOWN until scripts/forensics/capture-functions.ts is run that they hold 9310116's code"
+    }
+  },
+  "duties": { "drive-index": "off", "calendar-event-sync": "off" },
+  "integrations": { "google": "revoked" },
+  "acceptedGaps": [
+    "#436 Mark done leaves the Mark done button until reload",
+    "authenticated MCP tools/list is unverified",
+    "#437 carrier-writers aliased INSERT parsing and stale harness expectations"
+  ],
+  "supersedes": [
+    "CLAUDE.md 'Production has 770 applied ... NOT applied'",
+    "docs/HANDOFF.md entries dated 2026-10-05/06 that say nothing was deployed or 770 were applied",
+    "the 6 October version of this record (798 applied, highest 1022, hq-api v896, page dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx)"
+  ]
+}
