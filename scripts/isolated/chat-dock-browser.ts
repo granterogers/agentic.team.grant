@@ -250,17 +250,17 @@ try {
       c2.length === 1,
       `${String(c2.length)} command(s) for ${String(sentLost.length)} attempt(s)`,
     )
+    await say(page, LOST)
+    // wait for the thing asserted (the second command being filed), not a fixed pause: under a busy gate the filing can land late
+    for (let waited = 0; waited < 15000; waited += 500) {
+      if ((await commandsFor(LOST)).length >= 2) break
+      await page.waitForTimeout(500)
+    }
+    const again = await commandsFor(LOST)
     check(
       'control: the same words typed again later are a NEW message',
-      await (async () => {
-        await say(page, LOST)
-        // wait for the thing asserted (the second command being filed), not a fixed pause: under a busy gate the filing can land late
-        for (let waited = 0; waited < 15000; waited += 500) {
-          if ((await commandsFor(LOST)).length >= 2) break
-          await page.waitForTimeout(500)
-        }
-        return (await commandsFor(LOST)).length === 2
-      })(),
+      again.length === 2,
+      `${String(again.length)} command(s) for those words; the page sent ${JSON.stringify(seen.turns.filter((t) => t.said === LOST).map((t) => `${t.message.slice(0, 10)}:${String(t.status)}`))}`,
     )
     check('no page error', seen.pageErrors.length === 0, seen.pageErrors.join(' | '))
   } finally {
