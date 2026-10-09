@@ -1932,7 +1932,7 @@ const wirePageMenu = (root) => {
     e.stopPropagation()
     /* Choosing something closes the menu - otherwise it is still hanging open
        over whatever the choice just opened. */
-    if (e.target?.closest?.('[role="menuitem"]') !== null) shut()
+    if (e.target?.closest?.('.bcmenuitem') !== null) shut()
   })
   document.addEventListener('click', shut)
   document.addEventListener('keydown', (e) => {

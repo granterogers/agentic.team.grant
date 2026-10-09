@@ -304,11 +304,11 @@ const menuPanel = () => {
   const projects = listed()
   const mine = canWrite()
   const item = (to, label, mark = '') =>
-    `<button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(to)}"
+    `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-go="${esc(to)}"
       aria-current="${isHere(to) ? 'page' : 'false'}">${mark}<span class="bcmenuname">${esc(label)}</span></button>`
   const firstRunShown = projects.length === 0 && source.live === true && mine && state().view === 'home'
   /* Always in the page, hidden until opened: the button's aria-controls always names something that exists. */
-  return `<div class="bcmenupanel" id="bc-menu" role="menu" aria-label="Projects and navigation"${menu.isOpen() ? '' : ' hidden'}>
+  return `<div class="bcmenupanel" id="bc-menu" role="${menu.isMaking() ? 'dialog' : 'menu'}" aria-label="${menu.isMaking() ? 'New project' : 'Projects and navigation'}"${menu.isOpen() ? '' : ' hidden'}>
     <p class="bcmenuhead">Projects</p>
     ${
       projects.length === 0

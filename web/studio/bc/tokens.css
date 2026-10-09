@@ -72,9 +72,9 @@
     in both schemes — reading the live variable would hand us a red tuned for
     a white page.
   */
-  --bc-danger: #b3382e;
+  --bc-danger: #a42d24;
   --bc-success: #1d6a45;
-  --bc-warn: #8f5a08;
+  --bc-warn: #7a4a05;
   /* Two more roles that were literals in the dark scheme only: a source that is not ours (Google, a generated file) and a notebook. */
   --bc-amber: #94560a;
   --bc-info: #34529a;

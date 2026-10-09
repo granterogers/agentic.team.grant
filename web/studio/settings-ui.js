@@ -92,7 +92,7 @@ export function frame({ groups, current, pane, tabTitle, lead, body, backLabel }
           )
           .join('')}
       </nav>
-      <main class="stg-main" id="stg-main" tabindex="-1">
+      <main class="stg-main" id="stg-main" tabindex="0" aria-label="${esc(tabTitle)}">
         <div class="stg-col">
           <header class="stg-pagehead">
             <h2>${esc(tabTitle)}</h2>

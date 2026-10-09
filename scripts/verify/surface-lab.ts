@@ -14,7 +14,7 @@
  * the reason, so an unreachable screen is named rather than omitted.
  */
 import '../../src/safety/arm.ts'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { chromium, type Page } from 'playwright'
 import { auditScript } from './lib/surface-audit.ts'
@@ -34,6 +34,8 @@ const browser = await chromium.launch()
   A signed-in person, without a real office: WRITER=1 starts a stand-in gateway (the contract canvas-devices uses) and the
   page is given a token, so controls drawn only for a writer (the new-project form, the first-run screen) can be opened.
 */
+const AXE_ON = process.env.AXE === '1'
+const AXE_SRC = AXE_ON ? await readFile('node_modules/axe-core/axe.min.js', 'utf8') : ''
 const WRITER = process.env.WRITER === '1'
 const API_PORT = 4717
 let writerProjects = 1
@@ -105,6 +107,11 @@ async function record(page: Page, surface: string, context: string, errors: stri
   const opened = expect.startsWith('url:') ? new URL(page.url()).pathname.includes(expect.slice(4)) : expect === '' || (await page.locator(expect).first().isVisible().catch(() => false))
   if (!opened) { blocked(surface, context, `did not open (no visible ${expect})`); return }
   const a = (await page.evaluate(auditScript())) as { out: string[] }
+  if (AXE_ON) {
+    await page.evaluate(AXE_SRC)
+    const v = (await page.evaluate(`axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] } }).then((r) => r.violations.map((x) => x.id + ' (' + x.nodes.length + '): ' + x.nodes[0].target.join(' ').slice(0, 70)))`)) as string[]
+    for (const x of v) a.out.push(`axe ${x}`)
+  }
   await page.screenshot({ path: shot })
   const findings = [...a.out, ...extra, ...errors.splice(0).map((e) => `page error: ${e}`)]
   rows.push({ surface, context, verdict: findings.length === 0 ? 'verified' : 'defect', findings, shot })

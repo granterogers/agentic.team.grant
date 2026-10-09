@@ -213,6 +213,12 @@
   background-repeat: no-repeat;
 }
 
+/* The Settings content area is a scroll region a keyboard can enter; its ring sits inside its edge so the page frame does not clip it. */
+#settings .stg-main:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: -3px; }
+
+/* The empty-module action is accent text on an accent wash: on the light scheme that is under 4.5:1, so the text is the accent drawn toward the text colour. */
+[data-experience='basecamp'] .bcmptyact { color: color-mix(in oklab, var(--bc-accent) 68%, var(--bc-text-strong)); }
+
 /* ---------------------------------------------------------------- 4. touch --- */
 
 /*

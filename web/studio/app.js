@@ -1816,7 +1816,7 @@ function paintDock() {
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <div class="thread${messages.length === 0 ? ' empty' : ''}" data-dockthread>${
+    <div class="thread${messages.length === 0 ? ' empty' : ''}" data-dockthread${messages.length === 0 ? '' : ' role="list" aria-label="Conversation with the team"'}>${
       /*
         An empty conversation should look like an invitation, not like a fault.
 
@@ -3476,9 +3476,11 @@ function teamTab(p) {
 const saidBy = (who, m) => {
   const name = who === 'grant' ? 'You' : (crewBy(who)?.name ?? 'The office')
   const role = who === 'grant' ? '' : `, ${crewBy(who)?.role ?? ''}`
-  const at = m.at === undefined || m.at === null || m.at === ''
+  /* A message with no usable time says nothing about one: a screen reader was told "Invalid Date". */
+  const when = m.at === undefined || m.at === null || m.at === '' ? null : new Date(m.at)
+  const at = when === null || Number.isNaN(when.getTime())
     ? ''
-    : `, ${new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : `, ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
   const to = m.to === undefined || m.to === null || m.to === ''
     ? ''
     : `, to ${crewBy(m.to)?.name ?? String(m.to)}`
