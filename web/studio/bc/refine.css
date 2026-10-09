@@ -197,6 +197,22 @@
 }
 @media (prefers-reduced-motion: reduce) { [data-experience='basecamp'] .bcmenu { animation: none; } }
 
+/*
+  SELECT BOXES wear the interface, not the browser: the platform arrow is replaced by a small chevron drawn from the text colour
+  (two gradients, so it follows the scheme and the look with no image), and the box keeps its own height and padding.
+*/
+[data-experience='basecamp'] select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline-end: 30px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
 /* ---------------------------------------------------------------- 4. touch --- */
 
 /*
