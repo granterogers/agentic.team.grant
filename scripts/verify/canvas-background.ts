@@ -451,7 +451,7 @@ await openLook(page)
 check('and the picker says it too', /default is shown/.test(await say(page)), await say(page))
 await closeLook(page)
 
-/* ---- 5b. the office's copy (#445, migration 1024): another device draws a picture this browser never held ---- */
+/* ---- 5b. the office's copy (#445, migration 1041): another device draws a picture this browser never held ---- */
 await page.goto(url(pathC), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('[data-bc-board]')
 const remoteRun = (await page.evaluate(

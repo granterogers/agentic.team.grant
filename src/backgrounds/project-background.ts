@@ -1,5 +1,5 @@
 /*
-  A PROJECT'S BACKGROUND PICTURE, SERVER SIDE (#445, migration 1024). Pure functions, so they are tested without a network.
+  A PROJECT'S BACKGROUND PICTURE, SERVER SIDE (#445, migration 1041). Pure functions, so they are tested without a network.
 
   Nothing in a request is trusted: the type comes from the bytes' own header (never the declared MIME type or a file name), the
   size from the header (so a file claiming to be enormous is refused before anything stores it), and the object key is built from

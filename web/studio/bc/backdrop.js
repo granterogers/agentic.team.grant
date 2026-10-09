@@ -213,7 +213,7 @@ export const customPut = async (slug, rec) => {
 }
 
 /*
-  THE OFFICE'S COPY (#445, migration 1024). The picture is also stored in the office, one per project, so a second device can
+  THE OFFICE'S COPY (#445, migration 1041). The picture is also stored in the office, one per project, so a second device can
   draw it; this browser's database is then only a cache keyed by the office's revision. The adapter is given by the page and is
   optional: with none (an office that predates the migration, a Sample visitor, offline) a picture stays in this browser alone,
   exactly as before, and the person is told so.

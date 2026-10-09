@@ -1,4 +1,4 @@
--- ROLLBACK for migration 1023 (a layout save can say which revision it was made from; #442).
+-- ROLLBACK for migration 1040 (a layout save can say which revision it was made from; #442).
 --
 -- Restores the four-argument writer exactly as migration 0711 (app) and its public wrapper left it, removes the reader, the
 -- revision trigger, the column and the sequence. NO ARRANGEMENT ROW IS DELETED OR CHANGED (only the rev column is dropped).
@@ -57,7 +57,7 @@ as $f$ select app.hq_dashboard_layout_set(p_office, p_slug, p_panels, p_surface)
 revoke all on function public.hq_dashboard_layout_set(uuid, text, jsonb, text) from public, anon, authenticated;
 grant execute on function public.hq_dashboard_layout_set(uuid, text, jsonb, text) to service_role;
 
--- The reset as migration 0711 left it (1023 added only an advisory lock to it).
+-- The reset as migration 0711 left it (1040 added only an advisory lock to it).
 create or replace function app.hq_dashboard_layout_reset(p_office uuid, p_slug text, p_surface text default 'studio')
  returns jsonb
  language plpgsql
@@ -84,6 +84,6 @@ alter table public.dashboard_layouts drop column if exists rev;
 drop sequence if exists public.dashboard_layouts_rev_seq;
 
 -- The migration ledger row (so migrate:one / migrate can apply it again later): remove it by name.
-delete from app.schema_migrations where name = '1023_a_layout_save_can_say_which_revision_it_was_made_from.sql';
+delete from app.schema_migrations where name = '1040_a_layout_save_can_say_which_revision_it_was_made_from.sql';
 
 commit;

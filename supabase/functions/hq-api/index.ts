@@ -676,7 +676,7 @@ const SECTIONS: Readonly<
     also: [{ param: 'slug', arg: 'p_slug' }],
   },
   /*
-    ONE project's saved arrangement and its REVISION (migration 1023, #442): `{ panels, rev, now }`, absent = revision 0.
+    ONE project's saved arrangement and its REVISION (migration 1040, #442): `{ panels, rev, now }`, absent = revision 0.
     The page names `rev` as `p_expected_rev` on `dashboard_layout_set` so a save made from a stale copy is refused, and
     stamps its notes with `now` so a device with a wrong clock cannot outrank a newer change. `?slug=&surface=`.
   */
@@ -1109,7 +1109,7 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     required: ['p_contact_id', 'p_project_id'],
   },
   /*
-    A PROJECT'S OWN BACKGROUND PICTURE (#445, migration 1024). Handled below rather than dispatched, because it carries bytes;
+    A PROJECT'S OWN BACKGROUND PICTURE (#445, migration 1041). Handled below rather than dispatched, because it carries bytes;
     listed here because the dispatcher checks this map first. The RPC named is the one the target is authorised through.
     The page names the project by SLUG; the office and the project id are never read from the request.
   */
@@ -2150,7 +2150,7 @@ const uploadTarget = async (
       p_project_id: projectId,
       p_contact_id: contactId,
       p_by: by,
-      // Only the background kind names its project by slug (migration 1024); the others are unchanged.
+      // Only the background kind names its project by slug (migration 1041); the others are unchanged.
       ...(slug === null ? {} : { p_slug: slug }),
     }),
   }).catch(() => null)
@@ -2166,7 +2166,7 @@ const uploadTarget = async (
 }
 
 /*
-  PROJECT BACKGROUND PICTURES (#445, migration 1024): one object per project in the private `files` bucket, under
+  PROJECT BACKGROUND PICTURES (#445, migration 1041): one object per project in the private `files` bucket, under
   `<office_id>/backgrounds/<project_id>.<ext>`. These helpers only talk to storage; WHICH project and WHICH office are
   decided by the caller from the verified session and the database, never from the request.
 */
@@ -3406,7 +3406,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     would otherwise break the query it appears in.
   */
   /*
-    A PROJECT'S BACKGROUND PICTURE (#445, 1024): `?slug=` returns `{ rev, url, mime, bytes }` where `url` is a signed link
+    A PROJECT'S BACKGROUND PICTURE (#445, 1041): `?slug=` returns `{ rev, url, mime, bytes }` where `url` is a signed link
     (an hour), or `null` when the project has none, is not this office's, or does not exist - the same answer for all three, so
     a probe learns nothing about another office. No link is ever minted for a key outside the verified office's prefix.
   */

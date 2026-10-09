@@ -1,4 +1,4 @@
--- 1023 - a project's arrangement row carries a revision, and a save may say which revision it was made from (#442).
+-- 1040 (written as 1023 and renumbered before it was applied: production already holds a different 1023 from another workstream) - a project's arrangement row carries a revision, and a save may say which revision it was made from (#442).
 --
 -- THE DEFECT THIS CLOSES. `dashboard_layout_set` upserted one row per (person, project, surface), last writer wins. The page
 -- (ADR-0068) therefore merged notes before and after every save so that two devices could not erase each other's Post-its,

@@ -675,7 +675,7 @@ const backoff = new Map()
 
 /**
  * The time a note is stamped with: this device's clock moved by how far it was from the office's last time the office said its
- * own (migration 1023 returns `now`). A device with a wrong clock would otherwise stamp every edit in the past or the future
+ * own (migration 1040 returns `now`). A device with a wrong clock would otherwise stamp every edit in the past or the future
  * and outrank or lose to every honest one. Zero until the office has answered, and ignored when the difference is implausible.
  */
 let lastStamp = 0
@@ -709,7 +709,7 @@ export const persistence = ({
 } = {}) => {
   /*
     `readRev(slug)` answers `{ panels, rev, now }` and `saveIf(slug, panels, rev)` answers `{ ok, rev }` or
-    `{ conflict, rev, panels }` (migration 1023, #442). Both or neither: a gateway that lacks them is detected on first use
+    `{ conflict, rev, panels }` (migration 1040, #442). Both or neither: a gateway that lacks them is detected on first use
     and the page falls back to the merge-and-check loop below, which is what it did before they existed.
   */
   readRev = typeof readRevision === 'function' && typeof saveIfRevision === 'function' ? readRevision : null

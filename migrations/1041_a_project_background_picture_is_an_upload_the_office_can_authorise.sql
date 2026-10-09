@@ -1,4 +1,4 @@
--- 1024 - an upload target can be a project's background picture, named by slug (#445).
+-- 1041 (written as 1024 and renumbered before it was applied, see 1040) - an upload target can be a project's background picture, named by slug (#445).
 --
 -- THE GAP THIS CLOSES. A person's own canvas picture lived in one browser's IndexedDB, so it never reached a second device.
 -- The gateway now stores one picture per project in the private `files` bucket under `<office_id>/backgrounds/<project_id>.<ext>`

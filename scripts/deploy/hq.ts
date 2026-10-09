@@ -90,7 +90,7 @@ form.append(
   }),
 )
 
-// A project's background picture, server side (#445, 1024): one source in src/, uploaded beside the entrypoint as ./background.ts.
+// A project's background picture, server side (#445, 1041): one source in src/, uploaded beside the entrypoint as ./background.ts.
 form.append(
   'file',
   new File([await readFile('src/backgrounds/project-background.ts', 'utf8')], 'background.ts', {

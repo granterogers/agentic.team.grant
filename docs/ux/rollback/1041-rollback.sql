@@ -1,6 +1,6 @@
--- ROLLBACK for migration 1024 (a project background picture is an upload the office can authorise; #445).
+-- ROLLBACK for migration 1041 (a project background picture is an upload the office can authorise; #445).
 --
--- Restores the five-argument upload-target check exactly as migration 0688 left it. NO TABLE OR COLUMN WAS ADDED BY 1024, so
+-- Restores the five-argument upload-target check exactly as migration 0688 left it. NO TABLE OR COLUMN WAS ADDED BY 1041, so
 -- nothing else needs undoing. Pictures already stored stay in the private `files` bucket under <office>/backgrounds/ and are
 -- unreachable once the gateway is rolled back (see docs/ux/deploy-442-445.md for removing them if wanted).
 --
@@ -55,6 +55,6 @@ $f$;
 revoke all on function public.hq_upload_target(uuid, text, uuid, uuid, text) from public, anon, authenticated;
 grant execute on function public.hq_upload_target(uuid, text, uuid, uuid, text) to service_role;
 
-delete from app.schema_migrations where name = '1024_a_project_background_picture_is_an_upload_the_office_can_authorise.sql';
+delete from app.schema_migrations where name = '1041_a_project_background_picture_is_an_upload_the_office_can_authorise.sql';
 
 commit;

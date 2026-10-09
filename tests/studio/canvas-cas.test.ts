@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: a fake office and layout.js modules without types
 // biome-ignore-all format: a dense fake office and tables of cases, kept readable as written
 /**
- * Compare-and-swap saves of a project's arrangement (#442, migration 1023), driven through the real layout.js against a fake
+ * Compare-and-swap saves of a project's arrangement (#442, migration 1040), driven through the real layout.js against a fake
  * office that keeps a revision exactly as the database does: a save naming a stale revision is refused with the current copy.
  * They assert what must survive (no note lost, a deletion kept, a bounded number of attempts), never how it got there.
  */

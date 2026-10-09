@@ -14210,7 +14210,7 @@ bcGrid.persistence({
     return Array.isArray(p_?.layout_board) ? p_.layout_board : null
   },
   /*
-    Compare-and-swap (migration 1023, #442). The gateway section and the revision argument exist only once that migration is
+    Compare-and-swap (migration 1040, #442). The gateway section and the revision argument exist only once that migration is
     applied; until then the read fails with "unknown section" and layout.js falls back to the merge-and-check loop above.
   */
   readRev: async (slug) => {
@@ -14248,7 +14248,7 @@ bcGrid.persistence({
 })
 
 /*
-  A project's own background picture is also kept in the office (migration 1024, #445). A Sample visitor never uploads (the
+  A project's own background picture is also kept in the office (migration 1041, #445). A Sample visitor never uploads (the
   gateway refuses it), so its picture stays in this browser; an office without the migration answers "unknown action", and
   the picker says the picture is kept in this browser only.
 */

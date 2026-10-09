@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: SQL results are untyped rows
 // biome-ignore-all format: a dense proof script kept readable as written
 /**
- * Compare-and-swap on a project's saved arrangement, on the isolated replica only (#442, migration 1023).
+ * Compare-and-swap on a project's saved arrangement, on the isolated replica only (#442, migration 1040).
  *
  *   bash scripts/isolated/replica.sh && npx tsx scripts/isolated/layout-cas.ts
  *
