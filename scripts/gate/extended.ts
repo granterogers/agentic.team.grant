@@ -144,6 +144,12 @@ export const EXTENDED: readonly Proof[] = [
     { args: ['--only=390'], timeoutS: 420 },
   ),
   p(
+    'chat-dock-browser',
+    10,
+    'Team Chat dock, real page and real voice door: one typed message is one command for the right person and project, a lost response is retried under the same message name and filed once, and a second visit lands in the same conversation',
+    { timeoutS: 420 },
+  ),
+  p(
     'series-ui-browser',
     28,
     'Team HQ My Tasks, real page and real gateway: ticking a recurring reminder completes that time only, Stop repeating is its own press that asks twice and cancels exactly that series, and the proof reads the database (a refused stop turns it red)',
