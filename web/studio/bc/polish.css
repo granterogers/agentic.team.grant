@@ -71,7 +71,7 @@
   border-bottom: 0;
   background: color-mix(in srgb, var(--bc-text-strong) 6%, var(--bc-surface));
 }
-[data-experience='basecamp'] .bcmenuhead { margin: 6px 10px 6px; font-size: 11.5px; font-weight: 650; letter-spacing: 0.09em; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcmenuhead { margin: 6px 10px 6px; font-size: 12px; font-weight: 650; letter-spacing: 0.09em; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcmenulist { gap: 2px; }
 [data-experience='basecamp'] .bcmenuitem {
   position: relative;
