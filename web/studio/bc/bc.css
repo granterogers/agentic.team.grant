@@ -1827,7 +1827,7 @@
   background: var(--bc-surface);
   box-shadow: var(--bc-shadow-surface);
 }
-.bcmenuhead { margin: 6px 8px 4px; font: var(--bc-compact); color: var(--bc-text-muted); text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }
+.bcmenuhead { margin: 6px 8px 4px; font: var(--bc-compact); color: var(--bc-text-muted); text-transform: uppercase; letter-spacing: .06em; font-size: 12px; }
 .bcmenunone { margin: 4px 8px 8px; color: var(--bc-text-muted); font: var(--bc-compact); }
 .bcmenulist { display: grid; gap: 1px; }
 .bcmenuitem {
