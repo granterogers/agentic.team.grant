@@ -18,7 +18,11 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-## Latest checkpoint: Team HQ overhaul RELEASED (9 October 2026) - nothing is pending
+## Checkpoint (9 October 2026, later): V1 integration candidate on `claude/v1-integration-main-2026-10-09`, outcome B
+
+Reliability work reconciled onto `main`; not merged, not deployed. Next step is Grant's decision on authorised production reads (preflight), per `docs/audit/V1-INTEGRATION-RELEASE-CANDIDATE-2026-10-09.md`. Backlog: #450 to #455.
+
+## Earlier checkpoint: Team HQ overhaul RELEASED (9 October 2026) - nothing is pending
 
 The Team HQ overhaul (#439) and its two backend pieces, revisioned layout saves (#442, migration `1040`) and custom backgrounds stored per office (#445,
 migration `1041`), are **deployed to production and merged to `main`** (#448, `e00bfab6`): hq-api v899, page `dpl_6zXt…` at https://ai-team-hq.vercel.app.

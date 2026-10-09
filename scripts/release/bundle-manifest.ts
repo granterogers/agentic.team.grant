@@ -17,7 +17,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { bundlePath, walk } from '../deploy/lib/bundle.ts'
@@ -63,7 +63,9 @@ export const manifestHere = async (): Promise<Manifest> => {
   }
   for (const [slug, files] of Object.entries(LISTED_SERVICES)) {
     out[slug] = {}
-    for (const f of files) out[slug][f] = digest(readFileSync(f))
+    // A file the list names today may not exist at an older baseline (hq-api gained background.ts's source after 9310116):
+    // absent there means ADDED here, so it is simply left out of that side's manifest.
+    for (const f of files) if (existsSync(f)) out[slug][f] = digest(readFileSync(f))
   }
   out.page = {}
   const tracked = execFileSync('git', ['ls-files', ...PAGE_ROOTS], { encoding: 'utf8' })

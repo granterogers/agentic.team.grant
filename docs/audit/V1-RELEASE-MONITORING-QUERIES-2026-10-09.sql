@@ -60,8 +60,9 @@ select jsonb_pretty(app.office_health(app.operator_office(), 1));
 -- M17 what answers are waiting on him (open questions, including a delivery that failed or may not have arrived)
 select requested_action, state, created_at, on_answer ->> 'kind' as kind from public.blockers where state = 'open' order by created_at desc limit 30;
 
--- M18 the migration ledger after step 1 (must list exactly the eleven pending names, 1023 to 1035, in order)
-select name from app.schema_migrations where name >= '1023' order by name;
+-- M18 the migration ledger after step 1 (must list exactly the eleven pending names, 1042 to 1052 (authored 1023 to 1035 and
+--     renumbered, see docs/audit/V1-INTEGRATION-RELEASE-CANDIDATE-2026-10-09.md), in order)
+select name from app.schema_migrations where name >= '1042' order by name;
 
 -- M21 POST-MIGRATION, BEFORE the worker is deployed: would 1033's containment refuse a real delivery that was sent in the last week? EXPECT zero rows. A row is a destination the
 --     migration now treats as another office's: STOP, do not deploy the worker, and show Grant the row (the answer is the destination, not a secret).

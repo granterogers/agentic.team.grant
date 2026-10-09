@@ -1,5 +1,9 @@
 # V1 release: operator checklist (9 October 2026)
 
+> **CORRECTED 9 October 2026 (integration run):** ledger 802 / highest 1041 (not 798 / 1022); the eleven migrations are **1042 to 1052**
+> (not 1023 to 1035); do not use the numbers or the service order in this checklist. Use the integration release-candidate report
+> `V1-INTEGRATION-RELEASE-CANDIDATE-2026-10-09.md` and the corrected preflight/monitoring SQL.
+
 **NOT AUTHORISED. NOTHING HERE HAS BEEN RUN IN PRODUCTION.** Reasoning and evidence: `V1-PRODUCTION-RELEASE-PLAN-2026-10-09.md` (section numbers below refer to it).
 SQL files: `V1-RELEASE-PREFLIGHT-QUERIES-…sql` (P01 to P19), `V1-RELEASE-MONITORING-QUERIES-…sql` (M01 to M21), `V1-RELEASE-FUNCTION-FINGERPRINTS-…tsv`.
 Run each SQL with `ALLOW_PRODUCTION_CHECKS=1 npm run qq -- "<statement>"`. Grant sets `ALLOW_PRODUCTION_CHECKS` and `ALLOW_PRODUCTION_WRITES` per command; the agent never does. Never print a secret.

@@ -4,12 +4,18 @@
 -- isolated replica (schema through 1035) to prove the column names; an empty replica returns empty answers.
 -- The expected answer is written beside each, so a result is read against a stated expectation rather than against a feeling.
 
--- P01 the ledger: how many applied, and the highest. EXPECT 798 and 1022 (docs/ops/deployment-state.json). Anything else = STOP:
---     the state changed since 6 October and the plan is not valid as written.
+-- CORRECTED 9 October 2026 (integration run, docs/audit/V1-INTEGRATION-RELEASE-CANDIDATE-2026-10-09.md): the first version of
+-- this file expected 798 and 1022 and named the reliability migrations 1023 to 1035. Production already held a DIFFERENT 1023 and
+-- 1027 (the efficiency workstream, 7 October) and 1040 and 1041 (Team HQ, 9 October), so the eleven are renumbered 1042 to 1052.
+
+-- P01 the ledger: how many applied, and the highest. EXPECT 802 and 1041 (docs/ops/deployment-state.json, which is a RECORD of
+--     9 October and not a live reading). Anything else = STOP: the state changed and the plan is not valid as written.
 select count(*) as applied, max(name) as highest from app.schema_migrations;
 
--- P02 no pending number is already applied under a different name. EXPECT zero rows.
-select name from app.schema_migrations where name >= '1023' order by name;
+-- P02 nothing at or above 1042 is applied, and production's own 1023 and 1027 are the efficiency files, not ours. EXPECT exactly
+--     three rows: 1023_the_health_reading_asks_the_cheap_question_first (3298fd85...), 1027_the_pulse_reads_each_table_once
+--     (8dca3590...), and nothing named 1042 or higher. (The first 8 hex of each checksum are enough to tell them from ours.)
+select name, left(checksum, 8) as checksum8 from app.schema_migrations where name >= '1023' and name < '1040' or name >= '1042' order by name;
 
 -- P03 the worker heartbeat is active and nothing has run for long. EXPECT active = true, running small, oldest_running_min null or small.
 select (select active from cron.job where jobname = 'worker-heartbeat') as heartbeat_active, count(*) filter (where state = 'running') as running, round(extract(epoch from now() - min(started_at) filter (where state = 'running')) / 60) as oldest_running_min, count(*) filter (where state in ('queued', 'retrying')) as waiting from public.jobs where created_at > now() - interval '1 day';

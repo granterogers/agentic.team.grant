@@ -1,3 +1,7 @@
+> ## 2026-10-09 (later) - V1 RELIABILITY WORK INTEGRATED ONTO LATEST MAIN, RELEASE CANDIDATE OUTCOME B (branch `claude/v1-integration-main-2026-10-09`, NOT merged, NOT deployed)
+>
+> The reliability branch (`claude/deep-systems-audit-3cwbtc`) is reconciled with `main` `b8ea3c0`: its eleven migrations are renumbered **1042 to 1052** (production holds a different 1023 and 1027 and 1040/1041), a Team HQ "Stop repeating" control was added, and the redrive reads its output through its own office. Gates on the integrated head: unit 6,702, `verify:critical` 66/66, `verify:extended` 73/73, sabotage 16/16. Nothing was applied, deployed or read from production. **Read `docs/audit/V1-INTEGRATION-RELEASE-CANDIDATE-2026-10-09.md`** (outcome B: production-state verification required first); the earlier 9 October plan and checklist are marked superseded. Open: Issues #450 to #455.
+>
 > ## 2026-10-09 - TEAM HQ OVERHAUL RELEASED TO PRODUCTION, #442 AND #445 DEPLOYED AND VERIFIED (branch `claude/confident-cori-ql21nl`, merged to `main`)
 >
 > On Grant's explicit authorisation: migrations **1040** (revisioned layout saves; written as 1023) and **1041** (a project background is an authorisable upload; written as 1024) applied with `migrate:one`; **hq-api v899**;

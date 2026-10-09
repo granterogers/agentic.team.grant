@@ -1,5 +1,11 @@
 # Version 1 production release plan (9 October 2026)
 
+> **SUPERSEDED IN PART, 9 October 2026 (later the same day).** Main and production moved after this plan was written: the ledger is 802
+> (highest 1041), not 798 (1022); production already holds a different 1023 and 1027 (efficiency workstream) and 1040/1041 (Team HQ); hq-api is
+> v899; the page is a different deployment. The eleven reliability migrations are therefore **1042 to 1052**, not 1023 to 1035, and the
+> five-service order below must be re-derived from `docs/audit/V1-INTEGRATION-RELEASE-CANDIDATE-2026-10-09.md` before any use. Everything
+> below that quotes 798, 1022, 8f74449 or "1023 to 1035" is the earlier state and is kept unaltered as history.
+
 **Status: PREPARED, NOT AUTHORISED, NOTHING EXECUTED.** Every statement here is from files in this repository or from the isolated replicas. No production read, write, deploy or message was made in this phase.
 Where production state would have to be read, the exact read is written and marked NEEDS AUTHORISED READ; where it cannot be known, the word is UNKNOWN. The operator's one-page version is
 `V1-RELEASE-OPERATOR-CHECKLIST-2026-10-09.md`; this document is the reasoning behind it.
