@@ -6850,7 +6850,7 @@ function appearanceTab() {
         `<div class="st-looks" role="group" aria-label="Look">${LOOKS.map((l) => {
           const [c, s] = l.faces[shown] ?? l.faces.dark
           return `<button type="button" class="st-look" data-look-pick="${esc(l.id)}" aria-pressed="${now.look === l.id}">
-            <span class="st-lookface" style="--c:${c};--s:${s}" aria-hidden="true"><i></i><i></i></span>
+            <span class="st-lookface" style="--lf-canvas:${c};--lf-face:${s}" aria-hidden="true"><i></i><i></i></span>
             <b>${esc(l.name)}</b><small>${esc(l.note)}</small>
           </button>`
         }).join('')}</div>`,
