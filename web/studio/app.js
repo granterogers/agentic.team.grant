@@ -1721,6 +1721,13 @@ function paintDock() {
   el.hidden = !open
   document.body.classList.toggle('docked', open)
   if (!open) {
+    /*
+      Closing the dock must not throw away what somebody was in the middle of saying (#458). The words are kept against the project
+      they were typed for and put back only into THAT project's composer, so a draft never turns up in another conversation.
+    */
+    const leaving = $('[data-docksay]')
+    if (leaving !== null && leaving.value.trim() !== '' && leaving.dataset.dockFor)
+      state.dockDraft = { slug: leaving.dataset.dockFor, text: leaving.value }
     el.innerHTML = ''
     /* Closing the dock releases the microphone. */
     if (state.experience === 'basecamp') bcDictate.release()
@@ -1788,6 +1795,15 @@ function paintDock() {
   }
   const messages = p ? chat.thread(p.slug) : []
   const draft = $('[data-docksay]')?.value ?? ''
+  /*
+    A redraw replaces the composer, so a person who is TYPING when an answer lands (or a retry comes back, or the history loads) would
+    keep their words (the draft above) but lose the keyboard: focus fell to the page and every later keystroke went nowhere, or
+    to a page shortcut. The words were already kept; where the cursor was is kept now too (#458).
+  */
+  const typingIn = $('[data-docksay]')
+  const hadFocus = typingIn !== null && document.activeElement === typingIn
+  const selStart = hadFocus ? typingIn.selectionStart : null
+  const selEnd = hadFocus ? typingIn.selectionEnd : null
   const at = $('[data-dockthread]')?.scrollTop
   /*
     WHERE THE PERSON WAS, NOT JUST HOW FAR DOWN (closure, 4 October).
@@ -1877,6 +1893,15 @@ function paintDock() {
 
   const box = $('[data-docksay]', el)
   if (box) box.value = draft
+  if (box && p) box.dataset.dockFor = p.slug
+  if (box && draft === '' && state.dockDraft && p && state.dockDraft.slug === p.slug) {
+    box.value = state.dockDraft.text
+    state.dockDraft = null
+  }
+  if (box && hadFocus) {
+    box.focus({ preventScroll: true })
+    try { box.setSelectionRange(selStart ?? draft.length, selEnd ?? draft.length) } catch { /* not fatal: the words are kept */ }
+  }
   if (bcNote) {
     bcGrip.mount(el)
     bcDictate.wire(el)
@@ -1968,6 +1993,7 @@ function paintDock() {
     const text = String(box?.value ?? '').trim()
     if (text === '' || !p) return
     if (box) box.value = ''
+    state.dockDraft = null
     chat.send(p.slug, text, null)
     paintDock()
     // `also` is its own slot: the callback in it was the #375 defect, here too.

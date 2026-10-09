@@ -80,6 +80,11 @@ export const CRITICAL: readonly Proof[] = [
     21,
     'the public anon key reaches no function or table it should not (exposure proven able to fail)',
   ),
+  p(
+    'public-views-closed',
+    16,
+    "a public key reaches no view in public (14 views run with the owner's rights and bypassed row security), the office roles still do, and the proof fails without migration 1053",
+  ),
   p('google-office-binding', 15, "a Google job in one office never borrows another office's token"),
 
   // ---- approvals and the human-contact boundary ----------------------------------------------------------------------

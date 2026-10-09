@@ -42,6 +42,9 @@ import {
   readReach,
   type TableReach,
   tableReachableByAPublicKey,
+  VIEW_EXPOSURE_SQL,
+  type ViewReach,
+  viewReachableByAPublicKey,
 } from '../src/safety/anon-exposure.ts'
 
 // The command re-exports the helpers so existing importers keep working; new ones import src/safety/anon-exposure.ts.
@@ -52,6 +55,9 @@ export {
   readReach,
   type TableReach,
   tableReachableByAPublicKey,
+  VIEW_EXPOSURE_SQL,
+  type ViewReach,
+  viewReachableByAPublicKey,
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -160,6 +166,47 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1)
   }
   console.log('ok   no table without a row policy is reachable by anon or authenticated')
+  /*
+    VIEWS (1053, Issue #457). A view reads its tables with its owner's rights, so row security underneath does not protect it: a
+    public key that may SELECT one reads every office's rows. Same shape as the checks above: the set must be non-empty and the
+    predicate must catch an injected exposure and spare an injected safe view.
+  */
+  const viewRows = (await db.execute(VIEW_EXPOSURE_SQL)).rows as Record<string, unknown>[]
+  const views: ViewReach[] = viewRows.map((r) => ({
+    name: String(r.name),
+    invoker: r.invoker === true,
+    anon: r.anon === true,
+    authenticated: r.authenticated === true,
+  }))
+  const openViews = views.filter(viewReachableByAPublicKey)
+  const viewControl = viewReachableByAPublicKey({
+    name: 'synthetic',
+    invoker: false,
+    anon: true,
+    authenticated: false,
+  })
+  const viewControlSafe = !viewReachableByAPublicKey({
+    name: 'synthetic',
+    invoker: true,
+    anon: true,
+    authenticated: true,
+  })
+  console.log(
+    `inspected ${String(views.length)} public view(s); control: an exposed view is caught ${String(viewControl)}, a security_invoker view is not ${String(viewControlSafe)}`,
+  )
+  if (views.length === 0 || !viewControl || !viewControlSafe) {
+    console.log('FAIL the view check cannot see anything, so its silence means nothing')
+    process.exit(1)
+  }
+  if (openViews.length > 0) {
+    console.log(
+      `FAIL ${String(openViews.length)} view(s) are selectable by a public key: ${openViews
+        .map((v) => v.name)
+        .join(', ')}`,
+    )
+    process.exit(1)
+  }
+  console.log('ok   no view in public is selectable by anon or authenticated')
   let failed = false
   if (fns.length === 0 || !control || !controlPublic) {
     console.log('FAIL the check cannot see anything, so its silence means nothing')

@@ -96,11 +96,13 @@ const CHROMIUM = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/ch
 const browser = await chromium.launch({ executablePath: CHROMIUM, args: ['--no-sandbox'] })
 
 type Turn = { message: string; session: string; said: string; status: number }
-type Seen = { pageErrors: string[]; turns: Turn[]; loseNext: boolean }
+type Seen = { pageErrors: string[]; turns: Turn[]; loseNext: boolean; delayNextMs: number }
 
-const openPage = async () => {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
-  const seen: Seen = { pageErrors: [], turns: [], loseNext: false }
+const DESKTOP = { width: 1440, height: 900 }
+const PHONE = { width: 390, height: 844 }
+const openPage = async (viewport = DESKTOP) => {
+  const ctx = await browser.newContext({ viewport })
+  const seen: Seen = { pageErrors: [], turns: [], loseNext: false, delayNextMs: 0 }
   await ctx.route(`${GW}/**`, async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
@@ -133,6 +135,12 @@ const openPage = async () => {
     if (turn !== null) {
       turn.status = res.status
       seen.turns.push(turn)
+      if (seen.delayNextMs > 0) {
+        // The office has recorded it; the answer to the page is held back, so a person can be typing when it lands.
+        const ms = seen.delayNextMs
+        seen.delayNextMs = 0
+        await new Promise((r) => setTimeout(r, ms))
+      }
       if (seen.loseNext) {
         // The office recorded it; the connection drops before the page hears (a lost response).
         seen.loseNext = false
@@ -168,12 +176,41 @@ const openPage = async () => {
   return { page, seen, close: () => ctx.close() }
 }
 
+/** What each step of `say` saw, kept so a red can say where a message went (#458). */
+const trace: string[] = []
 const say = async (page: Page, text: string): Promise<void> => {
-  if ((await page.locator('.dock [data-docksay]').count()) === 0)
+  const t0 = Date.now()
+  const note = (what: string): void => {
+    trace.push(`${String(Date.now() - t0)}ms ${what}`)
+  }
+  const value = (): Promise<string | null> =>
+    page
+      .locator('.dock [data-docksay]')
+      .first()
+      .inputValue({ timeout: 1500 })
+      .catch(() => null)
+  if ((await page.locator('.dock [data-docksay]').count()) === 0) {
+    note('dock was closed; opening it')
     await page.locator('[data-bc-dock]').first().click({ force: true })
+  }
   await page.waitForSelector('.dock [data-docksay]', { timeout: 10000 })
-  await page.fill('.dock [data-docksay]', text)
+  /*
+    SYNCHRONISE ON THE THING ASSERTED. A redraw of the dock (an answer or a retry landing) replaces the composer; a fill that resolved
+    its element just before that lands on the node that was thrown away, and the words are not in the box a person would see (#458,
+    caught with these steps: "filled; box holds an empty string"). So the words are filled until the live box holds them, then sent.
+    This is not a sleep and asserts nothing less: if the words never stick the proof fails here.
+  */
+  let stuck = false
+  for (let attempt = 1; attempt <= 6 && !stuck; attempt += 1) {
+    await page.fill('.dock [data-docksay]', text)
+    stuck = (await value()) === text
+    if (!stuck)
+      note(`attempt ${String(attempt)}: the box did not hold the words (a redraw replaced it)`)
+  }
+  if (!stuck) throw new Error(`the words never stuck in the composer: ${text.slice(-30)}`)
+  note(`filled; box holds ${JSON.stringify(((await value()) ?? 'NO BOX').slice(-14))}`)
   await page.locator('.dock [type=submit]').click({ force: true })
+  note(`clicked; box now ${JSON.stringify(((await value()) ?? 'NO BOX').slice(-14))}`)
 }
 
 const commandsFor = async (text: string): Promise<Record<string, unknown>[]> =>
@@ -257,10 +294,31 @@ try {
       await page.waitForTimeout(500)
     }
     const again = await commandsFor(LOST)
+    // Diagnostics for a red: what the page was showing and what it had sent, so the next failure names its own cause (#458).
+    let diag = ''
+    if (again.length !== 2) {
+      const dock = await page
+        .evaluate(
+          `(() => {
+            const d = document.querySelector('.dock')
+            const ta = document.querySelector('.dock [data-docksay]')
+            const submit = document.querySelector('.dock [type=submit]')
+            return {
+              text: ((d && d.textContent) || '').replace(/\\s+/g, ' ').slice(-300),
+              draft: ta ? ta.value.slice(0, 80) : null,
+              submitDisabled: submit ? submit.disabled : null,
+              retryButtons: document.querySelectorAll('[data-chat-retry]').length,
+            }
+          })()`,
+        )
+        .catch((e: Error) => ({ error: e.message }))
+      await page.screenshot({ path: `.out/chat-dock-red-${run}.png` }).catch(() => undefined)
+      diag = ` | steps: ${JSON.stringify(trace.slice(-6))} | page: ${JSON.stringify(dock)}; all sends ${JSON.stringify(seen.turns.map((t) => `${t.said.slice(-12)}:${t.message.slice(0, 10)}:${String(t.status)}`))}; screenshot .out/chat-dock-red-${run}.png`
+    }
     check(
       'control: the same words typed again later are a NEW message',
       again.length === 2,
-      `${String(again.length)} command(s) for those words; the page sent ${JSON.stringify(seen.turns.filter((t) => t.said === LOST).map((t) => `${t.message.slice(0, 10)}:${String(t.status)}`))}`,
+      `${String(again.length)} command(s) for those words; the page sent ${JSON.stringify(seen.turns.filter((t) => t.said === LOST).map((t) => `${t.message.slice(0, 10)}:${String(t.status)}`))}${diag}`,
     )
     check('no page error', seen.pageErrors.length === 0, seen.pageErrors.join(' | '))
   } finally {
@@ -293,6 +351,138 @@ try {
     check('no page error on the second visit', second.seen.pageErrors.length === 0)
   } finally {
     await second.close()
+  }
+
+  // 4. a person's words, focus and place survive a redraw, a resize, closing and reopening, and moving about, at both widths (#458)
+  const openAt = async (viewport: { width: number; height: number }, slug = SLUG) => {
+    const o = await openPage(viewport)
+    await o.page.goto(`${APP}/p/${slug}/overview`, { waitUntil: 'domcontentloaded' })
+    await o.page.waitForSelector('.bctop', { timeout: 20000 })
+    await o.page.waitForSelector('[data-bc-dock]', { timeout: 20000 })
+    await o.page.waitForTimeout(800)
+    return o
+  }
+  const composer = (page: Page): Promise<{ value: string; focused: boolean; present: boolean }> =>
+    page.evaluate(
+      `(() => { const b = document.querySelector('.dock [data-docksay]'); return { present: b !== null, value: b ? b.value : '', focused: b !== null && document.activeElement === b } })()`,
+    ) as Promise<{ value: string; focused: boolean; present: boolean }>
+  const dockText = (page: Page): Promise<string> =>
+    page.evaluate(
+      `((document.querySelector('.dock') || {}).textContent || '').replace(/\\s+/g, ' ')`,
+    ) as Promise<string>
+  for (const [label, vp] of [
+    ['desktop', DESKTOP],
+    ['phone', PHONE],
+  ] as const) {
+    const o = await openAt(vp)
+    try {
+      // 4a. typing while an answer lands: every word arrives and the composer keeps the keyboard
+      const HELD = `[dock proof ${run}] ${label} held question`
+      o.seen.delayNextMs = 2500
+      await say(o.page, HELD)
+      await o.page.locator('.dock [data-docksay]').click({ force: true })
+      const WORDS = `typing as the answer lands on ${label}`
+      await o.page.keyboard.type(WORDS, { delay: 110 })
+      const typed = await composer(o.page)
+      check(
+        `${label}: words typed while an answer lands all arrive (no keystroke is lost to the redraw)`,
+        typed.value === WORDS,
+        JSON.stringify(typed.value.slice(-40)),
+      )
+      check(
+        `${label}: and the composer still has the keyboard after that redraw`,
+        typed.focused,
+        String(typed.focused),
+      )
+      check(
+        `${label}: the held message reached the office once and the answer did land during the typing`,
+        (await commandsFor(HELD)).length === 1 &&
+          o.seen.turns.some((t) => t.said === HELD && t.status === 200),
+      )
+      // 4b. a resize (desktop to phone width and back) keeps the draft and the conversation
+      const other = vp === DESKTOP ? PHONE : DESKTOP
+      await o.page.setViewportSize(other)
+      await o.page.waitForTimeout(400)
+      await o.page.setViewportSize(vp)
+      await o.page.waitForTimeout(400)
+      const resized = await composer(o.page)
+      check(
+        `${label}: resizing the window and back keeps the draft and the conversation`,
+        resized.value === WORDS && (await dockText(o.page)).includes(HELD),
+        JSON.stringify({
+          draft: resized.value.slice(-20),
+          shows: (await dockText(o.page)).includes(HELD),
+        }),
+      )
+      // 4c. closing and reopening the dock
+      await o.page.locator('[data-dock-close]').first().click({ force: true })
+      await o.page.waitForTimeout(300)
+      const shut = await composer(o.page)
+      await o.page.locator('[data-bc-dock]').first().click({ force: true })
+      await o.page.waitForSelector('.dock [data-docksay]', { timeout: 10000 })
+      const reopened = await composer(o.page)
+      console.log(
+        `      observed ${label}: closed -> composer present ${String(shut.present)}; reopened -> draft ${JSON.stringify(reopened.value.slice(-24))}; conversation shown ${String((await dockText(o.page)).includes(HELD))}`,
+      )
+      check(
+        `${label}: closing and reopening the dock shows the same conversation`,
+        (await dockText(o.page)).includes(HELD),
+      )
+      check(
+        `${label}: and does not throw away what the person had typed`,
+        reopened.value === WORDS,
+        JSON.stringify(reopened.value.slice(-24)),
+      )
+      check(
+        `${label}: no page error`,
+        o.seen.pageErrors.length === 0,
+        o.seen.pageErrors.join(' | '),
+      )
+    } finally {
+      await o.close()
+    }
+  }
+
+  // 4d. a second project: the dock follows the page, so a message sent there belongs to THAT project and the first project's
+  // conversation is not on screen (no wrong-conversation send)
+  const made2 = json(
+    (
+      await one(
+        `select app.hq_create_project(${lit(OFFICE)}::uuid, ${lit(`Dock second ${run}`)}, 'upload', ${lit(`dock2-${run}`)}, ${lit(`Dock second ${run}`)}, true) as v`,
+      )
+    ).v,
+  )
+  const PROJECT2 = String(made2.project_id)
+  const SLUG2 = String(
+    (await one(`select slug from public.projects where project_id = ${lit(PROJECT2)}::uuid`)).slug,
+  )
+  const p2 = await openAt(DESKTOP, SLUG2)
+  try {
+    const THERE = `[dock proof ${run}] message for the second project`
+    await say(p2.page, THERE)
+    await p2.page.waitForTimeout(2500)
+    const sent = (await commandsFor(THERE))[0]
+    const header = await dockText(p2.page)
+    check(
+      'a message sent from the second project belongs to the second project, not the first',
+      sent !== undefined && sent.project === PROJECT2 && sent.office === OFFICE,
+      JSON.stringify({
+        project: String(sent?.project).slice(0, 8),
+        expected: PROJECT2.slice(0, 8),
+      }),
+    )
+    check(
+      "and the first project's conversation is not what the second project's dock shows",
+      header.includes(`Dock second ${run}`) && !header.includes('what is the venue deposit'),
+      header.slice(0, 120),
+    )
+    check(
+      'no page error on the second project',
+      p2.seen.pageErrors.length === 0,
+      p2.seen.pageErrors.join(' | '),
+    )
+  } finally {
+    await p2.close()
   }
 } finally {
   await browser.close()

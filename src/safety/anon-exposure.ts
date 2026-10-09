@@ -39,6 +39,31 @@ export type TableReach = {
 export const tableReachableByAPublicKey = (t: TableReach): boolean =>
   !t.rls && (t.anon || t.authenticated)
 
+export type ViewReach = {
+  readonly name: string
+  /** `security_invoker = true` in the view's options: the view reads its tables with the CALLER'S rights, so their row security applies. */
+  readonly invoker: boolean
+  readonly anon: boolean
+  readonly authenticated: boolean
+}
+
+/**
+ * A view a public key can select. Row security on the tables underneath does NOT protect it unless the view is `security_invoker`: a
+ * view reads with its owner's rights, and the owner bypasses row security (1053, Issue #457; 0642 and this check once looked at tables
+ * only and missed all fourteen).
+ */
+export const viewReachableByAPublicKey = (v: ViewReach): boolean =>
+  !v.invoker && (v.anon || v.authenticated)
+
+export const VIEW_EXPOSURE_SQL = `
+  select c.relname as name,
+         coalesce(c.reloptions::text, '') like '%security_invoker=true%' as invoker,
+         has_table_privilege('anon', c.oid, 'select') as anon,
+         has_table_privilege('authenticated', c.oid, 'select') as authenticated
+    from pg_class c
+   where c.relnamespace = 'public'::regnamespace and c.relkind in ('v', 'm')
+   order by 1`
+
 export const readReach = (rows: readonly unknown[]): FnReach[] =>
   (rows as Record<string, unknown>[]).map((r) => ({
     name: String(r.name),
