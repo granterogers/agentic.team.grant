@@ -1,0 +1,131 @@
+/*
+  Team HQ refinement layer (10-hour aesthetic sprint, 9 October 2026). Loaded last, after polish.css.
+  Rule: only the same interface, finished better. Every value is a token from tokens.css; nothing here introduces a colour.
+  Sections: 1 overlays and sheets, 2 type floor, 3 materials and elevation, 4 controls, 5 motion.
+*/
+
+/* ---------------------------------------------------------------- 1. overlays and sheets --- */
+
+/* The command bar's label sat on the input's top edge; it is a heading for the field, so it gets its own line and room. */
+[data-experience='basecamp'] .bcjumphead .bclabel {
+  display: block;
+  margin: 2px 2px 8px;
+  line-height: 1.3;
+}
+
+/* ---------------------------------------------------------------- 3. looks, glass and depth --- */
+
+/*
+  LOOKS. The default ("original") is the interface as it already is and needs no rule. The others change only what the
+  surfaces are made of (canvas, surface, popover edge); the accent is the person's other choice and is never touched here,
+  so any look can wear any accent. Each pair is checked for contrast by tests/web/looks.test.ts and the surface lab.
+*/
+:root:root[data-experience='basecamp'][data-look='silver'][data-scheme='dark'] { --bc-canvas: #0d1114; --bc-surface: #1c2227; --bc-border-popover: #4a5258; --bc-text-muted: #a9b0b6; }
+:root:root[data-experience='basecamp'][data-look='forest'][data-scheme='dark'] { --bc-canvas: #0a1511; --bc-surface: #18291f; --bc-border-popover: #43544a; --bc-text-muted: #a7b3ab; }
+:root:root[data-experience='basecamp'][data-look='graphite'][data-scheme='dark'] { --bc-canvas: #131110; --bc-surface: #262220; --bc-border-popover: #55504b; --bc-text-muted: #b0aaa4; }
+:root:root[data-experience='basecamp'][data-look='silver'][data-scheme='light'] { --bc-canvas: #d4d7da; --bc-surface: #eff1f3; --bc-border-popover: #b3b9be; }
+:root:root[data-experience='basecamp'][data-look='forest'][data-scheme='light'] { --bc-canvas: #d2d6cb; --bc-surface: #eef0e8; --bc-border-popover: #b1b6a8; }
+:root:root[data-experience='basecamp'][data-look='graphite'][data-scheme='light'] { --bc-canvas: #d9d4cd; --bc-surface: #f2efea; --bc-border-popover: #bcb5ab; }
+/* A person who follows the device has no data-scheme: the same looks, chosen by the system. */
+@media (prefers-color-scheme: dark) {
+  :root:root[data-experience='basecamp'][data-look='silver']:not([data-scheme]) { --bc-canvas: #0d1114; --bc-surface: #1c2227; --bc-border-popover: #4a5258; --bc-text-muted: #a9b0b6; }
+  :root:root[data-experience='basecamp'][data-look='forest']:not([data-scheme]) { --bc-canvas: #0a1511; --bc-surface: #18291f; --bc-border-popover: #43544a; --bc-text-muted: #a7b3ab; }
+  :root:root[data-experience='basecamp'][data-look='graphite']:not([data-scheme]) { --bc-canvas: #131110; --bc-surface: #262220; --bc-border-popover: #55504b; --bc-text-muted: #b0aaa4; }
+}
+@media (prefers-color-scheme: light) {
+  :root:root[data-experience='basecamp'][data-look='silver']:not([data-scheme]) { --bc-canvas: #d4d7da; --bc-surface: #eff1f3; --bc-border-popover: #b3b9be; }
+  :root:root[data-experience='basecamp'][data-look='forest']:not([data-scheme]) { --bc-canvas: #d2d6cb; --bc-surface: #eef0e8; --bc-border-popover: #b1b6a8; }
+  :root:root[data-experience='basecamp'][data-look='graphite']:not([data-scheme]) { --bc-canvas: #d9d4cd; --bc-surface: #f2efea; --bc-border-popover: #bcb5ab; }
+}
+
+/* DEPTH multiplies the one shadow scale in tokens.css (--bc-sh-*): flat is a hairline, deep is a pronounced lift. */
+:root[data-experience='basecamp'] { --bc-depth: 1; }
+:root[data-experience='basecamp'][data-depth='flat'] { --bc-depth: 0.35; }
+:root[data-experience='basecamp'][data-depth='deep'] { --bc-depth: 1.45; }
+
+/*
+  GLASS is how much the floating surfaces (menus, the command bar, popovers) let the board show through. Only floating
+  surfaces use it: a module face, a maximised view and every row of text stay opaque so reading is never against a texture.
+  --bc-glass-keep is the share of the surface colour that stays; --bc-glass-blur is the frosting.
+*/
+:root[data-experience='basecamp'] { --bc-glass-keep: 92%; --bc-glass-blur: 16px; }
+:root[data-experience='basecamp'][data-glass='off'] { --bc-glass-keep: 100%; --bc-glass-blur: 0px; }
+:root[data-experience='basecamp'][data-glass='rich'] { --bc-glass-keep: 80%; --bc-glass-blur: 24px; }
+[data-experience='basecamp'] :is(.bcmenupanel, .bcsheet, .bcpop, .bcofficemenu) {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bc-text-strong) 6%, var(--bc-surface)) 0%, var(--bc-surface) 40%, color-mix(in srgb, var(--bc-canvas) 20%, var(--bc-surface)) 100%);
+  background-color: color-mix(in srgb, var(--bc-surface) var(--bc-glass-keep), transparent);
+  -webkit-backdrop-filter: blur(var(--bc-glass-blur)) saturate(1.15);
+  backdrop-filter: blur(var(--bc-glass-blur)) saturate(1.15);
+}
+/* The gradient above would hide the glass, so a translucent surface paints its gradient at the same share. */
+[data-experience='basecamp'][data-glass='soft'] :is(.bcmenupanel, .bcsheet, .bcpop, .bcofficemenu),
+[data-experience='basecamp'][data-glass='rich'] :is(.bcmenupanel, .bcsheet, .bcpop, .bcofficemenu),
+:root[data-experience='basecamp']:not([data-glass]) :is(.bcmenupanel, .bcsheet, .bcpop, .bcofficemenu) {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, color-mix(in srgb, var(--bc-text-strong) 6%, var(--bc-surface)) var(--bc-glass-keep), transparent) 0%, color-mix(in srgb, var(--bc-surface) var(--bc-glass-keep), transparent) 40%, color-mix(in srgb, color-mix(in srgb, var(--bc-canvas) 20%, var(--bc-surface)) var(--bc-glass-keep), transparent) 100%);
+}
+
+/* The Look picker in Settings > Appearance: four cards, each a small canvas with a module face on it. */
+#settings .st-looks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  padding: var(--st-pad);
+}
+#settings .st-look {
+  appearance: none;
+  display: grid;
+  gap: 4px;
+  padding: 10px 10px 12px;
+  border-radius: 14px;
+  border: 1.5px solid var(--st-line-2);
+  background: var(--st-panel-2);
+  color: var(--st-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+#settings .st-look:hover { border-color: var(--st-line-3); }
+#settings .st-look[aria-pressed='true'] { border-color: var(--st-accent-line); background: var(--st-accent-wash); box-shadow: inset 0 0 0 1px var(--st-accent-line); }
+#settings .st-look b { font: 600 14px/1.3 var(--bc-font); margin-top: 4px; }
+#settings .st-look small { font: 400 12px/1.4 var(--bc-font); color: var(--st-text-2, var(--bc-text-muted)); }
+#settings .st-lookface {
+  position: relative;
+  height: 64px;
+  border-radius: 9px;
+  background: var(--c);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-text-strong) 10%, transparent);
+  overflow: hidden;
+}
+#settings .st-lookface i {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  width: 38%;
+  border-radius: 6px;
+  background: var(--s);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25), inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+#settings .st-lookface i:first-child { left: 10px; }
+#settings .st-lookface i:last-child { right: 10px; }
+@media (max-width: 860px) {
+  #settings .st-looks { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px; }
+  #settings .st-look small { display: none; }
+}
+
+/*
+  A backdrop filter only sees what is painted inside the nearest ancestor that has one. The top bar is frosted, so a menu
+  hanging from it would blur nothing but the bar; while a panel is open the bar keeps its tint and drops its own filter.
+*/
+[data-experience='basecamp'] .bctop:has(.bcmenupanel:not(.bcmenupanel-ghost)) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background-color: color-mix(in srgb, var(--bc-canvas) 94%, transparent);
+}
+
+/* ---------------------------------------------------------------- 2. type floor --- */
+
+/* 12px is the floor everywhere a person reads; the picker's section labels were 11px. */
+[data-experience='basecamp'] .bdsheet .t-label,
+[data-experience='basecamp'] #viewer .t-label { font-size: 12px; letter-spacing: 0.05em; }

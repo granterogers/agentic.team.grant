@@ -92,6 +92,29 @@ export const DENSITIES = [
   { id: 'compact', name: 'Compact', note: 'More on the screen at once.' },
 ]
 
+/*
+  Looks, glass and depth (aesthetic sprint, 9 October 2026). A look is what the surfaces are made of (the canvas, the
+  face of a module); the accent is the other choice and the two never touch. 'original' is the interface as it already
+  was and is the default, so nobody's screen changes until they choose.
+*/
+/* `faces` is [canvas, surface] in each scheme, only so the picker can draw a small preview; the CSS is the source of truth (refine.css). */
+export const LOOKS = [
+  { id: 'original', name: 'Original', note: 'The slate and stone Team HQ already has', faces: { dark: ['#0b151b', '#1b2930'], light: ['#d6d3cc', '#f0eee9'] } },
+  { id: 'silver', name: 'Slate & Silver', note: 'Cooler, neutral greys', faces: { dark: ['#0d1114', '#1c2227'], light: ['#d4d7da', '#eff1f3'] } },
+  { id: 'forest', name: 'Forest & Brass', note: 'Deep green faces, brass headings', faces: { dark: ['#0a1511', '#18291f'], light: ['#d2d6cb', '#eef0e8'] } },
+  { id: 'graphite', name: 'Warm Graphite', note: 'Warm charcoal and parchment', faces: { dark: ['#131110', '#262220'], light: ['#d9d4cd', '#f2efea'] } },
+]
+export const GLASS = [
+  { id: 'off', name: 'Solid', note: 'Menus are opaque' },
+  { id: 'soft', name: 'Soft', note: 'A hint of the board behind menus' },
+  { id: 'rich', name: 'Rich', note: 'Frosted, the board shows through' },
+]
+export const DEPTHS = [
+  { id: 'flat', name: 'Flat', note: 'Hairline shadows' },
+  { id: 'soft', name: 'Soft', note: 'Gently raised' },
+  { id: 'deep', name: 'Deep', note: 'A pronounced lift' },
+]
+
 const DEFAULTS = {
   palette: 'slate',
   texture: 'concrete',
@@ -99,6 +122,9 @@ const DEFAULTS = {
   ownName: '',
   scheme: 'light',
   density: 'comfortable',
+  look: 'original',
+  glass: 'soft',
+  depth: 'soft',
 }
 
 /*
@@ -161,6 +187,9 @@ export function appearance() {
       ownName: saved.ownName ?? '',
       scheme: SCHEMES.some((x) => x.id === saved.scheme) ? saved.scheme : DEFAULTS.scheme,
       density: DENSITIES.some((d) => d.id === saved.density) ? saved.density : DEFAULTS.density,
+      look: LOOKS.some((x) => x.id === saved.look) ? saved.look : DEFAULTS.look,
+      glass: GLASS.some((x) => x.id === saved.glass) ? saved.glass : DEFAULTS.glass,
+      depth: DEPTHS.some((x) => x.id === saved.depth) ? saved.depth : DEFAULTS.depth,
     }
   } catch {
     // A private window, or storage blocked. A default is a fine answer.
@@ -184,6 +213,10 @@ export function apply(next = appearance()) {
     at.
   */
   document.documentElement.dataset.density = next.density
+  /* Always written, like density, so an audit can read which look, glass and depth it is looking at. */
+  document.documentElement.dataset.look = next.look ?? DEFAULTS.look
+  document.documentElement.dataset.glass = next.glass ?? DEFAULTS.glass
+  document.documentElement.dataset.depth = next.depth ?? DEFAULTS.depth
   /*
     Absent means "follow the system", and absent has to mean literally absent:
     every dark block in skins.css is guarded `:not([data-scheme="light"])`, so

@@ -45,7 +45,7 @@ import * as bcGrip from './bc/dockgrip.js'
 import * as bcDictate from './bc/dockdictate.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
-import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme } from './appearance.js'
+import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme, LOOKS, GLASS, DEPTHS } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as dictate from './dictate.js'
@@ -6837,7 +6837,25 @@ function channelsTab() {
 function appearanceTab() {
   const ui = settingsUi
   const now = appearance()
+  const shown = activeScheme(now)
+  const seg = (key, list, label) =>
+    `<span class="st-seg" role="group" aria-label="${label}">${list
+      .map((o) => `<button type="button" data-${key}-pick="${o.id}" aria-pressed="${now[key] === o.id}" title="${esc(o.note)}">${esc(o.name)}</button>`)
+      .join('')}</span>`
   return [
+    ui.section({
+      title: 'Look',
+      note: 'What the canvas and the faces of the modules are made of. Your accent colour goes on top of any of them.',
+      body: ui.card([
+        `<div class="st-looks" role="group" aria-label="Look">${LOOKS.map((l) => {
+          const [c, s] = l.faces[shown] ?? l.faces.dark
+          return `<button type="button" class="st-look" data-look-pick="${esc(l.id)}" aria-pressed="${now.look === l.id}">
+            <span class="st-lookface" style="--c:${c};--s:${s}" aria-hidden="true"><i></i><i></i></span>
+            <b>${esc(l.name)}</b><small>${esc(l.note)}</small>
+          </button>`
+        }).join('')}</div>`,
+      ]),
+    }),
     ui.section({
       title: 'Accent colour',
       note: 'Used for buttons, links, the selected item and the focus ring. It applies straight away and is saved to your account, so your other devices match.',
@@ -6867,6 +6885,22 @@ function appearanceTab() {
                 `<button type="button" data-scheme-pick="${id}" aria-pressed="${now.scheme === id}">${name}</button>`,
             )
             .join('')}</span>`,
+        }),
+      ]),
+    }),
+    ui.section({
+      title: 'Materials',
+      note: 'How menus and panels sit above the board. Text is always read against a solid face.',
+      body: ui.card([
+        ui.row({
+          name: 'Frosted menus',
+          desc: 'How much of the board shows through menus and the command bar.',
+          control: seg('glass', GLASS, 'Frosted menus'),
+        }),
+        ui.row({
+          name: 'Depth',
+          desc: 'How far panels and menus lift off the board.',
+          control: seg('depth', DEPTHS, 'Depth'),
         }),
       ]),
     }),
@@ -8177,6 +8211,15 @@ function wireAppearance(v) {
   }
   for (const b of v.querySelectorAll('[data-scheme-pick]')) {
     b.addEventListener('click', () => pick('scheme', b.dataset.schemePick))
+  }
+  for (const b of v.querySelectorAll('[data-look-pick]')) {
+    b.addEventListener('click', () => pick('look', b.dataset.lookPick))
+  }
+  for (const b of v.querySelectorAll('[data-glass-pick]')) {
+    b.addEventListener('click', () => pick('glass', b.dataset.glassPick))
+  }
+  for (const b of v.querySelectorAll('[data-depth-pick]')) {
+    b.addEventListener('click', () => pick('depth', b.dataset.depthPick))
   }
 }
 

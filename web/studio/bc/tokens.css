@@ -87,10 +87,10 @@
   --bc-hi: color-mix(in srgb, var(--bc-text-strong) 9%, transparent);
   /* What goes behind every dialog, sheet and maximised view: shadow, never the canvas colour (that is pale on stone). */
   --bc-scrim: color-mix(in srgb, var(--bc-shadow-ink) 50%, transparent);
-  --bc-sh-1: 0 1px 2px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-weak), transparent), 0 6px 16px -8px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
-  --bc-sh-2: 0 2px 4px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-weak), transparent), 0 14px 30px -12px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
-  --bc-sh-3: 0 3px 6px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-weak), transparent), 0 22px 44px -16px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-deep), transparent);
-  --bc-sh-pop: 0 2px 4px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-weak), transparent), 0 18px 38px -14px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-deep), transparent), 0 44px 80px -36px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
+  --bc-sh-1: 0 1px 2px color-mix(in srgb, var(--bc-shadow-ink) calc(var(--bc-sh-weak) * var(--bc-depth, 1)), transparent), 0 6px 16px -8px color-mix(in srgb, var(--bc-shadow-ink) calc(var(--bc-sh-mid) * var(--bc-depth, 1)), transparent);
+  --bc-sh-2: 0 2px 4px color-mix(in srgb, var(--bc-shadow-ink) calc(var(--bc-sh-weak) * var(--bc-depth, 1)), transparent), 0 14px 30px -12px color-mix(in srgb, var(--bc-shadow-ink) calc(var(--bc-sh-mid) * var(--bc-depth, 1)), transparent);
+  --bc-sh-3: 0 3px 6px color-mix(in srgb, var(--bc-shadow-ink) calc(var(--bc-sh-weak) * var(--bc-depth, 1)), transparent), 0 22px 44px -16px color-mix(in srgb, var(--bc-shadow-ink) calc(var(--bc-sh-deep) * var(--bc-depth, 1)), transparent);
+  --bc-sh-pop: 0 2px 4px color-mix(in srgb, var(--bc-shadow-ink) calc(var(--bc-sh-weak) * var(--bc-depth, 1)), transparent), 0 18px 38px -14px color-mix(in srgb, var(--bc-shadow-ink) calc(var(--bc-sh-deep) * var(--bc-depth, 1)), transparent), 0 44px 80px -36px color-mix(in srgb, var(--bc-shadow-ink) calc(var(--bc-sh-mid) * var(--bc-depth, 1)), transparent);
 
   /* --- Typography (§4.2) ------------------------------------------------ */
   /*
