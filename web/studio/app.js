@@ -13993,8 +13993,7 @@ const bcContext = {
   myRepeating: () => (Array.isArray(mine.repeating) ? mine.repeating : null),
   /* After a tick or a stop on My Tasks: the kept lists are behind, so forget them and read again. */
   refreshMyTasks: async () => {
-    forgetMine()
-    await refresh()
+    await Promise.all([reloadMine(), refresh()])
   },
   canWrite: () => canWrite(),
   refresh: () => refresh(),
@@ -15191,6 +15190,39 @@ function forgetMine() {
   for (const k of Object.keys(mine.lists)) delete mine.lists[k]
   mine.counts = null
   mine.repeating = undefined
+}
+
+/*
+  Read the shown list, the counts and the repeating reminders again WITHOUT blanking what is on screen (#450). A tick on My Tasks used
+  to forget every kept list, so the whole list turned into a skeleton and came back, and a second tick made before it returned landed
+  on a row that was being replaced. The rows stay until the new ones arrive, then swap in place; a read that fails keeps what was shown
+  rather than turning it into an empty list. Lists of the other buckets are dropped so they are read when next visited.
+*/
+async function reloadMine() {
+  const key = mineKey()
+  const kept = mine.lists[key]
+  try {
+    const [rows, counts, all] = await Promise.all([
+      settles(read('my_tasks', mine.bucket, { q: mine.query, sort: mine.sort })),
+      settles(read('my_task_counts')),
+      settles(read('my_tasks', 'all', { q: '', sort: 'smart' })),
+    ])
+    for (const k of Object.keys(mine.lists)) if (k !== key) delete mine.lists[k]
+    if (Array.isArray(rows)) {
+      mine.lists[key] = rows
+      delete mine.trouble[key]
+    } else if (kept === undefined) {
+      delete mine.lists[key]
+    }
+    if (counts !== null && typeof counts === 'object') mine.counts = counts
+    if (Array.isArray(all))
+      mine.repeating = all.filter(
+        (r) => r?.repeats?.series === true && r.state !== 'done' && r.state !== 'cancelled',
+      )
+  } catch {
+    // keep what is on screen: a failed re-read is not an empty list
+  }
+  render()
 }
 
 /*
