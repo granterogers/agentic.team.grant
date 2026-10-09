@@ -28,7 +28,9 @@ const SCHEMES = (process.env.SCHEMES ?? 'dark,light').split(',')
 for (const scheme of SCHEMES) {
   const phone = process.env.PHONE === '1'
   const ctx = await browser.newContext({
-    viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+    viewport: phone
+      ? { width: 390, height: 844 }
+      : { width: Number(process.env.W ?? 1440), height: Number(process.env.H ?? 900) },
     hasTouch: phone,
     isMobile: phone,
     locale: 'en-GB',
@@ -67,6 +69,14 @@ for (const scheme of SCHEMES) {
       .screenshot({ path: `${OUT}/${PALETTE}-${scheme}-schedule-${v}.png` })
   }
   await press('.bcstage [data-cal-view="month"]')
+  if (!phone) {
+    for (let i = 0; i < 3; i += 1) await press('[data-bc-zoom="out"]')
+    await shot('zoomed-out')
+    await press('[data-bc-zoom="reset"]')
+    for (let i = 0; i < 4; i += 1) await press('[data-bc-zoom="in"]')
+    await shot('zoomed-in')
+    await press('[data-bc-zoom="reset"]')
+  }
   await page.click('[data-bc-menu]')
   await page.waitForTimeout(450)
   await shot('burger')
@@ -92,6 +102,10 @@ for (const scheme of SCHEMES) {
   await page.waitForTimeout(300)
   await press('[data-bc-settings]')
   await shot('settings')
+  await press('#settings [data-setting="appearance"]')
+  await shot('settings-appearance')
+  await press('#settings [data-setting="connections"]')
+  await shot('settings-services')
   await ctx.close()
 }
 await browser.close()

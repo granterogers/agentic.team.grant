@@ -6856,9 +6856,17 @@ function appearanceTab() {
       body: ui.card([
         ui.row({
           name: 'Colour scheme',
-          desc: 'Team HQ is designed for a dark background in every light. There is no light version yet.',
-          kind: 'fact',
-          control: '<span class="st-value">Dark</span>',
+          desc: 'Light stone or dark slate, or follow your device. It applies straight away and is saved to your account.',
+          control: `<span class="st-seg" role="group" aria-label="Colour scheme">${[
+            ['light', 'Light'],
+            ['dark', 'Dark'],
+            ['system', 'Device'],
+          ]
+            .map(
+              ([id, name]) =>
+                `<button type="button" data-scheme-pick="${id}" aria-pressed="${now.scheme === id}">${name}</button>`,
+            )
+            .join('')}</span>`,
         }),
       ]),
     }),
@@ -8162,10 +8170,13 @@ function wireAppearance(v) {
     settingsSheet()          // redraw so the tick moves
     sheet(v, true)
   }
-  // The accent is the one appearance setting that changes Team HQ (see appearanceTab); the old scheme, density and
+  // The accent and the colour scheme change Team HQ (see appearanceTab); the old density and
   // texture controls were removed from the page and their wiring with them.
   for (const b of v.querySelectorAll('[data-palette-pick]')) {
     b.addEventListener('click', () => pick('palette', b.dataset.palettePick))
+  }
+  for (const b of v.querySelectorAll('[data-scheme-pick]')) {
+    b.addEventListener('click', () => pick('scheme', b.dataset.schemePick))
   }
 }
 

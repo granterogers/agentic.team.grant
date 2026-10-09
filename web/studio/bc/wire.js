@@ -63,16 +63,16 @@ export const mount = (c) => {
   document.addEventListener('pointerdown', (e) => {
     if (ctx.state.experience !== 'basecamp' || !menu.isOpen()) return
     if (e.target instanceof Element && e.target.closest('.bcmenupanel, [data-bc-menu], [data-bc-menu-open]')) return
-    menu.setOpen(false)
-    c.render()
+    menu.closeAnimated(() => c.render())
   })
   document.addEventListener('keydown', (e) => {
     if (ctx.state.experience !== 'basecamp') return
     jump.onKey(e)
     if (e.key === 'Escape' && menu.isOpen()) {
-      menu.setOpen(false)
-      c.render()
-      document.querySelector('[data-bc-menu]')?.focus()
+      menu.closeAnimated(() => {
+        c.render()
+        document.querySelector('[data-bc-menu]')?.focus()
+      })
     }
   })
 }
@@ -711,11 +711,17 @@ export const wire = (root) => {
   for (const b of root.querySelectorAll('[data-bc-menu], [data-bc-menu-open]')) {
     b.addEventListener('click', () => {
       const wasOpen = menu.isOpen()
-      menu.setOpen(b.hasAttribute('data-bc-menu-open') ? true : !wasOpen)
-      if (b.hasAttribute('data-bc-menu-open') && !canWrite()) menu.setMaking(false)
-      ctx.render()
-      if (menu.isOpen()) root.ownerDocument.querySelector('.bcmenuitem')?.focus()
-      else root.ownerDocument.querySelector('[data-bc-menu]')?.focus()
+      const opening = b.hasAttribute('data-bc-menu-open') || !wasOpen
+      const settle = () => {
+        if (b.hasAttribute('data-bc-menu-open') && !canWrite()) menu.setMaking(false)
+        ctx.render()
+        if (menu.isOpen()) root.ownerDocument.querySelector('.bcmenuitem')?.focus()
+        else root.ownerDocument.querySelector('[data-bc-menu]')?.focus()
+      }
+      if (opening) {
+        menu.setOpen(true)
+        settle()
+      } else menu.closeAnimated(settle)
     })
   }
   /* The menu is a role=menu, so the arrow keys, Home and End move between its entries. */

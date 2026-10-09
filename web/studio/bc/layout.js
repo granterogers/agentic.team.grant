@@ -503,6 +503,12 @@ const cleanMod = (m) => ({
   h: m.h,
   z: Number.isFinite(m.z) ? m.z : 1,
   tint: validTint(m.tint) ? (m.tint ?? null) : null,
+  /*
+    WHO DECIDED THE GEOMETRY. true: the person arranged the board, so x, y, w and h are theirs and are kept to the pixel.
+    false: the arrangement is the default one, computed from the window, and x, y, w and h are only a snapshot of it. Absent:
+    a document stored before this flag existed (see frozen()).
+  */
+  ...(m.placed === true ? { placed: true } : m.placed === false ? { placed: false } : {}),
 })
 
 /** The longest note kept. The textarea says the same (compose.js), so nothing is typed that is not saved. */
@@ -1072,18 +1078,57 @@ export const forgetAll = () => {
 
 /* ------------------------------------------------------------- the modules --- */
 
+const sameBox = (a, b) =>
+  Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1 && Math.abs(a.w - b.w) <= 1 && Math.abs(a.h - b.h) <= 1
+
+/**
+ * Has the person arranged this board, so that its geometry is theirs to keep?
+ *
+ * The defect this answers (9 October 2026): pressing anywhere inside a module raised it, and a raise stored EVERY module's
+ * rectangle at the window width of that moment. From then on the arrangement was "customised", so opening the chat or
+ * resizing the window no longer re-fitted the modules and a note ended up on top of a panel. A press is not an
+ * arrangement. Only a move, a resize, a tidy, a preset or a loaded layout is (they store `placed: true`); a raise or a tint
+ * stores the stacking order and the colour and leaves the geometry following the window.
+ *
+ * Documents written before the flag existed have neither value. They are kept exactly as they were, with one exception that
+ * loses nothing: if every rectangle in one is the default arrangement for the window as it is now, it never was an
+ * arrangement, it was a snapshot of the default, and it follows the window again. A document stored at some other width
+ * cannot be told apart from a deliberate one, so it stays frozen and "Reset view" is the way back.
+ */
+const frozen = (d) => {
+  if (d.mods === null || d.mods.length === 0) return false
+  if (d.mods.some((m) => m.placed === true)) return true
+  if (d.mods.every((m) => m.placed === false)) return false
+  const was = fromFractions(THIRDS, stage)
+  const arranged = !d.mods.every((m) => {
+    const w = was.find((x) => x.id === m.id)
+    return w !== undefined && sameBox(w, m)
+  })
+  /* Decided once, when first asked, and remembered on the document: the verdict must not flip when the window changes later. */
+  for (const m of d.mods) m.placed = arranged
+  return arranged
+}
+
 /** The modules on the page, in pixels for the current stage, clamped. */
 export const layout = (slug) => {
   const d = doc(slug)
-  const base = d.mods === null ? fromFractions(THIRDS, stage) : d.mods
-  return base.map((m) => clampRect(m))
+  const was = fromFractions(THIRDS, stage)
+  if (d.mods === null) return was.map((m) => clampRect(m))
+  if (frozen(d)) return d.mods.map((m) => clampRect(m))
+  /* Following the window: the default rectangle for each module that is on the page, with the person's stacking and colour. */
+  return d.mods.map((m) => {
+    const w = was.find((x) => x.id === m.id) ?? m
+    return clampRect({ ...w, id: m.id, z: m.z, tint: m.tint ?? null })
+  })
 }
 
-const materialised = (slug) => {
+/** The document with every module's rectangle written out, and who owns it recorded (`placed`). */
+const materialised = (slug, ownIt = false) => {
   const d = doc(slug)
+  const owned = ownIt || frozen(d)
   return {
     ...d,
-    mods: d.mods === null ? fromFractions(THIRDS, stage) : d.mods.map((m) => ({ ...m })),
+    mods: layout(slug).map((m) => ({ ...m, placed: owned })),
   }
 }
 
@@ -1092,7 +1137,8 @@ const topZ = (d) =>
 
 /** Move or resize one module. Neighbours are left alone: overlap is permitted. */
 export const place = (slug, id, rect) => {
-  const d = materialised(slug)
+  /* A move or a resize IS an arrangement: every rectangle is written down as the person's from here on. */
+  const d = materialised(slug, true)
   const z = topZ(d) + 1
   d.mods = d.mods.map((m) => (m.id === id ? clampRect({ ...m, ...rect, id, z }) : m))
   commit(slug, d)
@@ -1128,7 +1174,7 @@ export const add = (slug, id) => {
   const d = materialised(slug)
   if (d.mods.some((m) => m.id === id)) return
   const [r] = fromFractions({ [id]: THIRDS[id] }, stage)
-  d.mods = [...d.mods, { ...r, z: topZ(d) + 1 }]
+  d.mods = [...d.mods, { ...r, z: topZ(d) + 1, placed: d.mods.some((m) => m.placed === true) }]
   commit(slug, d)
 }
 
@@ -1140,8 +1186,8 @@ export const off = (slug) => {
 
 /** Lightly tidy this page. */
 export const autoArrange = (slug) => {
-  const d = materialised(slug)
-  d.mods = tidy(d.mods, stage)
+  const d = materialised(slug, true)
+  d.mods = tidy(d.mods, stage).map((m) => ({ ...m, placed: true }))
   commit(slug, d)
   return layout(slug)
 }
@@ -1169,6 +1215,8 @@ export const customised = (slug) => {
   if (d.mods === null) return false
   const was = fromFractions(THIRDS, stage)
   if (d.mods.length !== was.length) return true
+  /* Following the window is the default arrangement whatever the stored snapshot says: only a colour makes it different. */
+  if (!frozen(d)) return d.mods.some((m) => m.tint !== null)
   return d.mods.some((m) => {
     const w = was.find((x) => x.id === m.id)
     return (
@@ -1187,6 +1235,17 @@ export const customised = (slug) => {
 export const zoomOf = (slug) => doc(slug).zoom
 export const viewOf = (slug) => ({ zoom: doc(slug).zoom, ...doc(slug).pan })
 /** Store the view (zoom and where the origin sits). */
+/**
+ * Remember the live view for this session WITHOUT writing it. The page stores the view 250ms after a gesture stops, and a
+ * redraw inside that window (opening the menu, a calendar press) used to read the older stored view and snap the board back to
+ * the zoom it had before. The write still happens, late, through setView.
+ */
+export const holdView = (slug, v) => {
+  const d = doc(slug)
+  d.zoom = Math.round(clampZoom(v.zoom) * 1000) / 1000
+  d.pan = cleanPan(v)
+}
+
 export const setView = (slug, v) => {
   const zoom = Math.round(clampZoom(v.zoom) * 1000) / 1000
   commit(slug, { ...doc(slug), zoom, pan: cleanPan(v) })
@@ -1228,7 +1287,7 @@ export const saveLayout = (slug, name) => {
   const n = cleanName(name)
   if (n === '') return ''
   const d = doc(slug)
-  const snap = layout(slug).map(cleanMod)
+  const snap = layout(slug).map((m) => cleanMod({ ...m, placed: true }))
   commit(slug, { ...d, layouts: { ...d.layouts, [n]: { mods: snap, zoom: d.zoom } } })
   return n
 }
@@ -1237,7 +1296,7 @@ export const loadLayout = (slug, name) => {
   const d = doc(slug)
   const l = d.layouts[name]
   if (l === undefined) return false
-  commit(slug, { ...d, mods: l.mods.map((m) => ({ ...m })), zoom: l.zoom })
+  commit(slug, { ...d, mods: l.mods.map((m) => ({ ...m, placed: true })), zoom: l.zoom })
   return true
 }
 
@@ -1265,7 +1324,7 @@ export const deleteLayout = (slug, name) => {
 export const applyPreset = (slug, key) => {
   const p = PRESETS[key]
   if (p === undefined) return false
-  commit(slug, { ...doc(slug), mods: fromFractions(p.frac, stage) })
+  commit(slug, { ...doc(slug), mods: fromFractions(p.frac, stage).map((m) => ({ ...m, placed: true })) })
   return true
 }
 

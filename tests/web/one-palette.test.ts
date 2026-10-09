@@ -70,7 +70,39 @@ describe('one palette', () => {
 
   it('the maximised view is scrimmed with shadow, never with the canvas colour (which is pale in the light scheme)', () => {
     const back = /\.bcexpback\s*\{([^}]*)\}/.exec(polish)?.[1] ?? ''
-    expect(back).toMatch(/--bc-shadow-ink/)
+    expect(back).toMatch(/background:\s*var\(--bc-scrim\)/)
     expect(back).not.toMatch(/--bc-canvas/)
+    expect(declared(tokens, '--bc-scrim')).toMatch(/--bc-shadow-ink/)
+  })
+
+  it('every backdrop in Team HQ is the one scrim token', () => {
+    const files: Record<string, RegExp> = {
+      'bc/bc.css': /\.bcscrim\s*\{[^}]*background:\s*var\(--bc-scrim\)/,
+      'bc/stone.css': /\.viewer\s*\{[^}]*background:\s*var\(--bc-scrim\)/,
+      'bc/calendar.css': /\.bccal2back\s*\{[^}]*background:\s*var\(--bc-scrim/,
+      'settings-ui.css': /background:\s*var\(--bc-scrim/,
+    }
+    for (const [f, re] of Object.entries(files)) expect(read(f), f).toMatch(re)
+  })
+
+  it('the maximised surface stands on an opaque colour, so nothing behind it can show through', () => {
+    const box = /\.bcexpbox\s*\{([^}]*)\}/.exec(polish)?.[1] ?? ''
+    expect(box).toMatch(/background-color:\s*var\(--bc-surface\)/)
+  })
+
+  it('the dark-only literal colours are gone from the calendar and documents sheets', () => {
+    const literals = /#(f0907e|e8a04a|e0b66a|7fa4ee|4fb985|f2c46d)\b/i
+    for (const f of ['bc/calendar.css', 'bc/docs.css']) expect(read(f), f).not.toMatch(literals)
+    /* compose.css keeps the rainbow of the custom-colour swatch, which is a picture of a choice, not a role. */
+    expect(read('bc/compose.css')).not.toMatch(/#f2c46d\b/i)
+  })
+
+  it('shadows come from one scale (no black rgb shadow is left in the Team HQ sheets)', () => {
+    for (const f of ['bc/stone.css', 'bc/settings.css', 'bc/calendar.css', 'bc/docs.css']) {
+      const bad = read(f)
+        .split('\n')
+        .filter((l) => /box-shadow:[^;]*rgba?\(\s*0[ ,]+0[ ,]+0/.test(l) && !/var\(--bc-sh/.test(l))
+      expect(bad, f).toEqual([])
+    }
   })
 })

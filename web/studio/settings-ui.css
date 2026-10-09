@@ -806,7 +806,7 @@
   transform: translate(-50%, 0);
 }
 .stg-toast.warn {
-  border-color: rgb(243 198 119 / 0.6);
+  border-color: color-mix(in srgb, var(--st-warn) 60%, transparent);
 }
 
 /* ================================================== the lists / tiles ===== */
@@ -937,7 +937,7 @@
   height: 24px;
   border-radius: 50%;
   background: var(--c);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  box-shadow: inset 0 0 0 1px var(--bc-hi, rgb(255 255 255 / 0.25));
 }
 
 /* =================================================== segmented control ==== */
@@ -1264,7 +1264,9 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgb(4 10 13 / 0.72);
+  background: var(--bc-scrim, rgb(4 10 13 / 0.72));
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
   font-family: var(--st-font);
 }
 /* The invisible shield left for a moment after a dialog closes, so a double-tap cannot land on the control underneath. */
@@ -1283,7 +1285,7 @@
   border-radius: 16px;
   background: var(--st-panel-2);
   border: 1px solid var(--st-line-3);
-  box-shadow: 0 30px 70px rgb(0 0 0 / 0.6);
+  box-shadow: var(--bc-sh-pop, 0 30px 70px rgb(0 0 0 / 0.6));
   color: var(--st-text);
 }
 .stg-confirmbox h2 {
@@ -1535,3 +1537,22 @@
 .st-googleline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 14px; }
 .st-gtick { color: var(--ink-3, #9aa3a8); font-size: 12.5px; }
 .st-gtick.is-on { color: var(--ink, #e1e5e8); }
+
+/* A row whose control is a segmented choice puts it under the words on a phone, so neither is squeezed (9 October 2026). */
+@media (max-width: 560px) {
+  #settings .st-row:has(.st-seg) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #settings .st-row:has(.st-seg) .st-ctl {
+    margin-top: 12px;
+    justify-content: stretch;
+  }
+  #settings .st-row:has(.st-seg) .st-seg {
+    display: flex;
+    width: 100%;
+  }
+  #settings .st-row:has(.st-seg) .st-seg button {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
+}

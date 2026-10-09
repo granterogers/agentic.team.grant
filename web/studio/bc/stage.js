@@ -150,11 +150,12 @@ export const wireStage = (root, ctx) => {
       c.beginPath()
       for (let j = 0; j < rows; j++) {
         const iy = iy0 + j
-        const y = snap(view.y + iy * step)
+        /* Half a step in: a dot never straddles the board's own edge at the origin, where it would be cut in two. */
+        const y = snap(view.y + (iy + 0.5) * step)
         for (let i = 0; i < cols; i++) {
           const ix = ix0 + i
           if ((ix % 4 === 0 && iy % 4 === 0) !== major) continue
-          const x = snap(view.x + ix * step)
+          const x = snap(view.x + (ix + 0.5) * step)
           const rr = major ? r * 1.35 : r
           c.moveTo(x + rr, y)
           c.arc(x, y, rr, 0, Math.PI * 2)
@@ -183,6 +184,7 @@ export const wireStage = (root, ctx) => {
   const paintView = () => {
     queueGrid()
     zoomLive = view.zoom
+    grid.holdView(slug, view)
     stageEl.style.transform = `translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})`
     stageEl.style.setProperty('--bc-zoom', String(view.zoom))
     board.style.setProperty('--bc-gx', `${String(view.x)}px`)

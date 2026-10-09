@@ -16,6 +16,7 @@ declare const document: any
 
 const API_PORT = 4676
 let stored = null as any[] | null
+let rev = 0
 const writes: string[] = []
 let slow = 0
 const cors = {
@@ -38,6 +39,11 @@ const office = createServer((req, res) => {
     if (req.method === 'GET') {
       const section = url.searchParams.get('section')
       res.writeHead(200, cors)
+      /* The compare-and-swap read the page prefers since #442: the arrangement with its revision and the office's clock. */
+      if (section === 'layout') {
+        res.end(JSON.stringify({ data: { panels: stored, rev, now: Date.now() } }))
+        return
+      }
       if (section === 'studio') {
         res.end(
           JSON.stringify({
@@ -73,12 +79,19 @@ const office = createServer((req, res) => {
     const body = JSON.parse(raw === '' ? '{}' : raw) as { action?: string; args?: any }
     if (body.action === 'dashboard_layout_set') {
       const panels = body.args?.p_panels as any[]
+      const expected = body.args?.p_expected_rev as number | undefined
       const reply = (): void => {
+        res.writeHead(200, cors)
+        /* Compare-and-swap, as the gateway does it: a write made against an older revision is refused and handed the newer copy to merge. */
+        if (expected !== undefined && expected !== rev) {
+          res.end(JSON.stringify({ result: { conflict: true, panels: stored, rev, now: Date.now() } }))
+          return
+        }
         stored = panels
+        rev += 1
         const meta = panels.find((m) => m.id === '__workspace')
         writes.push((meta?.postits ?? []).map((n: any) => n.text).join('|'))
-        res.writeHead(200, cors)
-        res.end(JSON.stringify({ result: { ok: true } }))
+        res.end(JSON.stringify({ result: { ok: true, rev, now: Date.now() } }))
       }
       if (slow > 0) setTimeout(reply, slow)
       else reply()

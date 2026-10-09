@@ -126,7 +126,7 @@
 [data-experience='basecamp'] button.bccount:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
 [data-experience='basecamp'] .bccount--waiting .bccountn { color: var(--bc-section-accent); }
 [data-experience='basecamp'] .bccount--late .bccountn { color: var(--bc-danger); }
-[data-experience='basecamp'] .bccount--stuck .bccountn { color: #f2c46d; }
+[data-experience='basecamp'] .bccount--stuck .bccountn { color: var(--bc-warn); }
 @media (pointer: coarse) {
   [data-experience='basecamp'] .bccount { min-height: 44px; line-height: 44px; }
 }
@@ -437,7 +437,7 @@
   border-radius: 2px;
   background: var(--bc-text-strong);
   opacity: 0.85;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
 }
 
 [data-experience='basecamp'] .bcmate--asks,
@@ -539,7 +539,7 @@
   background: color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas));
   border: 1px solid var(--bc-border-subtle);
   border-radius: 3px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
   overflow: hidden;
 }
 [data-experience='basecamp'] .bcpline { height: 3px; border-radius: 2px; background: var(--bc-canvas); opacity: 0.38; }
@@ -1055,13 +1055,13 @@
   padding: 10px 10px 8px 14px;
   border: 1px solid var(--bc-border-control);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--bc-surface) 92%, black);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.04);
+  background: color-mix(in srgb, var(--bc-surface) 92%, var(--bc-canvas));
+  box-shadow: var(--bc-sh-2), inset 0 1px 0 var(--bc-hi);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 [data-experience='basecamp'] .bcsaybox:focus-within {
   border-color: color-mix(in srgb, var(--bc-accent) 60%, transparent);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.28), 0 0 0 3px color-mix(in srgb, var(--bc-accent) 18%, transparent);
+  box-shadow: var(--bc-sh-2), 0 0 0 3px color-mix(in srgb, var(--bc-accent) 18%, transparent);
 }
 [data-experience='basecamp'] .bcsayinput {
   display: block;
@@ -1178,7 +1178,7 @@
   background: color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas));
   border: 1px solid var(--bc-border-subtle);
   border-radius: 3px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
   overflow: hidden;
   position: relative;
 }
@@ -1193,7 +1193,7 @@
 }
 [data-experience='basecamp'] .bcdoc--openable:hover .bcthumb,
 [data-experience='basecamp'] .bcdoc--openable:focus-within .bcthumb {
-  box-shadow: 0 2px 10px rgb(0 0 0 / 55%);
+  box-shadow: var(--bc-sh-1);
   border-color: var(--bc-accent);
 }
 
@@ -1315,7 +1315,7 @@
 }
 [data-experience='basecamp'] .bcmod--dragging {
   z-index: 3;
-  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--bc-sh-3);
   transform: scale(1.012);
 }
 [data-experience='basecamp'] .bcmod--placed .bcmodhead {
@@ -1608,11 +1608,11 @@
     var(--bc-surface) 42%,
     color-mix(in srgb, var(--bc-canvas) 28%, var(--bc-surface)) 100%
   );
-  --v2-lift: 0 1px 2px rgb(0 0 0 / 22%), 0 10px 26px -18px rgb(0 0 0 / 55%);
+  --v2-lift: inset 0 1px 0 var(--bc-hi), var(--bc-sh-1);
   --v2-glow:
     0 0 0 1px color-mix(in srgb, var(--bc-accent) 34%, transparent),
-    0 0 22px -4px color-mix(in srgb, var(--bc-accent) 42%, transparent),
-    0 2px 4px rgb(0 0 0 / 22%), 0 14px 32px -20px rgb(0 0 0 / 60%);
+    0 0 22px -6px color-mix(in srgb, var(--bc-accent) 38%, transparent),
+    var(--bc-sh-2);
 }
 
 [data-experience='basecamp'] .bccomp--c .bcmod {
@@ -1712,7 +1712,7 @@
   background: var(--v2-face);
   border: var(--v2-edge);
   border-radius: var(--bc-r-sheet);
-  box-shadow: 0 24px 70px -28px rgb(0 0 0 / 75%), 0 2px 6px rgb(0 0 0 / 30%);
+  box-shadow: var(--bc-sh-pop);
   padding: 26px 28px 30px;
 }
 /*
@@ -2103,7 +2103,7 @@
 }
 [data-experience='basecamp'] .bcbcard:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--bc-sh-2);
 }
 [data-experience='basecamp'] .bcbcard:focus-visible {
   outline: 2px solid var(--bc-accent);
@@ -2500,14 +2500,14 @@
   border-radius: 14px;
   border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 22%, transparent);
   background: var(--bc-surface);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--bc-sh-1);
   cursor: pointer;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 [data-experience='basecamp'] .bcservice:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--bc-accent) 55%, transparent);
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--bc-sh-3);
 }
 [data-experience='basecamp'] .bcservice:focus-visible {
   outline: 2px solid var(--bc-accent);
@@ -3240,7 +3240,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   border: 1px solid color-mix(in srgb, var(--bc-danger) 45%, transparent);
   border-radius: 10px;
   background: color-mix(in srgb, var(--bc-danger) 10%, var(--bc-surface));
-  box-shadow: 0 10px 24px rgb(0 0 0 / 0.3);
+  box-shadow: var(--bc-sh-2);
   text-align: left;
   font-size: 13px;
   line-height: 1.45;
@@ -3342,7 +3342,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   border: 1px solid var(--bc-border-subtle);
   border-radius: 14px;
   background: color-mix(in srgb, var(--bc-text) 3%, var(--bc-surface));
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 6px 18px rgb(0 0 0 / 0.14);
+  box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-1);
   transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
 }
 [data-experience='basecamp'] .bcsources--full .bcsource.bcsource--press:hover {
@@ -3602,7 +3602,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 [data-experience='basecamp'] .bcpsig--zero { opacity: 0.8; /* 0.7 measured 4.07:1 in axe; 0.8 clears 4.5 */ }
 [data-experience='basecamp'] .bcpsig--waiting b { color: var(--bc-section-accent); }
 [data-experience='basecamp'] .bcpsig--late b { color: var(--bc-danger); }
-[data-experience='basecamp'] .bcpsig--stuck b { color: #f2c46d; }
+[data-experience='basecamp'] .bcpsig--stuck b { color: var(--bc-warn); }
 
 /* A contact record's groups: small, quiet headings between the fields. */
 [data-experience='basecamp'] .bcctgroup {
@@ -3826,7 +3826,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 [data-experience='basecamp'] .bcmod--placed .bcmodbtn { width: 24px; height: 24px; border-radius: 7px; }
 [data-experience='basecamp'] .bcmod--placed .bcresize { right: 0; bottom: 0; width: 18px; height: 18px; }
 [data-experience='basecamp'] .bcmod--placed .bcresize svg { width: 11px; height: 11px; }
-[data-experience='basecamp'] .bcmod--dragging { transform: none; box-shadow: 0 18px 40px -12px rgb(0 0 0 / 55%); }
+[data-experience='basecamp'] .bcmod--dragging { transform: none; box-shadow: var(--bc-sh-3); }
 [data-experience='basecamp'] .bcpanes--moving .bcmod--placed:not(.bcmod--dragging) { pointer-events: none; }
 
 /* A tinted module: the hue washes the face, the edge and the top line. */
@@ -3902,7 +3902,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   background: var(--bc-surface);
   border: 1px solid color-mix(in srgb, var(--bc-text-muted) 32%, transparent);
   border-radius: 12px;
-  box-shadow: 0 18px 44px -14px rgb(0 0 0 / 60%), 0 2px 6px rgb(0 0 0 / 30%);
+  box-shadow: var(--bc-sh-pop);
   font-size: 13px;
   animation: bc-pop-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -4203,7 +4203,7 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
   background: var(--bc-ink, #1d2230);
   color: var(--bc-paper, #fff);
   font-size: 13px;
-  box-shadow: 0 10px 24px -12px rgb(0 0 0 / 60%);
+  box-shadow: var(--bc-sh-2);
 }
 [data-experience='basecamp'] .bcpostitundobtn {
   appearance: none;

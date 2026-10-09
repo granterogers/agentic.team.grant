@@ -13,19 +13,13 @@
 [data-experience='basecamp'] {
   --bc-stone-tex: url('/textures/microcement.webp');
   --bc-panel: color-mix(in srgb, var(--bc-surface) 92%, white);
-  --bc-panel-shadow:
-    0 1px 1.5px rgb(40 36 28 / 0.12),
-    0 6px 14px -6px rgb(40 36 28 / 0.22),
-    0 22px 38px -22px rgb(40 36 28 / 0.30);
-  --bc-panel-shadow-lift:
-    0 2px 3px rgb(40 36 28 / 0.14),
-    0 14px 26px -8px rgb(40 36 28 / 0.30),
-    0 34px 54px -26px rgb(40 36 28 / 0.38);
+  --bc-panel-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-1);
+  --bc-panel-shadow-lift: inset 0 1px 0 var(--bc-hi), var(--bc-sh-3);
+  /* The well the board sits in: pressed into the page, lit from above. One definition for both schemes. */
+  --bc-well: inset 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent), inset 0 0 0 1px var(--bc-hi);
 }
 [data-experience='basecamp'][data-scheme='dark'] {
   --bc-panel: color-mix(in srgb, var(--bc-surface) 96%, white);
-  --bc-panel-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 10px 24px -10px rgb(0 0 0 / 0.55);
-  --bc-panel-shadow-lift: 0 2px 4px rgb(0 0 0 / 0.4), 0 22px 44px -14px rgb(0 0 0 / 0.65);
 }
 
 /* The page and the canvas share one material. */
@@ -56,11 +50,10 @@
   border-radius: 14px;
   border: 1px solid var(--bc-border-subtle);
   background-color: color-mix(in srgb, var(--bc-canvas) 55%, transparent);
-  box-shadow: inset 0 1px 3px rgb(40 36 28 / 0.14), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  box-shadow: var(--bc-well);
   --bc-dot: color-mix(in srgb, var(--bc-text) 26%, transparent);
 }
 [data-experience='basecamp'][data-scheme='dark'] .bcpanes {
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.5);
   --bc-dot: color-mix(in srgb, var(--bc-text-muted) 38%, transparent);
 }
 
@@ -79,7 +72,7 @@
 [data-experience='basecamp'] .bcstate {
   background: color-mix(in srgb, var(--bc-surface) 78%, transparent);
   border: 1px solid var(--bc-border-control);
-  box-shadow: 0 1px 2px rgb(40 36 28 / 0.10);
+  box-shadow: var(--bc-sh-1);
 }
 [data-experience='basecamp'] .bcmenupanel,
 [data-experience='basecamp'] .bcpop {
@@ -111,7 +104,7 @@
   border-left: 3px solid var(--bc-accent);
   border-radius: 10px;
   background: var(--bc-panel);
-  box-shadow: 0 1px 2px rgb(40 36 28 / 0.08);
+  box-shadow: var(--bc-sh-1);
 }
 [data-experience='basecamp'] .setauto.off { border-left-color: var(--bc-border-control); background: color-mix(in srgb, var(--bc-surface) 70%, transparent); }
 [data-experience='basecamp'] .setauto.off .setautowhat { color: var(--bc-text-muted); }
@@ -126,7 +119,7 @@
   border: 1px solid var(--bc-border-subtle);
   border-radius: 12px;
   background: var(--bc-panel);
-  box-shadow: 0 1px 2px rgb(40 36 28 / 0.08);
+  box-shadow: var(--bc-sh-1);
 }
 [data-experience='basecamp'] .setmake textarea,
 [data-experience='basecamp'] .setmakerow select,
@@ -197,7 +190,7 @@
   color: var(--bc-text);
 }
 [data-experience='basecamp'] #viewer,
-[data-experience='basecamp'] .viewer { background: rgb(30 28 24 / 0.38); backdrop-filter: none; -webkit-backdrop-filter: none; }
+[data-experience='basecamp'] .viewer { background: var(--bc-scrim); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) {
   width: min(680px, 100%);
   padding: 14px 18px 16px;
@@ -331,9 +324,8 @@
   background-color: color-mix(in srgb, var(--bc-canvas) 55%, transparent);
   background-image: radial-gradient(circle at center, color-mix(in srgb, var(--bc-text) 26%, transparent) 0 1.1px, transparent 1.8px);
   background-size: 24px 24px;
-  box-shadow: inset 0 1px 3px rgb(40 36 28 / 0.14), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  box-shadow: var(--bc-well);
 }
-[data-experience='basecamp'][data-scheme='dark'] .bcvoid { box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.5); }
 
 /* 761-860px: the studio's own rule turns the dock into a bottom sheet here, which this experience does not have; it stays a side panel like wider windows. */
 @media (min-width: 761px) and (max-width: 860px) {

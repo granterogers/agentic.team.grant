@@ -22,10 +22,10 @@
   /* --- Colour (§4.1) ---------------------------------------------------- */
   --bc-canvas: #d6d3cc;
   --bc-surface: #f0eee9;
-  --bc-surface-selected: #dde3ea;
+  --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 14%, var(--bc-surface));
   --bc-text: #272a2d;
   --bc-text-strong: #14171a;
-  --bc-text-muted: #595e63;
+  --bc-text-muted: #4d5258;
   --bc-accent: #2b6cb0;
   --bc-accent-ink: #ffffff;
   --bc-section-accent: #a2502f;
@@ -73,10 +73,24 @@
     a white page.
   */
   --bc-danger: #b3382e;
-  --bc-success: #2a7a54;
+  --bc-success: #1d6a45;
   --bc-warn: #8f5a08;
+  /* Two more roles that were literals in the dark scheme only: a source that is not ours (Google, a generated file) and a notebook. */
+  --bc-amber: #94560a;
+  --bc-info: #34529a;
   /* The colour shadows are made of: warm near-black on stone, true black on the dark scheme. */
   --bc-shadow-ink: rgb(40 36 28);
+  /* How strong shadow is on this scheme (stone shows less than slate), and the four shadows built from it. One scale, used everywhere. */
+  --bc-sh-weak: 16%;
+  --bc-sh-mid: 28%;
+  --bc-sh-deep: 42%;
+  --bc-hi: color-mix(in srgb, var(--bc-text-strong) 9%, transparent);
+  /* What goes behind every dialog, sheet and maximised view: shadow, never the canvas colour (that is pale on stone). */
+  --bc-scrim: color-mix(in srgb, var(--bc-shadow-ink) 50%, transparent);
+  --bc-sh-1: 0 1px 2px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-weak), transparent), 0 6px 16px -8px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
+  --bc-sh-2: 0 2px 4px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-weak), transparent), 0 14px 30px -12px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
+  --bc-sh-3: 0 3px 6px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-weak), transparent), 0 22px 44px -16px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-deep), transparent);
+  --bc-sh-pop: 0 2px 4px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-weak), transparent), 0 18px 38px -14px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-deep), transparent), 0 44px 80px -36px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
 
   /* --- Typography (§4.2) ------------------------------------------------ */
   /*
@@ -169,7 +183,7 @@
 :root[data-experience='basecamp'][data-scheme='dark'] {
   --bc-canvas: #0b151b;
   --bc-surface: #1b2930;
-  --bc-surface-selected: #2a4259;
+  --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 20%, var(--bc-surface));
   --bc-text: #e1e5e8;
   --bc-text-strong: #f2f4f5;
   --bc-text-muted: #a8afb3;
@@ -192,7 +206,12 @@
   --bc-danger: #f0857c;
   --bc-success: #6fd3a3;
   --bc-warn: #f3c677;
+  --bc-amber: #e8a04a;
+  --bc-info: #8aa9ee;
   --bc-shadow-ink: rgb(0 0 0);
+  --bc-sh-weak: 30%;
+  --bc-sh-mid: 46%;
+  --bc-sh-deep: 62%;
   --bc-shadow-surface: 0 0 30px rgb(0 0 0 / 0.08);
   color-scheme: dark;
 }
@@ -200,7 +219,7 @@
   :root[data-experience='basecamp']:not([data-scheme='light']):not([data-scheme='dark']) {
     --bc-canvas: #0b151b;
     --bc-surface: #1b2930;
-    --bc-surface-selected: #2a4259;
+    --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 20%, var(--bc-surface));
     --bc-text: #e1e5e8;
     --bc-text-strong: #f2f4f5;
     --bc-text-muted: #a8afb3;
@@ -223,7 +242,12 @@
     --bc-danger: #f0857c;
     --bc-success: #6fd3a3;
     --bc-warn: #f3c677;
+    --bc-amber: #e8a04a;
+    --bc-info: #8aa9ee;
     --bc-shadow-ink: rgb(0 0 0);
+    --bc-sh-weak: 30%;
+    --bc-sh-mid: 46%;
+    --bc-sh-deep: 62%;
     --bc-shadow-surface: 0 0 30px rgb(0 0 0 / 0.08);
     color-scheme: dark;
   }

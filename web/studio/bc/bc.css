@@ -420,7 +420,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgb(0 0 0 / 0.4);
+  background: var(--bc-scrim);
   animation: bcfade var(--bc-t-in) var(--bc-ease-out);
 }
 @keyframes bcfade { from { opacity: 0; } to { opacity: 1; } }
@@ -1288,7 +1288,7 @@
   padding: var(--bc-2) var(--bc-main-pad);
   border-bottom: 1px solid var(--bc-border-subtle);
   background: var(--bc-hover);
-  color: var(--bc-text-muted);
+  color: var(--bc-text);
   font: 500 13px/1.45 var(--bc-font);
 }
 [data-experience="basecamp"] .bcnotlive b {

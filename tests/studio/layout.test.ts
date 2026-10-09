@@ -399,3 +399,75 @@ describe('Post-its', () => {
     expect(Object.keys(n).sort()).toEqual(['at', 'h', 'id', 'text', 'w', 'x', 'y', 'z'])
   })
 })
+
+describe('a press is not an arrangement (9 October 2026)', () => {
+  const NARROW = { w: 880, h: 620 }
+  const box = (list: Rect[]) => list.map((m) => `${m.id}:${m.x},${m.y},${m.w},${m.h}`).join(' ')
+
+  it('raising a module keeps the default arrangement following the window', () => {
+    L.raise('p', 'tasks')
+    expect(L.customised('p')).toBe(false)
+    L.setStage(NARROW.w, NARROW.h)
+    const list = L.layout('p') as Rect[]
+    L.forgetAll()
+    L.setStage(NARROW.w, NARROW.h)
+    expect(box(list)).toBe(box(L.layout('p') as Rect[]))
+    for (let i = 0; i < list.length; i += 1)
+      for (let j = i + 1; j < list.length; j += 1)
+        expect(overlaps(list[i] as Rect, list[j] as Rect)).toBe(false)
+  })
+  it('a raise still changes the stacking order, and a tint still sticks, without freezing the geometry', () => {
+    L.raise('p', 'tasks')
+    L.setTint('p', 'board', L.TINTS[0].id)
+    const list = L.layout('p') as Rect[]
+    const z = (id: string) => list.find((m) => m.id === id)?.z ?? 0
+    expect(z('tasks')).toBeGreaterThan(z('board'))
+    expect(list.find((m) => m.id === 'board')?.tint).toBe(L.TINTS[0].id)
+    L.setStage(NARROW.w, NARROW.h)
+    const narrow = L.layout('p') as Rect[]
+    expect(narrow.find((m) => m.id === 'tasks')?.z).toBe(z('tasks'))
+    expect(narrow.find((m) => m.id === 'board')?.tint).toBe(L.TINTS[0].id)
+    expect(narrow.every((m) => m.x + m.w <= NARROW.w)).toBe(true)
+  })
+  it('a move is an arrangement: every rectangle is kept to the pixel when the window changes', () => {
+    L.place('p', 'tasks', { x: 40, y: 30 })
+    const before = box(L.layout('p') as Rect[])
+    expect(L.customised('p')).toBe(true)
+    L.setStage(NARROW.w, NARROW.h)
+    expect(box(L.layout('p') as Rect[])).toBe(before)
+  })
+  it('a document stored before the flag existed is kept exactly as it was', () => {
+    const arranged = (L.layout('p') as Rect[]).map((m) =>
+      m.id === 'tasks' ? { ...m, x: m.x + 50 } : m,
+    )
+    L.forgetAll()
+    localStorage.setItem(
+      'bc.stage.q',
+      JSON.stringify({ mods: arranged, zoom: 1, pan: { x: 0, y: 0 } }),
+    )
+    const before = box(L.layout('q') as Rect[])
+    L.setStage(NARROW.w, NARROW.h)
+    expect(box(L.layout('q') as Rect[])).toBe(before)
+    expect(L.customised('q')).toBe(true)
+  })
+  it('a legacy document that is only the default arrangement for this window follows the window again', () => {
+    const snapshot = (L.layout('p') as Rect[]).map((m) => ({ ...m, z: m.z ?? 1 }))
+    L.forgetAll()
+    localStorage.setItem(
+      'bc.stage.q',
+      JSON.stringify({ mods: snapshot, zoom: 1, pan: { x: 0, y: 0 } }),
+    )
+    expect(L.customised('q')).toBe(false)
+    L.setStage(NARROW.w, NARROW.h)
+    const list = L.layout('q') as Rect[]
+    expect(list.every((m) => m.x + m.w <= NARROW.w)).toBe(true)
+  })
+  it('removing a module and adding it back does not freeze the rest', () => {
+    L.remove('p', 'contacts')
+    L.add('p', 'contacts')
+    L.setStage(NARROW.w, NARROW.h)
+    const list = L.layout('p') as Rect[]
+    expect(list.length).toBe(L.ALL.length)
+    expect(list.every((m) => m.x + m.w <= NARROW.w)).toBe(true)
+  })
+})

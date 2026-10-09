@@ -10,9 +10,6 @@
 [data-experience='basecamp'] {
   /* Native controls (sliders, ticks, radios, progress) take the person's accent instead of the browser's blue. */
   accent-color: var(--bc-accent);
-  --bc-hi: color-mix(in srgb, var(--bc-text-strong) 9%, transparent);
-  --bc-sh-1: 0 1px 2px color-mix(in srgb, var(--bc-shadow-ink) 24%, transparent), 0 6px 16px -8px color-mix(in srgb, var(--bc-shadow-ink) 38%, transparent);
-  --bc-sh-2: 0 2px 4px color-mix(in srgb, var(--bc-shadow-ink) 24%, transparent), 0 18px 38px -14px color-mix(in srgb, var(--bc-shadow-ink) 50%, transparent), 0 44px 80px -36px color-mix(in srgb, var(--bc-shadow-ink) 40%, transparent);
 }
 
 /* ---------------------------------------------------------------- the top bar -- */
@@ -60,7 +57,7 @@
   animation: bc-menu-in 200ms var(--bc-ease-out) both;
 }
 /* The little notch that ties the panel to the button that opened it. */
-[data-experience='basecamp'] .bcmenupanel::before {
+[data-experience='basecamp'] :is(.bcmenupanel, .bcmenupanel-ghost)::before {
   content: '';
   position: absolute;
   left: 15px;
@@ -166,7 +163,7 @@
   itself stands on an opaque colour first and takes its gradient above it, so nothing behind can ever show through.
 */
 [data-experience='basecamp'] .bcexpback {
-  background: color-mix(in srgb, var(--bc-shadow-ink) 52%, transparent);
+  background: var(--bc-scrim);
   -webkit-backdrop-filter: blur(5px) saturate(0.9);
   backdrop-filter: blur(5px) saturate(0.9);
 }
@@ -261,4 +258,64 @@
 [data-experience='basecamp'] #root.shell[data-bg-page] .bctop {
   background-image: none;
   background-color: color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) 62%, transparent);
+}
+
+/* ------------------------------------------------- one set of control states -- */
+/* Hover, focus, pressed and disabled are the same on every button family, so no control looks like it belongs to another product. */
+[data-experience='basecamp'] :is(.bcbtn, .bcdockbtn, .btn, .bccal2btn, .bcseg, .iconbtn) {
+  transition: background var(--bc-t-colour) ease, border-color var(--bc-t-colour) ease, box-shadow var(--bc-t-colour) ease, transform var(--bc-t-in) var(--bc-ease-out), color var(--bc-t-colour) ease;
+}
+[data-experience='basecamp'] :is(.bcbtn, .bcdockbtn, .btn, .bccal2btn, .bcseg, .iconbtn):active:not(:disabled):not([aria-disabled='true']) { transform: translateY(1px); }
+[data-experience='basecamp'] :is(.bcbtn, .bcdockbtn, .btn, .bccal2btn, .bcseg, .iconbtn):disabled,
+[data-experience='basecamp'] :is(.bcbtn, .bcdockbtn, .btn, .bccal2btn, .bcseg, .iconbtn)[aria-disabled='true'] { opacity: 0.5; cursor: not-allowed; }
+[data-experience='basecamp'] :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------- the maximised schedule's switch -- */
+[data-experience='basecamp'] .bccal2views:not(.bccal2views--mini) {
+  padding: 2px;
+  gap: 2px;
+  overflow: visible;
+  border: 1px solid var(--bc-border-control);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bc-canvas) 40%, transparent);
+}
+[data-experience='basecamp'] .bccal2views:not(.bccal2views--mini) .bccal2btn--seg {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bccal2views:not(.bccal2views--mini) .bccal2btn--seg:hover { color: var(--bc-text-strong); background: var(--bc-hover); }
+[data-experience='basecamp'] .bccal2views:not(.bccal2views--mini) .bccal2btn--seg.is-on {
+  background: color-mix(in srgb, var(--bc-accent) 20%, var(--bc-surface));
+  color: var(--bc-text-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-accent) 45%, transparent);
+}
+
+/* The heading row and the board are two edges one beside the other; the board's own edge is the only rule (a second line 45px above it read as fussy). */
+[data-experience='basecamp'] .bccomp--c .bchead { border-bottom: 0; }
+
+/* A module's title rule is a plain line: it had inherited the panel's corner radius and curled up at both ends. */
+[data-experience='basecamp'] .bccomp--c .bcmod .bcmodhead { border-radius: 0; }
+
+/* The way out of the menu: the panel lifts away and the cross folds back into three lines. */
+@keyframes bc-menu-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-6px) scale(0.97); }
+}
+[data-experience='basecamp'] .bcmenupanel--leaving {
+  animation: bc-menu-out 150ms var(--bc-ease-in) both;
+  pointer-events: none;
+}
+[data-experience='basecamp'] .bcmenupanel--leaving .bcmenuitem { animation: none; }
+[data-experience='basecamp'] .bcburger[data-closing] .bcb1 { animation: bc-burger-1 150ms var(--bc-ease-in) reverse both; }
+[data-experience='basecamp'] .bcburger[data-closing] .bcb2 { animation: bc-burger-2 150ms ease reverse both; }
+[data-experience='basecamp'] .bcburger[data-closing] .bcb3 { animation: bc-burger-3 150ms var(--bc-ease-in) reverse both; }
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcmenupanel--leaving { animation: none !important; }
 }
