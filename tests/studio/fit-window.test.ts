@@ -65,7 +65,7 @@ describe('scaleToWidth (pure)', () => {
   })
   it('is bounded: a degenerate arrangement is not blown up or crushed', () => {
     const tiny = L.scaleToWidth([{ id: 'tasks', x: 0, y: 0, w: 240, h: 150 }], 100000) as Rect[]
-    expect(tiny[0].w).toBeLessThanOrEqual(240 * 3 + 1)
+    expect((tiny[0] as Rect).w).toBeLessThanOrEqual(240 * 3 + 1)
     expect(L.scaleToWidth([], 1000)).toEqual([])
     expect(L.scaleToWidth(mods, 0)).toBe(mods)
   })

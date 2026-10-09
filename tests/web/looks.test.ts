@@ -129,6 +129,23 @@ describe('glass and depth', () => {
   })
 })
 
+type Appearance = {
+  look: string
+  glass: string
+  depth: string
+  palette: string
+  texture: string
+  scheme: string
+  density: string
+}
+type AppearanceModule = {
+  appearance: () => Appearance
+  apply: (a: Appearance) => Appearance
+  LOOKS: { id: string; faces: Record<'dark' | 'light', [string, string]> }[]
+}
+// @ts-expect-error - a browser module with no types; ADR-0002, no build step.
+const loadAppearance = (): Promise<AppearanceModule> => import('../../web/studio/appearance.js')
+
 describe('the appearance module', () => {
   const store = new Map<string, string>()
   const root: { dataset: Record<string, string>; style: Record<string, unknown> } = {
@@ -143,14 +160,14 @@ describe('the appearance module', () => {
   ;(globalThis as Record<string, unknown>).window = { matchMedia: () => ({ matches: false }) }
 
   it('defaults to today: original look, soft glass, soft depth', async () => {
-    const m = await import('../../web/studio/appearance.js')
+    const m = await loadAppearance()
     store.clear()
     const a = m.appearance()
     expect([a.look, a.glass, a.depth]).toEqual(['original', 'soft', 'soft'])
   })
 
   it('apply writes all three on the document and remembers them', async () => {
-    const m = await import('../../web/studio/appearance.js')
+    const m = await loadAppearance()
     store.clear()
     m.apply({ ...m.appearance(), look: 'forest', glass: 'rich', depth: 'deep' })
     expect([root.dataset.look, root.dataset.glass, root.dataset.depth]).toEqual([
@@ -163,14 +180,14 @@ describe('the appearance module', () => {
   })
 
   it('a value nobody offers falls back to the default rather than to nothing', async () => {
-    const m = await import('../../web/studio/appearance.js')
+    const m = await loadAppearance()
     store.set('studio.appearance', JSON.stringify({ look: 'neon', glass: 'max', depth: 9 }))
     const a = m.appearance()
     expect([a.look, a.glass, a.depth]).toEqual(['original', 'soft', 'soft'])
   })
 
   it('an older saved appearance (no look keys) loads unchanged and gains only the defaults', async () => {
-    const m = await import('../../web/studio/appearance.js')
+    const m = await loadAppearance()
     store.set(
       'studio.appearance',
       JSON.stringify({ palette: 'clay', texture: 'oak', scheme: 'dark', density: 'compact' }),
@@ -181,7 +198,7 @@ describe('the appearance module', () => {
   })
 
   it('every look offered has a CSS block in both schemes, and the picker faces match the CSS', async () => {
-    const m = await import('../../web/studio/appearance.js')
+    const m = await loadAppearance()
     for (const l of m.LOOKS) {
       if (l.id === 'original') continue
       for (const scheme of ['dark', 'light'] as const) {
