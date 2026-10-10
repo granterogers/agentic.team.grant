@@ -482,6 +482,10 @@ const emptyDoc = () => ({
 export const BG_MODES = ['tile', 'cover', 'fit', 'center']
 const BG_ID = /^[a-z0-9][a-z0-9-]{0,47}$/
 const num = (v, lo, hi, dflt) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt)
+/** Appearance: the range of each slider (0 to 1) and what a project that never chose gets. dots 0.6 and tex 0.4 are exactly the look before the sliders existed. */
+export const LOOK_RANGE = { dots: [0, 1], tex: [0, 1], mod: [0.2, 1] }
+export const LOOK_DEFAULT = { dots: 0.6, tex: 0.4, mod: 0.8 }
+export const MOD_MODES = ['card', 'edge']
 export const cleanBg = (raw) => {
   if (raw === null || typeof raw !== 'object') return null
   const id = typeof raw.id === 'string' ? raw.id : ''
@@ -494,6 +498,15 @@ export const cleanBg = (raw) => {
     tint: Math.round(num(raw.tint, 0, 0.6, 0) * 100) / 100,
     at: Number.isFinite(raw.at) ? raw.at : 0,
   }
+  /*
+    The project's APPEARANCE rides on the same record (so it is stored, merged and synced exactly as the background is, with no
+    new store): grid-dot opacity, the stone texture's strength, the minimised modules' face opacity and whether a module's colour
+    fills its card or only its title and edge. Absent means the default; an older page drops them harmlessly.
+  */
+  for (const [k, [lo, hi]] of Object.entries(LOOK_RANGE)) {
+    if (Number.isFinite(raw[k])) out[k] = Math.round(num(raw[k], lo, hi, LOOK_DEFAULT[k]) * 100) / 100
+  }
+  if (MOD_MODES.includes(raw.modMode)) out.modMode = raw.modMode
   /* The office's revision of a custom picture (#445): a short word, never bytes or a link. Older pages drop it harmlessly. */
   if (id === 'custom' && typeof raw.rev === 'string' && /^[0-9a-z]{1,16}$/.test(raw.rev)) out.rev = raw.rev
   return out
@@ -1284,10 +1297,40 @@ export const bgOf = (slug) => doc(slug).bg
  * ({ id: 'default' }), because a plain removal could not beat an older choice on another device.
  */
 export const setBg = (slug, bg, now = stamp()) => {
-  const clean = cleanBg({ ...bg, at: now })
+  /* Choosing a background never throws away the project's appearance settings. */
+  const clean = cleanBg({ ...lookFields(doc(slug).bg), ...bg, at: now })
   if (clean === null) return doc(slug).bg
   commit(slug, { ...doc(slug), bg: clean })
   return clean
+}
+
+const lookFields = (bg) => {
+  const out = {}
+  if (bg === null || bg === undefined) return out
+  for (const k of [...Object.keys(LOOK_RANGE), 'modMode']) if (bg[k] !== undefined) out[k] = bg[k]
+  return out
+}
+
+/** The project's appearance with every default filled in: { dots, tex, mod, modMode }. */
+export const lookOf = (slug) => lookResolved(doc(slug).bg)
+export const lookResolved = (bg) => ({
+  dots: bg?.dots ?? LOOK_DEFAULT.dots,
+  tex: bg?.tex ?? LOOK_DEFAULT.tex,
+  mod: bg?.mod ?? LOOK_DEFAULT.mod,
+  modMode: bg?.modMode ?? 'card',
+})
+
+/**
+ * Change the project's appearance (any of dots, tex, mod, modMode). The background choice is kept as it is (a project that never
+ * chose one is recorded as choosing the default, which draws exactly what it drew before).
+ */
+export const setLook = (slug, patch, now = stamp()) => {
+  const prev = doc(slug).bg
+  const base = prev ?? { id: 'default' }
+  const clean = cleanBg({ ...base, ...patch, at: now })
+  if (clean === null) return lookOf(slug)
+  commit(slug, { ...doc(slug), bg: clean })
+  return lookOf(slug)
 }
 
 export const setZoom = (slug, z) => {

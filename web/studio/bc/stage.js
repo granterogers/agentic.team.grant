@@ -152,9 +152,13 @@ export const wireStage = (root, ctx) => {
     const lum = ink.startsWith('color(') ? ((nums[0] ?? 0) + (nums[1] ?? 0) + (nums[2] ?? 0)) / 3 : ((nums[0] ?? 0) + (nums[1] ?? 0) + (nums[2] ?? 0)) / 765
     const haloInk = lum > 0.5 ? 'rgb(0 0 0)' : 'rgb(255 255 255)'
     const r = Math.max(0.9, Math.min(1.5, 0.8 + 0.5 * z))
+    /* The project's grid-dot opacity setting, as a multiple of the original strength (Project settings, Appearance). */
+    const rawGain = Number.parseFloat(globalThis.getComputedStyle(gridCv).getPropertyValue('--bc-dot-op'))
+    const gain = Number.isFinite(rawGain) ? Math.max(0, rawGain) : 1
     for (const halo of [true, false]) for (const major of [false, true]) {
       c.fillStyle = halo ? haloInk : ink
-      c.globalAlpha = halo ? (major ? 0.32 : 0.22) : major ? 1 : 0.8
+      c.globalAlpha = Math.min(1, gain * (halo ? (major ? 0.32 : 0.22) : major ? 1 : 0.8))
+      if (gain === 0) continue
       c.beginPath()
       for (let j = 0; j < rows; j++) {
         const iy = iy0 + j
