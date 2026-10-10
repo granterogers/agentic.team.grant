@@ -56,7 +56,7 @@ export const PANES = [
   /* Team HQ only: it edits the project's appearance (grid, texture, module colour and opacity), which the older studio has no board for. */
   { id: 'appearance', name: 'Appearance', teamHq: true },
 ]
-const isTeamHq = () => globalThis.document?.documentElement?.getAttribute('data-experience') === 'basecamp'
+const isTeamHq = () => globalThis.document?.documentElement?.dataset.experience === 'basecamp'
 const panes = () => PANES.filter((x) => x.teamHq !== true || isTeamHq())
 
 /*

@@ -610,7 +610,7 @@ const drive = async (
   const oldSrcs = (await page
     .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Picture from an older version' })
     .locator('img.realpage')
-    .evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src))) as string[]
+    .evaluateAll((els) => els.map((e) => (e as unknown as { src: string }).src))) as string[]
   check(
     `[${label}] CONTROL: a tile whose source changed since the kept picture shows NO stale picture`,
     oldSrcs.every((x) => x !== 'data:image/jpeg;base64,/9j/4AAQ'),
