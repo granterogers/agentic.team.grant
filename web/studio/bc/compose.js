@@ -39,6 +39,7 @@
 
 import * as icons from '../icons.js'
 import * as backdrop from './backdrop.js'
+import * as identity from './identity.js'
 import * as grid from './layout.js'
 import * as live from './livevoice.js'
 import { button, esc } from './parts.js'
@@ -101,22 +102,7 @@ export const choose = (v) => {
   }
 }
 
-/*
-  EACH MODULE'S MARK. A small outline icon before the title so the modules can be told apart at a glance (Grant, 10 October).
-  Drawn in the module's own colour (--bc-tint); decorative, because the title beside it already names the module.
-*/
-const MOD_ICONS = {
-  tasks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8M13 12h8M13 18h8"/>',
-  board: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v7M12 7v4M16 7v10"/>',
-  documents: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5M9 13h6M9 17h6"/>',
-  schedule: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
-  contacts: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
-  activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
-}
-const modIcon = (id) =>
-  MOD_ICONS[id] === undefined
-    ? ''
-    : `<svg class="bcmodicon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${MOD_ICONS[id]}</svg>`
+const modIcon = (id) => (identity.known(id) ? identity.svg(id, 16) : '')
 
 /**
  * A module of the project home.

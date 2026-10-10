@@ -687,6 +687,27 @@
   [data-experience='basecamp'] .bcchat--full .bcsaid { padding: 10px 12px 12px; }
 }
 
+/* THE JUMP OVERLAY wears the dashboard's identity: every row has a mark (a project's own icon and colour, a tool in its module's colour),
+   from the one table in identity.js. */
+[data-experience='basecamp'] .bcjumprow { display: flex; align-items: center; gap: 12px; }
+[data-experience='basecamp'] .bcjumpname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-experience='basecamp'] .bcjumpico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: color-mix(in srgb, var(--bc-tint) 78%, var(--bc-text-strong));
+  background: color-mix(in srgb, var(--bc-tint) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-tint) 34%, transparent);
+}
+[data-experience='basecamp'] .bcjumpico--project { background: none; box-shadow: none; color: inherit; }
+[data-experience='basecamp'] .bcjumpico--project .bcprojmark { width: 30px; height: 30px; border-radius: 9px; font-size: 15px; }
+[data-experience='basecamp'] .bcjumpico--project .bcprojmark svg { width: 17px; height: 17px; }
+[data-experience='basecamp'] .bcjumprow[aria-selected='true'] .bcjumpico { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-tint) 60%, transparent); }
+[data-experience='basecamp'] .bcjumpgroup { letter-spacing: 0.08em; }
+
 /* The phone's CSS dots follow the same opacity setting as the canvas ones. */
 [data-experience='basecamp'] .bcpanes::before { opacity: var(--bc-dot-op, 1); }
 

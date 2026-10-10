@@ -32,6 +32,8 @@
 
 import { PROJECTS } from '../data.js'
 import * as cal from './calendar.js'
+import * as compose from './compose.js'
+import * as identity from './identity.js'
 import * as grid from './layout.js'
 import { esc } from './parts.js'
 import * as todos from './todos.js'
@@ -284,6 +286,35 @@ const candidates = () => {
 }
 
 
+/*
+  THE MARK AND COLOUR OF A ROW, from the one identity table (identity.js) the dashboard's modules use, so a project is drawn with
+  its own icon and colour here exactly as in the project menu and a tool in the colour of its module. Worked out in one place from
+  what the row already says, so no row can be added without one.
+*/
+const markOf = (r) => {
+  const chip = (id) => `<span class="bcjumpico" style="--bc-tint:${identity.hue(id)}">${identity.svg(id, 16)}</span>`
+  if (r.group === 'Projects') {
+    const p = PROJECTS.find((x) => at(`/p/${x.slug}`) === r.to)
+    return p === undefined ? chip('project') : `<span class="bcjumpico bcjumpico--project" aria-hidden="true">${compose.projectMark(p, 18)}</span>`
+  }
+  if (r.group.startsWith('In ')) return chip(String(r.to ?? '').split('/').pop() ?? '')
+  if (r.group === 'Go to') {
+    const id = { Home: 'home', 'My Tasks': 'mytasks', Activity: 'activity', 'Search everything': 'search' }[r.name]
+    return chip(id ?? 'found')
+  }
+  if (r.group === 'People') return chip('person')
+  if (r.group === 'Ask') return chip('ask')
+  if (r.group === 'Found') {
+    const k = String(r.kind ?? '').toLowerCase()
+    return chip(/task|to-do/.test(k) ? 'tasks' : /doc|file/.test(k) ? 'documents' : /person|people|contact/.test(k) ? 'contacts' : /event/.test(k) ? 'schedule' : /project/.test(k) ? 'project' : 'found')
+  }
+  const n = String(r.name ?? '').toLowerCase()
+  if (/to-?do|task/.test(n)) return chip('tasks')
+  if (/event/.test(n)) return chip('schedule')
+  if (/layout|zoom|tidy|reset|bigger|smaller|wider|taller/.test(n) || r.group === 'Layout' || r.group === 'Saved layout' || r.kind === 'Workspace') return chip('layout')
+  return chip('action')
+}
+
 const draw = () => {
   const el = document.getElementById('bcjump')
   if (el === null) return
@@ -297,7 +328,7 @@ const draw = () => {
       last = r.group
       return `${head}<button type="button" class="bcjumprow" role="option" id="bcjr${String(i)}"
         aria-selected="${i === picked ? 'true' : 'false'}" data-bc-jumpi="${String(i)}">
-        <span>${esc(r.name)}</span><span class="bckind">${esc(r.kind)}</span>
+        ${markOf(r)}<span class="bcjumpname">${esc(r.name)}</span><span class="bckind">${esc(r.kind)}</span>
       </button>`
     })
     .join('')
