@@ -390,6 +390,10 @@
 @media (pointer: coarse) {
   /* A one-line Card table card was 30px tall; a card is a control, so it is 44px on a touch screen (a two-line card already is). */
   [data-experience='basecamp'] .bcminicard { min-height: 44px; -webkit-box-pack: center; }
+  /* Settings' segmented choices (scheme, glass, depth) were 36px on a touch screen wider than a portrait phone (a landscape phone, a tablet). */
+  #settings .st-seg button { min-height: 44px; }
+  /* Notes show on a landscape phone and a tablet, where the add and remove controls were 44x20: the header row grows to fit a finger. */
+  [data-experience='basecamp'] :is(.bcpostitx, .bcpostitplus) { width: 44px; height: 44px; }
   /* The tick on a My Tasks row is drawn 28px; the part that answers a finger grows around it, as it does in the modules. */
   [data-experience='basecamp'] .bclist .bcitem > .bccheck::before { content: ''; position: absolute; inset: -8px; }
 }

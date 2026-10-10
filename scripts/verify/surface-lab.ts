@@ -77,6 +77,8 @@ const DEVICES: Record<string, { w: number; h: number; touch: boolean }> = {
   phone360: { w: 360, h: 740, touch: true },
   phone390: { w: 390, h: 844, touch: true },
   phone430: { w: 430, h: 932, touch: true },
+  phone390land: { w: 844, h: 390, touch: true },
+  tablet768: { w: 768, h: 1024, touch: true },
   tablet1024: { w: 1024, h: 768, touch: false },
   laptop1280: { w: 1280, h: 800, touch: false },
   desktop1440: { w: 1440, h: 900, touch: false },
@@ -199,7 +201,8 @@ for (const dev of devices) {
           for (const t of tabs) {
             if (await tryPress(page, `#settings [data-setting="${t}"]`)) await record(page, `settings-${t}`, context, errors, '#settings .stg')
             else blocked(`settings-${t}`, context, 'tab not pressable')
-            if (DEVICES[dev]?.touch) await tryPress(page, '#settings [data-stg-back]')
+            /* Master and detail (a phone portrait) needs Back to the list; a two-pane layout (a landscape phone) keeps the list on screen, and its Back leaves Settings altogether. */
+            if (DEVICES[dev]?.touch && !(await page.locator('#settings [data-setting]').first().isVisible().catch(() => false))) await tryPress(page, '#settings [data-stg-back]')
           }
         } else blocked('settings', context, 'no [data-bc-settings] control')
       }
