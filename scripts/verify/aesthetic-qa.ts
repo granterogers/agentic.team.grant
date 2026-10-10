@@ -472,6 +472,8 @@ if (want('contrast')) {
     { name: 'board', go: async () => undefined },
     { name: 'dock', go: async (p) => press(p, '[data-bc-dock]') },
     { name: 'menu', go: async (p) => press(p, '[data-bc-menu]') },
+    /* The selected row is tinted with the accent, so the Ink palette (a light gold) is what reads muted text hardest. */
+    { name: 'jump', go: async (p) => { await p.keyboard.press('Control+k'); await p.waitForSelector('#bcjump:not([hidden]) .bcjumprow[aria-selected="true"] .bckind') } },
     { name: 'maximised schedule', go: async (p) => press(p, '[data-bc-expand="schedule"]') },
     { name: 'maximised team', go: async (p) => { await p.goto(`${p.url()}/x/team`, { waitUntil: 'domcontentloaded' }) } },
     { name: 'look sheet', go: async (p) => { await press(p, '[data-bc-pagemenu]'); await press(p, '[data-bc-look]'); await p.waitForSelector('.bdgrid') } },
@@ -481,7 +483,7 @@ if (want('contrast')) {
   ]
   let total = 0
   for (const scheme of ['dark', 'light']) {
-    for (const palette of ['slate', 'clay']) {
+    for (const palette of ['slate', 'clay', 'ink']) {
       for (const s of surfaces) {
         const { ctx, page } = await open({ scheme, palette })
         try {

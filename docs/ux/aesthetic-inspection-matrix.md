@@ -47,18 +47,19 @@ Graphite; accents slate, clay, moss (gallery). Not every surface was run in ever
 | Event editor | 7 x 2 | Defect corrected | yes (gallery, phone) | 36px fields at 14px type; all-day checkbox target |
 | Contact record, Document viewer, Task record | 7 x 2 | Verified | yes (390, task 1440) | select boxes now draw their own chevron |
 | Search, My Tasks, Activity | 7 x 2 | Verified | yes (My Tasks) | signed-out prototypes; a signed-in run was not made |
-| Project settings | 7 x 2 | Verified | yes | cosmetic: the card sits flush under the prototype strip |
+| Project settings | 7 x 2 | Defect corrected | yes | the card sat flush under the prototype strip; one shared rule gives every page card its 12px margin (10 October) |
 | Settings: Team, Autonomy, Requests, Learned, Services, Messaging, Appearance, Usage and health, Help | 7 x 2; looks | Verified | Team, Services, Messaging, Appearance, Usage (yes); Autonomy, Requests, Learned, Help (audit only) | |
 | Settings > Appearance: Look, Accent, Scheme, Materials | 1440 and 390, both schemes | Verified | yes | new; persistence in the QA suite |
 | Component gallery (17 live components) | 12 appearances | Verified | yes (2) | |
 | Empty project (all modules empty) | writer, 1440 and 390 x 2 | Verified | yes | |
 | Confirmation dialogs (confirm, danger confirm, ask) | 1440 and 390 x 2 | Verified | yes | opened through the dialog module the product uses, with the product's own wording; the lab's first fixture had a placeholder the real call does not, and the audit caught that one as cut off on a phone |
-| Tooltips | none | **Not inspected** | | titles only; native |
-| Notifications / undo bar | none | **Not inspected** | | needs a write that offers undo |
+| Tooltips | n/a | **Not a surface to inspect** | | Team HQ has no tooltip component: hover help is the browser's native `title`, whose look is the operating system's. Every icon-only control now carries a `title` and an accessible name (`icon-audit.ts` fails one without), which is the part that belongs to the product. |
+| Notifications / undo strip | 1440 and 390 x 2 (writer) | Defect corrected | yes | the strip is the only transient notification the product has; its wrapping, palette and 44px keys were fixed (10 October). `undo-bar`, `-error`, `-long`, `-message` in the lab |
 | Voice controls (microphone, live voice, dictation) | button states only | **Partially verified** | | the buttons are measured; a real microphone is not testable here |
 | Loading, error and offline states | `basecamp-states` (80 checks) | Verified by the existing suite | no | not re-photographed in this sprint |
 | Signed-in data-heavy pages (real office) | none | **Blocked** | | production access is off; the stand-in office has one empty project |
-| Sign-in / account entry screens | none | **Not inspected** | | |
+| Sign-in, create account, signed-out notice, set-up-office screens | 1440 and 390 x 2 (`auth` group, `officeMode` stand-in) | Defect corrected | yes (sign-in, set-up) | axe clean; the "Sign out" link is a 44px target on a phone |
+| Palettes x looks x glass x depth, axe over pages, menus, settings, popovers | 4 looks x 2 schemes x 2 devices (Solid, deep); 4 palettes x 2 schemes (Soft, flat); Forest and Graphite (Rich, soft) | Verified | sample read | 360 + 240 + 180 lab captures, 1 contrast defect found and fixed (Jump row on the Ink palette) |
 
 Counts from the final lab runs (same 144 surface-by-context cells, phone 390 and desktop 1440, both schemes): **before the sprint's changes
 98 verified, 36 with a finding, 10 blocked; after, 134 verified, 0 with a finding, 10 blocked** (the 10 are "needs a signed-in office" and

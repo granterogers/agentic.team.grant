@@ -339,3 +339,6 @@
 
 /* The scale itself (12, 13, 14, 15, 16, 18, whole pixels; nothing under 12) is declared where each rule is written and held by tests/web/type-scale.test.ts. */
 .bdfield > .t-label { font-size: 12px; letter-spacing: 0.05em; }
+
+/* The selected Jump row is tinted with the person's accent; muted text on a light accent (the Ink palette's gold, dark scheme) fell under 4.5:1. */
+[data-experience='basecamp'] .bcjumprow[aria-selected='true'] .bckind { color: var(--bc-text); }
