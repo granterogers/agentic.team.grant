@@ -15,6 +15,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: "frozen text: efficiency's unapplied 1030 as written, the CONTROL dequeue-reconciled installs in a scratch schema to show the conflict with 1044 is real; never applied",
   },
   {
+    stem: 'stress-browser',
+    role: 'realistic synthetic data volumes in a real browser through the real gateway code on the replica (needs chromium and takes minutes; run by hand with a replica database name, see its header)',
+  },
+  {
     stem: 'icons-on-replica',
     role: 'check:icons asked of the isolated replica (production-free): every icon_defaults row names a drawable mark; run by hand with a replica database name',
   },

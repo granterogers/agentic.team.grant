@@ -372,3 +372,24 @@
 
 /* The selected Jump row is tinted with the person's accent; muted text on a light accent (the Ink palette's gold, dark scheme) fell under 4.5:1. */
 [data-experience='basecamp'] .bcjumprow[aria-selected='true'] .bckind { color: var(--bc-text); }
+
+/* ---------------------------------------------------------------- staging validation: realistic data volumes --- */
+
+/* A month chip keeps its own height (calendar.js fitMonth hides the ones a cell has no room for); it was allowed to shrink and its text was cut. */
+[data-experience='basecamp'] .bccal2chips .bccal2chip,
+[data-experience='basecamp'] .bccal2chips .bccal2more { flex: none; }
+[data-experience='basecamp'] .bccal2chips :is(.bccal2chip, .bccal2more)[hidden] { display: none; }
+
+/*
+  A project with a very long name pushed the project menu 784px wide on a 390px phone: the list is a grid with an automatic column, so
+  the nowrap name set the column's minimum and the ellipsis never had anything to clip. One flexible column that may shrink fixes it.
+*/
+[data-experience='basecamp'] .bcmenulist { grid-template-columns: minmax(0, 1fr); }
+[data-experience='basecamp'] .bcmenuitem { min-width: 0; max-width: 100%; }
+
+@media (pointer: coarse) {
+  /* A one-line Card table card was 30px tall; a card is a control, so it is 44px on a touch screen (a two-line card already is). */
+  [data-experience='basecamp'] .bcminicard { min-height: 44px; -webkit-box-pack: center; }
+  /* The tick on a My Tasks row is drawn 28px; the part that answers a finger grows around it, as it does in the modules. */
+  [data-experience='basecamp'] .bclist .bcitem > .bccheck::before { content: ''; position: absolute; inset: -8px; }
+}
