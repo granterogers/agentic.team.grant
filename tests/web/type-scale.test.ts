@@ -21,7 +21,10 @@ const stripComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, 
 const sizes = (css: string): number[] => {
   const out: number[] = []
   for (const m of stripComments(css).matchAll(/font-size:\s*([0-9.]+)px/g)) out.push(Number(m[1]))
-  for (const m of stripComments(css).matchAll(/font:\s*(?:[0-9]{3}\s+)?(?:italic\s+)?([0-9.]+)px\//g)) out.push(Number(m[1]))
+  for (const m of stripComments(css).matchAll(
+    /font:\s*(?:[0-9]{3}\s+)?(?:italic\s+)?([0-9.]+)px\//g,
+  ))
+    out.push(Number(m[1]))
   return out
 }
 
@@ -49,6 +52,10 @@ describe('the type scale', () => {
   })
 
   it('the detector sees a half step when one is written (control)', () => {
-    expect(sizes('.x { font-size: 12.5px } .y { font: 500 13.5px/1.4 serif }').filter((s) => !Number.isInteger(s))).toEqual([12.5, 13.5])
+    expect(
+      sizes('.x { font-size: 12.5px } .y { font: 500 13.5px/1.4 serif }').filter(
+        (s) => !Number.isInteger(s),
+      ),
+    ).toEqual([12.5, 13.5])
   })
 })
