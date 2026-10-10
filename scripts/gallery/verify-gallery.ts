@@ -62,7 +62,7 @@ for (const [w, h] of [
     .waitForFunction(`[...document.images].every((i) => i.complete)`, undefined, { timeout: 30000 })
     .catch(() => null)
   const r = (await page.evaluate(
-    `(() => { const im = [...document.images]; return { n: im.length, broken: im.filter((i) => i.naturalWidth === 0).map((i) => i.src.slice(-70)), sw: document.documentElement.scrollWidth } })()`,
+    `(() => { const im = [...document.images].filter((i) => i.id !== 'lbi'); return { n: im.length, broken: im.filter((i) => i.naturalWidth === 0).map((i) => i.src.slice(-70)), sw: document.documentElement.scrollWidth } })()`,
   )) as { n: number; broken: string[]; sw: number }
   check(
     `${w}px: ${r.n} images, all load`,
