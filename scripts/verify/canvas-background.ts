@@ -85,8 +85,11 @@ const pick = async (page: Page, id: string): Promise<void> => {
 const board = (page: Page): Promise<any> =>
   page.evaluate(() => {
     const b = document.querySelector('[data-bc-board]')
-    const cs = window.getComputedStyle(b)
+    /* ADR-0072: the material is ONE layer on the page (#root); the board lets it show through. What is drawn for the window is read there. */
+    const cs = window.getComputedStyle(document.getElementById('root'))
     return {
+      boardOwnImage: window.getComputedStyle(b).backgroundImage,
+      boardOwnColor: window.getComputedStyle(b).backgroundColor,
       bg: b.getAttribute('data-bg'),
       mode: b.getAttribute('data-bg-mode'),
       tone: b.getAttribute('data-bg-tone'),
@@ -265,10 +268,9 @@ const layer4 = (s: string): number[] => {
 }
 const readView = (): Promise<any> =>
   page.evaluate(() => {
-    const b = document.querySelector('[data-bc-board]')
     const t = document.querySelector('.bcstage')
     const m = /translate\(([-\d.e]+)px, ([-\d.e]+)px\) scale\(([-\d.e]+)\)/.exec(t.style.transform)
-    const cs = window.getComputedStyle(b)
+    const cs = window.getComputedStyle(document.getElementById('root'))
     return {
       x: Number(m?.[1]),
       y: Number(m?.[2]),
@@ -289,6 +291,7 @@ d.requests.length = 0
 const bp = await bareAt()
 await page.mouse.move(bp.x, bp.y)
 let alignedAll = true
+const gridMoved = new Set<string>()
 let distorted = false
 const log: string[] = []
 for (let step = 0; step < 8; step += 1) {
@@ -304,14 +307,35 @@ for (let step = 0; step < 8; step += 1) {
   const dotPos = `${String(v.x)}px ${String(v.y)}px`
   const texPos = v.pos.split(',')[2]?.trim() ?? ''
   const sz = layer4(v.size)
-  const okPos = dotPos === texPos
-  const okSize = Math.abs((sz[0] ?? 0) - tw * v.z) < 1.5 && Math.abs((sz[1] ?? 0) - th * v.z) < 1.5
+  /* ADR-0072: the material is fixed to the window. It sits at the page origin at its own size whatever the zoom, while the grid's origin follows the pan. */
+  gridMoved.add(dotPos)
+  const okPos = texPos === '0px 0px'
+  const okSize = Math.abs((sz[0] ?? 0) - tw) < 1.5 && Math.abs((sz[1] ?? 0) - th) < 1.5
   const okRatio = Math.abs((sz[0] ?? 1) / (sz[1] ?? 1) - 2048 / 1152) < 0.01
   if (!okPos || !okSize) alignedAll = false
   if (!okRatio) distorted = true
   log.push(`z${v.z.toFixed(2)} ${okPos ? 'pos=' : 'pos!'} ${okSize ? 'size=' : 'size!'}`)
 }
-check('while zooming and panning the texture is drawn from the same origin as the grid and at tile x zoom', alignedAll, log.join(' | '))
+check('while zooming and panning the material does not move or change size (it is fixed to the window)', alignedAll, log.join(' | '))
+check('and the grid, meanwhile, really did move (the two are independent)', gridMoved.size >= 4, String(gridMoved.size))
+const own = await board(page)
+check('the board paints no image of its own: it only carries Shade and Opacity over the page material', !/url\(/.test(own.boardOwnImage) && /rgba\(0, 0, 0, 0\)|transparent/.test(own.boardOwnColor), `${own.boardOwnColor} ${own.boardOwnImage.slice(0, 60)}`)
+/* Pixels, not properties: with the dots hidden, a patch of bare board must look identical after a pan and a zoom. */
+{
+  await page.addStyleTag({ content: '.bcgridcv { display: none !important }' })
+  const at = await bareAt()
+  const clip = { x: Math.round(at.x) - 40, y: Math.round(at.y) - 40, width: 80, height: 80 }
+  await page.mouse.move(at.x, at.y)
+  const before = await page.screenshot({ clip })
+  await page.mouse.down()
+  await page.mouse.move(at.x - 33, at.y - 21, { steps: 5 })
+  await page.mouse.up()
+  await page.mouse.move(at.x, at.y)
+  await page.mouse.wheel(0, -240)
+  await page.waitForTimeout(300)
+  const after = await page.screenshot({ clip })
+  check('the material is pixel-identical at a fixed window position after a pan and a zoom', before.equals(after), `${String(before.length)} vs ${String(after.length)} bytes`)
+}
 check('the texture is never stretched out of its aspect ratio at any zoom', !distorted)
 const reloads = d.requests.filter((u) => /textures\/bg\/slate\.webp/.test(u))
 check('zooming and panning do not reload the image', reloads.length === 0, String(reloads.length))
@@ -557,8 +581,8 @@ await d.ctx.close()
   await m.page.waitForSelector('[data-bc-board]')
   await m.page.waitForTimeout(900)
   const missingBoard = await board(m.page)
-  const solid = (await m.page.evaluate(() => window.getComputedStyle(document.querySelector('[data-bc-board]')).backgroundColor)) as string
-  check('a texture file that fails to load leaves the canvas colour under the grid, and the board works', missingBoard.bg === 'walnut' && !/rgba\(0, 0, 0, 0\)|transparent/.test(solid) && missingBoard.image.startsWith('linear-gradient'), `${solid}`)
+  const solid = (await m.page.evaluate(() => window.getComputedStyle(document.getElementById('root')).backgroundColor)) as string
+  check('a texture file that fails to load leaves the canvas colour under the grid (on the page, where the material is drawn), and the board works', missingBoard.bg === 'walnut' && !/rgba\(0, 0, 0, 0\)|transparent/.test(solid) && missingBoard.image.startsWith('linear-gradient'), `${solid}`)
   const stillZooms = await m.page.evaluate(`(() => { const t = document.querySelector('.bcstage'); return !!t })()`)
   check('and the panels are still there and no page error was raised', stillZooms === true && (await m.page.locator('[data-mod]').count()) >= 3 && m.errors.length === 0, m.errors.join(' | '))
   await m.page.screenshot({ path: `${OUT}/missing-asset.png` })
