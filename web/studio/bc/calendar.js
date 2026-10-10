@@ -638,7 +638,7 @@ const compact = (s, list, size, today, selected) => {
         : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')
     }</div>`
   }
-  return `<div class="bccal2compact bccal2compact--${size}">
+  return `<div class="bccal2compact" data-compact="${size}">
     <div class="bccal2minibar">
       <button type="button" class="bccal2btn bccal2btn--icon" data-cal-nav="prev" aria-label="${esc(`Previous ${word}`)}">&lsaquo;</button>
       <span class="bccal2minititle" aria-live="polite">${esc(title)}</span>
