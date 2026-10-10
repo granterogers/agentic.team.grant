@@ -449,7 +449,7 @@ for (const where of surfaces) {
     const inside = (u) => u === '' || (u[0] === '/' && u.indexOf('/classic') !== 0) || (u.indexOf('#/') === 0 && u.indexOf('#/classic') !== 0)
     for (const a of document.querySelectorAll('a[href]')) {
       const raw = a.getAttribute('href') || ''
-      if (raw.indexOf('http') === 0 || raw.indexOf('mailto:') === 0 || raw[0] === '#') continue
+      if (raw.indexOf('http') === 0 || raw.indexOf('mailto:') === 0 || raw.indexOf('tel:') === 0 || raw[0] === '#') continue
       if (!inside(raw)) leaves.push('link ' + raw + ' — ' + (a.textContent || '').trim().slice(0, 24))
     }
     for (const el of document.querySelectorAll('[data-bc-go], [data-bc-leave]')) {

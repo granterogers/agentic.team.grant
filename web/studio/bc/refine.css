@@ -931,3 +931,5 @@
 
 /* A control scrolled into view (by a keyboard, a link or a test) must not land under the sticky top bar. */
 html[data-experience='basecamp'] { scroll-padding-top: 96px; }
+
+.bctchip--done { color: var(--bc-text-muted); }

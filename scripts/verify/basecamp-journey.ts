@@ -641,7 +641,8 @@ await open('/basecamp/p/journey-subject')
   asserting it here would be asserting against the fixture. `basecamp-home`
   asserts that half against a project that has some.
 */
-const headLine = await page.locator('.bchead').first().innerText()
+/* The project head was folded into the single top bar (11 October 2026, one unified top part), so the head line is read there. */
+const headLine = await page.locator('.bctop--work').first().innerText()
 const todoPanel = await page
   .locator('.bcpanes [data-mod="tasks"]')
   .first()
