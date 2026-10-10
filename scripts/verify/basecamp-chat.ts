@@ -75,17 +75,14 @@ if (process.argv.includes('--prove-it')) {
     token on the request, sending at all -- depends on it, so if the suite
     still passes it is not looking at the session architecture.
   */
-  const sabotaged = before.replace(
-    "  const access = q.get('access_token') ?? ''",
-    "  const access = ''",
-  )
+  const sabotaged = before.replace('  write(decided.session)', '  void decided.session')
   if (sabotaged === before) {
     console.error('SABOTAGE DID NOT APPLY — adopt() has been reworded in session.js.')
     console.error('A sabotage that did not land is not a passing control. Nothing was proved.')
     process.exit(2)
   }
   await writeFile(victim, sabotaged)
-  const landed = (await readFile(victim, 'utf8')).includes("const access = ''")
+  const landed = (await readFile(victim, 'utf8')).includes('  void decided.session')
   console.log(`sabotage landed in ${victim}: ${String(landed)}\n`)
   const { spawnSync } = await import('node:child_process')
   const red = spawnSync('npx', ['tsx', 'scripts/verify/basecamp-chat.ts'], {
@@ -443,8 +440,25 @@ const slug = await (async (): Promise<string> => {
  * chat.
  * ====================================================================== */
 {
-  const { ctx, page, seen, thrown } = await open({ accept: [ACCESS] })
-  const back = `${url(slug)}#access_token=${ACCESS}&refresh_token=${REFRESH}&expires_in=3600&token_type=bearer`
+  /*
+    A SESSION IS ADOPTED ONLY FOR A SIGN-IN THIS BROWSER STARTED (B-05, web/studio/flow.js). The browser mints a nonce when it asks for
+    the link and the link comes back to `?flow=<nonce>`; a return with no such flow is refused. So the return here is the one this
+    browser asked for, seeded the way `begin()` stores it, and a second context below shows a return with no flow signs nobody in.
+  */
+  const NONCE = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4'
+  const flow = `try { localStorage.setItem('hq.signin.flow', ${JSON.stringify(
+    JSON.stringify([
+      {
+        nonce: NONCE,
+        kind: 'link',
+        email: 'me@example.com',
+        at: Date.now(),
+        exp: Date.now() + 3600_000,
+      },
+    ]),
+  )}) } catch {}`
+  const { ctx, page, seen, thrown } = await open({ accept: [ACCESS] }, flow)
+  const back = `${url(slug)}?flow=${NONCE}#access_token=${ACCESS}&refresh_token=${REFRESH}&expires_in=3600&token_type=bearer`
   await page.goto(back, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.bcmain')
   await page.waitForTimeout(1200)
@@ -474,6 +488,24 @@ const slug = await (async (): Promise<string> => {
   )
   check('nothing threw', thrown.length === 0, thrown.join(' | '))
   await ctx.close()
+
+  // The negative that makes the positive mean something: the same link in a browser that asked for nothing is refused.
+  const other = await open({ accept: [ACCESS] })
+  await other.page.goto(
+    `${url(slug)}#access_token=${ACCESS}&refresh_token=${REFRESH}&expires_in=3600&token_type=bearer`,
+    { waitUntil: 'domcontentloaded' },
+  )
+  await other.page.waitForSelector('.bcmain')
+  await other.page.waitForTimeout(1200)
+  const heldThere = (await other.page.evaluate(
+    inPage("return localStorage.getItem('hq.session')"),
+  )) as string | null
+  check(
+    'a link this browser never asked for signs nobody in',
+    heldThere === null || !String(heldThere).includes(ACCESS),
+    String(heldThere ?? '(nothing stored)').slice(0, 80),
+  )
+  await other.ctx.close()
 }
 
 /* ====================================================================== *
