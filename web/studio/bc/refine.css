@@ -464,29 +464,54 @@
   the bar and can be ordered: row one is the burger, the project's name, the project menu, Attention, office menu and Sign out;
   row two is the counters, Chat with Team and the microphone.
 */
-@media (max-width: 860px) {
-  [data-experience='basecamp'] .bctop.bctop--work { gap: 0 6px; padding: 4px 10px 6px; }
+/* With the chat dock open the bar is about 1100px wide, which still has to hold one row (opening the chat must not move the board down): the name is capped, Attention is a bell, the dock is tighter. */
+@container bartools (max-width: 1250px) {
+  [data-experience='basecamp'] .bctop--work .bchere { max-width: 150px; }
+  [data-experience='basecamp'] .bctop--work .bcattbell { display: block; }
+  [data-experience='basecamp'] .bctop--work .bcattword { display: none; }
+  [data-experience='basecamp'] .bctop--work [data-bc-attention] { position: relative; width: 44px; min-width: 44px; padding: 0; }
+  @media (pointer: fine) {
+    [data-experience='basecamp'] .bctop--work [data-bc-attention] { width: 36px; min-width: 36px; }
+  }
+  [data-experience='basecamp'] .bctop--work [data-bc-attention] .bcstatus { position: absolute; top: 2px; right: 0; }
+  [data-experience='basecamp'] .bctop--work .bcworktools { flex-basis: 560px; }
+  [data-experience='basecamp'] .bctop--work .bcheadrow { gap: 8px; }
+  [data-experience='basecamp'] .bctop--work .bcdockbtn { padding-inline: 7px; }
+}
+@container bartools (max-width: 1000px) {
   [data-experience='basecamp'] .bctop--work :is(.bcworktools, .bcheadrow, .bcheadacts) { display: contents; }
   [data-experience='basecamp'] .bctop--work .bcleft { order: 1; }
   [data-experience='basecamp'] .bctop--work .bchere { order: 2; flex: 1 1 0; max-width: none; min-width: 0; }
   [data-experience='basecamp'] .bctop--work .bcheadacts > .bcmenuwrap { order: 3; }
   [data-experience='basecamp'] .bctop--work .bcright { order: 4; margin-left: 0; }
   [data-experience='basecamp'] .bctop--work::after { content: ''; order: 4; flex: 1 0 100%; height: 0; }
-  [data-experience='basecamp'] .bctop--work .bcstate { order: 5; flex: 1 1 0; width: auto; min-width: 0; margin: 0; padding-bottom: 0; overflow-x: auto; }
-  [data-experience='basecamp'] .bctop--work [data-bc-dock] { order: 6; flex: none; padding-inline: 10px; }
+  [data-experience='basecamp'] .bctop--work .bcstate { order: 5; flex: 0 1 auto; width: auto; min-width: 0; margin: 0; padding-bottom: 0; overflow-x: auto; }
+  [data-experience='basecamp'] .bctop--work .bcworkbar { order: 6; flex: 1 1 auto; justify-content: center; margin: 0; }
+  [data-experience='basecamp'] .bctop--work [data-bc-dock] { order: 7; flex: none; padding-inline: 10px; }
   [data-experience='basecamp'] .bctop--work .bccountn { font-size: 14px; }
-  [data-experience='basecamp'] .bctop--work .bcmic { order: 7; flex: none; }
-  [data-experience='basecamp'] .bctop--work .bccallsay { order: 8; flex: 1 0 100%; }
-  [data-experience='basecamp'] .bctop--work .bcworkbar { order: 9; flex: 1 0 100%; margin: 0; }
-  [data-experience='basecamp'] .bctop--work .bcworkbar:not(:has(.bcoffchip)) { display: none; }
+  [data-experience='basecamp'] .bctop--work .bcmic { order: 8; flex: none; }
+  [data-experience='basecamp'] .bctop--work .bccallsay { order: 9; flex: 1 0 100%; }
   /* Nothing waiting means nothing to open: the bell is not drawn on a phone then (its count rides on it when there is one). */
-  [data-experience='basecamp'] .bctop--work [data-bc-attention][disabled] { display: none; }
   [data-experience='basecamp'] .bctop--work .bccount { padding: 0 4px; gap: 3px; }
   [data-experience='basecamp'] .bctop--work .bccounts { gap: 0; padding: 2px; }
   [data-experience='basecamp'] .bctop--work button.bccount { min-width: 44px; justify-content: center; }
   [data-experience='basecamp'] .bctop--work .bccountw { font-size: 12px; }
   [data-experience='basecamp'] .bctop--work [data-bc-dock] { padding-inline: 8px; }
 }
+
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bctop.bctop--work { gap: 0 6px; padding: 4px 10px 6px; }
+  /* A phone: the counters take the room that is left beside Chat and the microphone, and the (hidden) dock's put-back chips get a row of their own. */
+  [data-experience='basecamp'] .bctop--work .bcstate { flex: 1 1 0; }
+  [data-experience='basecamp'] .bctop--work [data-bc-dock] { order: 6; }
+  [data-experience='basecamp'] .bctop--work .bcmic { order: 7; }
+  [data-experience='basecamp'] .bctop--work .bccallsay { order: 8; }
+  [data-experience='basecamp'] .bctop--work .bcworkbar { order: 9; flex: 1 0 100%; justify-content: flex-start; }
+  [data-experience='basecamp'] .bctop--work .bcworkbar:not(:has(.bcoffchip)) { display: none; }
+  [data-experience='basecamp'] .bctop--work [data-bc-attention][disabled] { display: none; }
+}
+/* The bar is a size container: the page beside an open chat dock is narrower than the window, and the bar must answer to ITS width, not the window's. */
+[data-experience='basecamp'] .bctop { container: bartools / inline-size; }
 
 /* THE GRID IS ALWAYS VISIBLE. The dots are stronger on every material, and each is drawn with a halo of the opposite lightness (stage.js). */
 [data-experience='basecamp'] .bcpanes:not([data-bg-tone]) { --bc-dot: color-mix(in srgb, var(--bc-text) 50%, transparent); }
@@ -539,3 +564,9 @@
 [data-experience='basecamp'] .bcmodtitle { display: inline-flex; align-items: center; gap: 7px; }
 [data-experience='basecamp'] .bcmodicon { flex: none; color: var(--bc-tint, var(--bc-text-muted)); }
 [data-experience='basecamp'] .bcmod:not(.bcmod--tinted) .bcmodicon { color: var(--bc-text-muted); }
+
+/* A multi-line title in a My Tasks row (or an agenda line) overlapped the line under it on a touch screen: its 44px hit area was made with a negative margin that only suits one line. The padding gives the area; the margin cancels it. */
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcitemtitle,
+  [data-experience='basecamp'] .bcagendawhat { padding-block: 11px; }
+}

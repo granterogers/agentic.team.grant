@@ -462,15 +462,6 @@ for (const vp of VIEWPORTS) {
     if (GALLERY) {
       // The visual-review gallery's populated extras (docs/integration/final-visual-gallery): every shot is a real page over the replica's rows.
       await seen('gx-dashboard-board', '.bcstage')
-      if (process.argv.includes('--quick')) {
-        // --quick: the board, the burger menu and the maximised schedule only (a fast loop for chrome and module changes).
-        const menuBtn = page.locator('[data-bc-menu]').first()
-        await menuBtn.click({ force: true }).catch(() => null)
-        await seen('gx-burger-menu', '.bcmenupanel, .bcmenu')
-        await page.keyboard.press('Escape')
-        await ctx.close()
-        continue
-      }
       const press = async (sel: string): Promise<boolean> => {
         const l = page.locator(sel).first()
         if ((await l.count()) === 0) return false
@@ -492,6 +483,22 @@ for (const vp of VIEWPORTS) {
         await page.keyboard.press('Escape')
         await settle(page, 400)
       }
+      if (process.argv.includes('--quick')) {
+        // --quick: the board, the burger menu and the chat dock only (a fast loop for chrome changes).
+        await press('[data-bc-menu]')
+        await shotOf('gx-burger-menu', '.bcmenupanel, .bcmenu')
+        await back()
+        await go(`/p/${busy.slug}`)
+        if (await press('[data-bc-dock]:visible')) {
+          await page.waitForSelector('#dock [data-docksay]', { timeout: 8000 }).catch(() => null)
+          await shotOf('gx-chat-open', '#dock .thread')
+        }
+        await page.evaluate(`localStorage.setItem('bc.dockw', '720')`)
+        await go(`/p/${busy.slug}`)
+        await shotOf('gx-chat-expanded', '#dock .thread')
+        await ctx.close()
+        continue
+      }
       // On a phone the board stacks its modules, so the schedule is below the fold: scroll it into view so the picture shows what it is labelled.
       await page
         .locator('.bcstage [data-mod="schedule"]')
@@ -508,7 +515,7 @@ for (const vp of VIEWPORTS) {
           await press(`[data-cal-view="${v}"]`)
           await shotOf(`gx-schedule-maximised-${v}`, '.bcexp .bcexpbox')
         }
-        if (await press('[data-cal-new]')) {
+        if (await press('.bcexp [data-cal-new]')) {
           await shotOf('gx-event-editor', '.bccal2form')
           await back()
         }
@@ -538,6 +545,25 @@ for (const vp of VIEWPORTS) {
       await settle(page, 600)
       await shotOf('gx-jump-search', '#bcjump:not([hidden])')
       await back()
+      // The module menus (desktop only: a phone stacks its modules and has no arrangement controls).
+      await go(`/p/${busy.slug}`)
+      if (await press('.bcstage [data-bc-tint]')) {
+        await shotOf('gx-module-colour-menu', '.bcpop')
+        await back()
+      }
+      await go(`/p/${busy.slug}`)
+      if (await press('[data-bc-layouts]')) {
+        await shotOf('gx-layouts-menu', '.bcpop--layouts')
+        await back()
+      }
+      // The chat dock widened (a stored preference, as dragging its grip stores it); on a phone the dock is full width already.
+      await page.evaluate(`localStorage.setItem('bc.dockw', '720')`)
+      await go(`/p/${busy.slug}`)
+      if (await press('[data-bc-dock]:visible')) {
+        await page.waitForSelector('#dock [data-docksay]', { timeout: 8000 }).catch(() => null)
+        await shotOf('gx-chat-expanded', '#dock .thread')
+      }
+      await page.evaluate(`localStorage.removeItem('bc.dockw')`)
       await go(`/p/${busy.slug}`)
       await page
         .locator(

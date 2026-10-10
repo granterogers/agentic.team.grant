@@ -14,6 +14,7 @@ const RAW = process.argv[2] ?? '.out/g'
 const SHA = process.argv[3] ?? 'unknown'
 const OUT = 'docs/integration/final-visual-gallery'
 await rm(`${OUT}/screenshots`, { recursive: true, force: true })
+await rm(`${OUT}/thumbs`, { recursive: true, force: true })
 await mkdir(`${OUT}/screenshots`, { recursive: true })
 
 type Meta = { area: string; title: string; state: string }
@@ -35,7 +36,12 @@ const POP: Record<string, Meta> = {
   'chat-keyboard-emulated': { area: A(2), title: 'Chat dock with an emulated soft keyboard (viewport shrunk; NOT iOS Safari)', state: 'dock open, keyboard emulated' },
 }
 const GX: Record<string, Meta> = {
-  'dashboard-board': { area: A(0), title: 'Project board (the main dashboard)', state: 'normal' },
+  'dashboard-board': { area: A(0), title: 'Project board with the consolidated top bar (the main dashboard)', state: 'normal' },
+  'chat-expanded': { area: A(2), title: 'Chat dock widened (GENERATED conversation); on a phone the dock is already full width', state: 'dock open, expanded' },
+  'chat-open': { area: A(2), title: 'Chat dock open (GENERATED conversation)', state: 'dock open' },
+  'event-editor': { area: A(6), title: 'Event editor (new event)', state: 'editor open' },
+  'module-colour-menu': { area: A(6), title: 'Module colour menu (desktop only)', state: 'menu open' },
+  'layouts-menu': { area: A(6), title: 'Layouts menu (desktop only)', state: 'menu open' },
   'schedule-compact': { area: A(4), title: 'Schedule module on the board, compact', state: 'compact' },
   'schedule-maximised-day': { area: A(4), title: 'Schedule, Day view', state: 'maximised' },
   'schedule-maximised-week': { area: A(4), title: 'Schedule, Week view', state: 'maximised' },
@@ -66,10 +72,6 @@ const LAB: Record<string, Meta> = {
   'burger-menu': { area: A(1), title: 'Burger menu (stand-in office)', state: 'menu open' },
   'new-project-form': { area: A(1), title: 'New project form', state: 'form open' },
   'module-maximised-board': { area: A(5), title: 'Card table, maximised (stand-in office, example cards)', state: 'maximised' },
-  'event-editor': { area: A(6), title: 'Event editor (new event)', state: 'editor open' },
-  'module-tint-popover': { area: A(6), title: 'Module three-dot / tint popover', state: 'popover open' },
-  'layouts-popover': { area: A(6), title: 'Layouts popover', state: 'popover open' },
-  'note-focused': { area: A(6), title: 'Sticky note focused', state: 'note focused' },
   'confirm-dialog': { area: A(9), title: 'Confirmation dialog', state: 'dialog open' },
   'confirm-dialog-danger': { area: A(9), title: 'Confirmation dialog, destructive action', state: 'dialog open' },
   'ask-dialog': { area: A(9), title: 'Ask dialog (reason required)', state: 'dialog open' },
@@ -133,44 +135,27 @@ for (const f of (await readdir(`${RAW}/gx`)).sort()) {
   const m = GX[x[3] as string]
   if (m !== undefined) await add(`${RAW}/gx/${f}`, x[3] as string, m, x[2] as 'dark', 'original', x[1] as string, 'replica')
 }
-for (const look of Object.keys(LOOKS)) {
-  for (const f of (await readdir(`${RAW}/look-${look}`)).sort()) {
-    const x = /^real-(1440|390)-(dark|light)-gx-(.+)\.png$/.exec(f)
-    if (x === null || !LOOKSURF.includes(x[3] as string)) continue
-    const base = GX[x[3] as string] as Meta
-    await add(`${RAW}/look-${look}/${f}`, x[3] as string, { ...base, area: A(8), title: `${base.title}, look: ${LOOKS[look]}` }, x[2] as 'dark', look, x[1] as string, 'replica')
-  }
-}
-for (const f of (await readdir(`${RAW}/pal-paper`)).sort()) {
-  const x = /^real-(1440|390)-(dark|light)-gx-(.+)\.png$/.exec(f)
-  if (x === null || !['dashboard-board', 'settings-appearance'].includes(x[3] as string)) continue
-  const base = GX[x[3] as string] as Meta
-  await add(`${RAW}/pal-paper/${f}`, x[3] as string, { ...base, area: A(8), title: `${base.title}, accent colour Violet` }, x[2] as 'dark', 'original', x[1] as string, 'replica', false, 'violet')
-}
+/* The other looks, the Violet accent and the extra viewports of the first gallery are not part of this one: two sizes, Light and Dark, the Original look. */
+void LOOKSURF
 for (const f of (await readdir(`${RAW}/lab`)).sort()) {
   const x = /^(.+)__(desktop1440|phone390)-(dark|light)-slate\.png$/.exec(f)
   if (x === null) continue
   const m = LAB[x[1] as string]
   if (m !== undefined) await add(`${RAW}/lab/${f}`, x[1] as string, m, x[3] as 'dark', 'original', x[2] as string, 'standin')
 }
-for (const f of (await readdir(`${RAW}/resp`)).sort()) {
-  const x = /^(.+)__(phone360|phone430|tablet768|phone390land)-(dark|light)-slate\.png$/.exec(f)
-  if (x === null) continue
-  const m = RESP[x[1] as string]
-  if (m !== undefined) await add(`${RAW}/resp/${f}`, x[1] as string, m, x[3] as 'dark', 'original', x[2] as string, 'standin')
-}
+void RESP
 
 const notCaptured = [
   { item: 'Real iOS Safari (any screen)', reason: 'No WebKit or iOS device in the build environment. Every "390x844" image is Chromium with touch emulation, not iOS Safari.' },
   { item: 'Real microphone, dictation and live voice in use', reason: 'No audio hardware; only the buttons and idle states are shown. Voice is covered by simulated-audio suites, not by these images.' },
   { item: 'Hosted preview signed in / Sample Office on the hosted preview', reason: 'The hosted preview cannot sign in (its API base is a placeholder); that is why this gallery exists. Every image here is a local capture.' },
   { item: 'Real Grant office data, real Google calendar, real Telegram/Slack', reason: 'Production access is forbidden for this task. Data is synthetic rows in an isolated replica.' },
-  { item: 'Event editor over the populated replica', reason: 'The populated run did not open the editor (the capture failed and is not included). The editor is shown from the stand-in office instead.' },
-  { item: 'Task, contact and document record sheets on the stand-in office; Attention page', reason: 'The stand-in office has no such records, and the Attention page did not open in the lab. The record sheets are shown from the populated replica.' },
-  { item: 'Module tint / layouts popovers and sticky notes on a phone', reason: 'Not offered on a phone by design (arrangement controls are off there). Desktop captures included.' },
+  { item: 'The Attention page', reason: 'It did not open in the capture lab, which has no waiting items; the Attention count is visible in the top bar.' },
+  { item: 'Module colour menu, Layouts menu and sticky notes on a phone', reason: 'Not offered on a phone by design (the arrangement controls are off there and the modules stack). Desktop captures included.' },
+  { item: 'Calendar Day / Week / Month on the empty stand-in office', reason: 'Shown on the populated replica only.' },
   { item: 'Full-page / long-scroll captures', reason: 'Team HQ is a fixed-viewport canvas (ADR-0072): the page itself does not scroll, lists scroll inside their module or sheet. Captures are viewport images; lists are shown through the maximised module views. Settings panes taller than a phone screen are cut at the viewport.' },
   { item: 'Operating-system push notifications', reason: 'Not part of the page. The in-page undo bar and dialogs are captured.' },
-  { item: 'Palette matrix beyond Settings and the dashboard', reason: 'Other looks (Slate & Silver, Forest & Brass, Warm Graphite) are captured for the dashboard and Settings only, as asked, to avoid a needless full matrix.' },
+  { item: 'Other looks and accent colours, other screen sizes', reason: 'This gallery is the Original look at two sizes only (1440x900 and 390x844), Light and Dark, as asked. The earlier gallery had the other looks and sizes.' },
 ]
 
 await writeFile(`${OUT}/manifest.json`, `${JSON.stringify({ generated: new Date().toISOString().slice(0, 10), branch: 'integration/aesthetic-release-candidate', commit: SHA, viewportNote: 'Chromium emulation only; iOS Safari was not tested', count: entries.length, notCaptured, entries }, null, 1)}\n`)
