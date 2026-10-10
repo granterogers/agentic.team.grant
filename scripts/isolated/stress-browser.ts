@@ -425,6 +425,43 @@ for (const vp of VIEWPORTS) {
       await dock.click({ force: true }).catch(() => null)
       await page.waitForSelector('#dock [data-docksay]', { timeout: 8000 }).catch(() => null)
       await seen('chat-dock-90-messages-GENERATED', '#dock .thread', 'generated')
+      if (vp.touch) {
+        // A soft keyboard EMULATED by shrinking the viewport while the composer holds focus (this is Chromium, not iOS Safari: the
+        // layout viewport really changes here, where iOS keeps it and moves the visual one). The composer and Send must stay on
+        // screen and the newest message must not be hidden behind the composer.
+        await page.locator('#dock [data-docksay]').first().focus()
+        const full = page.viewportSize() ?? { width: vp.w, height: vp.h }
+        const kb = Math.round(full.height * 0.55)
+        await page.setViewportSize({ width: full.width, height: kb })
+        await settle(page, 700)
+        const geo = (await page.evaluate(`(() => {
+          const box = document.querySelector('#dock [data-docksay]').getBoundingClientRect()
+          const send = document.querySelector('#dock [data-dockform] button[type=submit]').getBoundingClientRect()
+          const msgs = [...document.querySelectorAll('#dock .thread > *')].filter((e) => e.getBoundingClientRect().height > 0)
+          const last = msgs[msgs.length - 1]?.getBoundingClientRect()
+          return { vh: window.innerHeight, boxTop: Math.round(box.top), boxBottom: Math.round(box.bottom), sendBottom: Math.round(send.bottom), lastBottom: last ? Math.round(last.bottom) : -1 }
+        })()`)) as {
+          vh: number
+          boxTop: number
+          boxBottom: number
+          sendBottom: number
+          lastBottom: number
+        }
+        check(
+          `${tag} keyboard (emulated): the composer and Send stay on screen`,
+          geo.boxTop >= 0 && geo.boxBottom <= geo.vh + 1 && geo.sendBottom <= geo.vh + 1,
+          JSON.stringify(geo),
+        )
+        check(
+          `${tag} keyboard (emulated): the newest message is not behind the composer`,
+          geo.lastBottom <= geo.boxTop + 1,
+          JSON.stringify(geo),
+        )
+        if (SHOTS !== '')
+          await page.screenshot({ path: `${SHOTS}/generated-${tag}-chat-keyboard-emulated.png` })
+        await page.setViewportSize(full)
+        await settle(page, 400)
+      }
     } else check(`${tag} chat dock: control found`, false, 'no dock')
     // The long project name must keep a readable header (not squeezed to nothing).
     await go(`/p/${(projects[2] as { slug: string }).slug}`)
