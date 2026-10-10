@@ -1,114 +1,64 @@
-# INNERGY Agentic Team HQ: complete visual review gallery, 10 October 2026
+# INNERGY Agentic Team HQ: visual gallery, latest interface (10 October 2026)
 
-Branch `integration/aesthetic-release-candidate`, page code at commit `7beac4e7df348e3c9030e02fc219849af20b28e0`. Open `index.html`.
-This is a visual-review package, not a development change: the product code is untouched (`web/` is byte-identical to the commit above). Nothing was merged or
-deployed, and production was not contacted.
+Branch `integration/aesthetic-release-candidate`; page code as of commit `8ca23e0255cd720343fcbc7855a1bef73276d933` (the consolidated top bar, coloured module icons, the roomier burger menu and the stronger grid are all in these images).
+Open `index.html` (published as an isolated static site; see the commit message for the address in use).
 
-## What is in the package
+**One desktop size (1440x900) and one phone size (390x844), Light and Dark, Original look.** Four images per screen: Desktop Light, Desktop Dark, Mobile Light, Mobile Dark.
+The phone images are Chromium touch emulation, **not iOS Safari**. Nothing is edited: files are exactly what the browser wrote.
 
 | Path | What |
 |---|---|
-| `index.html` | the gallery: a navigation index by interface area, Light and Dark side by side for the same screen, data, size and state, a switch between all sizes / desktop 1440 / phone and tablet sizes, click an image for the full-resolution PNG |
-| `manifest.json` | one record per image (screen, scheme, look, palette, viewport, device, state, source, data kind, commit, file) and the NOT CAPTURED list |
-| `screenshots/` | the **original, unedited** PNGs exactly as the browser wrote them (316 files, 65 MB). **Shipped in the ZIP, not committed to git** (size); regenerate with the commands below |
-| `thumbs/` | 316 reduced JPEG thumbnails the index shows (640 px wide for desktop and tablet sizes, 220 px for phones). Derived images, for browsing only; judge pixels in `screenshots/` |
+| `index.html` | the gallery: jump menu by area, Size (All / Desktop / Mobile) and Theme (Both / Light / Dark) filters, Light and Dark side by side, tap to enlarge, swipe between images, pinch to zoom |
+| `manifest.json` | one record per image (screen, theme, look, viewport, state, source, commit) and the NOT CAPTURED list |
+| `thumbs/` | the reduced JPEGs the index shows (committed) |
+| `screenshots/` | the original PNGs. Not committed (size, git-ignored); they are what the published site serves when you tap an image |
 
-File names say what they are: `<area>__<screen>__<replica|standin>__<WxH>__<light|dark>__<look>-<accent>.png`.
+## Inventory
 
-## How the images were made (and what is behind them)
-
-All images are real Chromium screenshots of the real page (`web/studio`) served locally. No mock-ups, no recolouring, no cropping and no retouching; the script
-that builds the gallery only copies and labels. Two sources, stated on every card:
-
-- **Local replica** (178 images): the real page, and the real `hq-api` and sign-in function code, answering from an **isolated Postgres replica** holding
-  **synthetic rows**: six projects (one with a 100-character name), 140 to-dos on the busy project, 12 events, 36 documents, 28 contacts, 70 personal items with
-  repeating reminders. The replica is real SQL and real code, not real data. The **chat conversation (90 messages) is GENERATED** and presented by the page; the
-  office cannot seed a stored conversation, so every chat card says so.
-- **Local stand-in** (138 images): the real page against the lab's stand-in gateway (one near-empty project) or the signed-out prototype. Used where the replica
-  run does not reach a screen: sign-in, create-account, set-up-office, first run, empty states, dialogs, undo bar, new-project form, event editor, popovers.
-
-Sizes: **1440x900** desktop and **390x844** iPhone-size are the main gallery; 360x740, 430x932, 768x1024 and 844x390 (landscape phone) are extras for five
-screens. **All phone and tablet images are Chromium touch emulation. None is iOS Safari.** Themes: Light and Dark with the Original look and the Blue accent
-(`slate` palette) for every pair. Looks Slate & Silver, Forest & Brass and Warm Graphite, and the Violet accent, are shown for the main dashboard and Settings
-(Appearance and index) only, as asked.
-
-## Inventory (screens x images)
-
-| Area | Distinct screens | Images |
-|---|---|---|
-| Dashboard and project workspace | 5 | 20 |
-| Menus and navigation (burger / project selection, page menu, background picker, Jump, new project) | 6 | 24 |
-| Chat (dock open with a 90-message generated thread; emulated soft keyboard on phones) | 2 | 6 |
-| My Tasks and Search | 3 | 12 |
-| Schedule (compact, Day, Week, Month) | 4 | 16 |
-| Maximised modules (To-dos, Card table, Docs and Files, Contacts, Activity) | 6 | 24 |
-| Records and editors (task, contact, document, event editor, popovers, note) | 7 | 22 |
-| Settings (index, Appearance top and scrolled, Behaviour, Channels, Connections, Help, Memory, Models, Requests, Team, Project settings) | 12 | 48 |
-| Looks and palettes (3 other looks and Violet; dashboard, Settings index, Appearance) | 11 | 44 |
-| Dialogs and notifications (confirm, destructive confirm, ask, undo bar x4) | 7 | 28 |
-| Sign-in and onboarding (sign-in, create account, signed-out notice, set up office) | 4 | 16 |
-| Empty and first-run | 4 | 16 |
-| Responsive extras (360, 430, 768, 844x390) | 5 | 40 |
-
-## NOT CAPTURED (with reasons)
-
-| Item | Reason |
+| Area | Screens |
 |---|---|
-| Real iOS Safari | no WebKit or iPhone here; every 390 image is Chromium touch emulation |
-| Real microphone, dictation, live voice in use | no audio hardware; buttons and idle states only |
-| Hosted preview signed in, Sample Office on the hosted preview | the hosted preview cannot sign in; that is why this gallery exists |
-| Real Grant data, real Google calendar, Telegram, Slack | production access is forbidden for this task; data is synthetic |
-| Event editor over the populated replica | that capture failed and is not included; the editor is shown from the stand-in office |
-| Task, contact, document record sheets on the stand-in; the Attention page | the stand-in has no records; the Attention page did not open in the lab. Record sheets come from the replica |
-| Module tint and layouts popovers and sticky notes on a phone | not offered on a phone by design |
-| Full-page / long-scroll captures | the page is a fixed-viewport canvas (ADR-0072): lists scroll inside their module or sheet; lists are shown through the maximised views. Settings Appearance is shown scrolled to its end; other panes taller than a phone screen are cut at the viewport |
-| Operating-system push notifications | not part of the page; the in-page undo bar and dialogs are captured |
-| Other looks beyond the dashboard and Settings | deliberately limited, as asked |
+| Dashboard and project workspace (with the consolidated top bar) | busy project board, long-name project board, home |
+| Menus and navigation | burger menu / project selection, project three-dot menu, background picker, Jump |
+| Chat | dock open (generated 90-message thread), widened dock, emulated soft keyboard on the phone |
+| My Tasks and Search | My Tasks (70 items, repeating reminders), Search |
+| Schedule | compact module, Day, Week, Month |
+| Maximised modules | To-dos, Docs and Files, Contacts, Latest Activity, Schedule |
+| Records and editors | task, contact and document record sheets, event editor, module colour menu and Layouts menu (desktop only) |
+| Settings | index, Appearance (top and scrolled), Behaviour, Channels, Connections, Help, Memory, Models, Requests, Team |
+| Dialogs and notifications | confirm, destructive confirm, ask-a-reason, undo bar (4 states) |
+| Sign-in and onboarding | sign-in, create account, signed-out notice, set up your office |
+| Empty and first-run | first run, empty board, empty To-dos, empty Schedule |
 
-## Visual concerns found by looking at the captures
+Sources (stated on every card): **local replica** (the real page and gateway code over an isolated Postgres replica with synthetic rows: 140 to-dos, 36 documents, 28 contacts, 12 events, 70 personal items)
+and **local stand-in** (the real page against a near-empty stand-in office, used for sign-in, empty and dialog screens). The chat conversation is generated and presented by the page; the office cannot seed a stored one.
 
-Read from the images, not from the code. Each is a judgement for you; none was changed in this task.
+## NOT CAPTURED
 
-1. **Bright yellow sticky note** is the strongest colour on the board in both themes; on Dark it is the one saturated light patch (dashboard, every look).
-2. **Pure-white document thumbnails in Dark** (for example "Venue contract", the blank white page tile in Docs and Files) are the brightest pixels on a dark board.
-3. **Light theme is a mid grey-beige canvas with near-white panels**; the contrast between canvas and panel is soft and panel edges rely on a thin shadow, which
-   reads weak on the My Tasks page and the sign-in card. There is no pure-white page in Light, but the stone canvas can read dull rather than harsh.
-4. **Record sheets (task, contact, document) fill the viewport and are mostly empty** on desktop, especially the task sheet in Dark: a large dark slab with a small
-   form top-left.
-5. **Background picker on a phone**: the first swatch label breaks mid-word ("Microceme / nt").
-6. **Maximised To-dos on desktop and the board's To-dos column** truncate long titles with an ellipsis while the Card table repeats the same truncated text; with
-   the synthetic data the screens read repetitive (that is the data, not the product).
-7. **Contacts order** shows "Contact 1, Contact 11, Contact 12, Contact 13": synthetic names sorted as text; not a visual defect.
-8. **Chat on Light**: user bubbles are saturated blue against the stone panel, the agent bubbles are pale; the contrast between the two is strong, between the
-   agent bubble and the dock background weak.
-9. **The dashboard header on a phone** shows the project name truncated ("Riverside launc…") beside four controls.
-10. Looks other than Original were captured only for the dashboard and Settings; Forest & Brass and Warm Graphite in Dark read well in those two screens, but
-    every other screen is unseen in those looks.
+Real iOS Safari; a real microphone; real data; the hosted staging preview signed in; the Attention page (it needs waiting items); the module colour menu, Layouts menu and sticky notes on a phone (not offered there by design);
+OS push notifications; other looks, accents and screen sizes (the earlier gallery had them).
 
-## Verification of this package
+## Visual review: what the images show
 
-- Every image was produced by the commands below against commit `7beac4e7`; the labels come from the capture that wrote the file, not from the file name.
-- Light/Dark labelling was checked by measuring mean luminance of every image (all 316: Light above, Dark below the expected band, 0 mismatches), and a sample of
-  about fifteen images was opened and read against its label (including the schedule on a phone, which was re-captured after the first pass showed the To-dos
-  module under a "Schedule" label).
-- `npx tsx scripts/gallery/verify-gallery.ts` opens `index.html` at 1440 and 390 px: 316 images, all load, no failed request, no horizontal overflow.
-- One capture pass contaminated its own later runs and was repeated: pressing an accent colour in Settings is **saved to the account**, so a Violet press in the
-  Dark run turned the next Light run Violet and Dark. Accent variants now come from a separate run seeded through storage (`--palette=paper`), and the replica
-  database was rebuilt before each affected run.
+Defects found and fixed in this pass (genuine, small):
+1. **Opening the chat widened the top bar's problem**: with the dock open or widened the bar is narrower than the window and its tools overlapped (Chat with Team over the zoom control). The bar now answers to its own width: one row when the chat is at its default width (so opening the chat does not move the board), two rows when it is widened.
+2. **My Tasks on a phone**: a title that wrapped to several lines overlapped the date line under it (a negative margin made for one-line titles). Fixed.
 
-## Commands that regenerate the captures (local, no production)
+Still visible, not changed (judgement calls, not defects):
+- The bright yellow sticky note is the strongest colour on every desktop board, in both themes.
+- Blank white document thumbnails ("Venue contract") are the brightest pixels on a dark board.
+- On a phone the maximised To-dos sheet opens on "Showing yours" and so reads empty beside "99+ open" for a person with nothing assigned; "Show everything" is one tap away. The desktop sheet opens on everything.
+- The phone counters row ("0 need you 56 late 0 stuck") is tight at 390 px and scrolls rather than clipping at narrower widths.
+- The calendar's Day view opened on 20 October, not today (10 October), after the month view had been used.
+- Synthetic data repeats ("Contact 11" before "Contact 2", identical task titles); that is the data, not the product.
+
+## Regenerate (local, no production)
 
 ```
 unset SUPABASE_ACCESS_TOKEN SUPABASE_PROJECT_REF SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_URL
-bash scripts/isolated/replica.sh                                   # once; then: createdb bq template post (drop first if it exists)
-npx tsx scripts/isolated/stress-browser.ts bq --only=1440,390 --shots=.out/g/populated
-npx tsx scripts/isolated/stress-browser.ts bq --only=1440,390 --gallery --shots=.out/g/gx
-npx tsx scripts/isolated/stress-browser.ts bq --only=1440,390 --gallery --look=silver --shots=.out/g/look-silver   # also forest, graphite
-npx tsx scripts/isolated/stress-browser.ts bq --only=1440,390 --gallery --palette=paper --shots=.out/g/pal-paper
-WRITER=1 DEVICES=desktop1440,phone390 ONLY=pages,menus,settings,records,modules,popovers,dialogs,toasts,writer,empty,auth,chat OUT=.out/g/lab npx tsx scripts/verify/surface-lab.ts
-WRITER=1 DEVICES=phone360,phone430,tablet768,phone390land ONLY=pages,menus,settings OUT=.out/g/resp npx tsx scripts/verify/surface-lab.ts
-npx tsx scripts/gallery/build-gallery.ts .out/g <commit>           # copies, labels, writes manifest.json and index.html
-npx tsx scripts/gallery/verify-gallery.ts
+bash scripts/isolated/replica.sh      # then: createdb bq template post (drop it first if it exists; rebuild it before every populated run)
+npx tsx scripts/isolated/stress-browser.ts bq --only=1440,390 --shots=.out/g2/populated
+npx tsx scripts/isolated/stress-browser.ts bq --only=1440,390 --gallery --shots=.out/g2/gx
+WRITER=1 DEVICES=desktop1440,phone390 ONLY=records,dialogs,toasts,writer,empty,auth OUT=.out/g2/lab npx tsx scripts/verify/surface-lab.ts
+npx tsx scripts/gallery/build-gallery.ts .out/g2 <commit>   # then make thumbs, assemble the site folder and run: GALLERY_DIR=<folder> npm run deploy:gallery
+npx tsx scripts/gallery/verify-live.ts <url>
 ```
-
-Run each long command on its own (each takes 4 to 6 minutes); rebuild the `bq` database before every populated run that follows one that pressed a Settings control.

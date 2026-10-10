@@ -6,8 +6,18 @@
  *
  * Needs the public internet (run `npm run trust:proxy-ca` once in the sandbox); it contacts only the gallery host.
  */
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
+
+/* How many screenshots the gallery should hold, and how many of them are Dark, come from the manifest the gallery was built from. */
+const built = JSON.parse(
+  await readFile('docs/integration/final-visual-gallery/manifest.json', 'utf8'),
+) as {
+  count: number
+  entries: { scheme: string }[]
+}
+const N = built.count
+const DARK = built.entries.filter((e) => e.scheme === 'dark').length
 
 declare const document: any
 const BASE = process.argv[2] ?? ''
@@ -54,8 +64,8 @@ await page
 const r = (await page.evaluate(
   `(() => { const im = [...document.images].filter((i) => i.id !== 'lbi'); return { n: im.length, broken: im.filter((i) => i.naturalWidth === 0).length, sw: document.documentElement.scrollWidth, links: document.querySelectorAll('a[data-lb]').length } })()`,
 )) as { n: number; broken: number; sw: number; links: number }
-check('316 thumbnails all load', r.n === 316 && r.broken === 0, `${r.n} images, ${r.broken} broken`)
-check('316 tappable screenshots', r.links === 316, String(r.links))
+check(`${N} thumbnails all load`, r.n === N && r.broken === 0, `${r.n} images, ${r.broken} broken`)
+check(`${N} tappable screenshots`, r.links === N, String(r.links))
 check('no horizontal overflow at 390px', r.sw <= 391, String(r.sw))
 check('no request left the gallery origin', foreign.length === 0, foreign.slice(0, 2).join(', '))
 check(
@@ -68,7 +78,7 @@ const lab = (await page.evaluate(
 )) as { n: number; wrong: number }
 check(
   'Light/Dark labels agree with the card data',
-  lab.n === 316 && lab.wrong === 0,
+  lab.n === N && lab.wrong === 0,
   `${lab.wrong} wrong of ${lab.n}`,
 )
 // Every full-resolution PNG is served (HEAD from the page), and the right one.
@@ -77,8 +87,8 @@ const full = (await page.evaluate(
 )) as string[]
 const okFull = full.filter((s) => s.startsWith('200 image/png'))
 check(
-  '316 full-resolution PNGs are served',
-  okFull.length === 316,
+  `${N} full-resolution PNGs are served`,
+  okFull.length === N,
   `${okFull.length} of ${full.length}`,
 )
 await page.screenshot({ path: `${SHOTS}/01-top.png` })
@@ -92,8 +102,8 @@ const dark = (await page.evaluate(
   `(() => ({ vis: [...document.querySelectorAll('a[data-lb]')].filter((l) => l.offsetParent !== null).length, light: [...document.querySelectorAll('figure[data-s=light]')].filter((l) => l.offsetParent !== null).length, count: document.getElementById('count').textContent }))()`,
 )) as { vis: number; light: number; count: string }
 check(
-  'Dark filter shows 158 and no Light',
-  dark.vis === 158 && dark.light === 0,
+  `Dark filter shows ${DARK} and no Light`,
+  dark.vis === DARK && dark.light === 0,
   JSON.stringify(dark),
 )
 await page.locator('.tog button[data-f="only-mob"]').tap()
@@ -118,7 +128,7 @@ check(
 await page.locator('.tog button[data-g="t"][data-f="all"]').tap()
 await page.locator('.tog button[data-g="z"][data-f="all"]').tap()
 const reset = (await page.evaluate(`document.getElementById('count').textContent`)) as string
-check('clearing the filters brings all 316 back', reset === '316 of 316 shown', reset)
+check(`clearing the filters brings all ${N} back`, reset === `${N} of ${N} shown`, reset)
 // Viewer
 await page.selectOption('#jump', 'dashboard-and-project-workspace')
 await page.waitForTimeout(400)
@@ -133,8 +143,8 @@ const v1 = (await page.evaluate(
   `(() => ({ src: document.getElementById('lbi').src.split('/').slice(-2).join('/'), w: document.getElementById('lbi').naturalWidth, n: document.getElementById('lbn').textContent, cap: document.getElementById('lbc').textContent }))()`,
 )) as { src: string; w: number; n: string; cap: string }
 check(
-  'tap opens the viewer, over all 316, and lazy-loads the full-resolution PNG',
-  v1.src.startsWith('screenshots/') && v1.w >= 390 && v1.n.startsWith('1 / 316'),
+  `tap opens the viewer, over all ${N}, and lazy-loads the full-resolution PNG`,
+  v1.src.startsWith('screenshots/') && v1.w >= 390 && v1.n.startsWith(`1 / ${N}`),
   `${v1.src} ${v1.w}px ${v1.n}`,
 )
 await page.screenshot({ path: `${SHOTS}/03-viewer.png` })
