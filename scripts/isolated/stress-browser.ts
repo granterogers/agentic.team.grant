@@ -31,6 +31,11 @@ const ONLY = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.
 /* The appearance the run is drawn in: --look=original|silver|forest|graphite and --glass=off|soft|rich (default Original, Soft). */
 const LOOK =
   process.argv.find((a) => a.startsWith('--look='))?.slice('--look='.length) ?? 'original'
+/* --palette=slate|paper|clay|ink|moss: the accent colour the run is drawn in (slate is the Blue the product starts with; paper is Violet). Set through storage, never by pressing the control: a press is SAVED TO THE ACCOUNT and would colour every later run. */
+const PALETTE =
+  process.argv.find((a) => a.startsWith('--palette='))?.slice('--palette='.length) ?? 'slate'
+/* --gallery: capture only the visual-review extras (records, calendar views, settings tabs) instead of the audit sequence. */
+const GALLERY = process.argv.includes('--gallery')
 const GLASS = process.argv.find((a) => a.startsWith('--glass='))?.slice('--glass='.length) ?? 'soft'
 const db = await isolated(dbName)
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -365,7 +370,7 @@ const open = async (vp: (typeof VIEWPORTS)[number], scheme: 'dark' | 'light') =>
   )
   await ctx.addInitScript(`window.HQ_API = '${GW}/hq-api'; window.HQ_SIGNIN = '${GW}/signin';
     try { localStorage.setItem('hq.session', JSON.stringify({ access_token: '${SESSION}', refresh_token: 'r', expires_at: Date.now() + 36e5 }));
-      localStorage.setItem('studio.appearance', JSON.stringify({ palette: 'slate', texture: 'concrete', own: null, ownName: '', scheme: '${scheme}', density: 'comfortable', look: '${LOOK}', glass: '${GLASS}', depth: 'soft' })) } catch {}`)
+      localStorage.setItem('studio.appearance', JSON.stringify({ palette: '${PALETTE}', texture: 'concrete', own: null, ownName: '', scheme: '${scheme}', density: 'comfortable', look: '${LOOK}', glass: '${GLASS}', depth: 'soft' })) } catch {}`)
   const page = await ctx.newPage()
   page.on('requestfailed', (r) => {
     if (r.resourceType() !== 'image')
@@ -452,6 +457,116 @@ for (const vp of VIEWPORTS) {
       await settle(page, 900)
     }
     await go(`/p/${busy.slug}`)
+    if (GALLERY) {
+      // The visual-review gallery's populated extras (docs/integration/final-visual-gallery): every shot is a real page over the replica's rows.
+      await seen('gx-dashboard-board', '.bcstage')
+      const press = async (sel: string): Promise<boolean> => {
+        const l = page.locator(sel).first()
+        if ((await l.count()) === 0) return false
+        await l.click({ force: true, timeout: 4000 }).catch(() => null)
+        await settle(page, 700)
+        return true
+      }
+      const shotOf = async (name: string, expect: string): Promise<void> => {
+        await settle(page, 500)
+        const ok = await page
+          .locator(expect)
+          .first()
+          .isVisible()
+          .catch(() => false)
+        if (ok) await page.screenshot({ path: `${SHOTS}/real-${tag}-${name}.png` })
+        else await page.screenshot({ path: `${SHOTS}/FAILED-${tag}-${name}.png` })
+      }
+      const back = async (): Promise<void> => {
+        await page.keyboard.press('Escape')
+        await settle(page, 400)
+      }
+      // On a phone the board stacks its modules, so the schedule is below the fold: scroll it into view so the picture shows what it is labelled.
+      await page
+        .locator('.bcstage [data-mod="schedule"]')
+        .first()
+        .scrollIntoViewIfNeeded()
+        .catch(() => null)
+      await shotOf('gx-schedule-compact', '.bcstage [data-mod="schedule"]')
+      if (
+        await press(
+          '.bcstage [data-mod="schedule"] [data-bc-expand], .bcstage [data-mod="schedule"] [data-expand]',
+        )
+      ) {
+        for (const v of ['day', 'week', 'month']) {
+          await press(`[data-cal-view="${v}"]`)
+          await shotOf(`gx-schedule-maximised-${v}`, '.bcexp .bcexpbox')
+        }
+        if (await press('[data-cal-new]')) {
+          await shotOf('gx-event-editor', '.bccal2form')
+          await back()
+        }
+        await back()
+      }
+      await go(`/p/${busy.slug}`)
+      if (await press('.bcstage [data-bc-task-open]')) {
+        await shotOf('gx-record-task', 'body')
+        await go(`/p/${busy.slug}`)
+      }
+      if (await press('.bcstage [data-bc-contact]')) {
+        await shotOf('gx-record-contact', 'body')
+        await go(`/p/${busy.slug}`)
+      }
+      if (await press('.bcstage [data-bc-doc]')) {
+        await shotOf('gx-record-document', 'body')
+        await go(`/p/${busy.slug}`)
+      }
+      if (await press('[data-bc-pagemenu]')) {
+        await shotOf('gx-page-menu', '[data-bc-pagemenu-panel]:not([hidden])')
+        if (await press('[data-bc-look]')) await shotOf('gx-background-picker', '.bdgrid')
+        await back()
+        await back()
+      }
+      await go(`/p/${busy.slug}`)
+      await page.keyboard.press('Control+k')
+      await settle(page, 600)
+      await shotOf('gx-jump-search', '#bcjump:not([hidden])')
+      await back()
+      await go(`/p/${busy.slug}`)
+      await page
+        .locator(
+          'button[aria-label="Close the conversation"], button[title="Close the conversation"]',
+        )
+        .first()
+        .click({ force: true })
+        .catch(() => null)
+      await settle(page, 400)
+      if (await press('[data-bc-settings]')) {
+        await page.waitForSelector('#settings .stg', { timeout: 6000 }).catch(() => null)
+        await shotOf('gx-settings-index', '#settings .stg')
+        const tabs = (await page.evaluate(
+          `[...document.querySelectorAll('#settings [data-setting]')].map((e) => e.dataset.setting)`,
+        )) as string[]
+        for (const t of tabs) {
+          if (await press(`#settings [data-setting="${t}"]`))
+            await shotOf(`gx-settings-${t}`, '#settings .stg')
+          if (t === 'appearance') {
+            // The controls below the first screen (display density, glass, depth): scroll whichever box inside Settings scrolls, to its end.
+            await page.evaluate(
+              `(() => { const s = [...document.querySelectorAll('#settings *')].filter((e) => e.scrollHeight > e.clientHeight + 40 && /(auto|scroll)/.test(getComputedStyle(e).overflowY)); for (const e of s) e.scrollTop = e.scrollHeight })()`,
+            )
+            await settle(page, 500)
+            await shotOf('gx-settings-appearance-lower', '#settings .stg')
+          }
+          if (
+            vp.touch &&
+            !(await page
+              .locator('#settings [data-setting]')
+              .first()
+              .isVisible()
+              .catch(() => false))
+          )
+            await press('#settings [data-stg-back]')
+        }
+      }
+      await ctx.close()
+      continue
+    }
     await seen('board-busy-project', '.bcstage')
     for (const m of ['tasks', 'schedule', 'documents', 'contacts', 'activity']) {
       await go(`/p/${busy.slug}`)
