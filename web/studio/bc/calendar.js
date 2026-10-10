@@ -679,7 +679,7 @@ export const block = (p, { full = false } = {}) => {
   const failed = ev.state === 'error' ? `<p class="bccal2status bccal2status--bad" role="alert">${esc(`Could not load the events: ${ev.error ?? 'unknown error'}`)}</p>` : ''
   const size = full ? 'large' : (sizes.get(p.slug) ?? 'small')
   /* A month of three-letter chips is unreadable in 340px (each cell shows one letter). On a narrow screen the full month is the dense grid (a dot per busy day) with the selected day's agenda under it, which is what the medium module already does. */
-  const narrow = full && (globalThis.matchMedia?.('(max-width: 560px)')?.matches ?? false)
+  const narrow = size === 'large' && (globalThis.matchMedia?.('(max-width: 560px), (pointer: coarse) and (max-width: 900px)')?.matches ?? false)
   return `<div class="bccal2 ${full ? 'bccal2--full' : ''}" data-bc-cal="${esc(p.slug)}" data-size="${size}" data-view="${esc(s.view)}">
     ${size === 'large' ? `<div class="bccal2large">
       ${toolbar(s, ev.mode)}${loading}${failed}

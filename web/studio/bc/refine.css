@@ -880,3 +880,54 @@
 .bctchip--high { color: #9a5b00; border-color: currentColor; }
 :root[data-theme='dark'] .bctchip--high, [data-scheme='dark'] .bctchip--high { color: #f0b45a; }
 .bctchip--doing { color: var(--bc-accent); border-color: currentColor; }
+
+/* ---- Touch targets, the real ones (11 October 2026, release readiness) ---------------------------------------------
+   The minimised calendar's day numbers were 32x20 (phone) and 32x30 (tablet) with a transparent pseudo-element reaching to 44,
+   but the rows are closer than 44px apart so neighbouring hit areas overlapped and a tap could land on the wrong day. On a
+   coarse pointer the dense month's cells are now 44px tall and the number button fills its cell; the visible pill stays small
+   (drawn by a pseudo-element). The agenda rows are 44px themselves rather than 40px plus a hit area. */
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bccal2month--dense { grid-template-rows: auto repeat(6, 46px); }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2cell { min-height: 46px; padding: 0; }
+  [data-experience='basecamp'] .bccal2month:not(.bccal2month--dense) .bccal2num { min-width: 44px; height: 44px; }
+  [data-experience='basecamp'] .bccal2month:not(.bccal2month--dense) .bccal2num::after { content: none; }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2num {
+    align-self: stretch;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    position: relative;
+    background: transparent;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 0;
+  }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2num::after { content: none; }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2num::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    background: transparent;
+  }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2num:is(:hover, :focus-visible)::before { background: color-mix(in srgb, var(--bc-text) 14%, transparent); }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2cell.is-today .bccal2num { background: transparent; }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2cell.is-today .bccal2num::before { background: var(--bc-accent); }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2cell.is-today .bccal2num { color: var(--bc-accent-ink); }
+  [data-experience='basecamp'] :is(.bccal2agenda, .bccal2day) .bccal2chip { min-height: 44px; }
+  [data-experience='basecamp'] :is(.bccal2agenda, .bccal2day) .bccal2chip::after { content: none; }
+}
+
+@media (pointer: coarse) {
+  /* The dots under a day number must not take room from the 44px button. */
+  [data-experience='basecamp'] .bccal2month--dense .bccal2cell { position: relative; }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2dots { position: absolute; left: 0; right: 0; bottom: 3px; pointer-events: none; justify-content: center; }
+}
+
+/* A control scrolled into view (by a keyboard, a link or a test) must not land under the sticky top bar. */
+html[data-experience='basecamp'] { scroll-padding-top: 96px; }
