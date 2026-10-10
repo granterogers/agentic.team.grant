@@ -843,3 +843,40 @@
 [data-experience='basecamp'] .bcapsample .bcmod { min-height: 96px; padding: 10px 12px; border-radius: 12px; border: var(--v2-edge); }
 [data-experience='basecamp'] .bcapsample .bcmodtitle { font: 650 13px/18px var(--bc-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcapsample .bcmodbody { font-size: 13px; color: var(--bc-text); margin-top: 6px; }
+
+/* ---- Maximised To-dos: cards in a responsive grid (11 October 2026, 2.9) ---------------------------------------
+   Scoped to the surface by the sibling of its heading, so the minimised modules keep their compact rows. The tick, the title
+   button and the date keep their attributes; only the arrangement changes. */
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist :is(.bclist, .bcdonelist) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist :is(.bclist, .bcdonelist) > :not(.bcitem) { grid-column: 1 / -1; }
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'tick body' 'tick due';
+  align-content: start;
+  padding: 12px 14px;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 12px;
+  background: var(--bc-surface, transparent);
+}
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem > .bctickhit { grid-area: tick; }
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem > .bcitembody { grid-area: body; }
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem > .bcitemdue { grid-area: due; justify-self: start; font: var(--bc-compact); }
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem > .bcitemdue--late { color: var(--bc-danger, #b3261e); font-weight: 600; }
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem--done { opacity: .8; }
+.bctchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.bctchip {
+  font: 600 12px/18px var(--bc-font);
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bc-border-subtle);
+  color: var(--bc-text-muted);
+}
+.bctchip--urgent { color: var(--bc-danger, #b3261e); border-color: currentColor; }
+.bctchip--high { color: #9a5b00; border-color: currentColor; }
+:root[data-theme='dark'] .bctchip--high, [data-scheme='dark'] .bctchip--high { color: #f0b45a; }
+.bctchip--doing { color: var(--bc-accent); border-color: currentColor; }

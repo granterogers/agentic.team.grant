@@ -1201,6 +1201,21 @@ const repeatsList = (note, listName) => {
   name. The list is the heading above it; saying it again on each child spends
   the whole meta line on something already known.
 */
+/*
+  CHIPS FOR WHAT THE RECORD ACTUALLY HOLDS: priority (only when it is not the ordinary 100), stage, labels. Nothing is drawn
+  for a field the task does not carry, so a card never shows an invented value.
+*/
+const taskChips = (t, isDone) => {
+  const pr = todos.task(t).priority
+  const stage = todos.stageOf(t)
+  const chips = []
+  if (pr === 'urgent' || pr === 'high') chips.push(`<span class="bctchip bctchip--${pr}">${pr === 'urgent' ? 'Urgent' : 'High priority'}</span>`)
+  if (!isDone && stage === 'doing') chips.push('<span class="bctchip bctchip--doing">In progress</span>')
+  if (isDone) chips.push('<span class="bctchip bctchip--done">Done</span>')
+  for (const l of (Array.isArray(t.labels) ? t.labels : []).slice(0, 4)) chips.push(`<span class="bctchip">${esc(String(l))}</span>`)
+  return chips.length === 0 ? '' : `<span class="bctchips">${chips.join('')}</span>`
+}
+
 const taskRow = (t, i = 0, listName = '') => {
   /*
     THE SAME PREDICATE THE LIST SPLITS ON.
@@ -1257,6 +1272,7 @@ const taskRow = (t, i = 0, listName = '') => {
           .join(' · '),
       )}</span>
       ${t.blocked ? `<span class="bcitemmeta">${status('Blocked', 'blocked')} ${esc(t.blocked)}</span>` : ''}
+      ${taskChips(t, isDone)}
     </div>
     <!--
       THE DATE, in the row's last column, which was an empty span. It read
