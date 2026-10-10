@@ -243,7 +243,10 @@ const conversation = Array.from({ length: 90 }, (_, i) => {
 })
 
 const server = await serveStudio(4656)
-const APP = 'http://127.0.0.1:4656'
+/* --base=<url> draws a HOSTED copy of the page (an isolated preview) over the same local replica: only the page's own host is reachable, the office is still answered here. */
+const BASE = process.argv.find((a) => a.startsWith('--base='))?.slice('--base='.length)
+const APP = BASE ?? 'http://127.0.0.1:4656'
+const BASE_HOST = BASE === undefined ? '' : new URL(BASE).host.replace(/\./g, '\\.')
 const CHROMIUM = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
 const browser = await chromium.launch({ executablePath: CHROMIUM, args: ['--no-sandbox'] })
 if (SHOTS !== '') await mkdir(SHOTS, { recursive: true })
@@ -296,7 +299,12 @@ const open = async (vp: (typeof VIEWPORTS)[number], scheme: 'dark' | 'light') =>
       body: text,
     })
   })
-  await ctx.route(/^https?:\/\/(?!127\.0\.0\.1|gw\.invalid)/, (route) => route.abort())
+  await ctx.route(
+    new RegExp(
+      `^https?:\\/\\/(?!127\\.0\\.0\\.1|gw\\.invalid${BASE_HOST === '' ? '' : `|${BASE_HOST}`})`,
+    ),
+    (route) => route.abort(),
+  )
   await ctx.addInitScript(`window.HQ_API = '${GW}/hq-api'; window.HQ_SIGNIN = '${GW}/signin';
     try { localStorage.setItem('hq.session', JSON.stringify({ access_token: '${SESSION}', refresh_token: 'r', expires_at: Date.now() + 36e5 }));
       localStorage.setItem('studio.appearance', JSON.stringify({ palette: 'slate', texture: 'concrete', own: null, ownName: '', scheme: '${scheme}', density: 'comfortable', look: '${LOOK}', glass: '${GLASS}', depth: 'soft' })) } catch {}`)
