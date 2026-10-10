@@ -708,6 +708,74 @@
 [data-experience='basecamp'] .bcjumprow[aria-selected='true'] .bcjumpico { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-tint) 60%, transparent); }
 [data-experience='basecamp'] .bcjumpgroup { letter-spacing: 0.08em; }
 
+/* ---- MAXIMISED CONTACTS: cards on a responsive grid (shell.js contactCard). Shared maximised-view vocabulary: a grid, a card with a
+   head, labelled facts and a foot; nothing is drawn for a fact the record does not have. ---- */
+[data-experience='basecamp'] .bcctgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+[data-experience='basecamp'] .bcctcard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bc-surface) 78%, transparent);
+  box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-1);
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+[data-experience='basecamp'] .bcctcard:hover,
+[data-experience='basecamp'] .bcctcard:focus-within {
+  border-color: color-mix(in srgb, var(--bc-accent) 45%, transparent);
+  box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-2);
+}
+[data-experience='basecamp'] .bcctcardhead { display: flex; align-items: center; gap: 12px; min-width: 0; }
+[data-experience='basecamp'] .bcctcardhead .bcface { flex: none; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; font-size: 17px; }
+[data-experience='basecamp'] .bcctwho { display: grid; gap: 1px; min-width: 0; }
+[data-experience='basecamp'] .bcctname {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font: 650 16px/22px var(--bc-font);
+  color: var(--bc-text-strong);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+[data-experience='basecamp'] .bcctname:hover { text-decoration: underline; }
+[data-experience='basecamp'] .bcctrole,
+[data-experience='basecamp'] .bcctwhere { font: 400 13px/18px var(--bc-font); color: var(--bc-text-muted); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcctlabels { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+[data-experience='basecamp'] .bcctlabel {
+  padding: 1px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--bc-border-control);
+  background: color-mix(in srgb, var(--bc-text) 5%, transparent);
+  font: 600 12px/20px var(--bc-font);
+  color: var(--bc-text);
+}
+[data-experience='basecamp'] .bcctrows { display: grid; gap: 4px; margin: 0; }
+[data-experience='basecamp'] .bcctrow { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+[data-experience='basecamp'] .bcctrow dt { font: 600 12px/20px var(--bc-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcctrow dd { margin: 0; font: 400 14px/20px var(--bc-font); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcctrow a { color: color-mix(in srgb, var(--bc-accent) 84%, var(--bc-text-strong)); text-decoration: none; }
+[data-experience='basecamp'] .bcctrow a:hover { text-decoration: underline; }
+[data-experience='basecamp'] .bcctdue { margin-left: 4px; color: var(--bc-text-muted); font-size: 13px; }
+[data-experience='basecamp'] .bcctnote { margin: 0; font: 400 13px/19px var(--bc-font); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcctfoot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--bc-border-subtle); }
+[data-experience='basecamp'] .bcctproj { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+[data-experience='basecamp'] .bcctprojlabel { font: 600 12px/20px var(--bc-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcctprojchip { padding: 0 9px; border-radius: 8px; font: 500 12px/20px var(--bc-font); background: color-mix(in srgb, var(--bc-accent) 12%, transparent); color: var(--bc-text); }
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcctname { min-height: 44px; display: inline-flex; align-items: center; margin: -11px 0; padding: 11px 0; }
+  [data-experience='basecamp'] .bcctrow a { display: inline-block; padding-block: 11px; margin-block: -11px; }
+}
+
 /* The phone's CSS dots follow the same opacity setting as the canvas ones. */
 [data-experience='basecamp'] .bcpanes::before { opacity: var(--bc-dot-op, 1); }
 

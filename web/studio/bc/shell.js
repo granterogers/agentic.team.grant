@@ -44,6 +44,7 @@ import * as when from '../when.js'
 import * as bcDocOrder from './docorder.js'
 import * as stopping from './stopping.js'
 import * as contacts from './contacts.js'
+import * as people from '../people.js'
 import * as bcDrive from './drive.js'
 import * as todos from './todos.js'
 import * as account from './account.js'
@@ -2216,21 +2217,60 @@ const contactsSurface = (p) => {
     ${
       cs.length === 0
         ? empty({ title: 'No people recorded', body: 'People connected to this project appear here.' })
-        : `<div class="bclist">${cs
-            .map(
-              (c, i) => `<div class="bcitem">
-                ${avatar(c, 34)}
-                <div class="bcitembody">
-                  <button type="button" class="bcitemtitle bcitemlink" data-bc-contact="${esc(contactKey(c, i))}">${esc(c.name)}</button>
-                  <span class="bcitemmeta">${esc(
-                    [c.role, c.org, c.where, c.last].filter(Boolean).join(' · '),
-                  )}</span>
-                </div>
-                <span class="bcpmeta">${esc(c.email ?? c.phone ?? '')}</span>
-              </div>`,
-            )
-            .join('')}</div>`
+        : `<div class="bcctgrid" data-bc-ctgrid>${cs.map((c, i) => contactCard(p, c, i)).join('')}</div>`
   }`
+}
+
+/*
+  A CONTACT AS A CARD (11 October 2026): the maximised Contacts view used to be one long row per person, an avatar at the far left and
+  an email at the far right with the width between them empty. A card shows what the office actually holds about the person, and only
+  that: nothing is invented, so a field the record does not have is simply not drawn.
+
+    - who: photograph or monogram, name, role, organisation, where;
+    - labels: the ones applied, or the ones the role already names (people.labelsFor);
+    - how to reach them: email and telephone as real links, website, social;
+    - recent interaction: when they were last in touch, and the next step with its date;
+    - associations: the other projects this person is also on, found by the same email (or, without one, the same name).
+*/
+const sameContact = (a, b) => {
+  const ea = String(a?.email ?? '').trim().toLowerCase()
+  const eb = String(b?.email ?? '').trim().toLowerCase()
+  if (ea !== '' && eb !== '') return ea === eb
+  return ea === '' && eb === '' && String(a?.name ?? '').trim().toLowerCase() === String(b?.name ?? '').trim().toLowerCase() && String(a?.name ?? '').trim() !== ''
+}
+const otherProjectsOf = (p, c) =>
+  PROJECTS.filter((q) => q.slug !== p.slug && q.slug !== 'unnamed' && (q.contacts ?? []).some((x) => sameContact(x, c))).map((q) => q.name)
+
+const contactCard = (p, c, i) => {
+  const key = contactKey(c, i)
+  const labels = people.labelsFor(c)
+  const also = otherProjectsOf(p, c)
+  const site = String(c.website ?? '').trim()
+  const row = (label, inner) => `<div class="bcctrow"><dt>${esc(label)}</dt><dd>${inner}</dd></div>`
+  const rows = [
+    c.email ? row('Email', `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : '',
+    c.phone ? row('Phone', `<a href="tel:${esc(String(c.phone).replace(/[^+\d]/g, ''))}">${esc(c.phone)}</a>`) : '',
+    site ? row('Website', /^https?:\/\//i.test(site) ? `<a href="${esc(site)}" target="_blank" rel="noopener noreferrer">${esc(site.replace(/^https?:\/\//i, ''))}</a>` : esc(site)) : '',
+    c.instagram ? row('Social', esc(c.instagram)) : '',
+    c.last ? row('Last contact', esc(c.last)) : '',
+    c.next ? row('Next step', `${esc(c.next)}${c.nextDue ? ` <span class="bcctdue">${esc(c.nextDue)}</span>` : ''}`) : '',
+  ].join('')
+  return `<article class="bcctcard" data-bc-ctcard="${esc(key)}">
+    <header class="bcctcardhead">
+      ${avatar(c, 52)}
+      <div class="bcctwho">
+        <button type="button" class="bcctname bcitemlink" data-bc-contact="${esc(key)}">${esc(c.name)}</button>
+        <span class="bcctrole">${esc([c.role, c.org].filter(Boolean).join(' · '))}</span>
+        ${c.where ? `<span class="bcctwhere">${esc(c.where)}</span>` : ''}
+      </div>
+    </header>
+    ${labels.length === 0 ? '' : `<ul class="bcctlabels" aria-label="Labels">${labels.map((l) => `<li class="bcctlabel ${esc(l.hue ?? '')}">${esc(l.name)}</li>`).join('')}</ul>`}
+    ${rows === '' ? '' : `<dl class="bcctrows">${rows}</dl>`}
+    ${c.note ? `<p class="bcctnote">${esc(String(c.note).length > 140 ? `${String(c.note).slice(0, 138)}…` : c.note)}</p>` : ''}
+    <footer class="bcctfoot">
+      <span class="bcctproj"><span class="bcctprojlabel">On</span> ${[p.name, ...also].map((n) => `<span class="bcctprojchip">${esc(n)}</span>`).join('')}</span>
+    </footer>
+  </article>`
 }
 
 /*
