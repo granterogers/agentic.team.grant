@@ -44,7 +44,7 @@ export const markup = (p) => {
     ${row('dots', 'Grid dot opacity', 'The dotted grid behind the modules. 0% hides it.', 0, 1)}
     ${row('tex', 'Background texture', 'The slate texture of the page. 0% is plain; 40% is the default; 100% is clearly pronounced.', 0, 1)}
     <div class="bcapsample" data-ap-sample data-modmode="${look.modMode === 'edge' ? 'edge' : 'card'}" style="${bd.lookStyle(grid.bgOf(p.slug)).join(';')}">
-      <div class="bccomp bccomp--c" style="display:contents">
+      <div style="display:contents">
         ${sample('Schedule', 'teal', '#3fb8a8', 'Today: two events', '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>')}
         ${sample('To-dos', 'sky', '#5aa9e6', '3 open, 1 late', '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8M13 12h8M13 18h8"/>')}
       </div>

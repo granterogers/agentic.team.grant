@@ -82,6 +82,18 @@ for (const scheme of ['dark', 'light'] as const) {
     JSON.stringify(vals),
   )
   check(`${scheme}: nothing is stored until a setting is changed`, (await stored(page, a)) === null)
+  /*
+    THE PANE KEEPS THE PAGE'S OWN MARGINS. The live sample once carried the board's class, which a page-level rule reads as
+    "this page is the board" and strips the page's padding, so the settings flowed to the screen edge on a phone.
+  */
+  const gutter = (await page.evaluate(
+    `(() => { const m = document.querySelector('.bcmain'); const c = getComputedStyle(m); return { pl: parseFloat(c.paddingLeft), bg: c.backgroundColor } })()`,
+  )) as { pl: number; bg: string }
+  check(
+    `${scheme}: opening the Appearance pane does not strip the page's margins or surface`,
+    gutter.pl > 0 && gutter.bg !== 'rgba(0, 0, 0, 0)',
+    JSON.stringify(gutter),
+  )
   await page.screenshot({ path: `${OUT}/pane-default-${scheme}.png` })
 
   // A slider previews while it moves, before anything is saved.
