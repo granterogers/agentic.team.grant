@@ -178,6 +178,16 @@ type Office = {
     the prototype crew is what the composer needs to exist at all.
   */
   readonly unreachable?: boolean
+  /*
+    OR THE OFFICE ANSWERS WITH ONE REAL PROJECT AND ONE CREW MEMBER.
+
+    Since #426 a signed-in person whose office does not answer is shown no
+    projects at all (never the prototype's invented ones), so the Chat button
+    the conversation sections press is gone in that state: `unreachable` can no
+    longer stand in for "an office with a project". This does, with the slug the
+    first section read off the prototype.
+  */
+  readonly serves?: string
 }
 
 /*
@@ -253,6 +263,39 @@ const open = async (office: Office, init = '', phone = false) => {
     const auth = route.request().headers().authorization ?? ''
     const ok = good(auth)
     seen.push(`hq-api ${ok ? 'good' : 'bad'}${ok ? ` ${auth.slice(7)}` : ''}`)
+    const wanted = new URL(route.request().url()).searchParams.get('section')
+    if (office.serves !== undefined && route.request().method() === 'GET') {
+      const project = {
+        slug: office.serves.replace(/^\/p\//, '').split('/')[0],
+        name: 'Riverside',
+        purpose: 'A made-up project for the chat checks.',
+        tasks: [],
+        documents: [],
+        contacts: [],
+        sources: [],
+        activity: [],
+        waiting: [],
+        modules: [],
+        requests: [],
+        layout_board: null,
+      }
+      const body =
+        wanted === 'studio'
+          ? {
+              data: {
+                generated_at: new Date().toISOString(),
+                crew: [
+                  { slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' },
+                ],
+                projects: [project],
+              },
+            }
+          : wanted === 'layout'
+            ? { data: { panels: null, rev: 0, now: Date.now() } }
+            : { data: [] }
+      await route.fulfill({ status: 200, headers: cors, body: JSON.stringify(body) })
+      return
+    }
     await route.fulfill({
       status: ok ? 200 : 401,
       headers: cors,
@@ -442,7 +485,7 @@ const slug = await (async (): Promise<string> => {
     page: chat,
     seen,
     thrown,
-  } = await open({ accept: [ACCESS], unreachable: true }, stored(ACCESS, hour(1)))
+  } = await open({ accept: [ACCESS], serves: slug }, stored(ACCESS, hour(1)))
   await chat.goto(url(slug), { waitUntil: 'domcontentloaded' })
   await chat.waitForSelector('.bcmain')
   await chat.waitForTimeout(700)
@@ -562,7 +605,7 @@ const slug = await (async (): Promise<string> => {
  * ====================================================================== */
 {
   const { ctx, page } = await open(
-    { accept: [], unreachable: true },
+    { accept: [], serves: slug },
     stored('a-session-that-was-revoked', hour(1)),
   )
   await page.goto(url(slug), { waitUntil: 'domcontentloaded' })

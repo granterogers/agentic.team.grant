@@ -203,8 +203,11 @@ for (const file of scripts) {
   for (const m of text.matchAll(/setProperty\(\s*['"`](--[a-z0-9-]+)/gi)) {
     if (m[1] !== undefined) defined.add(m[1])
   }
-  for (const m of text.matchAll(/style\s*=\s*["'`][^"'`]*?(--[a-z0-9-]+)\s*:/gi)) {
-    if (m[1] !== undefined) defined.add(m[1])
+  // Every custom property an inline style declares, not only the first: `style="--hour:48px;--cols:7"` defines both.
+  for (const attr of text.matchAll(/style\s*=\s*["'`]([^"'`]*)/gi)) {
+    for (const m of (attr[1] ?? '').matchAll(/(--[a-z0-9-]+)\s*:/gi)) {
+      if (m[1] !== undefined) defined.add(m[1])
+    }
   }
 }
 

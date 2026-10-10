@@ -304,11 +304,11 @@ const menuPanel = () => {
   const projects = listed()
   const mine = canWrite()
   const item = (to, label, mark = '') =>
-    `<button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(to)}"
+    `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-go="${esc(to)}"
       aria-current="${isHere(to) ? 'page' : 'false'}">${mark}<span class="bcmenuname">${esc(label)}</span></button>`
   const firstRunShown = projects.length === 0 && source.live === true && mine && state().view === 'home'
   /* Always in the page, hidden until opened: the button's aria-controls always names something that exists. */
-  return `<div class="bcmenupanel" id="bc-menu" role="menu" aria-label="Projects and navigation"${menu.isOpen() ? '' : ' hidden'}>
+  return `<div class="bcmenupanel" id="bc-menu" role="${menu.isMaking() ? 'dialog' : 'menu'}" aria-label="${menu.isMaking() ? 'New project' : 'Projects and navigation'}"${menu.isOpen() ? '' : ' hidden'}>
     <p class="bcmenuhead">Projects</p>
     ${
       projects.length === 0
@@ -387,7 +387,7 @@ const topRow = () => {
         aria-label="Projects and navigation" title="Projects and navigation">
         <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none"
           stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-          <path d="M4 7h16M4 12h16M4 17h16"></path>
+          <path class="bcb1" d="M4 7h16"></path><path class="bcb2" d="M4 12h16"></path><path class="bcb3" d="M4 17h16"></path>
         </svg>
       </button>
       ${menuPanel()}
@@ -3608,7 +3608,7 @@ const expandedOverlay = (p) => {
     <div class="bcexpback" data-bc-expclose="1"></div>
     <div class="bcexpbox" role="dialog" aria-modal="true"
       aria-label="${esc(EXPANDED_NAME[id] ?? id)}">
-      <button type="button" class="bcexpx" data-bc-expclose="1" aria-label="Close">
+      <button type="button" class="bcexpx" data-bc-expclose="1" aria-label="Close" title="Close">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="M6 6l12 12M18 6L6 18"></path>

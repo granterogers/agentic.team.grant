@@ -17,7 +17,8 @@ import { readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { extname, join } from 'node:path'
 
-const ROOT = 'web/studio'
+/* STUDIO_ROOT points a run at another checkout of the page (a before-and-after comparison), and is unset in every gate. */
+const ROOT = process.env.STUDIO_ROOT ?? 'web/studio'
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

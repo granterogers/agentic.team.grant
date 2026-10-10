@@ -195,8 +195,13 @@ if (look !== null) {
 }
 
 /* --- 3. the controls are still there and still act ---------------------- */
+/*
+  Project Settings has two panes, Automations and Labels. The Team and Project tabs were removed on purpose (commit 9bdb212): the
+  team lives in Settings for everything, and rename, export and archive stay reachable in a fold on the same page, so this asserts the
+  property (every project-level control is still reachable) and not the old tab count.
+*/
 const panes = await page.locator('[data-setpane]').count()
-check('every settings pane is still offered', panes >= 4, `${String(panes)} pane(s)`)
+check('both Project Settings panes are offered', panes === 2, `${String(panes)} pane(s)`)
 await page.locator('[data-setpane="labels"]').click()
 await page.waitForTimeout(600)
 check(
@@ -204,12 +209,12 @@ check(
   (await page.locator('.bcsetframe').innerText()).toLowerCase().includes('label'),
   (await page.locator('.bcsetframe').innerText()).replace(/\n/g, ' / ').slice(0, 140),
 )
-await page.locator('[data-setpane="project"]').click()
-await page.waitForTimeout(600)
-const projectPane = await page.locator('.bcsetframe').innerText()
+await page.locator('.setfold > summary').click()
+await page.waitForTimeout(400)
+const projectPane = await page.locator('.setfold').innerText()
 check(
-  'the Project pane still carries the project-level controls',
-  projectPane.length > 80,
+  'the project-level controls (rename, export, archive) are in the fold, which opens',
+  projectPane.length > 80 && /export/i.test(projectPane) && /archive/i.test(projectPane),
   projectPane.replace(/\n/g, ' / ').slice(0, 140),
 )
 
@@ -217,46 +222,37 @@ check(
 await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.bcpanes')
 await page.waitForTimeout(400)
-await page.locator('[data-bc-pagemenu]').first().click()
-await page.waitForTimeout(200)
-await page.locator('[data-bc-settings]').first().click()
-await page.waitForTimeout(800)
+/*
+  Settings is a PAGE, not a centred dialog (#158): a full-width frame with its own bar, navigation and content. The checks that
+  described the old sheet (radius, centring, a scrim) were about a surface that no longer exists, so they are replaced by what is
+  true of the page: it opens from the office control, it is opaque and set in the experience typeface, and every tab is still there.
+*/
+await page
+  .locator('.bcofficemenu [data-bc-menu], .bcofficemenu button')
+  .first()
+  .click({ force: true })
+  .catch(() => null)
+await page.locator('[data-bc-settings]').first().click({ force: true })
+await page.waitForSelector('#settings .stg', { timeout: 8000 })
+await page.waitForTimeout(500)
 const sheet = (await page.evaluate(
-  inPage(`const el = document.querySelector('#settings .sheet.settings')
+  inPage(`const el = document.querySelector('#settings .stg')
      if (el === null) return null
      const cs = getComputedStyle(el)
-     const host = getComputedStyle(document.querySelector('#settings'))
      const r = el.getBoundingClientRect()
-     return {
-       radius: cs.borderRadius,
-       border: cs.borderTopWidth,
-       shadow: cs.boxShadow,
-       background: cs.backgroundColor,
-       hostBackground: host.backgroundColor,
-       hostPlace: host.placeItems,
-       left: Math.round(r.left),
-       right: Math.round(window.innerWidth - r.right),
-       font: cs.fontFamily,
-     }`),
+     return { background: getComputedStyle(document.querySelector('#settings')).backgroundColor, font: cs.fontFamily, width: Math.round(r.width), vw: window.innerWidth }`),
 )) as Record<string, string | number> | null
-check('the office settings open from the experiment', sheet !== null)
+check('the office settings open from the experiment, as a page', sheet !== null)
 if (sheet !== null) {
   check(
-    'they are a dialog rather than a flush drawer: radius, border and shadow',
-    Number.parseFloat(String(sheet.radius)) >= 8 &&
-      Number.parseFloat(String(sheet.border)) >= 1 &&
-      String(sheet.shadow) !== 'none',
-    `radius ${String(sheet.radius)}, border ${String(sheet.border)}`,
+    'the page spans the window (it is not a half-covering drawer)',
+    Number(sheet.width) >= Number(sheet.vw) - 4,
+    `${String(sheet.width)} of ${String(sheet.vw)}`,
   )
   check(
-    'centred, with the project dimmed behind rather than half-covered',
-    Math.abs(Number(sheet.left) - Number(sheet.right)) <= 8 &&
-      String(sheet.hostBackground) !== 'rgba(0, 0, 0, 0)',
-    `left ${String(sheet.left)}, right ${String(sheet.right)}, scrim ${String(sheet.hostBackground)}`,
-  )
-  check(
-    'opaque, so the board does not show through its own cards',
-    !/rgba\([^)]*,\s*0\)/.test(String(sheet.background)),
+    'opaque, so the board does not show through it',
+    !/rgba\([^)]*,\s*0\)/.test(String(sheet.background)) &&
+      String(sheet.background) !== 'rgba(0, 0, 0, 0)',
     String(sheet.background),
   )
   check(
@@ -265,13 +261,14 @@ if (sheet !== null) {
     String(sheet.font),
   )
 }
-const tabs = await page.locator('#settings .settabs button').count()
-check('every global settings tab is still there', tabs >= 8, `${String(tabs)} tab(s)`)
-await page.locator('#settings .settabs button', { hasText: 'Behaviour' }).first().click()
+const tabs = await page.locator('#settings [data-setting]').count()
+check('every global settings tab is still there', tabs >= 9, `${String(tabs)} tab(s)`)
+await page.locator('#settings [data-setting="behaviour"]').first().click()
 await page.waitForTimeout(600)
 check(
   'and choosing one still changes the tab',
-  (await page.locator('#settings').innerText()).length > 200,
+  (await page.locator('#settings').innerText()).length > 200 &&
+    (await page.locator('#settings [data-setting="behaviour"][aria-current="page"]').count()) === 1,
 )
 
 /* --- 5. the default studio's settings are untouched --------------------- */
