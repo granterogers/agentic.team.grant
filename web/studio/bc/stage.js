@@ -53,8 +53,8 @@ export const wireStage = (root, ctx) => {
   const board = root.querySelector('[data-bc-board]')
   if (board === null) return
   const slug = board.dataset.bcBoard ?? ctx.state.project
-  /* The dock lives in the project's head row, not in the board. */
-  const dock = board.closest('.bchome') ?? root
+  /* The dock lives in the shell's top bar (the project's tools), not in the board; the page's own head row is the older home. */
+  const dock = document.querySelector('.bcworktools') ?? board.closest('.bchome') ?? root
   const stageEl = board.querySelector('.bcstage')
   const guides = board.querySelector('.bcguides')
   if (stageEl === null) return
@@ -89,7 +89,7 @@ export const wireStage = (root, ctx) => {
       const el = modEl(m.id)
       if (el === null) continue
       css(el, m)
-      const hue = grid.tintHue(m.tint)
+      const hue = grid.hueFor(m.id, m.tint)
       if (hue === '') {
         el.style.removeProperty('--bc-tint')
         el.classList.remove('bcmod--tinted')
@@ -143,10 +143,18 @@ export const wireStage = (root, ctx) => {
     const cols = Math.ceil(w / step) + 3
     const rows = Math.ceil(h / step) + 3
     const snap = (v) => Math.round(v * dpr) / dpr
-    c.fillStyle = ink
+    /*
+      A dot is drawn twice: first a slightly larger one in the opposite lightness, then the dot itself. Whatever the material
+      (a dark slate, a pale stone, a photograph), one of the two always differs from what is under it, so the grid is always
+      visible (Grant, 10 October). The halo's lightness comes from the dot's own colour.
+    */
+    const nums = (ink.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+    const lum = ink.startsWith('color(') ? ((nums[0] ?? 0) + (nums[1] ?? 0) + (nums[2] ?? 0)) / 3 : ((nums[0] ?? 0) + (nums[1] ?? 0) + (nums[2] ?? 0)) / 765
+    const haloInk = lum > 0.5 ? 'rgb(0 0 0)' : 'rgb(255 255 255)'
     const r = Math.max(0.9, Math.min(1.5, 0.8 + 0.5 * z))
-    for (const major of [false, true]) {
-      c.globalAlpha = major ? 1 : 0.62
+    for (const halo of [true, false]) for (const major of [false, true]) {
+      c.fillStyle = halo ? haloInk : ink
+      c.globalAlpha = halo ? (major ? 0.32 : 0.22) : major ? 1 : 0.8
       c.beginPath()
       for (let j = 0; j < rows; j++) {
         const iy = iy0 + j
@@ -156,7 +164,7 @@ export const wireStage = (root, ctx) => {
           const ix = ix0 + i
           if ((ix % 4 === 0 && iy % 4 === 0) !== major) continue
           const x = snap(view.x + (ix + 0.5) * step)
-          const rr = major ? r * 1.35 : r
+          const rr = (major ? r * 1.35 : r) + (halo ? 0.9 : 0)
           c.moveTo(x + rr, y)
           c.arc(x, y, rr, 0, Math.PI * 2)
         }

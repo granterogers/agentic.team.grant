@@ -281,6 +281,8 @@ if (SHOTS !== '') await mkdir(SHOTS, { recursive: true })
 const VIEWPORTS = [
   { name: '1440', w: 1440, h: 900, touch: false },
   { name: '390', w: 390, h: 844, touch: true },
+  { name: '1920', w: 1920, h: 1080, touch: false },
+  { name: '375', w: 375, h: 812, touch: true },
   { name: '360', w: 360, h: 740, touch: true },
   { name: '430', w: 430, h: 932, touch: true },
 ].filter((v) => ONLY === undefined || ONLY.split(',').includes(v.name))
@@ -460,6 +462,15 @@ for (const vp of VIEWPORTS) {
     if (GALLERY) {
       // The visual-review gallery's populated extras (docs/integration/final-visual-gallery): every shot is a real page over the replica's rows.
       await seen('gx-dashboard-board', '.bcstage')
+      if (process.argv.includes('--quick')) {
+        // --quick: the board, the burger menu and the maximised schedule only (a fast loop for chrome and module changes).
+        const menuBtn = page.locator('[data-bc-menu]').first()
+        await menuBtn.click({ force: true }).catch(() => null)
+        await seen('gx-burger-menu', '.bcmenupanel, .bcmenu')
+        await page.keyboard.press('Escape')
+        await ctx.close()
+        continue
+      }
       const press = async (sel: string): Promise<boolean> => {
         const l = page.locator(sel).first()
         if ((await l.count()) === 0) return false

@@ -91,6 +91,22 @@ export const validTint = (t) =>
   t === undefined ||
   (typeof t === 'string' && (TINTS.some((x) => x.id === t) || /^#[0-9a-fA-F]{6}$/.test(t)))
 
+/**
+ * Each module's own colour, used until the person chooses another (Grant, 10 October: every module should be a distinct
+ * colour by default). The hues are the curated ones above, so the colour popover shows the module's own as chosen-looking.
+ */
+export const DEFAULT_TINT = {
+  tasks: 'sky',
+  board: 'violet',
+  documents: 'amber',
+  schedule: 'teal',
+  contacts: 'rose',
+  activity: 'mint',
+}
+
+/** The CSS colour a module is drawn in: the person's choice, else the module's own. */
+export const hueFor = (id, t) => tintHue(t) || tintHue(DEFAULT_TINT[id] ?? null)
+
 /** The CSS colour for a stored tint. */
 export const tintHue = (t) => {
   if (typeof t !== 'string') return ''

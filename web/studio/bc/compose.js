@@ -101,6 +101,23 @@ export const choose = (v) => {
   }
 }
 
+/*
+  EACH MODULE'S MARK. A small outline icon before the title so the modules can be told apart at a glance (Grant, 10 October).
+  Drawn in the module's own colour (--bc-tint); decorative, because the title beside it already names the module.
+*/
+const MOD_ICONS = {
+  tasks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8M13 12h8M13 18h8"/>',
+  board: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v7M12 7v4M16 7v10"/>',
+  documents: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5M9 13h6M9 17h6"/>',
+  schedule: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  contacts: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+}
+const modIcon = (id) =>
+  MOD_ICONS[id] === undefined
+    ? ''
+    : `<svg class="bcmodicon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${MOD_ICONS[id]}</svg>`
+
 /**
  * A module of the project home.
  *
@@ -131,10 +148,12 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
     (4 October): left, top, width, height and a stacking order, plus an
     optional tint hue. Nothing about the grid survives here.
   */
-  const hue = rect === null ? '' : grid.tintHue(rect.tint)
+  const hue = grid.hueFor(id, rect === null ? null : rect.tint)
   const style =
     rect === null
-      ? ''
+      ? hue === ''
+        ? ''
+        : ` style="--bc-tint:${hue}"`
       : ` style="left:${String(rect.x)}px;top:${String(rect.y)}px;width:${String(rect.w)}px;height:${String(rect.h)}px;z-index:${String(rect.z ?? 1)}${hue === '' ? '' : `;--bc-tint:${hue}`}"`
   return `<section class="bcmod${wide ? ' bcmod--wide' : ''}${rect === null ? '' : ' bcmod--placed'}${hue === '' ? '' : ' bcmod--tinted'}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}"${style}>
     <!--
@@ -147,7 +166,7 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
       handler, so Enter opens and Alt with the arrows still moves and resizes.
     -->
     <header class="bcmodhead" data-bc-expand="${esc(id)}">
-      <h2 class="bcmodtitle"><button type="button" class="bcmodopen"
+      <h2 class="bcmodtitle">${modIcon(id)}<button type="button" class="bcmodopen"
         aria-label="${esc(`Open ${name}`)}"
         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown">${esc(name)}</button></h2>
       <!--
@@ -301,16 +320,13 @@ export const setPageMenuOpen = (want) => {
   the two communication actions legitimately wrap onto two lines - three
   controls of 44px do not fit across 390px beside a sentence.
 */
-const head = (p, extra = '') => {
-  return `<!--
-      The page's name, for anyone navigating by headings. Grant took the
-      VISIBLE title away (the top bar's chip already names the project), and
-      that left the page with no level-one heading at all. Outside the header,
-      which verify:basecamp-home reads to prove nothing is said twice.
-    -->
-    <h1 class="bcvh">${esc(p.name)}</h1>
-    <header class="bchead" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}" data-bc-livehost>
-    <div class="bcheadrow">
+/*
+  THE HEAD ROW (counters, workspace tools, Chat with Team, the microphone, the project menu) is a function of its own so
+  the freeform workspace can draw it INSIDE the shell's top bar, as one row with the project's name and the office
+  controls, instead of as a second band under it (Grant, 10 October: the top of the screen took too much height).
+*/
+const headRow = (p, extra = '') => {
+  return `<div class="bcheadrow">
       ${needsYouLine(p)}
       ${extra}
       <span class="bcheadacts">
@@ -437,32 +453,37 @@ const head = (p, extra = '') => {
           </div>
         </span>
       </span>
-    </div>
-    <!--
-      THERE IS NO LIVE CONVERSATION PANEL ANY MORE.
-
-      Section 4 of the 23 September review, after Grant used it: pressing the
-      microphone must not open a window, a panel, a modal, a drawer or a
-      transcript surface, must not rearrange the project and must not navigate
-      away, and the project screen should remain visually unchanged. What was
-      here was a strip under the head carrying a status line, a mute button, an
-      end button and the last six turns of the conversation, which is four of
-      those seven at once.
-
-      Every state it carried is now carried by the microphone itself, and the
-      one thing that genuinely needs words on the page - a refusal, a dropped
-      connection, the browser declining the microphone - already had somewhere
-      to go: the callsay line above, which is hidden until there is something
-      to say and is one line rather than a surface.
-
-      WHAT WENT WITH IT: mute. It was a button on the panel and there is now no
-      panel to put it on, and inventing a second control beside the microphone
-      would be the surface this section forbids by another name. Ending is a
-      second press. If Grant wants mute back the smallest honest form is a
-      long press, and that is his call to make rather than mine to assume.
-    -->
-  </header>`
+    </div>`
 }
+
+/*
+  THERE IS NO LIVE CONVERSATION PANEL ANY MORE.
+
+  Section 4 of the 23 September review, after Grant used it: pressing the microphone must not open a window, a panel, a
+  modal, a drawer or a transcript surface, must not rearrange the project and must not navigate away. Every state the
+  old strip carried is carried by the microphone itself, and the one thing that genuinely needs words on the page (a
+  refusal, a dropped connection, the browser declining the microphone) goes to the callsay line above, which is hidden
+  until there is something to say. Mute went with the panel; ending is a second press.
+*/
+const head = (p, extra = '', inBar = false) => {
+  /*
+    The page's name, for anyone navigating by headings. Grant took the VISIBLE title away (the top bar's chip already
+    names the project), and that left the page with no level-one heading at all. verify:basecamp-home reads the header
+    to prove nothing is said twice. With the row in the top bar (inBar) the header is not drawn on the page at all.
+  */
+  return `<h1 class="bcvh">${esc(p.name)}</h1>${
+    inBar
+      ? ''
+      : `<header class="bchead" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}" data-bc-livehost>${headRow(p, extra)}</header>`
+  }`
+}
+
+/**
+ * The freeform workspace's tools, for the shell's top bar: the counters, the workspace dock, Chat with Team, the
+ * microphone and the project menu. One row with the project's name and the office controls.
+ */
+export const workTools = (p) =>
+  `<div class="bcworktools" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}" data-bc-livehost>${headRow(p, `<div class="bcworkbar">${offChips(p)}${dock(p)}</div>`)}</div>`
 
 
 /*
@@ -759,7 +780,7 @@ export const compositionC = (p) => {
   const place = grid.layout(p.slug)
   const by = new Map(boardMods(p).map((m) => [m.id, m]))
   return `<div class="bchome bccomp bccomp--c">
-    ${head(p, `<div class="bcworkbar">${offChips(p)}${dock(p)}</div>`)}
+    ${head(p, '', true)}
     <div class="bcworkspace">
     <div class="bcpanes" data-bc-board="${esc(p.slug)}" ${backdrop.attrsFor(grid.bgOf(p.slug), p.slug)} style="height:${String(st.h)}px;--bc-gx:${String(view.x)}px;--bc-gy:${String(view.y)}px;--bc-gz:${String(view.zoom)};--bc-gstep:${String(grid.gridStep(view.zoom))}px;${backdrop.styleFor(grid.bgOf(p.slug), p.slug)}">
       <canvas class="bcgridcv" aria-hidden="true"></canvas>

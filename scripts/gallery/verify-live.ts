@@ -139,7 +139,10 @@ check(
 )
 await page.screenshot({ path: `${SHOTS}/03-viewer.png` })
 const cdp = await ctx.newCDPSession(page)
-const touch = async (type: string, pts: { x: number; y: number }[]): Promise<void> => {
+const touch = async (
+  type: 'touchStart' | 'touchMove' | 'touchEnd',
+  pts: { x: number; y: number }[],
+): Promise<void> => {
   await cdp.send('Input.dispatchTouchEvent', {
     type,
     touchPoints: pts.map((p, i) => ({ x: p.x, y: p.y, id: i })),

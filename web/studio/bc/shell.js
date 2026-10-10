@@ -353,6 +353,14 @@ const menuPanel = () => {
  * waiting on Grant - §6.1 says it must not become a permanent wide sidebar,
  * which is why it is a control with a count rather than a panel.
  */
+const workTools = () => {
+  const s = state()
+  if (s.view !== 'project' || s.tab !== 'overview') return ''
+  const p = project()
+  if (p === null || p === undefined) return ''
+  return compose.chosen() === 'c' ? compose.workTools(p) : ''
+}
+
 const topRow = () => {
   const waiting = PROJECTS.reduce((n, p) => n + (p.waiting?.length ?? 0), 0)
   /*
@@ -380,7 +388,13 @@ const topRow = () => {
   const here = state().view === 'project' && state().project !== null ? project() : null
   const firstWaiting = PROJECTS.find((p) => (p.waiting ?? []).length > 0)
   const attentionTo = firstWaiting === undefined ? null : at(`/p/${firstWaiting.slug}/team`)
-  return `<header class="bctop">
+  /*
+    ONE ROW. On the freeform workspace the project's counters, workspace tools, Chat with Team, the microphone and the
+    project menu are drawn here, between the project's name and the office controls, instead of as a second band
+    under the bar (Grant, 10 October: the top of the screen took too much height and was two different shades).
+  */
+  const work = workTools()
+  return `<header class="bctop${work === '' ? '' : ' bctop--work'}">
     <div class="bcleft">
       <button type="button" class="bcbtn bcicon bcburger" data-bc-menu
         aria-haspopup="menu" aria-expanded="${menu.isOpen() ? 'true' : 'false'}" aria-controls="bc-menu"
@@ -397,6 +411,7 @@ const topRow = () => {
       ${here === null ? '' : `<span class="bcjumpmark" aria-hidden="true">${compose.projectMark(here, 18)}</span>`}
       <span class="bcjumpname">${esc(here === null ? 'No project open' : here.name)}</span>
     </div>
+    ${work}
     <div class="bcright">
       <button type="button" class="bcbtn" data-bc-attention
         ${attentionTo === null ? 'disabled' : ''}

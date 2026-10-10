@@ -128,7 +128,9 @@ const FORBIDDEN = ['chat', 'sources']
   check(
     'Change this page is gone, and a three-dot menu is there instead',
     (await page.locator('[data-bc-pagemenu]').count()) === 1 &&
-      (await page.locator('.bchead').innerText()).includes('Change this page') === false,
+      (await page.locator('.bchead, .bcworktools').first().innerText()).includes(
+        'Change this page',
+      ) === false,
   )
   /*
     NO TEAM IMAGERY ON THE HOME. v2: *"Do not display pictures or avatars of
@@ -389,7 +391,7 @@ for (const [name, vp, touch, budget] of [
   const seen = (await hp.evaluate(
     inPage(`const strip = document.querySelector('.bcnotlive')
        const panes = document.querySelector('.bcpanes')
-       const head = document.querySelector('.bchead')
+       const head = document.querySelector('.bchead, .bcworktools')
        const name = (window.__shots.projects.find((x) => location.pathname.endsWith(x.slug))?.name ?? '')
        const purpose = (window.__shots.projects.find((x) => location.pathname.endsWith(x.slug))?.purpose ?? '')
        const headText = head === null ? '' : (head.textContent ?? '').replace(/\\s+/g, ' ')

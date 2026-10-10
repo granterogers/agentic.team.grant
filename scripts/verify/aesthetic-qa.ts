@@ -361,8 +361,9 @@ if (want('grid')) {
         /* Dots are the connected blobs of non-transparent pixels along one row band; take the row with the most coverage. */
         let best = 0, bestY = 0
         for (let y = 0; y < h; y++) { let n = 0; for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 40) n++; if (n > best) { best = n; bestY = y } }
-        const xs = []; let inDot = false, start = 0
-        for (let x = 0; x < w; x++) { const on = d[(bestY * w + x) * 4 + 3] > 40; if (on && !inDot) { inDot = true; start = x } if (!on && inDot) { inDot = false; xs.push((start + x - 1) / 2) } }
+        /* A dot's centre is the alpha-weighted centroid of its run: each dot now carries a faint halo, and a hard threshold on an anti-aliased edge moves the apparent centre by a pixel. */
+        const xs = []; let inDot = false, sw = 0, sa = 0
+        for (let x = 0; x < w; x++) { const a = d[(bestY * w + x) * 4 + 3]; const on = a > 40; if (on) { inDot = true; sw += a * x; sa += a } if (!on && inDot) { inDot = false; xs.push(sw / sa); sw = 0; sa = 0 } }
         const gaps = xs.slice(1).map((v, i) => v - xs[i])
         const scale = c.width / board.clientWidth
         return { dots: xs.length, gaps: gaps.map((g) => g / scale), scale, covered: best }
@@ -447,7 +448,7 @@ if (want('contrast')) {
     const over = (top, bot) => { const a = top[3] + bot[3] * (1 - top[3]); if (a === 0) return [0, 0, 0, 0]; return [0, 1, 2].map((i) => (top[i] * top[3] + bot[i] * bot[3] * (1 - top[3])) / a).concat([a]) }
     const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]) }
     const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) }
-    const bgOf = (el) => { let acc = [0, 0, 0, 0]; const chain = []; for (let e = el; e; e = e.parentElement) chain.push(e); for (const e of chain) { const cs = getComputedStyle(e); const c = rgba(cs.backgroundColor); if (c[3] > 0) acc = over(acc, c); if (acc[3] >= 0.99) return { c: acc, image: false }; if (cs.backgroundImage !== 'none' && !/^linear-gradient\\(rgba?\\(0, 0, 0, 0\\)/.test(cs.backgroundImage)) { return { c: acc[3] > 0 ? acc : rgba(getComputedStyle(document.documentElement).getPropertyValue('--bc-surface')), image: true } } } return { c: over(acc, rgba(getComputedStyle(document.body).backgroundColor || '#000')), image: false } }
+    const bgOf = (el) => { let acc = [0, 0, 0, 0]; const chain = []; for (let e = el; e; e = e.parentElement) chain.push(e); for (const e of chain) { const cs = getComputedStyle(e); const c = rgba(cs.backgroundColor); if (c[3] > 0) acc = over(acc, c); if (acc[3] >= 0.99) return { c: acc, image: false }; if (cs.backgroundImage !== 'none' && !/^linear-gradient\\(rgba?\\(0, 0, 0, 0\\)/.test(cs.backgroundImage)) { return { c: acc[3] > 0 ? over(acc, rgba(getComputedStyle(document.documentElement).getPropertyValue('--bc-surface'))) : rgba(getComputedStyle(document.documentElement).getPropertyValue('--bc-surface')), image: true } } } return { c: over(acc, rgba(getComputedStyle(document.body).backgroundColor || '#000')), image: false } }
     const out = []; const seen = new Set()
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -674,8 +675,9 @@ if (want('looks')) {
   await page.screenshot({ path: `${OUT}/looks-menu-rich-graphite.png` })
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
-  const closed = (await page.evaluate(`getComputedStyle(document.querySelector('.bctop')).backdropFilter`)) as string
-  check('with the menu closed the top bar is frosted again', /blur/.test(closed), closed)
+  /* One material: the top bar paints exactly what the page paints (same colour, same layers, same anchoring), so the strip at the very top can never be a different shade from what is under it. */
+  const closed = (await page.evaluate(`(() => { const b = getComputedStyle(document.querySelector('.bctop')); const r = getComputedStyle(document.getElementById('root')); const same = ['backgroundColor', 'backgroundImage', 'backgroundAttachment', 'backgroundBlendMode', 'backgroundSize'].every((k) => b[k] === r[k]); return { same, bar: b.backgroundImage.slice(0, 40), blur: b.backdropFilter } })()`)) as { same: boolean; bar: string; blur: string }
+  check('with the menu closed the top bar shows the page\'s own material (no second shade)', closed.same, JSON.stringify(closed))
   /* Back to Original: the screen is exactly the default again. */
   await pane()
   await press(page, '[data-look-pick="original"]')

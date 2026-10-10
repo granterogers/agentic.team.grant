@@ -75,6 +75,7 @@ const u = (p: string): string => `${process.env.BASE ?? `http://127.0.0.1:${Stri
 
 const DEVICES: Record<string, { w: number; h: number; touch: boolean }> = {
   phone360: { w: 360, h: 740, touch: true },
+  phone375: { w: 375, h: 812, touch: true },
   phone390: { w: 390, h: 844, touch: true },
   phone430: { w: 430, h: 932, touch: true },
   phone390land: { w: 844, h: 390, touch: true },

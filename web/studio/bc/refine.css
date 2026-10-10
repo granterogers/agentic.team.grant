@@ -397,3 +397,145 @@
   /* The tick on a My Tasks row is drawn 28px; the part that answers a finger grows around it, as it does in the modules. */
   [data-experience='basecamp'] .bclist .bcitem > .bccheck::before { content: ''; position: absolute; inset: -8px; }
 }
+
+/* ======================================================================================================================
+   10 October 2026: one top bar, one material, a grid that is always visible, a roomier project menu, a colour for every
+   module. Last in the file on purpose: several of these override phone and desktop rules written earlier in other sheets.
+   ====================================================================================================================== */
+
+/*
+  ONE MATERIAL. The bar used to paint its own copy of the stone texture (or, over a chosen material, a frosted mix of it)
+  on top of the page's, so the strip at the very top was a different shade from everything under it. It now INHERITS the
+  page's background exactly, and the page and the bar both anchor it to the viewport, so the two cannot differ by a pixel.
+*/
+[data-experience='basecamp'] body,
+[data-experience='basecamp'] #root.shell,
+[data-experience='basecamp'] #root.shell .bctop,
+[data-experience='basecamp'] #root.shell[data-bg-page] .bctop {
+  background-attachment: fixed;
+}
+[data-experience='basecamp'] #root.shell .bctop,
+[data-experience='basecamp'] #root.shell[data-bg-page] .bctop {
+  background: inherit;
+  background-attachment: fixed;
+  background-blend-mode: inherit;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+[data-experience='basecamp'] #root.shell .bctop:has(.bcmenupanel:not([hidden]):not(.bcmenupanel-ghost)) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ONE ROW. On the freeform workspace the project's tools sit in the top bar (shell.js workTools), not in a band under it. */
+[data-experience='basecamp'] .bctop.bctop--work {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 12px;
+  --bc-nav-h: 36px;
+}
+[data-experience='basecamp'] .bctop--work .bcleft { flex: none; }
+[data-experience='basecamp'] .bctop--work .bchere { flex: 0 1 auto; max-width: min(240px, 26vw); padding: 0 4px; height: 36px; }
+[data-experience='basecamp'] .bctop--work .bcworktools { flex: 1 1 620px; min-width: 0; }
+[data-experience='basecamp'] .bctop--work .bcright { flex: none; margin-left: auto; gap: 4px; }
+[data-experience='basecamp'] .bctop--work .bcheadrow { flex-wrap: nowrap; gap: 10px; width: 100%; margin: 0; }
+[data-experience='basecamp'] .bctop--work .bcworkbar { flex: 1 1 auto; justify-content: center; min-width: 0; margin: 0; min-height: 0; }
+[data-experience='basecamp'] .bctop--work .bcworkbar .bcdock { margin: 0; }
+[data-experience='basecamp'] .bctop--work .bcheadacts { flex: none; flex-wrap: nowrap; gap: 6px; }
+[data-experience='basecamp'] .bctop--work .bccounts { padding: 2px; border-radius: 11px; }
+[data-experience='basecamp'] .bctop--work .bccountn { font-size: 15px; }
+[data-experience='basecamp'] .bctop--work .bccountw { font-size: 12px; }
+@media (pointer: fine) {
+  [data-experience='basecamp'] .bctop--work .bccount { min-height: 30px; line-height: 30px; padding: 0 9px; gap: 5px; }
+  [data-experience='basecamp'] .bctop--work .bcheadacts .bcbtn { min-height: 36px; height: 36px; padding-inline: 14px; }
+  [data-experience='basecamp'] .bctop--work .bcheadacts .bcbtn.bcmic,
+  [data-experience='basecamp'] .bctop--work .bcheadacts .bcbtn.bcicon { width: 36px; min-width: 36px; padding: 0; }
+  [data-experience='basecamp'] .bctop--work .bcheadacts .bcmic svg { width: 18px; height: 18px; }
+}
+/* Labels give way to icons before the bar runs out of room; every dock button keeps its title and accessible name. */
+@media (max-width: 1580px) {
+  [data-experience='basecamp'] .bctop--work .bcdock .bcdockbtn > span { display: none; }
+}
+/*
+  Below a desktop the bar is two rows. The tools' wrappers dissolve (display: contents) so every control is a direct child of
+  the bar and can be ordered: row one is the burger, the project's name, the project menu, Attention, office menu and Sign out;
+  row two is the counters, Chat with Team and the microphone.
+*/
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bctop.bctop--work { gap: 0 6px; padding: 4px 10px 6px; }
+  [data-experience='basecamp'] .bctop--work :is(.bcworktools, .bcheadrow, .bcheadacts) { display: contents; }
+  [data-experience='basecamp'] .bctop--work .bcleft { order: 1; }
+  [data-experience='basecamp'] .bctop--work .bchere { order: 2; flex: 1 1 0; max-width: none; min-width: 0; }
+  [data-experience='basecamp'] .bctop--work .bcheadacts > .bcmenuwrap { order: 3; }
+  [data-experience='basecamp'] .bctop--work .bcright { order: 4; margin-left: 0; }
+  [data-experience='basecamp'] .bctop--work::after { content: ''; order: 4; flex: 1 0 100%; height: 0; }
+  [data-experience='basecamp'] .bctop--work .bcstate { order: 5; flex: 1 1 0; width: auto; min-width: 0; margin: 0; padding-bottom: 0; overflow-x: auto; }
+  [data-experience='basecamp'] .bctop--work [data-bc-dock] { order: 6; flex: none; padding-inline: 10px; }
+  [data-experience='basecamp'] .bctop--work .bccountn { font-size: 14px; }
+  [data-experience='basecamp'] .bctop--work .bcmic { order: 7; flex: none; }
+  [data-experience='basecamp'] .bctop--work .bccallsay { order: 8; flex: 1 0 100%; }
+  [data-experience='basecamp'] .bctop--work .bcworkbar { order: 9; flex: 1 0 100%; margin: 0; }
+  [data-experience='basecamp'] .bctop--work .bcworkbar:not(:has(.bcoffchip)) { display: none; }
+  /* Nothing waiting means nothing to open: the bell is not drawn on a phone then (its count rides on it when there is one). */
+  [data-experience='basecamp'] .bctop--work [data-bc-attention][disabled] { display: none; }
+  [data-experience='basecamp'] .bctop--work .bccount { padding: 0 4px; gap: 3px; }
+  [data-experience='basecamp'] .bctop--work .bccounts { gap: 0; padding: 2px; }
+  [data-experience='basecamp'] .bctop--work button.bccount { min-width: 44px; justify-content: center; }
+  [data-experience='basecamp'] .bctop--work .bccountw { font-size: 12px; }
+  [data-experience='basecamp'] .bctop--work [data-bc-dock] { padding-inline: 8px; }
+}
+
+/* THE GRID IS ALWAYS VISIBLE. The dots are stronger on every material, and each is drawn with a halo of the opposite lightness (stage.js). */
+[data-experience='basecamp'] .bcpanes:not([data-bg-tone]) { --bc-dot: color-mix(in srgb, var(--bc-text) 50%, transparent); }
+/* A phone stacks its modules and has no canvas to draw on, so the same dots are laid behind the stack (they were off there entirely). */
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcpanes { position: relative; }
+  [data-experience='basecamp'] .bcpanes::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle, var(--bc-dot) 0 1.3px, transparent 1.9px);
+    background-size: 24px 24px;
+    background-position: 12px 12px;
+  }
+  [data-experience='basecamp'] .bcpanes > .bcstage { position: relative; z-index: 1; }
+}
+
+/* THE PROJECT MENU HAS ROOM: rows are apart from one another, the badges are smaller than the rows, and the panel scrolls rather than clipping. */
+[data-experience='basecamp'] .bcmenupanel {
+  width: min(340px, calc(100vw - 16px));
+  max-height: calc(100vh - 84px);
+  max-height: calc(100dvh - 84px);
+  padding: 12px;
+}
+[data-experience='basecamp'] .bcmenuhead { margin: 4px 10px 10px; }
+[data-experience='basecamp'] .bcmenulist { gap: 8px; }
+[data-experience='basecamp'] .bcmenuitem { min-height: 48px; padding: 0 12px; gap: 12px; }
+[data-experience='basecamp'] .bcmenumark .bcprojmark { width: 30px; height: 30px; border-radius: 9px; }
+[data-experience='basecamp'] .bcmenumark .bcprojmark svg { width: 17px; height: 17px; }
+[data-experience='basecamp'] .bcmenusep { margin: 14px 4px; }
+[data-experience='basecamp'] .bcmenucreate { margin-top: 10px; }
+[data-experience='basecamp'] .bcmenupanel > .bcmenuitem { margin-top: 4px; }
+
+/* A COLOUR FOR EVERY MODULE. The module's own hue (layout.js DEFAULT_TINT, or the person's choice) washes the face a little more
+   than before so it reads at a glance, the title's icon is drawn in it, and a dark scheme lifts the wash so it is not lost. */
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--tinted {
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--bc-tint) 17%, transparent), color-mix(in srgb, var(--bc-tint) 17%, transparent)),
+    var(--v2-face);
+  border-color: color-mix(in srgb, var(--bc-tint) 48%, transparent);
+}
+[data-experience='basecamp'][data-scheme='dark'] .bccomp--c .bcmod.bcmod--tinted {
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--bc-tint) 20%, transparent), color-mix(in srgb, var(--bc-tint) 20%, transparent)),
+    var(--v2-face);
+}
+[data-experience='basecamp'] .bcmodtitle { display: inline-flex; align-items: center; gap: 7px; }
+[data-experience='basecamp'] .bcmodicon { flex: none; color: var(--bc-tint, var(--bc-text-muted)); }
+[data-experience='basecamp'] .bcmod:not(.bcmod--tinted) .bcmodicon { color: var(--bc-text-muted); }
