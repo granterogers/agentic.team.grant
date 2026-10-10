@@ -11,7 +11,10 @@ const files = [
   ...readdirSync(dir)
     .filter((f) => f.endsWith('.css'))
     .map((f) => [`bc/${f}`, readFileSync(new URL(f, dir), 'utf8')] as const),
-  ['settings-ui.css', readFileSync(new URL('../../web/studio/settings-ui.css', import.meta.url), 'utf8')] as const,
+  [
+    'settings-ui.css',
+    readFileSync(new URL('../../web/studio/settings-ui.css', import.meta.url), 'utf8'),
+  ] as const,
 ]
 const stripComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '')
 

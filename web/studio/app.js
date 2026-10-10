@@ -1811,7 +1811,7 @@ function paintDock() {
             : esc(p.slug === 'unnamed' ? 'Conversation' : p.name)
         }</span>
       </span>
-      <button class="closeconv" data-dock-close aria-label="Close the conversation">
+      <button class="closeconv" data-dock-close aria-label="Close the conversation" title="Close the conversation">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
@@ -2645,7 +2645,7 @@ function callSheet() {
       <div class="turns" id="turns" data-callturns></div>
     </details>
   </div>
-  <button class="close" aria-label="Close">
+  <button class="close" aria-label="Close" title="Close">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
   </button>`
@@ -6984,7 +6984,7 @@ function importSheet(p) {
         <h2 style="margin:2px 0 0">${esc(it.title)}</h2>
         <span class="t-meta">Into ${esc(p.name)}</span>
       </div>
-      <button class="close inhead" data-import-close aria-label="Close">✕</button>
+      <button class="close inhead" data-import-close aria-label="Close" title="Close">✕</button>
     </header>
 
     <label class="ifield">
@@ -12176,7 +12176,7 @@ function taskSheet(t, p) {
         </div>
       </form>
     </div>
-    <button class="close" aria-label="Close">
+    <button class="close" aria-label="Close" title="Close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>`
@@ -12426,7 +12426,7 @@ function lookSheet(p, keepSearch = false) {
         </span>
       </div>
     </div>
-    <button class="close" aria-label="Close">
+    <button class="close" aria-label="Close" title="Close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>`
@@ -12713,7 +12713,7 @@ function openContact(c) {
              </div>`
       }
     </div>
-    <button class="close" aria-label="Close">
+    <button class="close" aria-label="Close" title="Close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>`
@@ -12784,7 +12784,7 @@ function labelEditor(after) {
           <button class="btn primary" type="submit">Add</button>
         </form>
       </div>
-      <button class="close" aria-label="Close">
+      <button class="close" aria-label="Close" title="Close">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>`
@@ -12993,7 +12993,7 @@ function openDoc(doc, from) {
   v.innerHTML = `<div class="sheet docsheet">
       <div class="sheethead">
         <span style="flex:1;min-width:0">${head}</span>
-        <button class="close inhead" aria-label="Close">
+        <button class="close inhead" aria-label="Close" title="Close">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>

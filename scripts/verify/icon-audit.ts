@@ -43,18 +43,21 @@ const MEASURE = `(() => {
     const vb = svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width ? svg.viewBox.baseVal.width : sr.width
     const scale = sr.width / vb
     const host = b.closest('.bctop, .bcdockbar, .bcmodhead, .dockhead, .stg-bar, .bcexp, .bccal2head, .bcmenuwrap, #dock') || document.body
-    out.push({ name: (b.getAttribute('aria-label') || b.getAttribute('title') || b.className || b.tagName).toString().slice(0, 40), host: (host.className || host.tagName).toString().split(' ')[0], dx: Math.round(dx * 10) / 10, dy: Math.round(dy * 10) / 10, size: Math.round(sr.width), stroke: Math.round(sw * scale * 10) / 10, w: Math.round(br.width), h: Math.round(br.height) })
+    out.push({ name: (b.getAttribute('aria-label') || b.getAttribute('title') || b.className || b.tagName).toString().slice(0, 40), host: (host.className || host.tagName).toString().split(' ')[0], dx: Math.round(dx * 10) / 10, dy: Math.round(dy * 10) / 10, size: Math.round(sr.width), stroke: Math.round(sw * scale * 10) / 10, w: Math.round(br.width), h: Math.round(br.height), tip: !!(b.getAttribute('title') || (b.closest('[title]') && b.closest('[title]').getAttribute('title'))), named: !!(b.getAttribute('aria-label') || b.getAttribute('title') || b.getAttribute('aria-labelledby')) })
   }
   return out
 })()`
 
-type Icon = { name: string; host: string; dx: number; dy: number; size: number; stroke: number; w: number; h: number }
+type Icon = { name: string; host: string; dx: number; dy: number; size: number; stroke: number; w: number; h: number; tip: boolean; named: boolean }
 const failures: string[] = []
 const seenCount = { checked: 0 }
 
+const noTip = new Set<string>()
 const judge = (label: string, icons: Icon[], strict = true): void => {
   for (const i of icons) {
     seenCount.checked += 1
+    if (!i.named) failures.push(`${label}: an icon-only control has no accessible name (${i.name})`)
+    if (!i.tip) noTip.add(i.name)
     /* An icon whose ink is a glyph with its own optical weight (a chevron, a dot menu) may sit up to 2px off; anything more is misaligned. */
     if (strict && (Math.abs(i.dx) > 1.5 || Math.abs(i.dy) > 1.5)) failures.push(`${label}: "${i.name}" ink is ${String(i.dx)}px / ${String(i.dy)}px off its button centre (${String(i.w)}x${String(i.h)})`)
   }
@@ -109,7 +112,9 @@ const run = async (dev: string, scheme: string): Promise<void> => {
 for (const dev of wanted) for (const scheme of ['dark', 'light']) await run(dev, scheme)
 await browser.close()
 server.close()
+for (const n of noTip) failures.push(`an icon-only control has no hover tooltip (title): ${n}`)
 const unique = [...new Set(failures)]
 for (const f of unique) console.log(`FAIL  ${f}`)
+console.log(`icon-only controls with no hover tooltip (title): ${String(noTip.size)} distinct${noTip.size ? ` - ${[...noTip].slice(0, 12).join(' | ')}` : ''}`)
 console.log(`\nicon audit: ${String(seenCount.checked)} icon controls measured, ${String(unique.length)} problem(s)`)
 process.exit(unique.length === 0 ? 0 : 1)

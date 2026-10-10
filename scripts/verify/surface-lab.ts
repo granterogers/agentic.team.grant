@@ -233,6 +233,20 @@ for (const dev of devices) {
         await dialog('ask-dialog', `m.askDialog({ title: 'Why not?', body: 'The team is shown your reason, and so are you if it asks again.', label: 'Your reason (a sentence of at least eight characters)', confirmLabel: 'Decline' })`)
       }
 
+      if (want('toasts')) {
+        const toast = async (name: string, note: string): Promise<void> => {
+          await go(slug)
+          await page.evaluate(`import('/undo.js').then((m) => m.offer({ undo: 'lab-undo', note: ${JSON.stringify(note)} }, () => {}))`)
+          await page.waitForSelector('#undobar:not([hidden]) .undoword', { timeout: 4000 }).catch(() => null)
+          await record(page, name, context, errors, '#undobar:not([hidden])')
+        }
+        await toast('undo-bar', 'Renamed to Legacy Coaching Course')
+        await toast('undo-bar-message', 'Could not undo that: the project was changed in the meantime')
+        await page.evaluate(`document.getElementById('undobar').classList.add('bad')`)
+        await record(page, 'undo-bar-error', context, errors, '#undobar.bad')
+        await toast('undo-bar-long', 'Moved "WS01 - Legacy Opening Assessment" out of Legacy Coaching Course and into the Wellness project, with its three tags')
+      }
+
       if (want('chat')) {
         await go(slug)
         if (await tryPress(page, '[data-bc-chat], [data-bc-dock], .bcdocktoggle')) await record(page, 'chat-dock', context, errors, '.dock')

@@ -251,6 +251,43 @@
   backdrop-filter: blur(10px);
 }
 
+/*
+  THE UNDO STRIP (the one transient notice the product has). It was the canvas colour with an inverted button: near-black in both
+  schemes, and it cut what had been done to one line with an ellipsis, which is the whole point of the strip. It is now a floating
+  surface like every other (menu surface, popover edge, the pop shadow), says what happened in up to three lines, and Undo is the
+  accent's primary key. A failure (the .bad strip) is the danger colour on the same surface, never a different one.
+*/
+[data-experience='basecamp'] .undobar {
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-border-popover);
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-pop);
+  padding: 8px 8px 8px 16px;
+}
+[data-experience='basecamp'] .undoword {
+  font: 500 14px/1.4 var(--bc-font);
+  color: var(--bc-text-strong);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+[data-experience='basecamp'] .undobar.bad { border-color: color-mix(in srgb, var(--bc-danger) 55%, var(--bc-border-popover)); }
+[data-experience='basecamp'] .undobar.bad .undoword { color: var(--bc-danger); }
+[data-experience='basecamp'] .undogo {
+  border: 0;
+  border-radius: 10px;
+  background-color: var(--bc-accent);
+  background-image: linear-gradient(180deg, color-mix(in srgb, #fff 11%, transparent), transparent 55%, color-mix(in srgb, #000 6%, transparent));
+  color: var(--bc-accent-ink);
+  font: 600 14px/1 var(--bc-font);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--bc-shadow-ink) 18%, transparent);
+}
+[data-experience='basecamp'] .undoshut { color: var(--bc-text-muted); }
+[data-experience='basecamp'] .undoshut:hover { color: var(--bc-text-strong); background: var(--bc-hover); }
+@media (prefers-reduced-motion: reduce) { [data-experience='basecamp'] .undobar { animation: none; } }
+
 /* ---------------------------------------------------------------- 4. touch --- */
 
 /*

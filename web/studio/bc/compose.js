@@ -402,7 +402,7 @@ const head = (p, extra = '') => {
           -->
           <button type="button" class="bcbtn bcicon bcpagemenu" data-bc-pagemenu="1"
             aria-haspopup="menu" aria-expanded="false"
-            aria-label="Project menu: settings, how this project looks, sources and the team">
+            aria-label="Project menu: settings, how this project looks, sources and the team" title="Project menu">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
               <circle cx="5" cy="12" r="1.7"></circle>
               <circle cx="12" cy="12" r="1.7"></circle>
