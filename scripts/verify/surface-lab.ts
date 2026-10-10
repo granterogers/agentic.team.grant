@@ -39,6 +39,7 @@ const AXE_SRC = AXE_ON ? await readFile('node_modules/axe-core/axe.min.js', 'utf
 const WRITER = process.env.WRITER === '1'
 const API_PORT = 4717
 let writerProjects = 1
+let officeMode: 'ok' | 'no_office' | 'refused' = 'ok'
 const office = WRITER
   ? createServer((req, res) => {
       const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization,content-type', 'content-type': 'application/json' }
@@ -46,6 +47,12 @@ const office = WRITER
       req.on('end', () => {
         if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return }
         const url = new URL(req.url ?? '/', 'http://x')
+        const wantedSection = url.searchParams.get('section')
+        if (req.method === 'GET' && wantedSection === 'studio' && officeMode !== 'ok') {
+          res.writeHead(officeMode === 'refused' ? 401 : 403, cors)
+          res.end(JSON.stringify(officeMode === 'refused' ? { error: 'refused' } : { error: 'no_office', can_create: true }))
+          return
+        }
         res.writeHead(200, cors)
         if (req.method === 'GET') {
           const section = url.searchParams.get('section')
@@ -83,18 +90,18 @@ const looks = pick(process.env.LOOKS, 'original')
 const glass = process.env.GLASS ?? 'soft'
 const depth = process.env.DEPTH ?? 'soft'
 const only = new Set(pick(process.env.ONLY, ''))
-const want = (g: string): boolean => (only.size === 0 && g !== 'writer' && g !== 'empty') || only.has(g)
+const want = (g: string): boolean => (only.size === 0 && g !== 'writer' && g !== 'empty' && g !== 'auth') || only.has(g)
 
 type Row = { surface: string; context: string; verdict: 'verified' | 'defect' | 'blocked'; findings: string[]; shot: string }
 const rows: Row[] = []
 
 const settle = (p: Page, ms = 500): Promise<void> => p.waitForTimeout(ms)
 
-async function newPage(dev: string, scheme: string, palette: string, look: string, errors: string[]) {
+async function newPage(dev: string, scheme: string, palette: string, look: string, errors: string[], withToken = true) {
   const d = DEVICES[dev] ?? { w: 1440, h: 900, touch: false }
   const ctx = await browser.newContext({ viewport: { width: d.w, height: d.h }, deviceScaleFactor: 1, hasTouch: d.touch, isMobile: d.touch, colorScheme: 'dark' })
   await ctx.addInitScript(`try { localStorage.setItem('studio.appearance', JSON.stringify({ palette: '${palette}', texture: 'concrete', own: null, ownName: '', scheme: '${scheme}', density: 'comfortable', look: '${look}', glass: '${glass}', depth: '${depth}' })) } catch {}`)
-  if (WRITER) await ctx.addInitScript(`window.HQ_API = 'http://127.0.0.1:${String(API_PORT)}/hq-api'; try { localStorage.setItem('hq.token', 'lab-writer') } catch {}`)
+  if (WRITER && withToken) await ctx.addInitScript(`window.HQ_API = 'http://127.0.0.1:${String(API_PORT)}/hq-api'; try { localStorage.setItem('hq.token', 'lab-writer') } catch {}`)
   const page = await ctx.newPage()
   page.on('pageerror', (e) => errors.push(e.message))
   return { ctx, page }
@@ -245,6 +252,33 @@ for (const dev of devices) {
         await page.evaluate(`document.getElementById('undobar').classList.add('bad')`)
         await record(page, 'undo-bar-error', context, errors, '#undobar.bad')
         await toast('undo-bar-long', 'Moved "WS01 - Legacy Opening Assessment" out of Legacy Coaching Course and into the Wellness project, with its three tags')
+      }
+
+      if (want('auth')) {
+        /* The screens a person meets before they are in: each in a context of its own, because a token would take them past it. */
+        const bare = async (name: string, path: string, mode: 'ok' | 'no_office' | 'refused', after?: () => Promise<void>, expect = '.bcentry'): Promise<void> => {
+          officeMode = mode
+          const fresh = await newPage(dev, scheme, palette, look, errors, mode !== 'ok')
+          await fresh.page.goto(u(path), { waitUntil: 'domcontentloaded' })
+          await settle(fresh.page, 900)
+          if (after !== undefined) await after()
+          await record(fresh.page, name, context, errors, expect)
+          await fresh.ctx.close()
+          officeMode = 'ok'
+        }
+        await bare('entry-sign-in', '/?welcome', 'ok')
+        {
+          officeMode = 'ok'
+          const f = await newPage(dev, scheme, palette, look, errors, false)
+          await f.page.goto(u('/?welcome'), { waitUntil: 'domcontentloaded' }); await settle(f.page, 900)
+          await f.page.locator('[data-bc-entry-tab="create"]').click({ force: true }).catch(() => null); await settle(f.page, 400)
+          await record(f.page, 'entry-create-account', context, errors, '[data-bc-entry-form="create"]')
+          await f.ctx.close()
+        }
+        if (WRITER) {
+          await bare('entry-signed-out-notice', '/?welcome', 'refused', undefined, '.bcentry')
+          await bare('setup-office', '/', 'no_office', undefined, '[data-bc-setup-form]')
+        }
       }
 
       if (want('chat')) {
