@@ -545,6 +545,13 @@ export const wire = (root) => {
       ctx.render()
     })
   }
+  for (const b of root.querySelectorAll('[data-bc-actr]')) {
+    b.addEventListener('click', () => {
+      ctx.state.bcActRange = b.dataset.bcActr
+      if (b.dataset.bcActf !== undefined) ctx.state.bcActFilter = b.dataset.bcActf
+      ctx.render()
+    })
+  }
   rememberDialogScroll(root)
 
   // Navigation inside the experience.

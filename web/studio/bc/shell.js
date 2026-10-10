@@ -2556,14 +2556,29 @@ const ACT_FILTERS = [
   { id: 'document', name: 'Documents', test: (a) => a.category === 'document' },
   { id: 'task', name: 'Tasks', test: (a) => a.category === 'task' },
   { id: 'calendar', name: 'Calendar', test: (a) => a.category === 'calendar' },
+  /* Offered only when a record carries a severity: a filter nothing can match is a dead control. */
+  { id: 'problems', name: 'Problems', test: (a) => ['warn', 'warning', 'error', 'failed'].includes(String(a.severity ?? '').toLowerCase()) },
 ]
+/* TIME RANGE, from the instant a record carries. A range is offered only when some record has one. */
+const ACT_RANGES = [
+  { id: 'any', name: 'Any time', days: 0 },
+  { id: 'day', name: 'Last 24 hours', days: 1 },
+  { id: 'week', name: 'Last 7 days', days: 7 },
+]
+const inRange = (a, days) => {
+  if (days === 0) return true
+  const t = a.at ? Date.parse(a.at) : Number.NaN
+  return !Number.isNaN(t) && Date.now() - t <= days * 86400000
+}
 const activitySurface = (p) => {
   const acts = p.activity ?? []
   const offered = ACT_FILTERS.filter((f) => f.id === 'all' || acts.some(f.test))
   const want = state().bcActFilter ?? 'all'
   const on = offered.some((f) => f.id === want) ? want : 'all'
   const test = (offered.find((f) => f.id === on) ?? offered[0]).test
-  const shown = acts.filter(test)
+  const rangeOffered = acts.some((a) => a.at && !Number.isNaN(Date.parse(a.at)))
+  const rangeOn = rangeOffered ? (ACT_RANGES.find((r) => r.id === (state().bcActRange ?? 'any')) ?? ACT_RANGES[0]) : ACT_RANGES[0]
+  const shown = acts.filter(test).filter((a) => inRange(a, rangeOn.days))
   return `${crumbFor(p, 'activity')}
     <div class="bcrecordhead"><h1>${esc(toolById('activity')?.name ?? 'Activity')}</h1></div>
     <p class="bcpmeta bcprose bcgap-l">
@@ -2580,10 +2595,18 @@ const activitySurface = (p) => {
         : ''
     }
     ${
+      rangeOffered
+        ? `<div class="bcsrcchips bcactfilter" role="group" aria-label="Time range">${ACT_RANGES.map(
+            (r) =>
+              `<button type="button" class="bcsrcchip${r.id === rangeOn.id ? ' is-on' : ''}" data-bc-actr="${esc(r.id)}" aria-pressed="${r.id === rangeOn.id ? 'true' : 'false'}">${esc(r.name)}</button>`,
+          ).join('')}</div>`
+        : ''
+    }
+    ${
       acts.length === 0
         ? empty({ title: 'Nothing yet', body: 'What people and the team do on this project is listed here.' })
         : shown.length === 0
-          ? empty({ title: 'Nothing matches', body: 'Nothing on this project fits that filter.' }, button('Show everything', { 'data-bc-actf': 'all' }))
+          ? empty({ title: 'Nothing matches', body: 'Nothing on this project fits that filter.' }, button('Show everything', { 'data-bc-actf': 'all', 'data-bc-actr': 'any' }))
           : bcMini.timelineMini({ ...p, activity: shown }, { items: shown.length })
     }`
 }
