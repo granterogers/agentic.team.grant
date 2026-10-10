@@ -190,7 +190,8 @@ const slugOf = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-'
 const fig = (e: Entry | undefined, label: string): string => {
   if (e === undefined) return `<figure class="miss"><figcaption><b>${label}</b> NOT CAPTURED</figcaption></figure>`
   const th = e.file.replace('screenshots/', 'thumbs/').replace(/\.png$/, '.jpg')
-  return `<figure><a href="${esc(e.file)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(th)}" alt="${esc(`${e.title}, ${e.scheme}, ${e.viewport}`)}" width="${e.viewport.startsWith('1440') || e.viewport.startsWith('768') || e.viewport.startsWith('844') ? 640 : 220}"></a><figcaption><b>${label}</b> · ${esc(e.viewport)} · ${esc(e.look)} / ${esc(e.palette)} · ${esc(e.state)} · ${e.sourceKind === 'local-replica' ? 'local replica' : 'local stand-in'}${e.data.startsWith('GENERATED') ? ' · GENERATED chat' : ''} · <code>${SHA.slice(0, 7)}</code> · <a href="${esc(e.file)}">full-res PNG</a></figcaption></figure>`
+  const cap = `${e.title} · ${label} · ${e.viewport} · ${e.look} / ${e.palette} · ${e.state} · ${e.sourceKind === 'local-replica' ? 'local replica' : 'local stand-in'}${e.data.startsWith('GENERATED') ? ' · GENERATED chat' : ''}`
+  return `<figure data-s="${e.scheme}" data-wh="${e.viewport}" data-cap="${esc(cap)}"><a href="${esc(e.file)}" data-lb="1" target="_blank" rel="noopener"><img loading="lazy" src="${esc(th)}" alt="${esc(`${e.title}, ${e.scheme}, ${e.viewport}`)}" width="${e.viewport.startsWith('1440') || e.viewport.startsWith('768') || e.viewport.startsWith('844') ? 640 : 220}"></a><figcaption><b>${label}</b> · ${esc(e.viewport)} · ${esc(e.look)} / ${esc(e.palette)} · ${esc(e.state)} · ${e.sourceKind === 'local-replica' ? 'local replica' : 'local stand-in'}${e.data.startsWith('GENERATED') ? ' · GENERATED chat' : ''} · <code>${SHA.slice(0, 7)}</code> · <a href="${esc(e.file)}">full-res PNG</a></figcaption></figure>`
 }
 const sections: string[] = []
 const nav: string[] = []
@@ -234,15 +235,96 @@ article{background:var(--card);border:1px solid var(--line);border-radius:10px;p
 figure{margin:0;max-width:100%}figure img{display:block;max-width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:#888}
 figcaption{font-size:12px;color:var(--mut);margin-top:4px;max-width:640px}.miss{border:1px dashed var(--line);padding:8px;border-radius:6px}
 body.only-desk .mob,body.only-mob .desk{display:none}
+body.s-light figure[data-s=dark],body.s-dark figure[data-s=light]{display:none}
+.hide{display:none!important}
+nav select{font-size:16px;min-height:36px;max-width:100%;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px}
+.fl{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.fl b{font-size:12px;color:var(--mut)}
+figure a{display:block;-webkit-tap-highlight-color:transparent}figure[data-s=light] figcaption b{color:#8a5a00}figure[data-s=dark] figcaption b{color:var(--acc)}
+.count{font-size:12px;color:var(--mut)}
+@media (max-width:700px){nav .links{display:none}main{padding:0 10px 60px}article{padding:10px}h2{scroll-margin-top:96px}
+.pair.desk .sbs figure{flex:1 1 100%}.pair.mob .sbs figure{flex:1 1 calc(50% - 6px);min-width:0}.pair.mob figure img{width:100%}.pair.desk figure img{width:100%}
+.pair.mob figcaption{font-size:11px}}
+@media (min-width:701px){nav select{display:none}}
+#lb{position:fixed;inset:0;background:#000d;z-index:50;display:none;flex-direction:column;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none}
+#lb.on{display:flex}
+#lb .bar{display:flex;align-items:center;gap:8px;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top));font-size:13px}
+#lb .bar span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#lb button{background:#fff2;color:#fff;border:1px solid #fff4;border-radius:8px;min-width:44px;min-height:44px;font-size:20px}
+#lb .stage{flex:1;position:relative;overflow:hidden}
+#lb img{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;will-change:transform}
+#lb .cap{padding:8px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));font-size:12px;line-height:1.35;color:#ddd;max-height:22vh;overflow:auto}
+#lb .nav{position:absolute;top:50%;transform:translateY(-50%);}#lb .prev{left:6px}#lb .next{right:6px}
+@media (hover:none){#lb .nav{display:none}}
 table{border-collapse:collapse;font-size:13px}td,th{border:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
 </style></head><body>
-<nav aria-label="Gallery index"><strong>Index</strong>${nav.join('')}<a href="#not-captured">NOT CAPTURED</a>
-<span class="tog" role="group" aria-label="Show"><button type="button" data-f="all" aria-pressed="true">All sizes</button><button type="button" data-f="only-desk" aria-pressed="false">Desktop 1440</button><button type="button" data-f="only-mob" aria-pressed="false">Phone and tablet sizes</button></span></nav>
+<nav aria-label="Gallery index"><select id="jump" aria-label="Jump to an area"><option value="">Jump to…</option>${AREAS.filter((a) => byArea.has(a)).map((a) => `<option value="${slugOf(a)}">${esc(a)}</option>`).join('')}<option value="not-captured">NOT CAPTURED</option></select><span class="links"><strong>Index</strong> ${nav.join(' ')} <a href="#not-captured">NOT CAPTURED</a></span>
+<span class="fl tog" role="group" aria-label="Size"><b>Size</b><button type="button" data-g="z" data-f="all" aria-pressed="true">All</button><button type="button" data-g="z" data-f="only-desk" aria-pressed="false">Desktop</button><button type="button" data-g="z" data-f="only-mob" aria-pressed="false">Mobile</button></span>
+<span class="fl tog" role="group" aria-label="Theme"><b>Theme</b><button type="button" data-g="t" data-f="all" aria-pressed="true">Both</button><button type="button" data-g="t" data-f="s-light" aria-pressed="false">Light</button><button type="button" data-g="t" data-f="s-dark" aria-pressed="false">Dark</button></span><span class="count" id="count"></span></nav>
+<div id="lb" role="dialog" aria-modal="true" aria-label="Screenshot viewer"><div class="bar"><button type="button" id="lbx" aria-label="Close">&#10005;</button><span id="lbn"></span><button type="button" id="lbp" aria-label="Previous">&#8249;</button><button type="button" id="lbnx" aria-label="Next">&#8250;</button></div><div class="stage" id="lbs"><img id="lbi" alt=""></div><div class="cap" id="lbc"></div></div>
 <header><h1>Agentic Team HQ: visual review gallery</h1>
 <p class="meta">Branch <code>integration/aesthetic-release-candidate</code> at commit <code>${SHA}</code>. Genuine Chromium screenshots of the current page code, unedited. Every pair shows the same screen, data, size and state in Light and Dark. Phone-size images are Chromium touch emulation, <b>not iOS Safari</b>. Source is stated on every card: <i>local replica</i> (real page and gateway code over synthetic rows) or <i>local stand-in</i> (lab gateway, near-empty office). Click an image for the full-resolution PNG. ${entries.length} images; see <a href="README.md">README.md</a> and <a href="manifest.json">manifest.json</a>.</p></header>
 <main>${sections.join('\n')}
 <section id="not-captured"><h2>NOT CAPTURED</h2><table><tr><th>Item</th><th>Reason</th></tr>${notCaptured.map((n) => `<tr><td>${esc(n.item)}</td><td>${esc(n.reason)}</td></tr>`).join('')}</table></section></main>
-<script>document.querySelectorAll('.tog button').forEach(function(b){b.addEventListener('click',function(){document.body.className=b.dataset.f==='all'?'':b.dataset.f;document.querySelectorAll('.tog button').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')})})})</script>
+<script>
+(function(){
+var body=document.body,cls={z:'',t:''},$=function(s){return document.querySelector(s)},all=function(s){return [].slice.call(document.querySelectorAll(s))};
+function recount(){
+  all('article').forEach(function(a){a.classList.toggle('hide',![].some.call(a.querySelectorAll('a[data-lb]'),function(l){return l.offsetParent!==null}))});
+  all('section[id]').forEach(function(s){if(s.querySelector('article'))s.classList.toggle('hide',![].some.call(s.querySelectorAll('article'),function(a){return !a.classList.contains('hide')}))});
+  $('#count').textContent=vis().length+' of '+all('a[data-lb]').length+' shown';
+}
+function vis(){return all('a[data-lb]').filter(function(l){return l.offsetParent!==null})}
+all('.tog button').forEach(function(b){b.addEventListener('click',function(){
+  cls[b.dataset.g]=b.dataset.f==='all'?'':b.dataset.f;
+  all('.tog button[data-g="'+b.dataset.g+'"]').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});
+  body.className=(cls.z+' '+cls.t).trim();recount();
+})});
+$('#jump').addEventListener('change',function(e){var t=document.getElementById(e.target.value);if(t)t.scrollIntoView();e.target.value=''});
+recount();
+var lb=$('#lb'),img=$('#lbi'),stage=$('#lbs'),list=[],idx=0,W=1,H=1,sw=1,sh=1,fit=1,s=1,tx=0,ty=0,open=false;
+function clampT(){var w=W*s,h=H*s;tx=w<=sw?(sw-w)/2:Math.min(0,Math.max(sw-w,tx));ty=h<=sh?(sh-h)/2:Math.min(0,Math.max(sh-h,ty))}
+function paint(){clampT();img.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')'}
+function show(i){
+  idx=Math.max(0,Math.min(list.length-1,i));
+  var a=list[idx],f=a.parentNode,wh=f.getAttribute('data-wh').split('x');
+  W=+wh[0];H=+wh[1];sw=stage.clientWidth;sh=stage.clientHeight;fit=Math.min(sw/W,sh/H);s=fit;tx=0;ty=0;
+  img.style.width=W+'px';img.style.height=H+'px';img.src=a.querySelector('img').src;paint();
+  $('#lbn').textContent=(idx+1)+' / '+list.length+' · '+f.getAttribute('data-s').toUpperCase();
+  $('#lbc').textContent=f.getAttribute('data-cap');
+  var full=new Image(),mine=idx;full.onload=function(){if(open&&mine===idx)img.src=full.src};
+  full.onerror=function(){if(open&&mine===idx)$('#lbc').textContent+=' · (full-resolution image not available here: showing the thumbnail)'};
+  full.src=a.href;
+}
+function openAt(a){list=vis();open=true;lb.classList.add('on');body.style.overflow='hidden';show(list.indexOf(a));try{history.pushState({lb:1},'')}catch(e){}}
+function close(fromPop){if(!open)return;open=false;lb.classList.remove('on');body.style.overflow='';if(!fromPop&&history.state&&history.state.lb)history.back()}
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[data-lb]');if(a){e.preventDefault();openAt(a)}});
+$('#lbx').onclick=function(){close()};$('#lbp').onclick=function(){show(idx-1)};$('#lbnx').onclick=function(){show(idx+1)};
+window.addEventListener('popstate',function(){close(true)});
+document.addEventListener('keydown',function(e){if(!open)return;if(e.key==='Escape')close();if(e.key==='ArrowLeft')show(idx-1);if(e.key==='ArrowRight')show(idx+1)});
+window.addEventListener('resize',function(){if(open)show(idx)});
+var t0=null,pinch=null,last=0,moved=false;
+function dist(t){return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY)}
+function zoomAt(ns,cx,cy){ns=Math.max(fit,Math.min(fit*8,ns));var k=ns/s;tx=cx-(cx-tx)*k;ty=cy-(cy-ty)*k;s=ns;paint()}
+function pt(t){var r=stage.getBoundingClientRect();return [t.clientX-r.left,t.clientY-r.top]}
+stage.addEventListener('touchstart',function(e){
+  if(e.touches.length===2){pinch={d:dist(e.touches),s:s};t0=null}
+  else if(e.touches.length===1){var p=pt(e.touches[0]);t0={x:p[0],y:p[1],tx:tx,ty:ty,x0:p[0],y0:p[1],t:Date.now()};moved=false}
+},{passive:false});
+stage.addEventListener('touchmove',function(e){
+  e.preventDefault();
+  if(pinch&&e.touches.length===2){var a=pt(e.touches[0]),b=pt(e.touches[1]);zoomAt(pinch.s*dist(e.touches)/pinch.d,(a[0]+b[0])/2,(a[1]+b[1])/2)}
+  else if(t0&&e.touches.length===1){var p=pt(e.touches[0]);if(Math.abs(p[0]-t0.x0)+Math.abs(p[1]-t0.y0)>6)moved=true;if(s>fit*1.02){tx=t0.tx+p[0]-t0.x;ty=t0.ty+p[1]-t0.y;paint()}}
+},{passive:false});
+stage.addEventListener('touchend',function(e){
+  if(pinch){if(e.touches.length<2)pinch=null;if(s<fit*1.02){s=fit;paint()}return}
+  if(!t0)return;var p=pt(e.changedTouches[0]),dx=p[0]-t0.x0,dy=p[1]-t0.y0,now=Date.now();
+  if(s<=fit*1.02&&Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.3){show(idx+(dx<0?1:-1));t0=null;return}
+  if(!moved&&now-last<320){if(s>fit*1.02){s=fit;paint()}else zoomAt(fit*2.5,p[0],p[1]);last=0}else if(!moved)last=now;
+  t0=null;
+});
+stage.addEventListener('wheel',function(e){e.preventDefault();var p=pt(e);zoomAt(s*(e.deltaY<0?1.15:1/1.15),p[0],p[1])},{passive:false});
+})();
+</script>
 </body></html>
 `
 await writeFile(`${OUT}/index.html`, html)
