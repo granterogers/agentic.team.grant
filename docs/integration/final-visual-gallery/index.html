@@ -66,6 +66,7 @@ table{border-collapse:collapse;font-size:13px}td,th{border:1px solid var(--line)
 (function(){
 var body=document.body,cls={z:'',t:''},$=function(s){return document.querySelector(s)},all=function(s){return [].slice.call(document.querySelectorAll(s))};
 function recount(){
+  all('.hide').forEach(function(x){x.classList.remove('hide')});
   all('article').forEach(function(a){a.classList.toggle('hide',![].some.call(a.querySelectorAll('a[data-lb]'),function(l){return l.offsetParent!==null}))});
   all('section[id]').forEach(function(s){if(s.querySelector('article'))s.classList.toggle('hide',![].some.call(s.querySelectorAll('article'),function(a){return !a.classList.contains('hide')}))});
   $('#count').textContent=vis().length+' of '+all('a[data-lb]').length+' shown';
