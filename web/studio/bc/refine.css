@@ -664,6 +664,29 @@
 [data-experience='basecamp'] .bcmod .bcminicolname { color: color-mix(in srgb, var(--stage) 80%, var(--bc-text-strong)); }
 [data-experience='basecamp'] .bcmod :is(.bcdocsall a, .bclinky) { color: color-mix(in srgb, var(--bc-accent) 84%, var(--bc-text-strong)); }
 
+/*
+  THE CHAT PAGE USES THE WIDTH IT HAS. The thread was capped at 760px with a 68-character measure and the composer at 860px, so on
+  a 1440px screen 40% of the card was empty. The thread and composer now span the card (to a sensible 1280px on very wide screens),
+  each message is a panel, and the measure is a long but readable 118 characters.
+*/
+[data-experience='basecamp'] .bcchat--full { max-width: min(100%, 1280px); }
+[data-experience='basecamp'] .bcchat--full .bcsaid {
+  padding: 12px 16px 14px;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bc-surface) 72%, transparent);
+}
+[data-experience='basecamp'] .bcchat--full .bcsaid--mine {
+  background: color-mix(in srgb, var(--bc-accent) 8%, var(--bc-surface));
+  border-color: color-mix(in srgb, var(--bc-accent) 26%, transparent);
+}
+[data-experience='basecamp'] .bcchat--full .bcsaidbody { flex: 1 1 auto; min-width: 0; }
+[data-experience='basecamp'] .bcchat--full .bcsaidtext { max-width: 118ch; }
+[data-experience='basecamp'] .bcsay { max-width: min(100%, 1280px); }
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcchat--full .bcsaid { padding: 10px 12px 12px; }
+}
+
 /* The phone's CSS dots follow the same opacity setting as the canvas ones. */
 [data-experience='basecamp'] .bcpanes::before { opacity: var(--bc-dot-op, 1); }
 
