@@ -1535,7 +1535,7 @@
 }
 
 .st-googleline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 14px; }
-.st-gtick { color: var(--ink-3, #9aa3a8); font-size: 12.5px; }
+.st-gtick { color: var(--ink-3, #9aa3a8); font-size: 13px; }
 .st-gtick.is-on { color: var(--ink, #e1e5e8); }
 
 /* A row whose control is a segmented choice puts it under the words on a phone, so neither is squeezed (9 October 2026). */

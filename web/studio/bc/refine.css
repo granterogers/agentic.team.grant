@@ -299,11 +299,5 @@
 
 /* ---------------------------------------------------------------- 2. type floor --- */
 
-/* The chat's speaker line and avatar initials were 10 and 10.5px; nothing a person reads is under 12. */
-[data-experience='basecamp'] .dock .msg .t-label { font-size: 12px; letter-spacing: 0.03em; }
-[data-experience='basecamp'] .dock .msg.theirs > .face { width: 28px; height: 28px; font-size: 12px; }
-
-/* 12px is the floor everywhere a person reads; the picker's section labels were 11px. */
-[data-experience='basecamp'] .sheet:has([data-icon-picker]) .field > .t-label,
-[data-experience='basecamp'] .field.bdfield > .t-label,
-[data-experience='basecamp'] :is(.setoffice, .setblock) .t-label { font-size: 12px; letter-spacing: 0.05em; }
+/* The scale itself (12, 13, 14, 15, 16, 18, whole pixels; nothing under 12) is declared where each rule is written and held by tests/web/type-scale.test.ts. */
+.bdfield > .t-label { font-size: 12px; letter-spacing: 0.05em; }

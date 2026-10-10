@@ -72,6 +72,30 @@ describe('the default', () => {
   })
 })
 
+describe('a stage too SHORT for the wrapped rows', () => {
+  it('extends below the window instead of pushing the last row up into the one above (1024px with the chat open: 685 x 430)', () => {
+    for (const st of [
+      { w: 685, h: 430 },
+      { w: 700, h: 360 },
+      { w: 520, h: 300 },
+    ]) {
+      L.setStage(st.w, st.h)
+      const list = L.layout('short') as Rect[]
+      expect(list.length).toBe(L.ALL.length)
+      for (const m of list) {
+        expect(m.x).toBeGreaterThanOrEqual(0)
+        expect(m.x + m.w).toBeLessThanOrEqual(st.w)
+      }
+      for (let i = 0; i < list.length; i += 1)
+        for (let j = i + 1; j < list.length; j += 1)
+          expect(
+            overlaps(list[i] as Rect, list[j] as Rect),
+            `${String(st.w)}x${String(st.h)}`,
+          ).toBe(false)
+    }
+  })
+})
+
 describe('a start that cannot fit the stage is wrapped, not piled up', () => {
   it('every preset overlaps nothing at tablet widths, keeping every module at least its minimum', () => {
     for (const st of [

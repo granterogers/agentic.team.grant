@@ -109,7 +109,7 @@
 [data-experience='basecamp'] .setauto.off { border-left-color: var(--bc-border-control); background: color-mix(in srgb, var(--bc-surface) 70%, transparent); }
 [data-experience='basecamp'] .setauto.off .setautowhat { color: var(--bc-text-muted); }
 [data-experience='basecamp'] .setautowhat { font: 500 14px/1.4 var(--bc-font); color: var(--bc-text-strong); }
-[data-experience='basecamp'] .setauto .t-meta { font-size: 12.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .setauto .t-meta { font-size: 13px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .setautofoot { gap: 8px; }
 [data-experience='basecamp'] .setmake {
   gap: 8px;
@@ -136,8 +136,8 @@
 [data-experience='basecamp'] .setmakerow { gap: 8px; }
 [data-experience='basecamp'] .setoffice { margin-top: 14px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--bc-border-subtle); background: color-mix(in srgb, var(--bc-surface) 75%, transparent); max-width: 760px; }
 [data-experience='basecamp'] .setoffice .t-label,
-[data-experience='basecamp'] .setblock .t-label { font: 650 11.5px/1.2 var(--bc-font); letter-spacing: .06em; text-transform: uppercase; color: var(--bc-text-muted); }
-[data-experience='basecamp'] .setoffice .t-meta { font-size: 12.5px; }
+[data-experience='basecamp'] .setblock .t-label { font: 650 12px/1.2 var(--bc-font); letter-spacing: .05em; text-transform: uppercase; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .setoffice .t-meta { font-size: 13px; }
 [data-experience='basecamp'] .setlabels { gap: 8px; margin-bottom: 14px; max-width: 760px; }
 [data-experience='basecamp'] .setproj { gap: 8px; max-width: 760px; }
 [data-experience='basecamp'] .setblock {
@@ -147,7 +147,7 @@
   border-radius: 10px;
   background: var(--bc-panel);
 }
-[data-experience='basecamp'] .setblock p, [data-experience='basecamp'] .setblock .t-meta { font-size: 12.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .setblock p, [data-experience='basecamp'] .setblock .t-meta { font-size: 13px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .warnblock { border-color: color-mix(in srgb, var(--bc-danger) 40%, var(--bc-border-subtle)); }
 [data-experience='basecamp'] .setfold { margin-top: 14px; max-width: 760px; }
 [data-experience='basecamp'] .setfold > summary {
@@ -201,7 +201,7 @@
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) .chead { gap: 12px; align-items: center; margin: 0; }
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) .hero { width: 40px !important; height: 40px !important; border-radius: 11px !important; }
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) .t-title { font: 700 16px/1.25 var(--bc-font); }
-[data-experience='basecamp'] .sheet:has([data-icon-picker]) .chead .t-meta { font-size: 12.5px; margin-top: 2px !important; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .sheet:has([data-icon-picker]) .chead .t-meta { font-size: 13px; margin-top: 2px !important; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) .field {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
@@ -209,7 +209,7 @@
   margin-top: 0 !important;
   align-items: start;
 }
-[data-experience='basecamp'] .sheet:has([data-icon-picker]) .field > .t-label { font: 650 11px/1.2 var(--bc-font); letter-spacing: .07em; text-transform: uppercase; color: var(--bc-text-muted); padding-top: 6px; }
+[data-experience='basecamp'] .sheet:has([data-icon-picker]) .field > .t-label { font: 650 12px/1.2 var(--bc-font); letter-spacing: .05em; text-transform: uppercase; color: var(--bc-text-muted); padding-top: 6px; }
 [data-experience='basecamp'] .huepick { gap: 8px; }
 [data-experience='basecamp'] .hueswatch { width: 24px; height: 24px; border-radius: 8px; outline-offset: 2px; }
 [data-experience='basecamp'] .hueswatch.on { outline-color: var(--bc-text-strong); }

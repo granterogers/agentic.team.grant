@@ -289,7 +289,14 @@ export const fromFractions = (frac, st) => {
     ),
   )
   // The fractions never overlap each other; if the clamp made them, the stage is too small for this arrangement.
-  return anyCrossing(placed) ? flowFit(placed, st).map((m) => clampRect(m, st)) : placed
+  /*
+    The wrapped start keeps its width inside the stage but not its height: a stage too short for three rows used to be clamped back
+    into itself, which pushed the last row up into the one above (the default page opened overlapping at 1024px with the chat open).
+    The canvas is infinite; a start that is taller than the window extends below it, and Fit brings it into view.
+  */
+  return anyCrossing(placed)
+    ? flowFit(placed, st).map((m) => clampRect(m, { w: st.w, h: Number.POSITIVE_INFINITY }))
+    : placed
 }
 
 /* ------------------------------------------------------ alignment guides --- */
