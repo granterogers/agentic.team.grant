@@ -28,6 +28,10 @@ import { isolated } from './guard.ts'
 const dbName = process.argv[2] ?? 'bq'
 const SHOTS = process.argv.find((a) => a.startsWith('--shots='))?.slice('--shots='.length) ?? ''
 const ONLY = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length)
+/* The appearance the run is drawn in: --look=original|silver|forest|graphite and --glass=off|soft|rich (default Original, Soft). */
+const LOOK =
+  process.argv.find((a) => a.startsWith('--look='))?.slice('--look='.length) ?? 'original'
+const GLASS = process.argv.find((a) => a.startsWith('--glass='))?.slice('--glass='.length) ?? 'soft'
 const db = await isolated(dbName)
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const one = async (sql: string): Promise<Record<string, unknown>> =>
@@ -295,7 +299,7 @@ const open = async (vp: (typeof VIEWPORTS)[number], scheme: 'dark' | 'light') =>
   await ctx.route(/^https?:\/\/(?!127\.0\.0\.1|gw\.invalid)/, (route) => route.abort())
   await ctx.addInitScript(`window.HQ_API = '${GW}/hq-api'; window.HQ_SIGNIN = '${GW}/signin';
     try { localStorage.setItem('hq.session', JSON.stringify({ access_token: '${SESSION}', refresh_token: 'r', expires_at: Date.now() + 36e5 }));
-      localStorage.setItem('studio.appearance', JSON.stringify({ palette: 'slate', texture: 'concrete', own: null, ownName: '', scheme: '${scheme}', density: 'comfortable', look: 'original', glass: 'soft', depth: 'soft' })) } catch {}`)
+      localStorage.setItem('studio.appearance', JSON.stringify({ palette: 'slate', texture: 'concrete', own: null, ownName: '', scheme: '${scheme}', density: 'comfortable', look: '${LOOK}', glass: '${GLASS}', depth: 'soft' })) } catch {}`)
   const page = await ctx.newPage()
   page.on('pageerror', (e) => errors.push(e.message.slice(0, 200)))
   return { ctx, page, errors, bad }
