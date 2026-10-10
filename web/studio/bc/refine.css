@@ -48,7 +48,7 @@
   surfaces use it: a module face, a maximised view and every row of text stay opaque so reading is never against a texture.
   --bc-glass-keep is the share of the surface colour that stays; --bc-glass-blur is the frosting.
 */
-:root[data-experience='basecamp'] { --bc-glass-keep: 94%; --bc-glass-blur: 16px; }
+:root[data-experience='basecamp'] { --bc-glass-keep: 94%; --bc-glass-blur: 16px; --bc-shade-ink: #28241c; }
 :root[data-experience='basecamp'][data-glass='off'] { --bc-glass-keep: 100%; --bc-glass-blur: 0px; }
 :root[data-experience='basecamp'][data-glass='rich'] { --bc-glass-keep: 82%; --bc-glass-blur: 24px; }
 [data-experience='basecamp'] :is(.bcmenupanel, .bcsheet, .bcpop, .bcmenu) {
