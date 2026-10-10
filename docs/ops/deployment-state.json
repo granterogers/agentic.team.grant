@@ -11,18 +11,18 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 803,
+    "appliedAtRecord": 814,
     "highestAppliedAtRecord": "1053",
-    "note": "On 9 October 2026 at 19:11 UTC migration 1053 (a public key reaches no view, #457) was applied ALONE with migrate:one, making 803; 1042 to 1052 are still pending. The pending set is DERIVED: every committed migration file whose name is not in the ledger. It is not stored here, so it cannot go stale. The 802 are: the 798 of the 6 October record, the efficiency workstream's 1023_the_health_reading_asks_the_cheap_question_first and 1027_the_pulse_reads_each_table_once (7 October), and 1040 and 1041 (9 October). The reliability migrations are authored 1023 to 1035 on claude/deep-systems-audit-3cwbtc and are renumbered 1042 to 1052 here, because production already held a different 1023 and 1027."
+    "note": "On 9 October 2026 at 19:11 UTC migration 1053 (a public key reaches no view, #457) was applied ALONE with migrate:one, making 803; on 10 October at 01:18 UTC 1042 to 1052 were applied by npm run migrate (11 applied, 803 skipped), making 814: nothing is pending (1030 was never a file here, deferred). The pending set is DERIVED: every committed migration file whose name is not in the ledger. It is not stored here, so it cannot go stale. The 802 are: the 798 of the 6 October record, the efficiency workstream's 1023_the_health_reading_asks_the_cheap_question_first and 1027_the_pulse_reads_each_table_once (7 October), and 1040 and 1041 (9 October). The reliability migrations are authored 1023 to 1035 on claude/deep-systems-audit-3cwbtc and are renumbered 1042 to 1052 here, because production already held a different 1023 and 1027."
   },
   "components": {
     "worker": {
-      "version": "v975",
-      "note": "last deployed 6 October from 9310116; the 7 to 9 October releases did not redeploy it (efficiency closeout and the Team HQ release record say so); not re-read since"
+      "version": "v980",
+      "note": "10 October 01:20 UTC, V1 release from 047f6f17 (platform read at 01:22 UTC); before that v976 (code of 9310116)"
     },
     "hq-api": {
-      "version": "v899",
-      "note": "9 October, Team HQ release (revisioned layout saves, project backgrounds); rollback bundle v897 captured by that release into .out/rollback-release/hq-api.v897 (gitignored, may no longer exist)"
+      "version": "v903",
+      "note": "10 October 01:20 UTC V1 release from 047f6f17 (before it v899). Earlier: 9 October, Team HQ release (revisioned layout saves, project backgrounds); rollback bundle v897 captured by that release into .out/rollback-release/hq-api.v897 (gitignored, may no longer exist)"
     },
     "mcp": { "version": "v665" },
     "liveReading": {
@@ -32,9 +32,19 @@
       "worker": "v976, bundle sha256 941f7e73080a41e5..., code equals 9310116",
       "page": "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41, 273 of 273 files byte-identical to main b8ea3c0's web/studio tree"
     },
+    "v1Release": {
+      "at": "2026-10-10T01:18Z to 01:22Z",
+      "commit": "047f6f17f905 on claude/v1-integration-main-2026-10-09 (not merged to main)",
+      "deployed": "worker v980, hq-api v903, voice v663, voice-token v692 (re-deployed by the voice script, same code), signin v134, page dpl_E1J5U7iX4SDAH9Jo4hW8g9W5DQ2W (277 of 277 files identical to the candidate)",
+      "unchanged": "mcp v668, telegram-webhook v702, slack-events v680, google-oauth v650, hq-api-basecamp v115, voice-basecamp v111 (platform version numbers move when secrets are set; no code changed)",
+      "rollback": "functions: .out/rollback-r1b-2026-10-09/<slug>.v<n> with scripts/deploy/restore-function.ts (worker v976, hq-api v899, voice v659, signin v130, voice-token v688); page: promote dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41; the migrated schema is not reversed",
+      "report": "docs/audit/V1-RELEASE-REPORT-2026-10-09.md"
+    },
     "page": {
-      "deployment": "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41",
+      "deployment": "dpl_E1J5U7iX4SDAH9Jo4hW8g9W5DQ2W",
+      "previous": "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41",
       "rollback": [
+        "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41",
         "dpl_7Lfbc (id truncated in the release record)",
         "dpl_DhcRv (id truncated in the release record)",
         "dpl_Dj7erfTXZYqDJhEgxQ9eTBzsnc8H"

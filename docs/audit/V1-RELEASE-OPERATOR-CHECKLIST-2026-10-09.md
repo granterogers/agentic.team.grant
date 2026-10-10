@@ -22,7 +22,9 @@
 
 > **R-A RESULT (9 October 2026, 18:43 UTC): #457 IS CONFIRMED REACHABLE in production** (schema `public` exposed, view owner bypasses RLS, anon SELECT, anonymous HEAD on `delivery_health` answered 200). **The release is ON HOLD until 1053 is applied alone** (`migrate:one`, a separate approval; independent of 1042 to 1052) and verified with `check:anon-exposure`. See sections 13 to 15 of `V1-SECURITY-STABILITY-RELEASE-GATE-2026-10-09.md`.
 
-**NOT AUTHORISED. NOTHING HERE HAS BEEN RUN IN PRODUCTION.** Reasoning and evidence: `V1-PRODUCTION-RELEASE-PLAN-2026-10-09.md` (section numbers below refer to it).
+> **RELEASED 10 October 2026, 01:18 to 01:22 UTC (outcome B): migrations, worker, hq-api, voice, signin and the page are live; read `V1-RELEASE-REPORT-2026-10-09.md`.** Sections 2 and 3 below were executed (without the heartbeat pause and the fresh backup, which were outside the authorisation). **Section 4 (the attended smoke test A to G) has NOT been run and is the remaining work**; it needs Grant's approval of the named destinations. Section 6 (rollback) remains valid; copy `.out/rollback-r1b-2026-10-09` out of the sandbox before it is reclaimed.
+
+**NOT AUTHORISED. NOTHING HERE HAS BEEN RUN IN PRODUCTION.** (Superseded by the banner above: the release has been run; sections 4 onward are still to do.) Reasoning and evidence: `V1-PRODUCTION-RELEASE-PLAN-2026-10-09.md` (section numbers below refer to it).
 SQL files: `V1-RELEASE-PREFLIGHT-QUERIES-…sql` (P01 to P19), `V1-RELEASE-MONITORING-QUERIES-…sql` (M01 to M21), `V1-RELEASE-FUNCTION-FINGERPRINTS-…tsv`.
 Run each SQL with `ALLOW_PRODUCTION_CHECKS=1 npm run qq -- "<statement>"`. Grant sets `ALLOW_PRODUCTION_CHECKS` and `ALLOW_PRODUCTION_WRITES` per command; the agent never does. Never print a secret.
 Marks: **UNKNOWN** = not known until read. **REQUIRES APPROVAL** = needs Grant's yes first (R-numbers are plan section 13).
