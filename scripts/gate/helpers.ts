@@ -15,6 +15,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: "frozen text: efficiency's unapplied 1030 as written, the CONTROL dequeue-reconciled installs in a scratch schema to show the conflict with 1044 is real; never applied",
   },
   {
+    stem: 'icons-on-replica',
+    role: 'check:icons asked of the isolated replica (production-free): every icon_defaults row names a drawable mark; run by hand with a replica database name',
+  },
+  {
     stem: 'fixtures-approvals',
     role: 'fixtures: a real turn, a shown question, the door application name',
   },
