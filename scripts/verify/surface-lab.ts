@@ -70,7 +70,8 @@ const office = WRITER
     })
   : null
 if (office !== null) await new Promise<void>((r) => office.listen(API_PORT, '127.0.0.1', () => r()))
-const u = (p: string): string => `http://127.0.0.1:${String(PORT)}${p}`
+/* BASE points the whole lab at a HOSTED copy of the page (an isolated preview). Unset in every gate: the lab then serves the working tree. */
+const u = (p: string): string => `${process.env.BASE ?? `http://127.0.0.1:${String(PORT)}`}${p}`
 
 const DEVICES: Record<string, { w: number; h: number; touch: boolean }> = {
   phone360: { w: 360, h: 740, touch: true },
@@ -95,7 +96,9 @@ const want = (g: string): boolean => (only.size === 0 && g !== 'writer' && g !==
 type Row = { surface: string; context: string; verdict: 'verified' | 'defect' | 'blocked'; findings: string[]; shot: string }
 const rows: Row[] = []
 
-const settle = (p: Page, ms = 500): Promise<void> => p.waitForTimeout(ms)
+/* SLOW multiplies every settle: a hosted copy answers slower than a local server, and a control looked for too early reads as absent. */
+const SLOW = Number(process.env.SLOW ?? '1')
+const settle = (p: Page, ms = 500): Promise<void> => p.waitForTimeout(ms * SLOW)
 
 async function newPage(dev: string, scheme: string, palette: string, look: string, errors: string[], withToken = true) {
   const d = DEVICES[dev] ?? { w: 1440, h: 900, touch: false }
@@ -111,6 +114,14 @@ async function record(page: Page, surface: string, context: string, errors: stri
   const slug = `${surface}__${context}`.replace(/[^a-z0-9_.-]+/gi, '-').toLowerCase()
   const shot = `${OUT}/${slug}.png`
   await settle(page, 350)
+  /* A colour measured half-way through a transition is a colour nobody sees at rest (a hosted page, which paints later, showed one): wait for every finite animation and transition to finish. */
+  await page
+    .waitForFunction(
+      "document.getAnimations().every((a) => a.playState !== 'running' || a.effect?.getComputedTiming().iterations === Infinity)",
+      undefined,
+      { timeout: 900 },
+    )
+    .catch(() => null)
   const opened = expect.startsWith('url:') ? new URL(page.url()).pathname.includes(expect.slice(4)) : expect === '' || (await page.locator(expect).first().isVisible().catch(() => false))
   if (!opened) { blocked(surface, context, `did not open (no visible ${expect})`); return }
   const a = (await page.evaluate(auditScript())) as { out: string[] }
@@ -130,6 +141,8 @@ const blocked = (surface: string, context: string, why: string): void => {
 }
 const tryPress = async (page: Page, sel: string): Promise<boolean> => {
   const l = page.locator(sel).first()
+  /* Give a control that is drawn after the board's first paint a moment to exist (a hosted page paints later); one that never comes is still absent. */
+  if (SLOW > 1) await l.waitFor({ state: 'attached', timeout: 3000 }).catch(() => null)
   if ((await l.count()) === 0) return false
   await l.click({ force: true, timeout: 4000 }).catch(() => null)
   await settle(page, 350)
@@ -142,7 +155,8 @@ for (const dev of devices) {
       const context = `${dev}-${scheme}-${palette}${look === 'original' ? '' : `-${look}`}`
       const errors: string[] = []
       const { ctx, page } = await newPage(dev, scheme, palette, look, errors)
-      const go = async (p: string): Promise<void> => { await page.goto(u(p), { waitUntil: 'domcontentloaded' }); await settle(page, 700) }
+      /* A page that redirects itself (a route with no project) can supersede the navigation: that is ERR_ABORTED, not a failure, and only a hosted copy is slow enough to show it. */
+      const go = async (p: string): Promise<void> => { await page.goto(u(p), { waitUntil: 'domcontentloaded' }).catch((e: Error) => { if (!String(e.message).includes('ERR_ABORTED')) throw e }); await settle(page, 700) }
       await go('/basecamp')
       const slug = ((await page.evaluate(`document.querySelector('[data-bc-go^="/p/"]')?.dataset.bcGo ?? ''`)) as string) || '/p/riverside'
 

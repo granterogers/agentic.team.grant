@@ -632,7 +632,7 @@ const compact = (s, list, size, today, selected) => {
       )
       .join('')}</div>`
   } else {
-    body = `${monthBody(list, { ...s, view: 'month' }, true)}<div class="bccal2day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>${
+    body = `${monthBody(list, { ...s, view: 'month' }, true)}<div class="bccal2day" tabindex="0" role="region" aria-label="Agenda for the selected day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>${
       selected.length === 0
         ? '<p class="bccal2empty">Nothing on this day.</p>'
         : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')
@@ -673,7 +673,7 @@ export const block = (p, { full = false } = {}) => {
   return `<div class="bccal2 ${full ? 'bccal2--full' : ''}" data-bc-cal="${esc(p.slug)}" data-size="${size}" data-view="${esc(s.view)}">
     ${size === 'large' ? `<div class="bccal2large">
       ${toolbar(s, ev.mode)}${loading}${failed}
-      ${s.view === 'month' ? (narrow ? `${monthBody(list, s, true)}<div class="bccal2day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>
+      ${s.view === 'month' ? (narrow ? `${monthBody(list, s, true)}<div class="bccal2day" tabindex="0" role="region" aria-label="Agenda for the selected day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>
         ${selected.length === 0 ? '<p class="bccal2empty">Nothing on this day.</p>' : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')}
       </div>` : monthBody(list, s, false)) : timeGrid(list, days, s)}
     </div>` : ''}
