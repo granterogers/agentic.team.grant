@@ -242,6 +242,29 @@ const conversation = Array.from({ length: 90 }, (_, i) => {
   }
 })
 
+const TINY_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+const TINY_PDF = (() => {
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    '<< /Length 44 >>\nstream\nBT /F1 18 Tf 40 340 Td (Synthetic page) Tj ET\nendstream',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ]
+  let out = '%PDF-1.4\n'
+  const at: number[] = []
+  objs.forEach((o, i) => {
+    at.push(out.length)
+    out += `${String(i + 1)} 0 obj\n${o}\nendobj\n`
+  })
+  const xref = out.length
+  out += `xref\n0 ${String(objs.length + 1)}\n0000000000 65535 f \n`
+  for (const a of at) out += `${String(a).padStart(10, '0')} 00000 n \n`
+  out += `trailer\n<< /Size ${String(objs.length + 1)} /Root 1 0 R >>\nstartxref\n${String(xref)}\n%%EOF\n`
+  return out
+})()
+
 const server = await serveStudio(4656)
 /* --base=<url> draws a HOSTED copy of the page (an isolated preview) over the same local replica: only the page's own host is reachable, the office is still answered here. */
 const BASE = process.argv.find((a) => a.startsWith('--base='))?.slice('--base='.length)
@@ -265,6 +288,33 @@ const open = async (vp: (typeof VIEWPORTS)[number], scheme: 'dark' | 'light') =>
   })
   const errors: string[] = []
   const bad: string[] = []
+  // The files the 36 fixture documents point at: a real tiny PDF, a real PNG, plain text for the rest, so thumbnails render the way they do
+  // for a person whose files exist (a path with nothing behind it makes the PDF reader raise "Failed to fetch" at the page).
+  await ctx.route('https://replica.invalid/storage/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    // Cross-origin from a hosted page, so the answer carries CORS headers, as the real storage does.
+    const headers = { 'access-control-allow-origin': '*' }
+    if (path.includes('.pdf'))
+      return route.fulfill({
+        status: 200,
+        headers,
+        contentType: 'application/pdf',
+        body: Buffer.from(TINY_PDF, 'latin1'),
+      })
+    if (path.includes('.png'))
+      return route.fulfill({
+        status: 200,
+        headers,
+        contentType: 'image/png',
+        body: Buffer.from(TINY_PNG, 'base64'),
+      })
+    return route.fulfill({
+      status: 200,
+      headers,
+      contentType: 'text/plain',
+      body: 'A synthetic file.',
+    })
+  })
   await ctx.route(`${GW}/**`, async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
@@ -291,7 +341,8 @@ const open = async (vp: (typeof VIEWPORTS)[number], scheme: 'dark' | 'light') =>
         ...(body === undefined ? {} : { body }),
       }),
     )
-    const text = await res.text()
+    // The emulated storage answers on http; a hosted (https) page may not fetch that (mixed content), so the signed URLs are https here.
+    const text = (await res.text()).replaceAll('http://replica.invalid', 'https://replica.invalid')
     if (res.status >= 400) bad.push(`${res.status} ${fn} ${url.searchParams.get('section') ?? ''}`)
     return route.fulfill({
       status: res.status,
@@ -301,15 +352,38 @@ const open = async (vp: (typeof VIEWPORTS)[number], scheme: 'dark' | 'light') =>
   })
   await ctx.route(
     new RegExp(
-      `^https?:\\/\\/(?!127\\.0\\.0\\.1|gw\\.invalid${BASE_HOST === '' ? '' : `|${BASE_HOST}`})`,
+      `^https?:\\/\\/(?!127\\.0\\.0\\.1|gw\\.invalid|replica\\.invalid${BASE_HOST === '' ? '' : `|${BASE_HOST}`})`,
     ),
-    (route) => route.abort(),
+    (route) => {
+      // Named, so a page error that says only "Failed to fetch" can be traced to the host it reached for.
+      // An IMAGE refused off-machine is an agent avatar (the replica's staff rows carry the production avatar URLs); it is refused, never
+      // fetched, and does not fail the run. Anything else off-machine does.
+      if (route.request().resourceType() !== 'image')
+        bad.push(`refused off-machine ${route.request().url().slice(0, 90)}`)
+      return route.abort()
+    },
   )
   await ctx.addInitScript(`window.HQ_API = '${GW}/hq-api'; window.HQ_SIGNIN = '${GW}/signin';
     try { localStorage.setItem('hq.session', JSON.stringify({ access_token: '${SESSION}', refresh_token: 'r', expires_at: Date.now() + 36e5 }));
       localStorage.setItem('studio.appearance', JSON.stringify({ palette: 'slate', texture: 'concrete', own: null, ownName: '', scheme: '${scheme}', density: 'comfortable', look: '${LOOK}', glass: '${GLASS}', depth: 'soft' })) } catch {}`)
   const page = await ctx.newPage()
-  page.on('pageerror', (e) => errors.push(e.message.slice(0, 200)))
+  page.on('requestfailed', (r) => {
+    if (r.resourceType() !== 'image')
+      if (!r.url().endsWith('/config.js') && r.failure()?.errorText !== 'net::ERR_ABORTED')
+        // A request the page itself cancelled (it left the screen the request was for) is ERR_ABORTED and is not a failure.
+        // /config.js is written by the site configuration step of a real deploy and is absent from a static preview: the page tolerates it.
+        bad.push(`failed ${r.url().slice(0, 100)} ${r.failure()?.errorText ?? ''}`)
+  })
+  page.on('pageerror', (e) =>
+    errors.push(
+      `${e.message.slice(0, 120)} @ ${
+        String(e.stack ?? '')
+          .split('\n')[1]
+          ?.trim()
+          .slice(0, 120) ?? ''
+      }`,
+    ),
+  )
   return { ctx, page, errors, bad }
 }
 
