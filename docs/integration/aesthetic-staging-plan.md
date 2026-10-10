@@ -56,6 +56,8 @@ No Vercel token, staging project or authorisation was available in this session,
 
 ## 5. Exact commands, for when staging is authorised (not executed)
 
+**Step 1 was executed on 10 October 2026** (deployments `dpl_EokziBv…` and `dpl_9FYYe3k…`; see `aesthetic-staging-validation.md`). Step 2 has not been, and cannot be, without the staging project.
+
 Step 1, a signed-out preview on a real host (isolated; the deploy writes nothing but its own project):
 
 ```
