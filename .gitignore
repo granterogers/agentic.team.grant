@@ -178,3 +178,6 @@ web/studio/config.js
 
 # local lists of production identifiers for the staging preflight (never committed)
 .staging/
+
+# the visual gallery's full-resolution PNGs (65 MB) ship in the downloadable ZIP, not in git; thumbnails, manifest and index are committed
+docs/integration/final-visual-gallery/screenshots/

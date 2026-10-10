@@ -75,17 +75,14 @@ if (process.argv.includes('--prove-it')) {
     token on the request, sending at all -- depends on it, so if the suite
     still passes it is not looking at the session architecture.
   */
-  const sabotaged = before.replace(
-    "  const access = q.get('access_token') ?? ''",
-    "  const access = ''",
-  )
+  const sabotaged = before.replace('  write(decided.session)', '  void decided.session')
   if (sabotaged === before) {
     console.error('SABOTAGE DID NOT APPLY — adopt() has been reworded in session.js.')
     console.error('A sabotage that did not land is not a passing control. Nothing was proved.')
     process.exit(2)
   }
   await writeFile(victim, sabotaged)
-  const landed = (await readFile(victim, 'utf8')).includes("const access = ''")
+  const landed = (await readFile(victim, 'utf8')).includes('  void decided.session')
   console.log(`sabotage landed in ${victim}: ${String(landed)}\n`)
   const { spawnSync } = await import('node:child_process')
   const red = spawnSync('npx', ['tsx', 'scripts/verify/basecamp-chat.ts'], {
@@ -178,6 +175,16 @@ type Office = {
     the prototype crew is what the composer needs to exist at all.
   */
   readonly unreachable?: boolean
+  /*
+    OR THE OFFICE ANSWERS WITH ONE REAL PROJECT AND ONE CREW MEMBER.
+
+    Since #426 a signed-in person whose office does not answer is shown no
+    projects at all (never the prototype's invented ones), so the Chat button
+    the conversation sections press is gone in that state: `unreachable` can no
+    longer stand in for "an office with a project". This does, with the slug the
+    first section read off the prototype.
+  */
+  readonly serves?: string
 }
 
 /*
@@ -253,6 +260,39 @@ const open = async (office: Office, init = '', phone = false) => {
     const auth = route.request().headers().authorization ?? ''
     const ok = good(auth)
     seen.push(`hq-api ${ok ? 'good' : 'bad'}${ok ? ` ${auth.slice(7)}` : ''}`)
+    const wanted = new URL(route.request().url()).searchParams.get('section')
+    if (office.serves !== undefined && route.request().method() === 'GET') {
+      const project = {
+        slug: office.serves.replace(/^\/p\//, '').split('/')[0],
+        name: 'Riverside',
+        purpose: 'A made-up project for the chat checks.',
+        tasks: [],
+        documents: [],
+        contacts: [],
+        sources: [],
+        activity: [],
+        waiting: [],
+        modules: [],
+        requests: [],
+        layout_board: null,
+      }
+      const body =
+        wanted === 'studio'
+          ? {
+              data: {
+                generated_at: new Date().toISOString(),
+                crew: [
+                  { slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' },
+                ],
+                projects: [project],
+              },
+            }
+          : wanted === 'layout'
+            ? { data: { panels: null, rev: 0, now: Date.now() } }
+            : { data: [] }
+      await route.fulfill({ status: 200, headers: cors, body: JSON.stringify(body) })
+      return
+    }
     await route.fulfill({
       status: ok ? 200 : 401,
       headers: cors,
@@ -400,8 +440,25 @@ const slug = await (async (): Promise<string> => {
  * chat.
  * ====================================================================== */
 {
-  const { ctx, page, seen, thrown } = await open({ accept: [ACCESS] })
-  const back = `${url(slug)}#access_token=${ACCESS}&refresh_token=${REFRESH}&expires_in=3600&token_type=bearer`
+  /*
+    A SESSION IS ADOPTED ONLY FOR A SIGN-IN THIS BROWSER STARTED (B-05, web/studio/flow.js). The browser mints a nonce when it asks for
+    the link and the link comes back to `?flow=<nonce>`; a return with no such flow is refused. So the return here is the one this
+    browser asked for, seeded the way `begin()` stores it, and a second context below shows a return with no flow signs nobody in.
+  */
+  const NONCE = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4'
+  const flow = `try { localStorage.setItem('hq.signin.flow', ${JSON.stringify(
+    JSON.stringify([
+      {
+        nonce: NONCE,
+        kind: 'link',
+        email: 'me@example.com',
+        at: Date.now(),
+        exp: Date.now() + 3600_000,
+      },
+    ]),
+  )}) } catch {}`
+  const { ctx, page, seen, thrown } = await open({ accept: [ACCESS] }, flow)
+  const back = `${url(slug)}?flow=${NONCE}#access_token=${ACCESS}&refresh_token=${REFRESH}&expires_in=3600&token_type=bearer`
   await page.goto(back, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.bcmain')
   await page.waitForTimeout(1200)
@@ -431,6 +488,24 @@ const slug = await (async (): Promise<string> => {
   )
   check('nothing threw', thrown.length === 0, thrown.join(' | '))
   await ctx.close()
+
+  // The negative that makes the positive mean something: the same link in a browser that asked for nothing is refused.
+  const other = await open({ accept: [ACCESS] })
+  await other.page.goto(
+    `${url(slug)}#access_token=${ACCESS}&refresh_token=${REFRESH}&expires_in=3600&token_type=bearer`,
+    { waitUntil: 'domcontentloaded' },
+  )
+  await other.page.waitForSelector('.bcmain')
+  await other.page.waitForTimeout(1200)
+  const heldThere = (await other.page.evaluate(
+    inPage("return localStorage.getItem('hq.session')"),
+  )) as string | null
+  check(
+    'a link this browser never asked for signs nobody in',
+    heldThere === null || !String(heldThere).includes(ACCESS),
+    String(heldThere ?? '(nothing stored)').slice(0, 80),
+  )
+  await other.ctx.close()
 }
 
 /* ====================================================================== *
@@ -442,7 +517,7 @@ const slug = await (async (): Promise<string> => {
     page: chat,
     seen,
     thrown,
-  } = await open({ accept: [ACCESS], unreachable: true }, stored(ACCESS, hour(1)))
+  } = await open({ accept: [ACCESS], serves: slug }, stored(ACCESS, hour(1)))
   await chat.goto(url(slug), { waitUntil: 'domcontentloaded' })
   await chat.waitForSelector('.bcmain')
   await chat.waitForTimeout(700)
@@ -562,7 +637,7 @@ const slug = await (async (): Promise<string> => {
  * ====================================================================== */
 {
   const { ctx, page } = await open(
-    { accept: [], unreachable: true },
+    { accept: [], serves: slug },
     stored('a-session-that-was-revoked', hour(1)),
   )
   await page.goto(url(slug), { waitUntil: 'domcontentloaded' })

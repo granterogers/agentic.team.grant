@@ -316,6 +316,28 @@ const drive = async (
         url: '',
       })
     if (section === 'document_versions') return json({ versions: [] })
+    if (section === 'studio')
+      return json({
+        generated_at: new Date().toISOString(),
+        crew: [{ slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' }],
+        projects: [
+          {
+            slug: SLUG,
+            name: 'Legacy Coaching Course',
+            purpose: 'A made-up project.',
+            tasks: [],
+            documents: [],
+            contacts: [],
+            sources: [],
+            activity: [],
+            waiting: [],
+            modules: [],
+            requests: [],
+            layout_board: null,
+          },
+        ],
+      })
+    if (section === 'layout') return json({ panels: null, rev: 0, now: Date.now() })
     return route.fulfill({
       status: 500,
       contentType: 'application/json',
@@ -325,7 +347,13 @@ const drive = async (
   })
   const wall = async (): Promise<void> => {
     await page.goto(url(`/p/${SLUG}/documents`), { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('.bcdocs--wall [data-bc-doc]')
+    await page
+      .waitForSelector('.bcdocs--wall [data-bc-doc]', { timeout: 15000 })
+      .catch(async (e) => {
+        await page.screenshot({ path: `.out/ux-preview-wall-missing-${label}.png` })
+        console.log(await page.evaluate(inPage('return document.body.innerText.slice(0, 400)')))
+        throw e
+      })
     await page.waitForTimeout(500)
   }
   const open = async (title: string): Promise<void> => {
@@ -347,6 +375,9 @@ const drive = async (
       inPage('return document.documentElement.scrollWidth <= window.innerWidth + 1'),
     )) as boolean
 
+  page.on('console', (m) => {
+    if (m.text().startsWith('warmThumb')) console.log('PAGE', m.text())
+  })
   await wall()
   // A kept thumbnail for a document whose source has since changed: it must NOT be drawn.
   await page.evaluate(
@@ -534,12 +565,18 @@ const drive = async (
   // ---- PDF: streamed, rendered, and a small thumbnail kept
   await page.goBack()
   await page.waitForSelector('.bcdocs--wall [data-bc-doc]')
+  // The wall now makes a first-page picture itself for an unopened PDF, read through the same authenticated call.
+  await page
+    .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Board pack' })
+    .locator('img.realpage')
+    .waitFor({ timeout: 8000 })
+    .catch(() => undefined)
   check(
-    `[${label}] before it is opened, the PDF tile has no kept picture`,
+    `[${label}] a PDF tile nobody opened gets a real first page, made through the gateway (no public URL)`,
     (await page
       .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Board pack' })
       .locator('img.realpage')
-      .count()) === 0,
+      .count()) === 1 && streams.includes('pv-pdf'),
   )
   await open('Board pack')
   await page.waitForSelector('.bcdocpages img.bcdocpage', { timeout: 15000 })
@@ -569,12 +606,15 @@ const drive = async (
       .locator('img.realpage')
       .count()) === 1,
   )
+  // The changed source may now get a FRESH picture of its own (warmed at the new modified time); what must never show is the old one.
+  const oldSrcs = (await page
+    .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Picture from an older version' })
+    .locator('img.realpage')
+    .evaluateAll((els) => els.map((e) => (e as unknown as { src: string }).src))) as string[]
   check(
     `[${label}] CONTROL: a tile whose source changed since the kept picture shows NO stale picture`,
-    (await page
-      .locator('.bcdocs--wall [data-bc-doc]', { hasText: 'Picture from an older version' })
-      .locator('img.realpage')
-      .count()) === 0,
+    oldSrcs.every((x) => x !== 'data:image/jpeg;base64,/9j/4AAQ'),
+    JSON.stringify(oldSrcs.map((x) => x.slice(0, 40))),
   )
   check(
     `[${label}] CONTROL: a tile never opened has no picture either`,

@@ -44,6 +44,7 @@ import * as when from '../when.js'
 import * as bcDocOrder from './docorder.js'
 import * as stopping from './stopping.js'
 import * as contacts from './contacts.js'
+import * as people from '../people.js'
 import * as bcDrive from './drive.js'
 import * as todos from './todos.js'
 import * as account from './account.js'
@@ -304,11 +305,11 @@ const menuPanel = () => {
   const projects = listed()
   const mine = canWrite()
   const item = (to, label, mark = '') =>
-    `<button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(to)}"
+    `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-go="${esc(to)}"
       aria-current="${isHere(to) ? 'page' : 'false'}">${mark}<span class="bcmenuname">${esc(label)}</span></button>`
   const firstRunShown = projects.length === 0 && source.live === true && mine && state().view === 'home'
   /* Always in the page, hidden until opened: the button's aria-controls always names something that exists. */
-  return `<div class="bcmenupanel" id="bc-menu" role="menu" aria-label="Projects and navigation"${menu.isOpen() ? '' : ' hidden'}>
+  return `<div class="bcmenupanel" id="bc-menu" role="${menu.isMaking() ? 'dialog' : 'menu'}" aria-label="${menu.isMaking() ? 'New project' : 'Projects and navigation'}"${menu.isOpen() ? '' : ' hidden'}>
     <p class="bcmenuhead">Projects</p>
     ${
       projects.length === 0
@@ -353,6 +354,14 @@ const menuPanel = () => {
  * waiting on Grant - §6.1 says it must not become a permanent wide sidebar,
  * which is why it is a control with a count rather than a panel.
  */
+const workTools = () => {
+  const s = state()
+  if (s.view !== 'project' || s.tab !== 'overview') return ''
+  const p = project()
+  if (p === null || p === undefined) return ''
+  return compose.chosen() === 'c' ? compose.workTools(p) : ''
+}
+
 const topRow = () => {
   const waiting = PROJECTS.reduce((n, p) => n + (p.waiting?.length ?? 0), 0)
   /*
@@ -380,14 +389,20 @@ const topRow = () => {
   const here = state().view === 'project' && state().project !== null ? project() : null
   const firstWaiting = PROJECTS.find((p) => (p.waiting ?? []).length > 0)
   const attentionTo = firstWaiting === undefined ? null : at(`/p/${firstWaiting.slug}/team`)
-  return `<header class="bctop">
+  /*
+    ONE ROW. On the freeform workspace the project's counters, workspace tools, Chat with Team, the microphone and the
+    project menu are drawn here, between the project's name and the office controls, instead of as a second band
+    under the bar (Grant, 10 October: the top of the screen took too much height and was two different shades).
+  */
+  const work = workTools()
+  return `<header class="bctop${work === '' ? '' : ' bctop--work'}">
     <div class="bcleft">
       <button type="button" class="bcbtn bcicon bcburger" data-bc-menu
         aria-haspopup="menu" aria-expanded="${menu.isOpen() ? 'true' : 'false'}" aria-controls="bc-menu"
         aria-label="Projects and navigation" title="Projects and navigation">
         <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none"
           stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-          <path d="M4 7h16M4 12h16M4 17h16"></path>
+          <path class="bcb1" d="M4 7h16"></path><path class="bcb2" d="M4 12h16"></path><path class="bcb3" d="M4 17h16"></path>
         </svg>
       </button>
       ${menuPanel()}
@@ -397,6 +412,7 @@ const topRow = () => {
       ${here === null ? '' : `<span class="bcjumpmark" aria-hidden="true">${compose.projectMark(here, 18)}</span>`}
       <span class="bcjumpname">${esc(here === null ? 'No project open' : here.name)}</span>
     </div>
+    ${work}
     <div class="bcright">
       <button type="button" class="bcbtn" data-bc-attention
         ${attentionTo === null ? 'disabled' : ''}
@@ -1185,6 +1201,21 @@ const repeatsList = (note, listName) => {
   name. The list is the heading above it; saying it again on each child spends
   the whole meta line on something already known.
 */
+/*
+  CHIPS FOR WHAT THE RECORD ACTUALLY HOLDS: priority (only when it is not the ordinary 100), stage, labels. Nothing is drawn
+  for a field the task does not carry, so a card never shows an invented value.
+*/
+const taskChips = (t, isDone) => {
+  const pr = todos.task(t).priority
+  const stage = todos.stageOf(t)
+  const chips = []
+  if (pr === 'urgent' || pr === 'high') chips.push(`<span class="bctchip bctchip--${pr}">${pr === 'urgent' ? 'Urgent' : 'High priority'}</span>`)
+  if (!isDone && stage === 'doing') chips.push('<span class="bctchip bctchip--doing">In progress</span>')
+  if (isDone) chips.push('<span class="bctchip bctchip--done">Done</span>')
+  for (const l of (Array.isArray(t.labels) ? t.labels : []).slice(0, 4)) chips.push(`<span class="bctchip">${esc(String(l))}</span>`)
+  return chips.length === 0 ? '' : `<span class="bctchips">${chips.join('')}</span>`
+}
+
 const taskRow = (t, i = 0, listName = '') => {
   /*
     THE SAME PREDICATE THE LIST SPLITS ON.
@@ -1241,6 +1272,7 @@ const taskRow = (t, i = 0, listName = '') => {
           .join(' · '),
       )}</span>
       ${t.blocked ? `<span class="bcitemmeta">${status('Blocked', 'blocked')} ${esc(t.blocked)}</span>` : ''}
+      ${taskChips(t, isDone)}
     </div>
     <!--
       THE DATE, in the row's last column, which was an empty span. It read
@@ -2201,21 +2233,60 @@ const contactsSurface = (p) => {
     ${
       cs.length === 0
         ? empty({ title: 'No people recorded', body: 'People connected to this project appear here.' })
-        : `<div class="bclist">${cs
-            .map(
-              (c, i) => `<div class="bcitem">
-                ${avatar(c, 34)}
-                <div class="bcitembody">
-                  <button type="button" class="bcitemtitle bcitemlink" data-bc-contact="${esc(contactKey(c, i))}">${esc(c.name)}</button>
-                  <span class="bcitemmeta">${esc(
-                    [c.role, c.org, c.where, c.last].filter(Boolean).join(' · '),
-                  )}</span>
-                </div>
-                <span class="bcpmeta">${esc(c.email ?? c.phone ?? '')}</span>
-              </div>`,
-            )
-            .join('')}</div>`
+        : `<div class="bcctgrid" data-bc-ctgrid>${cs.map((c, i) => contactCard(p, c, i)).join('')}</div>`
   }`
+}
+
+/*
+  A CONTACT AS A CARD (11 October 2026): the maximised Contacts view used to be one long row per person, an avatar at the far left and
+  an email at the far right with the width between them empty. A card shows what the office actually holds about the person, and only
+  that: nothing is invented, so a field the record does not have is simply not drawn.
+
+    - who: photograph or monogram, name, role, organisation, where;
+    - labels: the ones applied, or the ones the role already names (people.labelsFor);
+    - how to reach them: email and telephone as real links, website, social;
+    - recent interaction: when they were last in touch, and the next step with its date;
+    - associations: the other projects this person is also on, found by the same email (or, without one, the same name).
+*/
+const sameContact = (a, b) => {
+  const ea = String(a?.email ?? '').trim().toLowerCase()
+  const eb = String(b?.email ?? '').trim().toLowerCase()
+  if (ea !== '' && eb !== '') return ea === eb
+  return ea === '' && eb === '' && String(a?.name ?? '').trim().toLowerCase() === String(b?.name ?? '').trim().toLowerCase() && String(a?.name ?? '').trim() !== ''
+}
+const otherProjectsOf = (p, c) =>
+  PROJECTS.filter((q) => q.slug !== p.slug && q.slug !== 'unnamed' && (q.contacts ?? []).some((x) => sameContact(x, c))).map((q) => q.name)
+
+const contactCard = (p, c, i) => {
+  const key = contactKey(c, i)
+  const labels = people.labelsFor(c)
+  const also = otherProjectsOf(p, c)
+  const site = String(c.website ?? '').trim()
+  const row = (label, inner) => `<div class="bcctrow"><dt>${esc(label)}</dt><dd>${inner}</dd></div>`
+  const rows = [
+    c.email ? row('Email', `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : '',
+    c.phone ? row('Phone', `<a href="tel:${esc(String(c.phone).replace(/[^+\d]/g, ''))}">${esc(c.phone)}</a>`) : '',
+    site ? row('Website', /^https?:\/\//i.test(site) ? `<a href="${esc(site)}" target="_blank" rel="noopener noreferrer">${esc(site.replace(/^https?:\/\//i, ''))}</a>` : esc(site)) : '',
+    c.instagram ? row('Social', esc(c.instagram)) : '',
+    c.last ? row('Last contact', esc(c.last)) : '',
+    c.next ? row('Next step', `${esc(c.next)}${c.nextDue ? ` <span class="bcctdue">${esc(c.nextDue)}</span>` : ''}`) : '',
+  ].join('')
+  return `<article class="bcctcard" data-bc-ctcard="${esc(key)}">
+    <header class="bcctcardhead">
+      ${avatar(c, 52)}
+      <div class="bcctwho">
+        <button type="button" class="bcctname bcitemlink" data-bc-contact="${esc(key)}">${esc(c.name)}</button>
+        <span class="bcctrole">${esc([c.role, c.org].filter(Boolean).join(' · '))}</span>
+        ${c.where ? `<span class="bcctwhere">${esc(c.where)}</span>` : ''}
+      </div>
+    </header>
+    ${labels.length === 0 ? '' : `<ul class="bcctlabels" aria-label="Labels">${labels.map((l) => `<li class="bcctlabel ${esc(l.hue ?? '')}">${esc(l.name)}</li>`).join('')}</ul>`}
+    ${rows === '' ? '' : `<dl class="bcctrows">${rows}</dl>`}
+    ${c.note ? `<p class="bcctnote">${esc(String(c.note).length > 140 ? `${String(c.note).slice(0, 138)}…` : c.note)}</p>` : ''}
+    <footer class="bcctfoot">
+      <span class="bcctproj"><span class="bcctprojlabel">On</span> ${[p.name, ...also].map((n) => `<span class="bcctprojchip">${esc(n)}</span>`).join('')}</span>
+    </footer>
+  </article>`
 }
 
 /*
@@ -2485,14 +2556,29 @@ const ACT_FILTERS = [
   { id: 'document', name: 'Documents', test: (a) => a.category === 'document' },
   { id: 'task', name: 'Tasks', test: (a) => a.category === 'task' },
   { id: 'calendar', name: 'Calendar', test: (a) => a.category === 'calendar' },
+  /* Offered only when a record carries a severity: a filter nothing can match is a dead control. */
+  { id: 'problems', name: 'Problems', test: (a) => ['warn', 'warning', 'error', 'failed'].includes(String(a.severity ?? '').toLowerCase()) },
 ]
+/* TIME RANGE, from the instant a record carries. A range is offered only when some record has one. */
+const ACT_RANGES = [
+  { id: 'any', name: 'Any time', days: 0 },
+  { id: 'day', name: 'Last 24 hours', days: 1 },
+  { id: 'week', name: 'Last 7 days', days: 7 },
+]
+const inRange = (a, days) => {
+  if (days === 0) return true
+  const t = a.at ? Date.parse(a.at) : Number.NaN
+  return !Number.isNaN(t) && Date.now() - t <= days * 86400000
+}
 const activitySurface = (p) => {
   const acts = p.activity ?? []
   const offered = ACT_FILTERS.filter((f) => f.id === 'all' || acts.some(f.test))
   const want = state().bcActFilter ?? 'all'
   const on = offered.some((f) => f.id === want) ? want : 'all'
   const test = (offered.find((f) => f.id === on) ?? offered[0]).test
-  const shown = acts.filter(test)
+  const rangeOffered = acts.some((a) => a.at && !Number.isNaN(Date.parse(a.at)))
+  const rangeOn = rangeOffered ? (ACT_RANGES.find((r) => r.id === (state().bcActRange ?? 'any')) ?? ACT_RANGES[0]) : ACT_RANGES[0]
+  const shown = acts.filter(test).filter((a) => inRange(a, rangeOn.days))
   return `${crumbFor(p, 'activity')}
     <div class="bcrecordhead"><h1>${esc(toolById('activity')?.name ?? 'Activity')}</h1></div>
     <p class="bcpmeta bcprose bcgap-l">
@@ -2509,10 +2595,18 @@ const activitySurface = (p) => {
         : ''
     }
     ${
+      rangeOffered
+        ? `<div class="bcsrcchips bcactfilter" role="group" aria-label="Time range">${ACT_RANGES.map(
+            (r) =>
+              `<button type="button" class="bcsrcchip${r.id === rangeOn.id ? ' is-on' : ''}" data-bc-actr="${esc(r.id)}" aria-pressed="${r.id === rangeOn.id ? 'true' : 'false'}">${esc(r.name)}</button>`,
+          ).join('')}</div>`
+        : ''
+    }
+    ${
       acts.length === 0
         ? empty({ title: 'Nothing yet', body: 'What people and the team do on this project is listed here.' })
         : shown.length === 0
-          ? empty({ title: 'Nothing matches', body: 'Nothing on this project fits that filter.' }, button('Show everything', { 'data-bc-actf': 'all' }))
+          ? empty({ title: 'Nothing matches', body: 'Nothing on this project fits that filter.' }, button('Show everything', { 'data-bc-actf': 'all', 'data-bc-actr': 'any' }))
           : bcMini.timelineMini({ ...p, activity: shown }, { items: shown.length })
     }`
 }
@@ -3608,7 +3702,7 @@ const expandedOverlay = (p) => {
     <div class="bcexpback" data-bc-expclose="1"></div>
     <div class="bcexpbox" role="dialog" aria-modal="true"
       aria-label="${esc(EXPANDED_NAME[id] ?? id)}">
-      <button type="button" class="bcexpx" data-bc-expclose="1" aria-label="Close">
+      <button type="button" class="bcexpx" data-bc-expclose="1" aria-label="Close" title="Close">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="M6 6l12 12M18 6L6 18"></path>

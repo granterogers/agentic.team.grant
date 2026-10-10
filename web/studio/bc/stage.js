@@ -53,8 +53,8 @@ export const wireStage = (root, ctx) => {
   const board = root.querySelector('[data-bc-board]')
   if (board === null) return
   const slug = board.dataset.bcBoard ?? ctx.state.project
-  /* The dock lives in the project's head row, not in the board. */
-  const dock = board.closest('.bchome') ?? root
+  /* The dock lives in the shell's top bar (the project's tools), not in the board; the page's own head row is the older home. */
+  const dock = document.querySelector('.bcworktools') ?? board.closest('.bchome') ?? root
   const stageEl = board.querySelector('.bcstage')
   const guides = board.querySelector('.bcguides')
   if (stageEl === null) return
@@ -89,7 +89,7 @@ export const wireStage = (root, ctx) => {
       const el = modEl(m.id)
       if (el === null) continue
       css(el, m)
-      const hue = grid.tintHue(m.tint)
+      const hue = grid.hueFor(m.id, m.tint)
       if (hue === '') {
         el.style.removeProperty('--bc-tint')
         el.classList.remove('bcmod--tinted')
@@ -109,9 +109,94 @@ export const wireStage = (root, ctx) => {
     }
   }
 
+  /*
+    THE DOT GRID, DRAWN RATHER THAN TILED. A tiled radial gradient at a fractional step (24px at 64% is 15.36px) lands
+    its dots on fractions of a pixel, so some are crisp and some are smears and the pattern looks broken as you zoom. Here
+    every dot is placed in world units, snapped to a device pixel, and the density steps by powers of two so the spacing
+    never drops below a readable distance. Every fourth dot each way is a little stronger, which gives the eye a ruler.
+    The colour is whatever --bc-dot resolves to on the board, so a material and a scheme change it without code here.
+  */
+  const gridCv = board.querySelector('.bcgridcv')
+  let gridQueued = false
+  const drawGrid = () => {
+    gridQueued = false
+    if (gridCv === null || !board.isConnected || stacked()) return
+    const dpr = Math.min(3, globalThis.devicePixelRatio || 1)
+    const w = board.clientWidth
+    const h = board.clientHeight
+    if (w < 2 || h < 2) return
+    if (gridCv.width !== Math.round(w * dpr) || gridCv.height !== Math.round(h * dpr)) {
+      gridCv.width = Math.round(w * dpr)
+      gridCv.height = Math.round(h * dpr)
+    }
+    const c = gridCv.getContext('2d')
+    if (c === null) return
+    c.setTransform(dpr, 0, 0, dpr, 0, 0)
+    c.clearRect(0, 0, w, h)
+    const ink = globalThis.getComputedStyle(gridCv).color
+    const z = view.zoom
+    let mult = 1
+    while (24 * mult * z < 18) mult *= 2
+    const step = 24 * mult * z
+    const ix0 = Math.floor(-view.x / step) - 1
+    const iy0 = Math.floor(-view.y / step) - 1
+    const cols = Math.ceil(w / step) + 3
+    const rows = Math.ceil(h / step) + 3
+    const snap = (v) => Math.round(v * dpr) / dpr
+    /*
+      A dot is drawn twice: first a slightly larger one in the opposite lightness, then the dot itself. Whatever the material
+      (a dark slate, a pale stone, a photograph), one of the two always differs from what is under it, so the grid is always
+      visible (Grant, 10 October). The halo's lightness comes from the dot's own colour.
+    */
+    const nums = (ink.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+    const lum = ink.startsWith('color(') ? ((nums[0] ?? 0) + (nums[1] ?? 0) + (nums[2] ?? 0)) / 3 : ((nums[0] ?? 0) + (nums[1] ?? 0) + (nums[2] ?? 0)) / 765
+    const haloInk = lum > 0.5 ? 'rgb(0 0 0)' : 'rgb(255 255 255)'
+    const r = Math.max(0.9, Math.min(1.5, 0.8 + 0.5 * z))
+    /* The project's grid-dot opacity setting, as a multiple of the original strength (Project settings, Appearance). */
+    const rawGain = Number.parseFloat(globalThis.getComputedStyle(gridCv).getPropertyValue('--bc-dot-op'))
+    const gain = Number.isFinite(rawGain) ? Math.max(0, rawGain) : 1
+    for (const halo of [true, false]) for (const major of [false, true]) {
+      c.fillStyle = halo ? haloInk : ink
+      c.globalAlpha = Math.min(1, gain * (halo ? (major ? 0.32 : 0.22) : major ? 1 : 0.8))
+      if (gain === 0) continue
+      c.beginPath()
+      for (let j = 0; j < rows; j++) {
+        const iy = iy0 + j
+        /* Half a step in: a dot never straddles the board's own edge at the origin, where it would be cut in two. */
+        const y = snap(view.y + (iy + 0.5) * step)
+        for (let i = 0; i < cols; i++) {
+          const ix = ix0 + i
+          if ((ix % 4 === 0 && iy % 4 === 0) !== major) continue
+          const x = snap(view.x + (ix + 0.5) * step)
+          const rr = (major ? r * 1.35 : r) + (halo ? 0.9 : 0)
+          c.moveTo(x + rr, y)
+          c.arc(x, y, rr, 0, Math.PI * 2)
+        }
+      }
+      c.fill()
+    }
+    c.globalAlpha = 1
+  }
+  const queueGrid = () => {
+    if (gridQueued) return
+    gridQueued = true
+    globalThis.requestAnimationFrame(drawGrid)
+  }
+  if (gridCv !== null && typeof MutationObserver === 'function') {
+    /* A new material or a scheme change moves the dot colour; the board and the root are the two places that say so. */
+    const watch = new MutationObserver(() => {
+      if (!board.isConnected) return watch.disconnect()
+      queueGrid()
+    })
+    watch.observe(board, { attributes: true, attributeFilter: ['data-bg', 'data-bg-tone', 'style'] })
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-scheme', 'data-palette'] })
+  }
+
   /* One place writes the transform and the grid, so a pan, a zoom and a drag cannot disagree. */
   const paintView = () => {
+    queueGrid()
     zoomLive = view.zoom
+    grid.holdView(slug, view)
     stageEl.style.transform = `translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})`
     stageEl.style.setProperty('--bc-zoom', String(view.zoom))
     board.style.setProperty('--bc-gx', `${String(view.x)}px`)
@@ -677,6 +762,12 @@ export const wireStage = (root, ctx) => {
             `<button type="button" class="bcpopbtn" data-preset="${esc(k)}">${esc(v.name)}</button>`,
         )
         .join('')}</div>
+      ${
+        grid.fitsWindow(slug)
+          ? ''
+          : `<button type="button" class="bcpopbtn bcpopfit" data-fit-window>Fit my arrangement to this window</button>
+             <p class="bcpopnote">Keeps its shape and saves the arrangement as it was under Your layouts first.</p>`
+      }
       <p class="bcpoplabel">Your layouts</p>
       ${
         names.length === 0
@@ -725,6 +816,13 @@ export const wireStage = (root, ctx) => {
         ctx.render()
       })
     }
+    p.querySelector('[data-fit-window]')?.addEventListener('click', () => {
+      glide()
+      grid.fitToWindow(slug)
+      view = grid.viewOf(slug)
+      shut()
+      ctx.render()
+    })
     for (const b of p.querySelectorAll('[data-load]')) {
       b.addEventListener('click', () => {
         glide()

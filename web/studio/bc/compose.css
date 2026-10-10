@@ -37,7 +37,7 @@
   overflow: hidden;
   background: var(--bc-surface-selected);
   color: var(--bc-text-strong);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
   box-shadow: inset 0 0 0 1px var(--bc-border-subtle);
@@ -126,7 +126,7 @@
 [data-experience='basecamp'] button.bccount:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
 [data-experience='basecamp'] .bccount--waiting .bccountn { color: var(--bc-section-accent); }
 [data-experience='basecamp'] .bccount--late .bccountn { color: var(--bc-danger); }
-[data-experience='basecamp'] .bccount--stuck .bccountn { color: #f2c46d; }
+[data-experience='basecamp'] .bccount--stuck .bccountn { color: var(--bc-warn); }
 @media (pointer: coarse) {
   [data-experience='basecamp'] .bccount { min-height: 44px; line-height: 44px; }
 }
@@ -199,7 +199,7 @@
 }
 
 [data-experience='basecamp'] .bcmpty { margin: 0; color: var(--bc-text-muted); font-size: 13px; }
-[data-experience='basecamp'] .bcmore { margin: 8px 0 0; color: var(--bc-text-muted); font-size: 12.5px; }
+[data-experience='basecamp'] .bcmore { margin: 8px 0 0; color: var(--bc-text-muted); font-size: 13px; }
 
 /* --------------------------------------------------------- to-do lists -- */
 
@@ -215,7 +215,7 @@
 [data-experience='basecamp'] .bclisthead h4 { margin: 0; font-size: 15px; color: var(--bc-text-strong); }
 [data-experience='basecamp'] .bclistcount {
   font-variant-numeric: tabular-nums;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--bc-text-muted);
 }
 [data-experience='basecamp'] .bctasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
@@ -260,7 +260,7 @@
 [data-experience='basecamp'] .bctask--done .bctasktitle { color: var(--bc-text-muted); text-decoration: line-through; }
 [data-experience='basecamp'] .bctaskdue {
   flex: 0 0 auto;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--bc-text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -305,7 +305,7 @@
   padding: 8px 9px;
   margin-bottom: 6px;
 }
-[data-experience='basecamp'] .bccardtitle { flex: 1 1 auto; min-width: 0; font-size: 12.5px; line-height: 1.35; }
+[data-experience='basecamp'] .bccardtitle { flex: 1 1 auto; min-width: 0; font-size: 13px; line-height: 1.35; }
 [data-experience='basecamp'] .bccolempty { margin: 0; color: var(--bc-text-muted); }
 
 /* ------------------------------------------------------------ calendar -- */
@@ -317,7 +317,7 @@
   align-items: start;
 }
 [data-experience='basecamp'] .bccalmonth {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--bc-text-muted);
   margin-bottom: 8px;
 }
@@ -328,7 +328,7 @@
   font-variant-numeric: tabular-nums;
 }
 [data-experience='basecamp'] .bccal-dow {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--bc-text-muted);
   text-align: center;
   padding-bottom: 2px;
@@ -397,7 +397,7 @@
 [data-experience='basecamp'] .bcsaidbody { min-width: 0; }
 [data-experience='basecamp'] .bcsaidwho { font-weight: 600; color: var(--bc-text-strong); font-size: 13px; }
 [data-experience='basecamp'] .bcsaidwhen { margin-left: 8px; font-size: 12px; color: var(--bc-text-muted); }
-[data-experience='basecamp'] .bcsaidtext { margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; max-width: 60ch; }
+[data-experience='basecamp'] .bcsaidtext { margin: 3px 0 0; font-size: 14px; line-height: 1.5; max-width: 60ch; }
 
 /* -------------------------------------------------------------- people -- */
 
@@ -411,7 +411,7 @@
 }
 [data-experience='basecamp'] .bcmatebody { flex: 1 1 auto; min-width: 0; display: grid; }
 [data-experience='basecamp'] .bcmatename {
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--bc-text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -437,7 +437,7 @@
   border-radius: 2px;
   background: var(--bc-text-strong);
   opacity: 0.85;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
 }
 
 [data-experience='basecamp'] .bcmate--asks,
@@ -463,7 +463,7 @@
 [data-experience='basecamp'] .bcsource:last-of-type { border-bottom: 0; }
 [data-experience='basecamp'] .bcsourcename {
   grid-area: name;
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--bc-text-strong);
   min-width: 0;
   overflow: hidden;
@@ -536,17 +536,17 @@
     name, which is the one element §16 says must dominate. A document should
     read as paper and paper in a dim room is not white.
   */
-  background: color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas));
+  background: var(--bc-paper, color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas)));
   border: 1px solid var(--bc-border-subtle);
   border-radius: 3px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
   overflow: hidden;
 }
-[data-experience='basecamp'] .bcpline { height: 3px; border-radius: 2px; background: var(--bc-canvas); opacity: 0.38; }
+[data-experience='basecamp'] .bcpline { height: 3px; border-radius: 2px; background: var(--bc-paper-ink, var(--bc-canvas)); opacity: 0.38; }
 [data-experience='basecamp'] .bcpline:first-child { height: 6px; opacity: 0.6; }
 [data-experience='basecamp'] .bcdoc figcaption { display: grid; gap: 2px; margin-top: 8px; }
 [data-experience='basecamp'] .bcdoctitle {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.35;
   color: var(--bc-text-strong);
   display: -webkit-box;
@@ -667,7 +667,7 @@
 */
 [data-experience='basecamp'] .bcrail .bcmod { background: transparent; border-color: transparent; padding: 0 0 4px; }
 [data-experience='basecamp'] .bcrail .bcmodhead { border-bottom-color: var(--bc-border-subtle); }
-[data-experience='basecamp'] .bcrail .bcsaidtext { font-size: 12.5px; }
+[data-experience='basecamp'] .bcrail .bcsaidtext { font-size: 13px; }
 [data-experience='basecamp'] .bcrail .bcday { grid-template-columns: minmax(0, 62px) minmax(0, 1fr); gap: 10px; }
 
 /* ======================================================================== *
@@ -841,7 +841,7 @@
   gap: 8px;
   min-width: 0;
 }
-[data-experience='basecamp'] .bcbcard .bcitemtitle { text-align: left; font-size: 13.5px; line-height: 1.35; }
+[data-experience='basecamp'] .bcbcard .bcitemtitle { text-align: left; font-size: 14px; line-height: 1.35; }
 [data-experience='basecamp'] .bcbmeta {
   display: flex;
   align-items: center;
@@ -872,7 +872,7 @@
   consequential and this changes a record.
 */
 [data-experience='basecamp'] .bcbmove { display: grid; gap: 3px; }
-[data-experience='basecamp'] .bcbmove .bcinput { font-size: 12.5px; padding: 5px 7px; }
+[data-experience='basecamp'] .bcbmove .bcinput { font-size: 13px; padding: 5px 7px; }
 /*
   44px ON A TOUCH DEVICE. Measured at 42 after the phone rule tightened the
   row - two pixels under the floor, which is exactly the size of finding that
@@ -897,7 +897,7 @@
 }
 [data-experience='basecamp'] .bcmonth:last-of-type { border-bottom: 0; }
 [data-experience='basecamp'] .bcmonth .bccal-day,
-[data-experience='basecamp'] .bcmonth .bccal-pad { font-size: 12.5px; }
+[data-experience='basecamp'] .bcmonth .bccal-pad { font-size: 13px; }
 [data-experience='basecamp'] .bcmonth .bcagendaitem { padding: 9px 0; }
 [data-experience='basecamp'] .bcmonth .bcagendawhat { text-align: left; }
 [data-experience='basecamp'] .bcundated { margin-top: 8px; }
@@ -1022,7 +1022,7 @@
  * ======================================================================== */
 
 [data-experience='basecamp'] .bcchat--full { display: grid; gap: 20px; margin-bottom: 28px; }
-[data-experience='basecamp'] .bcchat--full .bcsaidtext { font-size: 14.5px; }
+[data-experience='basecamp'] .bcchat--full .bcsaidtext { font-size: 15px; }
 /*
   The composer is a form, not a chat box pinned to the bottom of the screen.
   A pinned composer would need a scroll container of its own, which is #108's
@@ -1055,13 +1055,13 @@
   padding: 10px 10px 8px 14px;
   border: 1px solid var(--bc-border-control);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--bc-surface) 92%, black);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.04);
+  background: color-mix(in srgb, var(--bc-surface) 92%, var(--bc-canvas));
+  box-shadow: var(--bc-sh-2), inset 0 1px 0 var(--bc-hi);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 [data-experience='basecamp'] .bcsaybox:focus-within {
   border-color: color-mix(in srgb, var(--bc-accent) 60%, transparent);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.28), 0 0 0 3px color-mix(in srgb, var(--bc-accent) 18%, transparent);
+  box-shadow: var(--bc-sh-2), 0 0 0 3px color-mix(in srgb, var(--bc-accent) 18%, transparent);
 }
 [data-experience='basecamp'] .bcsayinput {
   display: block;
@@ -1175,10 +1175,10 @@
   gap: 4px;
   aspect-ratio: 3 / 4;
   padding: 11px 10px;
-  background: color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas));
+  background: var(--bc-paper, color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas)));
   border: 1px solid var(--bc-border-subtle);
   border-radius: 3px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent);
   overflow: hidden;
   position: relative;
 }
@@ -1193,7 +1193,7 @@
 }
 [data-experience='basecamp'] .bcdoc--openable:hover .bcthumb,
 [data-experience='basecamp'] .bcdoc--openable:focus-within .bcthumb {
-  box-shadow: 0 2px 10px rgb(0 0 0 / 55%);
+  box-shadow: var(--bc-sh-1);
   border-color: var(--bc-accent);
 }
 
@@ -1315,7 +1315,7 @@
 }
 [data-experience='basecamp'] .bcmod--dragging {
   z-index: 3;
-  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--bc-sh-3);
   transform: scale(1.012);
 }
 [data-experience='basecamp'] .bcmod--placed .bcmodhead {
@@ -1428,13 +1428,13 @@
 }
 
 [data-experience='basecamp'] .bccomp--c .bcmod { min-width: 0; }
-[data-experience='basecamp'] .bccomp--c .bcmodbody { font-size: 13.5px; }
+[data-experience='basecamp'] .bccomp--c .bcmodbody { font-size: 14px; }
 [data-experience='basecamp'] .bccomp--c .bcsaidtext { font-size: 13px; }
 [data-experience='basecamp'] .bccomp--c .bcdocs { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 12px 10px; }
 [data-experience='basecamp'] .bccomp--c .bccols { gap: 7px; }
 [data-experience='basecamp'] .bccomp--c .bccalwrap { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 [data-experience='basecamp'] .bccomp--c .bccal { display: none; }
-[data-experience='basecamp'] .bcsplit { margin: 0 0 12px; font-size: 12.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcsplit { margin: 0 0 12px; font-size: 13px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcsplit b { color: var(--bc-text-strong); }
 
 [data-experience='basecamp'] .bcarrange {
@@ -1456,7 +1456,7 @@
 [data-experience='basecamp'] .bcarrname { flex: 1 1 auto; min-width: 0; }
 [data-experience='basecamp'] .bcarract { display: flex; gap: 6px; flex: 0 0 auto; }
 [data-experience='basecamp'] .bcarradd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-[data-experience='basecamp'] .bcarrnote { margin: 0 0 14px; font-size: 12.5px; color: var(--bc-text-muted); max-width: 70ch; }
+[data-experience='basecamp'] .bcarrnote { margin: 0 0 14px; font-size: 13px; color: var(--bc-text-muted); max-width: 70ch; }
 
 /*
   §10's compressed board: tinted bars, the stage name on its side, the count
@@ -1608,11 +1608,11 @@
     var(--bc-surface) 42%,
     color-mix(in srgb, var(--bc-canvas) 28%, var(--bc-surface)) 100%
   );
-  --v2-lift: 0 1px 2px rgb(0 0 0 / 22%), 0 10px 26px -18px rgb(0 0 0 / 55%);
+  --v2-lift: inset 0 1px 0 var(--bc-hi), var(--bc-sh-1);
   --v2-glow:
     0 0 0 1px color-mix(in srgb, var(--bc-accent) 34%, transparent),
-    0 0 22px -4px color-mix(in srgb, var(--bc-accent) 42%, transparent),
-    0 2px 4px rgb(0 0 0 / 22%), 0 14px 32px -20px rgb(0 0 0 / 60%);
+    0 0 22px -6px color-mix(in srgb, var(--bc-accent) 38%, transparent),
+    var(--bc-sh-2);
 }
 
 [data-experience='basecamp'] .bccomp--c .bcmod {
@@ -1712,7 +1712,7 @@
   background: var(--v2-face);
   border: var(--v2-edge);
   border-radius: var(--bc-r-sheet);
-  box-shadow: 0 24px 70px -28px rgb(0 0 0 / 75%), 0 2px 6px rgb(0 0 0 / 30%);
+  box-shadow: var(--bc-sh-pop);
   padding: 26px 28px 30px;
 }
 /*
@@ -2103,7 +2103,7 @@
 }
 [data-experience='basecamp'] .bcbcard:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--bc-sh-2);
 }
 [data-experience='basecamp'] .bcbcard:focus-visible {
   outline: 2px solid var(--bc-accent);
@@ -2369,7 +2369,7 @@
   background: var(--bc-surface);
   box-shadow: var(--bc-shadow-surface);
   text-align: right;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--bc-text-muted);
   /* It reports; it is not a target. */
   pointer-events: none;
@@ -2500,14 +2500,14 @@
   border-radius: 14px;
   border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 22%, transparent);
   background: var(--bc-surface);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--bc-sh-1);
   cursor: pointer;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 [data-experience='basecamp'] .bcservice:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--bc-accent) 55%, transparent);
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--bc-sh-3);
 }
 [data-experience='basecamp'] .bcservice:focus-visible {
   outline: 2px solid var(--bc-accent);
@@ -2528,7 +2528,7 @@
   color: var(--bc-text-strong);
 }
 [data-experience='basecamp'] .bcservicewhat {
-  font: 400 12.5px/1.45 var(--bc-font);
+  font: 400 13px/1.45 var(--bc-font);
   color: var(--bc-text-muted);
 }
 [data-experience='basecamp'] .bcserviceadd {
@@ -2587,7 +2587,7 @@
 [data-experience='basecamp'] .bcundatedrow { align-items: center; }
 [data-experience='basecamp'] .bcdueinput {
   min-height: 40px;
-  font-size: 13.5px;
+  font-size: 14px;
   padding: 7px 10px;
   width: 168px;
 }
@@ -2761,7 +2761,7 @@
   color: var(--bc-accent);
 }
 [data-experience='basecamp'] .bcsigninelse > summary {
-  font: 500 12.5px/1.4 var(--bc-font);
+  font: 500 13px/1.4 var(--bc-font);
   color: var(--bc-text-muted);
   cursor: pointer;
   /* A 44px row for a control a thumb has to find, without a box around it. */
@@ -2903,7 +2903,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 [data-experience='basecamp'] .bcmateface--none {
   display: grid;
   place-items: center;
-  font: 650 12.5px/1 var(--bc-font);
+  font: 650 13px/1 var(--bc-font);
   color: var(--bc-text-muted);
   letter-spacing: .02em;
 }
@@ -3040,7 +3040,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 }
 /* Compact there: the pane is small and the control is secondary to the link. */
 [data-experience='basecamp'] .bcdocs .bcdocsortpick {
-  font-size: 12.5px;
+  font-size: 13px;
   min-height: 32px;
   padding: 0 6px;
 }
@@ -3240,7 +3240,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   border: 1px solid color-mix(in srgb, var(--bc-danger) 45%, transparent);
   border-radius: 10px;
   background: color-mix(in srgb, var(--bc-danger) 10%, var(--bc-surface));
-  box-shadow: 0 10px 24px rgb(0 0 0 / 0.3);
+  box-shadow: var(--bc-sh-2);
   text-align: left;
   font-size: 13px;
   line-height: 1.45;
@@ -3342,7 +3342,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   border: 1px solid var(--bc-border-subtle);
   border-radius: 14px;
   background: color-mix(in srgb, var(--bc-text) 3%, var(--bc-surface));
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 6px 18px rgb(0 0 0 / 0.14);
+  box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-1);
   transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
 }
 [data-experience='basecamp'] .bcsources--full .bcsource.bcsource--press:hover {
@@ -3367,7 +3367,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   align-items: center;
   gap: 7px;
   margin-top: 6px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 [data-experience='basecamp'] .bcsources--full .bcsourcewhen[data-tone='on']::before,
 [data-experience='basecamp'] .bcsources--full .bcsourcewhen[data-tone='link']::before {
@@ -3407,7 +3407,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 [data-experience='basecamp'] .bcputbacknote {
   flex-basis: 100%;
   margin: 2px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--bc-text-muted);
 }
 @media (pointer: coarse) {
@@ -3435,7 +3435,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   border: 1px solid color-mix(in srgb, var(--bc-accent) 45%, transparent);
   background: color-mix(in srgb, var(--bc-accent) 8%, transparent);
   color: var(--bc-accent);
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   text-decoration: none;
 }
@@ -3597,17 +3597,17 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 /* The portfolio: each project's own mark beside its name, and its signals. */
 [data-experience='basecamp'] .bctool > h2 { display: flex; align-items: center; gap: 10px; }
 [data-experience='basecamp'] .bctoolmark { display: inline-grid; flex: 0 0 auto; }
-[data-experience='basecamp'] .bcpsigs { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 10px; font-size: 12.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcpsigs { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 10px; font-size: 13px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcpsig b { font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; margin-right: 2px; }
 [data-experience='basecamp'] .bcpsig--zero { opacity: 0.8; /* 0.7 measured 4.07:1 in axe; 0.8 clears 4.5 */ }
 [data-experience='basecamp'] .bcpsig--waiting b { color: var(--bc-section-accent); }
 [data-experience='basecamp'] .bcpsig--late b { color: var(--bc-danger); }
-[data-experience='basecamp'] .bcpsig--stuck b { color: #f2c46d; }
+[data-experience='basecamp'] .bcpsig--stuck b { color: var(--bc-warn); }
 
 /* A contact record's groups: small, quiet headings between the fields. */
 [data-experience='basecamp'] .bcctgroup {
   margin: 18px 0 2px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -3822,13 +3822,13 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   min-height: 0;
 }
 [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead h2,
-[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodopen { font-size: 12.5px; }
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodopen { font-size: 13px; }
 [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodbody { font-size: 13px; }
 [data-experience='basecamp'] .bcmod--placed .bcmodctl { right: 1px; top: 0; gap: 0; }
 [data-experience='basecamp'] .bcmod--placed .bcmodbtn { width: 24px; height: 24px; border-radius: 7px; }
 [data-experience='basecamp'] .bcmod--placed .bcresize { right: 0; bottom: 0; width: 18px; height: 18px; }
 [data-experience='basecamp'] .bcmod--placed .bcresize svg { width: 11px; height: 11px; }
-[data-experience='basecamp'] .bcmod--dragging { transform: none; box-shadow: 0 18px 40px -12px rgb(0 0 0 / 55%); }
+[data-experience='basecamp'] .bcmod--dragging { transform: none; box-shadow: var(--bc-sh-3); }
 [data-experience='basecamp'] .bcpanes--moving .bcmod--placed:not(.bcmod--dragging) { pointer-events: none; }
 
 /* A tinted module: the hue washes the face, the edge and the top line. */
@@ -3904,7 +3904,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   background: var(--bc-surface);
   border: 1px solid color-mix(in srgb, var(--bc-text-muted) 32%, transparent);
   border-radius: 12px;
-  box-shadow: 0 18px 44px -14px rgb(0 0 0 / 60%), 0 2px 6px rgb(0 0 0 / 30%);
+  box-shadow: var(--bc-sh-pop);
   font-size: 13px;
   animation: bc-pop-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -3923,7 +3923,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   border-radius: 8px;
   background: transparent;
   color: var(--bc-text);
-  font: 500 12.5px/1 var(--bc-font);
+  font: 500 13px/1 var(--bc-font);
   cursor: pointer;
 }
 [data-experience='basecamp'] .bcpopbtn:hover,
@@ -4205,7 +4205,7 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
   background: var(--bc-ink, #1d2230);
   color: var(--bc-paper, #fff);
   font-size: 13px;
-  box-shadow: 0 10px 24px -12px rgb(0 0 0 / 60%);
+  box-shadow: var(--bc-sh-2);
 }
 [data-experience='basecamp'] .bcpostitundobtn {
   appearance: none;
@@ -4237,9 +4237,7 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
   touch-action: none;
   cursor: grab;
   --bc-dot: color-mix(in srgb, var(--bc-text-muted) 38%, transparent);
-  background-image: radial-gradient(circle at center, var(--bc-dot) 0 calc(0.9px + 0.25px * var(--bc-gz, 1)), transparent calc(1.6px + 0.25px * var(--bc-gz, 1)));
-  background-size: var(--bc-gstep) var(--bc-gstep);
-  background-position: var(--bc-gx, 0) var(--bc-gy, 0);
+  /* The dot grid is drawn on the canvas inside the board (stage.js drawGrid), not painted here. */
 }
 [data-experience='basecamp'] .bcpanes--panning { cursor: grabbing; }
 [data-experience='basecamp'] .bcpanes--grab * { cursor: grab; }
@@ -4319,7 +4317,7 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
 
 [data-experience='basecamp'] .dockhead { padding-bottom: 6px; gap: 8px; align-items: center; }
 [data-experience='basecamp'] .dockhead > span { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-[data-experience='basecamp'] .dockhead b { font: 600 13.5px/1.3 var(--text); }
+[data-experience='basecamp'] .dockhead b { font: 600 14px/1.3 var(--text); }
 [data-experience='basecamp'] .dockhead .t-meta { display: inline; margin: 0; font-size: 12px; }
 [data-experience='basecamp'] .dockhead .closeconv { width: 32px; height: 32px; }
 [data-experience='basecamp'] .dockhead .closeconv svg { width: 15px; height: 15px; }
@@ -4334,7 +4332,7 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
 [data-experience='basecamp'] .dock .msg.mine { max-width: 92%; gap: 3px; }
 [data-experience='basecamp'] .dock .msg p,
 [data-experience='basecamp'] .dock .msglist {
-  font: 400 13.5px/1.45 var(--text);
+  font: 400 14px/1.45 var(--text);
   overflow-wrap: anywhere;
   word-break: break-word;
   hyphens: auto;
@@ -4342,13 +4340,13 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
 [data-experience='basecamp'] .dock .msg p + p { margin-top: .45em; }
 [data-experience='basecamp'] .dock .msg.mine p { padding: 6px 10px; border-radius: 12px 12px 3px 12px; }
 [data-experience='basecamp'] .dock .msg.theirs .mbody { padding: 6px 10px; gap: 2px; border-radius: 12px 12px 12px 3px; min-width: 0; flex: 1 1 auto; }
-[data-experience='basecamp'] .dock .msg.theirs > .face { width: 24px; height: 24px; font-size: 10px; }
-[data-experience='basecamp'] .dock .msg .t-label { font-size: 10.5px; letter-spacing: .04em; line-height: 1.2; }
+[data-experience='basecamp'] .dock .msg.theirs > .face { width: 28px; height: 28px; font-size: 12px; }
+[data-experience='basecamp'] .dock .msg .t-label { font-size: 12px; letter-spacing: .03em; line-height: 1.2; }
 [data-experience='basecamp'] .dock .waitrow .t-meta,
 [data-experience='basecamp'] .dock .t-meta { font-size: 12px; }
 [data-experience='basecamp'] .dock .dockblank { padding: 14px 10px; gap: 6px; }
 [data-experience='basecamp'] .dock .dockblank svg { width: 20px; height: 20px; }
-[data-experience='basecamp'] .dock .dockeg { font-size: 12.5px; line-height: 1.5; }
+[data-experience='basecamp'] .dock .dockeg { font-size: 13px; line-height: 1.5; }
 
 [data-experience='basecamp'] .dock .composer { padding: 5px 6px; border-radius: 10px; gap: 4px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 [data-experience='basecamp'] .dock .crow { gap: 6px; align-items: flex-end; }
@@ -4359,7 +4357,7 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
   font: 400 14px/1.4 var(--text);
   overflow-y: auto;
 }
-[data-experience='basecamp'] .dock .crow .btn.primary { min-height: 34px; padding: 0 14px; font-size: 13.5px; }
+[data-experience='basecamp'] .dock .crow .btn.primary { min-height: 34px; padding: 0 14px; font-size: 14px; }
 @media (pointer: coarse) {
   [data-experience='basecamp'] .dock .crow textarea { font-size: 16px; }
   [data-experience='basecamp'] .dock .crow .btn.primary { min-height: 44px; }

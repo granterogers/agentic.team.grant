@@ -13,19 +13,13 @@
 [data-experience='basecamp'] {
   --bc-stone-tex: url('/textures/microcement.webp');
   --bc-panel: color-mix(in srgb, var(--bc-surface) 92%, white);
-  --bc-panel-shadow:
-    0 1px 1.5px rgb(40 36 28 / 0.12),
-    0 6px 14px -6px rgb(40 36 28 / 0.22),
-    0 22px 38px -22px rgb(40 36 28 / 0.30);
-  --bc-panel-shadow-lift:
-    0 2px 3px rgb(40 36 28 / 0.14),
-    0 14px 26px -8px rgb(40 36 28 / 0.30),
-    0 34px 54px -26px rgb(40 36 28 / 0.38);
+  --bc-panel-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-1);
+  --bc-panel-shadow-lift: inset 0 1px 0 var(--bc-hi), var(--bc-sh-3);
+  /* The well the board sits in: pressed into the page, lit from above. One definition for both schemes. */
+  --bc-well: inset 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) var(--bc-sh-mid), transparent), inset 0 0 0 1px var(--bc-hi);
 }
 [data-experience='basecamp'][data-scheme='dark'] {
   --bc-panel: color-mix(in srgb, var(--bc-surface) 96%, white);
-  --bc-panel-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 10px 24px -10px rgb(0 0 0 / 0.55);
-  --bc-panel-shadow-lift: 0 2px 4px rgb(0 0 0 / 0.4), 0 22px 44px -14px rgb(0 0 0 / 0.65);
 }
 
 /* The page and the canvas share one material. */
@@ -56,11 +50,10 @@
   border-radius: 14px;
   border: 1px solid var(--bc-border-subtle);
   background-color: color-mix(in srgb, var(--bc-canvas) 55%, transparent);
-  box-shadow: inset 0 1px 3px rgb(40 36 28 / 0.14), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  box-shadow: var(--bc-well);
   --bc-dot: color-mix(in srgb, var(--bc-text) 26%, transparent);
 }
 [data-experience='basecamp'][data-scheme='dark'] .bcpanes {
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.5);
   --bc-dot: color-mix(in srgb, var(--bc-text-muted) 38%, transparent);
 }
 
@@ -79,7 +72,7 @@
 [data-experience='basecamp'] .bcstate {
   background: color-mix(in srgb, var(--bc-surface) 78%, transparent);
   border: 1px solid var(--bc-border-control);
-  box-shadow: 0 1px 2px rgb(40 36 28 / 0.10);
+  box-shadow: var(--bc-sh-1);
 }
 [data-experience='basecamp'] .bcmenupanel,
 [data-experience='basecamp'] .bcpop {
@@ -111,12 +104,12 @@
   border-left: 3px solid var(--bc-accent);
   border-radius: 10px;
   background: var(--bc-panel);
-  box-shadow: 0 1px 2px rgb(40 36 28 / 0.08);
+  box-shadow: var(--bc-sh-1);
 }
 [data-experience='basecamp'] .setauto.off { border-left-color: var(--bc-border-control); background: color-mix(in srgb, var(--bc-surface) 70%, transparent); }
 [data-experience='basecamp'] .setauto.off .setautowhat { color: var(--bc-text-muted); }
 [data-experience='basecamp'] .setautowhat { font: 500 14px/1.4 var(--bc-font); color: var(--bc-text-strong); }
-[data-experience='basecamp'] .setauto .t-meta { font-size: 12.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .setauto .t-meta { font-size: 13px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .setautofoot { gap: 8px; }
 [data-experience='basecamp'] .setmake {
   gap: 8px;
@@ -126,7 +119,7 @@
   border: 1px solid var(--bc-border-subtle);
   border-radius: 12px;
   background: var(--bc-panel);
-  box-shadow: 0 1px 2px rgb(40 36 28 / 0.08);
+  box-shadow: var(--bc-sh-1);
 }
 [data-experience='basecamp'] .setmake textarea,
 [data-experience='basecamp'] .setmakerow select,
@@ -143,8 +136,8 @@
 [data-experience='basecamp'] .setmakerow { gap: 8px; }
 [data-experience='basecamp'] .setoffice { margin-top: 14px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--bc-border-subtle); background: color-mix(in srgb, var(--bc-surface) 75%, transparent); max-width: 760px; }
 [data-experience='basecamp'] .setoffice .t-label,
-[data-experience='basecamp'] .setblock .t-label { font: 650 11.5px/1.2 var(--bc-font); letter-spacing: .06em; text-transform: uppercase; color: var(--bc-text-muted); }
-[data-experience='basecamp'] .setoffice .t-meta { font-size: 12.5px; }
+[data-experience='basecamp'] .setblock .t-label { font: 650 12px/1.2 var(--bc-font); letter-spacing: .05em; text-transform: uppercase; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .setoffice .t-meta { font-size: 13px; }
 [data-experience='basecamp'] .setlabels { gap: 8px; margin-bottom: 14px; max-width: 760px; }
 [data-experience='basecamp'] .setproj { gap: 8px; max-width: 760px; }
 [data-experience='basecamp'] .setblock {
@@ -154,7 +147,7 @@
   border-radius: 10px;
   background: var(--bc-panel);
 }
-[data-experience='basecamp'] .setblock p, [data-experience='basecamp'] .setblock .t-meta { font-size: 12.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .setblock p, [data-experience='basecamp'] .setblock .t-meta { font-size: 13px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .warnblock { border-color: color-mix(in srgb, var(--bc-danger) 40%, var(--bc-border-subtle)); }
 [data-experience='basecamp'] .setfold { margin-top: 14px; max-width: 760px; }
 [data-experience='basecamp'] .setfold > summary {
@@ -197,7 +190,7 @@
   color: var(--bc-text);
 }
 [data-experience='basecamp'] #viewer,
-[data-experience='basecamp'] .viewer { background: rgb(30 28 24 / 0.38); backdrop-filter: none; -webkit-backdrop-filter: none; }
+[data-experience='basecamp'] .viewer { background: var(--bc-scrim); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) {
   width: min(680px, 100%);
   padding: 14px 18px 16px;
@@ -208,7 +201,7 @@
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) .chead { gap: 12px; align-items: center; margin: 0; }
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) .hero { width: 40px !important; height: 40px !important; border-radius: 11px !important; }
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) .t-title { font: 700 16px/1.25 var(--bc-font); }
-[data-experience='basecamp'] .sheet:has([data-icon-picker]) .chead .t-meta { font-size: 12.5px; margin-top: 2px !important; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .sheet:has([data-icon-picker]) .chead .t-meta { font-size: 13px; margin-top: 2px !important; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) .field {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
@@ -216,7 +209,7 @@
   margin-top: 0 !important;
   align-items: start;
 }
-[data-experience='basecamp'] .sheet:has([data-icon-picker]) .field > .t-label { font: 650 11px/1.2 var(--bc-font); letter-spacing: .07em; text-transform: uppercase; color: var(--bc-text-muted); padding-top: 6px; }
+[data-experience='basecamp'] .sheet:has([data-icon-picker]) .field > .t-label { font: 650 12px/1.2 var(--bc-font); letter-spacing: .05em; text-transform: uppercase; color: var(--bc-text-muted); padding-top: 6px; }
 [data-experience='basecamp'] .huepick { gap: 8px; }
 [data-experience='basecamp'] .hueswatch { width: 24px; height: 24px; border-radius: 8px; outline-offset: 2px; }
 [data-experience='basecamp'] .hueswatch.on { outline-color: var(--bc-text-strong); }
@@ -331,9 +324,8 @@
   background-color: color-mix(in srgb, var(--bc-canvas) 55%, transparent);
   background-image: radial-gradient(circle at center, color-mix(in srgb, var(--bc-text) 26%, transparent) 0 1.1px, transparent 1.8px);
   background-size: 24px 24px;
-  box-shadow: inset 0 1px 3px rgb(40 36 28 / 0.14), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  box-shadow: var(--bc-well);
 }
-[data-experience='basecamp'][data-scheme='dark'] .bcvoid { box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.5); }
 
 /* 761-860px: the studio's own rule turns the dock into a bottom sheet here, which this experience does not have; it stays a side panel like wider windows. */
 @media (min-width: 761px) and (max-width: 860px) {
@@ -364,52 +356,28 @@
 [data-experience='basecamp'] .bcpanes[data-bg] {
   --bc-shade-ink: #28241c;
   background-color: var(--bc-bg-solid, var(--bc-canvas));
+  /* Three layers: a shade, a veil of the canvas colour (the Opacity control), and the material. The dots are drawn on the canvas above. */
   background-image:
-    radial-gradient(circle at center, var(--bc-dot) 0 calc(0.9px + 0.25px * var(--bc-gz, 1)), transparent calc(1.6px + 0.25px * var(--bc-gz, 1))),
     linear-gradient(color-mix(in srgb, var(--bc-shade-ink) var(--bc-bg-shadep, 0%), transparent), color-mix(in srgb, var(--bc-shade-ink) var(--bc-bg-shadep, 0%), transparent)),
     linear-gradient(color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) var(--bc-bg-veilp, 0%), transparent), color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) var(--bc-bg-veilp, 0%), transparent)),
     var(--bc-bg-img, none);
-  background-repeat: repeat, no-repeat, no-repeat, repeat;
-  background-size:
-    var(--bc-gstep) var(--bc-gstep),
-    100% 100%,
-    100% 100%,
-    calc(var(--bc-bg-tw, 1024px) * var(--bc-gz, 1)) calc(var(--bc-bg-th, 576px) * var(--bc-gz, 1));
-  background-position: var(--bc-gx, 0) var(--bc-gy, 0), 0 0, 0 0, var(--bc-gx, 0) var(--bc-gy, 0);
+  background-repeat: no-repeat, no-repeat, repeat;
+  background-size: 100% 100%, 100% 100%, calc(var(--bc-bg-tw, 1024px) * var(--bc-gz, 1)) calc(var(--bc-bg-th, 576px) * var(--bc-gz, 1));
+  background-position: 0 0, 0 0, var(--bc-gx, 0) var(--bc-gy, 0);
 }
 [data-experience='basecamp'][data-scheme='dark'] .bcpanes[data-bg] { --bc-shade-ink: #000; }
-[data-experience='basecamp'] .bcpanes[data-bg-mode='cover'] {
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
-  background-size: var(--bc-gstep) var(--bc-gstep), 100% 100%, 100% 100%, cover;
-  background-position: var(--bc-gx, 0) var(--bc-gy, 0), 0 0, 0 0, center;
-}
-[data-experience='basecamp'] .bcpanes[data-bg-mode='fit'] {
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
-  background-size: var(--bc-gstep) var(--bc-gstep), 100% 100%, 100% 100%, contain;
-  background-position: var(--bc-gx, 0) var(--bc-gy, 0), 0 0, 0 0, center;
-}
-[data-experience='basecamp'] .bcpanes[data-bg-mode='center'] {
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
-  background-size: var(--bc-gstep) var(--bc-gstep), 100% 100%, 100% 100%, var(--bc-bg-tw, auto) var(--bc-bg-th, auto);
-  background-position: var(--bc-gx, 0) var(--bc-gy, 0), 0 0, 0 0, center;
-}
+[data-experience='basecamp'] .bcpanes[data-bg-mode='cover'] { background-repeat: no-repeat, no-repeat, no-repeat; background-size: 100% 100%, 100% 100%, cover; background-position: 0 0, 0 0, center; }
+[data-experience='basecamp'] .bcpanes[data-bg-mode='fit'] { background-repeat: no-repeat, no-repeat, no-repeat; background-size: 100% 100%, 100% 100%, contain; background-position: 0 0, 0 0, center; }
+[data-experience='basecamp'] .bcpanes[data-bg-mode='center'] { background-repeat: no-repeat, no-repeat, no-repeat; background-size: 100% 100%, 100% 100%, var(--bc-bg-tw, auto) var(--bc-bg-th, auto); background-position: 0 0, 0 0, center; }
 /* The grid dots follow the material, not the colour scheme: dark dots on a light material, light dots on a dark one. */
-[data-experience='basecamp'] .bcpanes[data-bg][data-bg-tone='light'] { --bc-dot: rgb(40 36 28 / 0.34); }
-[data-experience='basecamp'] .bcpanes[data-bg][data-bg-tone='dark'] { --bc-dot: rgb(255 255 255 / 0.5); }
-/* A phone stacks the panels and has no canvas to pan: the material is laid once, at a fixed size, with no grid. */
+[data-experience='basecamp'] .bcpanes[data-bg][data-bg-tone='light'] { --bc-dot: rgb(40 36 28 / 0.42); }
+[data-experience='basecamp'] .bcpanes[data-bg][data-bg-tone='dark'] { --bc-dot: rgb(255 255 255 / 0.55); }
+/* A phone stacks the panels and has no canvas to pan: the material is laid once, at a fixed size, with no grid (the zoom variable is 1 there). */
 @media (max-width: 860px) {
-  [data-experience='basecamp'] .bcpanes[data-bg] {
-    background-image:
-      linear-gradient(color-mix(in srgb, var(--bc-shade-ink) var(--bc-bg-shadep, 0%), transparent), color-mix(in srgb, var(--bc-shade-ink) var(--bc-bg-shadep, 0%), transparent)),
-      linear-gradient(color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) var(--bc-bg-veilp, 0%), transparent), color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) var(--bc-bg-veilp, 0%), transparent)),
-      var(--bc-bg-img, none);
-    background-repeat: no-repeat, no-repeat, repeat;
-    background-size: 100% 100%, 100% 100%, var(--bc-bg-tw, 1024px) var(--bc-bg-th, 576px);
-    background-position: 0 0, 0 0, 0 0;
-  }
-  [data-experience='basecamp'] .bcpanes[data-bg-mode='cover'] { background-repeat: no-repeat, no-repeat, no-repeat; background-size: 100% 100%, 100% 100%, cover; background-position: 0 0, 0 0, center; }
-  [data-experience='basecamp'] .bcpanes[data-bg-mode='fit'] { background-repeat: no-repeat, no-repeat, no-repeat; background-size: 100% 100%, 100% 100%, contain; background-position: 0 0, 0 0, center; }
-  [data-experience='basecamp'] .bcpanes[data-bg-mode='center'] { background-repeat: no-repeat, no-repeat, no-repeat; background-size: 100% 100%, 100% 100%, var(--bc-bg-tw, auto) var(--bc-bg-th, auto); background-position: 0 0, 0 0, center; }
+  [data-experience='basecamp'] .bcpanes[data-bg] { background-size: 100% 100%, 100% 100%, var(--bc-bg-tw, 1024px) var(--bc-bg-th, 576px); background-position: 0 0, 0 0, 0 0; }
+  [data-experience='basecamp'] .bcpanes[data-bg-mode='cover'] { background-size: 100% 100%, 100% 100%, cover; background-position: 0 0, 0 0, center; }
+  [data-experience='basecamp'] .bcpanes[data-bg-mode='fit'] { background-size: 100% 100%, 100% 100%, contain; background-position: 0 0, 0 0, center; }
+  [data-experience='basecamp'] .bcpanes[data-bg-mode='center'] { background-size: 100% 100%, 100% 100%, var(--bc-bg-tw, auto) var(--bc-bg-th, auto); background-position: 0 0, 0 0, center; }
 }
 
 /* The picker, inside How this project looks. */

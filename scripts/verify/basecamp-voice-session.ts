@@ -27,6 +27,7 @@
  */
 import { chromium } from 'playwright'
 import { isolated } from '../isolated/guard.ts'
+import { fulfillStandIn, STAND_IN_PATH } from './lib/standin-office.ts'
 import { serveStudio } from './serve-studio.ts'
 
 const inPage = (body: string): string => `(() => { ${body} })()`
@@ -83,14 +84,10 @@ const visit = async (): Promise<Sent[]> => {
       body: JSON.stringify({ reply: 'Noted.', said: 'Noted.' }),
     })
   })
-  await ctx.route('**/hq-api**', (r) => r.abort('connectionfailed'))
+  // One project and one crew member answer (since #426 an office that does not answer shows no project at all).
+  await ctx.route('**/hq-api**', fulfillStandIn)
   const page = await ctx.newPage()
-  await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-  await page.waitForTimeout(400)
-  const slug = (await page.evaluate(
-    inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
-       return el === null ? '' : (el.dataset.bcGo ?? '')`),
-  )) as string
+  const slug = STAND_IN_PATH
 
   where = 'dock'
   await page.goto(url(slug), { waitUntil: 'domcontentloaded' })

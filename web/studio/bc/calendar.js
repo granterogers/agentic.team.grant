@@ -405,14 +405,24 @@ const rawOf = (f) => {
 
 /* --------------------------------------------------------------- rendering --- */
 
+/* A project's hue from its slug: stable, and a second cue beside the source shape (colour is never the only one). */
+const projectHue = (slug) => {
+  let h = 0
+  for (const ch of String(slug)) h = (h * 31 + ch.charCodeAt(0)) % 360
+  return h
+}
+
 const chip = (e, day, compact, noTime = false) => {
   const time = noTime || e.allDay || e.startDay !== day ? '' : `<span class="bccal2t">${timeWords(e.startMin)}</span>`
   if (e.source === 'task') {
     return `<button type="button" class="bccal2chip bccal2chip--task" data-bc-task-open="${esc(taskKeyOf(e.task))}" title="${esc(`To-do: ${e.title}`)}">
       <span class="bccal2tick" aria-hidden="true"></span>${esc(e.title)}</button>`
   }
-  return `<button type="button" class="bccal2chip bccal2chip--${esc(e.source === 'google' ? 'google' : 'own')}${compact ? ' bccal2chip--compact' : ''}"
-    data-cal-ev="${esc(e.id)}" title="${esc(e.title)}">${time}${esc(e.title)}</button>`
+  const kind = e.source === 'google' ? 'google' : 'own'
+  const hue = e.project ? ` style="--ev-proj:${String(projectHue(e.project))}"` : ''
+  const where = [kind === 'google' ? 'Google Calendar' : 'Team HQ', e.projectName ?? ''].filter(Boolean).join(' · ')
+  return `<button type="button" class="bccal2chip bccal2chip--${esc(kind)}${e.allDay ? ' bccal2chip--allday' : ''}${e.project ? ' bccal2chip--proj' : ''}${compact ? ' bccal2chip--compact' : ''}"${hue}
+    data-cal-ev="${esc(e.id)}" title="${esc(`${e.title} (${where})`)}"><span class="bccal2mk bccal2mk--${esc(kind)}" aria-hidden="true"></span>${time}${esc(e.title)}</button>`
 }
 
 const taskKeyOf = (t) => todos.keyOf(t)
@@ -448,7 +458,7 @@ const monthBody = (list, s, dense) => {
             const more = evs.length - shown.length
             return `<div class="${cls.join(' ')}" role="gridcell" data-cal-day="${day}">
           <button type="button" class="bccal2num" data-cal-pick="${day}" aria-pressed="${day === s.sel ? 'true' : 'false'}" aria-label="${esc(`${dayWords(day)}${evs.length > 0 ? `, ${String(evs.length)} ${evs.length === 1 ? 'item' : 'items'}` : ''}`)}">${String(parseDay(day).getDate())}</button>
-          ${dense ? '' : `<div class="bccal2chips">${shown.map((e) => chip(e, day, true)).join('')}${more > 0 ? `<button type="button" class="bccal2more" data-cal-open-day="${day}">+${String(more)} more</button>` : ''}</div>`}
+          ${dense ? '' : `<div class="bccal2chips" data-total="${String(evs.length)}">${shown.map((e) => chip(e, day, true)).join('')}<button type="button" class="bccal2more" data-cal-open-day="${day}"${more > 0 ? '' : ' hidden'}>+${String(more)} more</button></div>`}
           ${dense && evs.length > 0 ? `<span class="bccal2dots" aria-hidden="true">${evs.slice(0, 3).map((e) => `<i class="bccal2dot bccal2dot--${esc(e.source === 'google' ? 'google' : e.source === 'task' ? 'task' : 'own')}"></i>`).join('')}</span>` : ''}
         </div>`
           })
@@ -589,6 +599,67 @@ const toolbar = (s, mode) => `<div class="bccal2bar">
       : ''
   }`
 
+/*
+  THE MODULE'S OWN VIEWS (9 October 2026). Grant: the minimised schedule should choose between day, week and month as the
+  expanded one does. Small and medium share one drawing: a bar (previous, the period, next, New), a Day / Week / Month
+  switch, and under it the day's list, the week's days in order, or the month with its dots and the chosen day beneath.
+  The choice is the same stored one the expanded view uses, so the two never disagree about which view is showing.
+*/
+const dayRows = (list, d, empty) => {
+  const evs = onDay(list, d)
+  if (evs.length === 0) return `<p class="bccal2empty">${esc(empty)}</p>`
+  return evs
+    .map(
+      (e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, d, false, true)}${e.source === 'google' ? '<span class="bccal2src" title="From Google Calendar">Google</span>' : ''}</div>`,
+    )
+    .join('')
+}
+
+const compact = (s, list, size, today, selected) => {
+  const view = s.view
+  const word = { day: 'day', week: 'week', month: 'month' }[view]
+  const title =
+    view === 'month'
+      ? `${MONTHS[parseDay(s.cursor).getMonth()]} ${String(parseDay(s.cursor).getFullYear())}`
+      : view === 'day'
+        ? s.cursor === today
+          ? 'Today'
+          : dayWords(s.cursor)
+        : titleOf(s)
+  const switcher = `<span class="bccal2views bccal2views--mini" role="group" aria-label="View">${['day', 'week', 'month']
+    .map(
+      (v) =>
+        `<button type="button" class="bccal2btn bccal2btn--seg${view === v ? ' is-on' : ''}" data-cal-view="${v}" aria-pressed="${view === v ? 'true' : 'false'}">${v.charAt(0).toUpperCase()}${v.slice(1)}</button>`,
+    )
+    .join('')}</span>`
+  let body = ''
+  if (view === 'day') body = `<div class="bccal2agenda">${dayRows(list, s.cursor, 'Nothing on this day.')}</div>`
+  else if (view === 'week') {
+    const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart(s.cursor), i))
+    body = `<div class="bccal2agenda">${days
+      .map(
+        (d) => `<section class="bccal2ag"><h3 class="bccal2agh${d === today ? ' is-today' : ''}">${esc(d === today ? 'Today' : dayWords(d))}</h3>${dayRows(list, d, 'Nothing.')}</section>`,
+      )
+      .join('')}</div>`
+  } else {
+    body = `${monthBody(list, { ...s, view: 'month' }, true)}<div class="bccal2day" tabindex="0" role="region" aria-label="Agenda for the selected day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>${
+      selected.length === 0
+        ? '<p class="bccal2empty">Nothing on this day.</p>'
+        : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')
+    }</div>`
+  }
+  return `<div class="bccal2compact" data-compact="${size}">
+    <div class="bccal2minibar">
+      <button type="button" class="bccal2btn bccal2btn--icon" data-cal-nav="prev" aria-label="${esc(`Previous ${word}`)}">&lsaquo;</button>
+      <span class="bccal2minititle" aria-live="polite">${esc(title)}</span>
+      <button type="button" class="bccal2btn bccal2btn--icon" data-cal-nav="next" aria-label="${esc(`Next ${word}`)}">&rsaquo;</button>
+      <button type="button" class="bccal2btn bccal2btn--primary bccal2btn--small" data-cal-new>New</button>
+    </div>
+    ${switcher}
+    ${body}
+  </div>`
+}
+
 /**
  * The calendar for a project, as markup.
  *
@@ -612,26 +683,11 @@ export const block = (p, { full = false } = {}) => {
   return `<div class="bccal2 ${full ? 'bccal2--full' : ''}" data-bc-cal="${esc(p.slug)}" data-size="${size}" data-view="${esc(s.view)}">
     ${size === 'large' ? `<div class="bccal2large">
       ${toolbar(s, ev.mode)}${loading}${failed}
-      ${s.view === 'month' ? (narrow ? `${monthBody(list, s, true)}<div class="bccal2day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>
+      ${s.view === 'month' ? (narrow ? `${monthBody(list, s, true)}<div class="bccal2day" tabindex="0" role="region" aria-label="Agenda for the selected day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>
         ${selected.length === 0 ? '<p class="bccal2empty">Nothing on this day.</p>' : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')}
       </div>` : monthBody(list, s, false)) : timeGrid(list, days, s)}
     </div>` : ''}
-    ${size === 'medium' ? `<div class="bccal2medium">
-      <div class="bccal2minibar">
-        <button type="button" class="bccal2btn bccal2btn--icon" data-cal-nav="prev" aria-label="Previous month">&lsaquo;</button>
-        <span class="bccal2minititle">${esc(`${MONTHS[parseDay(s.cursor).getMonth()]} ${String(parseDay(s.cursor).getFullYear())}`)}</span>
-        <button type="button" class="bccal2btn bccal2btn--icon" data-cal-nav="next" aria-label="Next month">&rsaquo;</button>
-        <button type="button" class="bccal2btn bccal2btn--primary bccal2btn--small" data-cal-new>New</button>
-      </div>
-      ${monthBody(list, { ...s, view: 'month' }, true)}
-      <div class="bccal2day"><h3 class="bccal2agh">${esc(s.sel === today ? 'Today' : dayWords(s.sel))}</h3>
-        ${selected.length === 0 ? '<p class="bccal2empty">Nothing on this day.</p>' : selected.map((e) => `<div class="bccal2agrow"><span class="bccal2agt">${e.allDay ? 'all day' : esc(timeWords(e.startMin))}</span>${chip(e, s.sel, false, true)}</div>`).join('')}
-      </div>
-    </div>` : ''}
-    ${size === 'small' ? `<div class="bccal2small">
-      ${agenda(list, today, 6, 'Nothing coming up.')}
-      <button type="button" class="bccal2btn bccal2btn--small" data-cal-new>New event</button>
-    </div>` : ''}
+    ${size === 'medium' || size === 'small' ? compact(s, list, size, today, selected) : ''}
   </div>`
 }
 
@@ -809,7 +865,49 @@ const openEditor = (p, existing, seed, fromEl = null) => {
 const modeOfSlug = (slug) => modeOf(slug)
 
 /** Attach the calendar's behaviour inside a freshly drawn root. */
+/*
+  A month cell shows as many chips as it has ROOM for, and says honestly how many it is not showing.
+
+  The month draws up to three chips and a "+N more" in every cell, but the rows share the box's height, so on a short box or a busy
+  day the chips were squeezed (they may shrink) and their text was cut through the middle: found with a populated calendar at
+  1440x900. Chips keep their own height now; this measures what the cell can hold and hides the rest, and the count is recomputed
+  from the day's real total so "+N more" is never short.
+*/
+const fitMonth = (month) => {
+  for (const box of month.querySelectorAll('.bccal2chips')) {
+    const cell = box.closest('.bccal2cell')
+    const total = Number(box.dataset.total) || 0
+    const chips = [...box.querySelectorAll('.bccal2chip')]
+    const more = box.querySelector('.bccal2more')
+    if (cell === null || more === null || chips.length === 0) continue
+    for (const c of chips) c.hidden = false
+    more.hidden = false
+    more.textContent = '+0 more'
+    /* Layout sizes (offset and client), not bounding rects: a dialog that is still scaling in would make a rect lie. */
+    const room = cell.clientHeight - box.offsetTop - 2
+    const rowH = (chips[0]?.offsetHeight ?? 20) + 2
+    const moreH = more.offsetHeight + 2
+    let fit = chips.length
+    while (fit > 0 && fit * rowH + (total > fit ? moreH : 0) > room) fit -= 1
+    chips.forEach((c, i) => {
+      c.hidden = i >= fit
+    })
+    more.textContent = `+${String(total - fit)} more`
+    more.hidden = total - fit <= 0
+  }
+}
+const monthObservers = new WeakMap()
+
 export const wire = (root) => {
+  for (const month of root.querySelectorAll('.bccal2month:not(.bccal2month--dense)')) {
+    fitMonth(month)
+    monthObservers.get(month)?.disconnect()
+    if (typeof ResizeObserver === 'function') {
+      const ro = new ResizeObserver(() => fitMonth(month))
+      ro.observe(month)
+      monthObservers.set(month, ro)
+    }
+  }
   for (const el of root.querySelectorAll('[data-bc-cal]')) {
     const slug = el.dataset.bcCal
     const p = ctx?.projects?.().find((q) => q.slug === slug) ?? { slug, tasks: [] }
@@ -857,7 +955,7 @@ export const wire = (root) => {
         if (how === 'today') {
           s.cursor = todayIso()
           s.sel = s.cursor
-        } else if (s.view === 'month' || el.dataset.size === 'medium') {
+        } else if (s.view === 'month') {
           s.cursor = addMonths(s.cursor, step)
           s.sel = s.cursor
         } else s.cursor = addDays(s.cursor, step * (s.view === 'week' ? 7 : 1))
@@ -866,6 +964,8 @@ export const wire = (root) => {
     }
     for (const b of el.querySelectorAll('[data-cal-view]')) {
       b.addEventListener('click', () => {
+        /* Moving from the month to a day or a week lands on the day that was chosen there, not on wherever the cursor last was. */
+        if (b.dataset.calView !== 'month' && s.view === 'month') s.cursor = s.sel
         s.view = b.dataset.calView
         redraw()
       })

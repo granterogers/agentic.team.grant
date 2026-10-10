@@ -27,8 +27,11 @@
  */
 import '../../src/safety/arm.ts'
 import { chromium } from 'playwright'
+import { fulfillStandIn, STAND_IN_PATH } from './lib/standin-office.ts'
 import { serveLive } from './serve-live.ts'
 import { serveStudio } from './serve-studio.ts'
+
+const slug = STAND_IN_PATH
 
 const inPage = (body: string): string => `(() => { ${body} })()`
 
@@ -197,24 +200,15 @@ await ctx.addInitScript(LOOPBACK)
 await ctx.addInitScript(
   `try { localStorage.setItem('hq.token', 'not-a-credential-local-test-only') } catch {}`,
 )
-await ctx.route('**/hq-api**', (r) =>
-  r.request().method() === 'OPTIONS'
-    ? r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } })
-    : r.abort('connectionfailed'),
-)
+// The office answers with one project and one crew member (since #426 an office that does not answer shows no project at all).
+await ctx.route('**/hq-api**', fulfillStandIn)
 const page = await ctx.newPage()
 const thrown: string[] = []
 page.on('pageerror', (e) => {
   thrown.push(e.message)
 })
 
-await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
-await page.waitForTimeout(500)
-const slug = (await page.evaluate(
-  inPage(`const el = document.querySelector('[data-bc-go^="/p/"]')
-     return el === null ? '' : (el.dataset.bcGo ?? '')`),
-)) as string
-await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+await page.goto(url(STAND_IN_PATH), { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('[data-bc-voice]')
 await page.waitForTimeout(500)
 
@@ -283,7 +277,7 @@ const minted = (await page.evaluate(inPage('return window.__minted'))) as string
 check('the office was asked for a credential', minted.length === 1, JSON.stringify(minted))
 check(
   'and it was told which project the call is about, so "this project" means this one',
-  minted[0] !== undefined && minted[0].includes(slug.split('/').pop() ?? ''),
+  (minted[0] ?? '').includes(slug.split('/').pop() ?? '(no slug)'),
   minted[0] ?? '',
 )
 const connected = (await page.evaluate(

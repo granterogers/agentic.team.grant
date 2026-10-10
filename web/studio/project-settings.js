@@ -40,6 +40,7 @@
   ADR-0014's order is a thing a person at a terminal does having read it.
 */
 
+import { markup as appearanceMarkup, wire as appearanceWire } from './bc/appearance-pane.js'
 import { CREW } from './data.js'
 import { act, attempt, canWrite, read, say, sure } from './office.js'
 
@@ -52,7 +53,11 @@ import { act, attempt, canWrite, read, say, sure } from './office.js'
 export const PANES = [
   { id: 'automations', name: 'Automations' },
   { id: 'labels', name: 'Labels' },
+  /* Team HQ only: it edits the project's appearance (grid, texture, module colour and opacity), which the older studio has no board for. */
+  { id: 'appearance', name: 'Appearance', teamHq: true },
 ]
+const isTeamHq = () => globalThis.document?.documentElement?.dataset.experience === 'basecamp'
+const panes = () => PANES.filter((x) => x.teamHq !== true || isTeamHq())
 
 /*
   What has been fetched, per project.
@@ -541,17 +546,21 @@ function projectPane(p) {
 
 export function section(p, pane, people) {
   const state = held.get(p.slug) ?? { team: [], automations: [], loading: true }
-  const which = PANES.some((x) => x.id === pane) ? pane : 'automations'
+  const which = panes().some((x) => x.id === pane) ? pane : 'automations'
 
-  const body = state.loading
-    ? `<p class="t-meta setnone">Reading the office…</p>`
-    : which === 'labels'
-      ? labelsPane(p, people)
-      : automationsPane(p, state)
+  /* Appearance is this browser's own record of the project's look: it needs nothing from the office, so it never waits for the read. */
+  const body =
+    which === 'appearance'
+      ? appearanceMarkup(p)
+      : state.loading
+        ? `<p class="t-meta setnone">Reading the office…</p>`
+        : which === 'labels'
+          ? labelsPane(p, people)
+          : automationsPane(p, state)
 
   return `<div class="tabbody">
     <div class="subnav" role="tablist" aria-label="Settings for this project">
-      ${PANES.map(
+      ${panes().map(
         (x) => `<button role="tab" class="subtab ${which === x.id ? 'on' : ''}"
           aria-selected="${which === x.id}" data-setpane="${x.id}">${esc(x.name)}</button>`,
       ).join('')}
@@ -603,6 +612,7 @@ function download(name, payload) {
  * row and wrong about the rest.
  */
 export function wire(root, p, people, redraw, openLook, reload) {
+  appearanceWire(root, p)
   /*
     The picker is built in `app.js`, where the sheet and its 451 marks live, so
     it is handed in rather than imported - importing it here would make this

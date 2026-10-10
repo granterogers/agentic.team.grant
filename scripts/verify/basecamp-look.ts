@@ -259,7 +259,7 @@ const markAfter = async (
        return {
          cls: m === null ? '' : m.className,
          tag: m === null ? '' : m.tagName.toLowerCase(),
-         hue: document.querySelector('.bchead')?.dataset.bcHue ?? '',
+         hue: document.querySelector('.bchead, .bcworktools')?.dataset.bcHue ?? '',
          src: m === null ? '' : (m.getAttribute('src') ?? ''),
        }`),
   )) as { cls: string; tag: string; hue: string; src: string }
@@ -339,7 +339,7 @@ if (both !== null) {
         inPage(`history.pushState({ path: '/basecamp/p/${which.slug}' }, '', '/basecamp/p/${which.slug}')
            window.dispatchEvent(new PopStateEvent('popstate', { state: { path: '/basecamp/p/${which.slug}' } }))
            return new Promise((go) => {
-             setTimeout(() => go(document.querySelector('.bchead')?.dataset.bcHue ?? ''), 600)
+             setTimeout(() => go(document.querySelector('.bchead, .bcworktools')?.dataset.bcHue ?? ''), 600)
            })`),
       )) as string,
     )
