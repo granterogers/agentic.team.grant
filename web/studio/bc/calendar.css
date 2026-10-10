@@ -249,3 +249,11 @@
 [data-experience='basecamp'] .bccal2dn { display: inline; }
 [data-experience='basecamp'] .bccal2ag { display: block; }
 [data-experience='basecamp'] .bccal2time { min-width: 0; }
+
+/* Calendar readability (11 October 2026, 2.6): the source is told by SHAPE as well as colour (circle = Team HQ, diamond = Google,
+   square tick = to-do), a project by a hue on the edge, an all-day event by a solid fill. */
+[data-experience='basecamp'] .bccal2mk { display: inline-block; width: 8px; height: 8px; margin-right: 5px; vertical-align: -1px; background: currentColor; opacity: .75; }
+[data-experience='basecamp'] .bccal2mk--own { border-radius: 50%; }
+[data-experience='basecamp'] .bccal2mk--google { transform: rotate(45deg) scale(.85); border-radius: 1px; }
+[data-experience='basecamp'] .bccal2chip--proj { border-left-color: hsl(var(--ev-proj) 55% 45%); }
+[data-experience='basecamp'] .bccal2chip--allday { font-weight: 650; background: color-mix(in srgb, var(--ev, var(--bc-accent)) 30%, transparent); }

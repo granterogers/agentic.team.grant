@@ -405,14 +405,24 @@ const rawOf = (f) => {
 
 /* --------------------------------------------------------------- rendering --- */
 
+/* A project's hue from its slug: stable, and a second cue beside the source shape (colour is never the only one). */
+const projectHue = (slug) => {
+  let h = 0
+  for (const ch of String(slug)) h = (h * 31 + ch.charCodeAt(0)) % 360
+  return h
+}
+
 const chip = (e, day, compact, noTime = false) => {
   const time = noTime || e.allDay || e.startDay !== day ? '' : `<span class="bccal2t">${timeWords(e.startMin)}</span>`
   if (e.source === 'task') {
     return `<button type="button" class="bccal2chip bccal2chip--task" data-bc-task-open="${esc(taskKeyOf(e.task))}" title="${esc(`To-do: ${e.title}`)}">
       <span class="bccal2tick" aria-hidden="true"></span>${esc(e.title)}</button>`
   }
-  return `<button type="button" class="bccal2chip bccal2chip--${esc(e.source === 'google' ? 'google' : 'own')}${compact ? ' bccal2chip--compact' : ''}"
-    data-cal-ev="${esc(e.id)}" title="${esc(e.title)}">${time}${esc(e.title)}</button>`
+  const kind = e.source === 'google' ? 'google' : 'own'
+  const hue = e.project ? ` style="--ev-proj:${String(projectHue(e.project))}"` : ''
+  const where = [kind === 'google' ? 'Google Calendar' : 'Team HQ', e.projectName ?? ''].filter(Boolean).join(' · ')
+  return `<button type="button" class="bccal2chip bccal2chip--${esc(kind)}${e.allDay ? ' bccal2chip--allday' : ''}${e.project ? ' bccal2chip--proj' : ''}${compact ? ' bccal2chip--compact' : ''}"${hue}
+    data-cal-ev="${esc(e.id)}" title="${esc(`${e.title} (${where})`)}"><span class="bccal2mk bccal2mk--${esc(kind)}" aria-hidden="true"></span>${time}${esc(e.title)}</button>`
 }
 
 const taskKeyOf = (t) => todos.keyOf(t)
