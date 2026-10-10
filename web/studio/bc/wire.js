@@ -13,7 +13,7 @@
   second mechanism would be a second set of words for one thing.
 */
 
-import { act, alreadyAnswered, attempt, canWrite, read, say, token } from '../office.js'
+import { act, alreadyAnswered, attempt, canWrite, read, readFile, say, token } from '../office.js'
 import * as session from '../session.js'
 import { signOut } from '../signout.js'
 import { esc } from './parts.js'
@@ -2120,6 +2120,66 @@ const dressObject = (host, face) => {
   host.innerHTML = bcMini.glyphFor(face)
 }
 
+/*
+  A REAL FIRST PAGE FOR A DOCUMENT NOBODY HAS OPENED.
+
+  Read through the same authenticated gateway call the viewer uses (document_preview_file), so no thumbnail URL is ever
+  public and nothing new is stored on a server: the small picture is kept on this device by docthumbs, keyed to the source's
+  modified time. One at a time, a few per session, and silent on any failure: the tile's own fallback stays. A file that is
+  neither a PDF nor a picture is left alone.
+*/
+const WARM = { busy: false, queue: [], done: 0, tried: new Set() }
+const WARM_MAX = 16
+const warmThumb = (host, id) => {
+  /* Only what has a first page to draw: a PDF or a picture. */
+  if (!/pdf|image|png|jpe?g|webp|gif/i.test(host.dataset.bcThumbtype ?? '')) return
+  if (WARM.tried.has(id) || WARM.tried.size >= WARM_MAX) return
+  WARM.tried.add(id)
+  WARM.queue.push({ host, id })
+  void warmNext()
+}
+const warmNext = async () => {
+  if (WARM.busy) return
+  const job = WARM.queue.shift()
+  if (job === undefined) return
+  WARM.busy = true
+  try {
+    const mod = job.host.dataset.bcThumbmod ?? ''
+    if (docthumbs.get(job.id, mod) === null) {
+      const blob = await readFile('document_preview_file', job.id, ctx.state.project ? { project: ctx.state.project } : undefined)
+      const url = URL.createObjectURL(blob)
+      try {
+        let src = null
+        if (blob.type === 'application/pdf') src = (await pdf.pages(url, 220, 1)).pages[0]?.src ?? null
+        else if (blob.type.startsWith('image/')) src = url
+        if (src !== null) {
+          const small = await docthumbs.shrink(src, 220)
+          if (small && docthumbs.put(job.id, mod, small)) {
+            /* The tile may have been redrawn while the page was read, so paint whichever tiles exist NOW. */
+            for (const h of document.querySelectorAll('[data-bc-thumb]')) {
+              if (h.dataset.bcThumb !== `id:${job.id}`) continue
+              const img = document.createElement('img')
+              img.className = 'realpage'
+              img.alt = ''
+              img.src = small
+              h.classList.remove('bcthumb--object', 'bcthumb--i')
+              h.replaceChildren(img)
+              h.classList.add('has-real')
+            }
+          }
+        }
+      } finally {
+        URL.revokeObjectURL(url)
+      }
+    }
+  } catch {
+    /* The tile keeps its fallback. */
+  } finally {
+    WARM.busy = false
+    void warmNext()
+  }
+}
+
 const paintThumb = async (host, ref) => {
   /*
     A THUMBNAIL KEPT ON THIS DEVICE (docthumbs.js): the viewer made it from the first page or the picture while the
@@ -2142,6 +2202,10 @@ const paintThumb = async (host, ref) => {
     }
   }
   const file = await fileFor(ref)
+  if (file === null || file.url === '') {
+    /* A document Team HQ reads on demand and nobody has opened yet: make its first-page picture ourselves (below). */
+    if (ref.startsWith('id:')) void warmThumb(host, ref.slice(3))
+  }
   if (file === null) return
   const face = bcMini.faceFor(file.mime ?? '', file.url === '' ? (file.title ?? '') : file.url)
   /* Something with no first page stops pretending to have one. */
