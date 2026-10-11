@@ -303,14 +303,18 @@ language plpgsql
 immutable
 set search_path = 'pg_catalog'
 as $$
-declare t text;
+declare t text; r record;
 begin
   if p_text is null or p_text = '' then return p_text; end if;
-  -- BOUNDED INPUT. The long-opaque pattern below looks ahead for a digit from every word start, which is quadratic in the length of an
-  -- unbroken run (measured: 5 000 characters 0.10 s, 20 000 1.55 s, 40 000 6.1 s), so an unbounded string at the external door is a
-  -- cheap way to hold a CPU. Only the first 4 000 characters are redacted and returned; every caller cuts to 300 or less anyway, and
-  -- the tail is dropped rather than returned unredacted.
+  -- BOUNDED, NORMALISED, LINEAR. Only the first 4 000 characters are read and returned (the tail is dropped, never returned
+  -- unredacted; every caller cuts to 300 or less anyway). The old long-opaque pattern looked ahead for a digit from every word start,
+  -- which is quadratic in an unbroken run (5 000 characters 0.10 s, 40 000 6.1 s), so the long-run test below is a loop over LINEAR
+  -- matches instead. NFKC folds full-width letters and unusual spaces to ASCII, and invisible format characters (zero-width spaces
+  -- and joiners, bidi controls, soft hyphen, variation selectors) are removed, so a credential split by one is whole again. The text
+  -- returned is the normalised text. This is the twin of redactStrict in src/text/secrets.ts; the limits of both are in SECURITY.md.
   t := left(p_text, 4000);
+  t := left(normalize(t, NFKC), 4000);
+  t := regexp_replace(t, '[\xAD\x34F\x61C\x115F\x1160\x17B4\x17B5\x180B-\x180E\x200B-\x200F\x202A-\x202E\x2060-\x206F\x3164\xFE00-\xFE0F\xFEFF\xFFA0]', '', 'g');
   t := regexp_replace(t, 'xox[abeprs]-[A-Za-z0-9-]{6,}', '[redacted:slack]', 'g');
   t := regexp_replace(t, 'sk-(?:proj-|or-|ant-|live-)?[A-Za-z0-9_-]{12,}', '[redacted:openai]', 'g');
   t := regexp_replace(t, 'sbp_[A-Za-z0-9]{16,}', '[redacted:supabase]', 'g');
@@ -321,15 +325,23 @@ begin
   t := regexp_replace(t, '\m[0-9]{6,}:[A-Za-z0-9_-]{30,}', '[redacted:telegram]', 'g');
   t := regexp_replace(t, '\meyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}', '[redacted:jwt]', 'g');
   t := regexp_replace(t, '\m(?:AKIA|ASIA)[A-Z0-9]{16}\M', '[redacted:aws]', 'g');
-  t := regexp_replace(t, '\m(Bearer|Basic|Token)([[:space:]]+)[A-Za-z0-9._~+/=-]{8,}', '\1\2[redacted:authorization]', 'gi');
-  t := regexp_replace(t, '\m(?=[A-Za-z0-9_+/=-]*[0-9])[A-Za-z0-9_+/=-]{40,}\M', '[redacted:long-opaque]', 'g');
-  t := regexp_replace(t, '-----BEGIN [A-Z ]*PRIVATE KEY-----', '[redacted:private-key]', 'g');
+  t := regexp_replace(t, '\m(?:(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{10,}|whsec_[A-Za-z0-9]{16,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{30,}|hf_[A-Za-z0-9]{30,}|glpat-[A-Za-z0-9_-]{20,}|ya29\.[A-Za-z0-9_-]{20,}|(?:AC|SK)[0-9a-f]{32})\M|hooks\.slack\.com/services/[A-Za-z0-9/]{20,}', '[redacted:vendor-key]', 'g');
+  t := regexp_replace(t, '([a-z][a-z0-9+.-]{1,20}://)(?:[^[:space:]/@:]{1,100}:[^[:space:]/@]{1,200}|[A-Za-z0-9._~%-]{20,200})@', '\1[redacted:url-credentials]@', 'gi');
+  t := regexp_replace(t, '\m(Bearer|Basic|Token)([[:space:]]+|[[:space:]]*[:=][[:space:]]*)[A-Za-z0-9._~+/=-]{8,}', '\1\2[redacted:authorization]', 'gi');
+  t := regexp_replace(t, '\m((?:pass(?:word|wd|phrase)|pwd|secret|client[_-]?secret|api[_-]?key|apikey|access[_-]?key|private[_-]?key|(?:auth|access|refresh|id|session|bearer)[_-]?token|token|credentials?|authorization|cookie|session[_-]?id|signature))(["'']?[[:space:]]*[:=][[:space:]]*)("[^"]*"|''[^'']*''|[^[:space:],;&"'']+)', '\1\2[redacted:assignment]', 'gi');
+  t := regexp_replace(t, '-----BEGIN [A-Z ]*PRIVATE KEY-----[^-]*(?:-----END [A-Z ]*PRIVATE KEY-----)?', '[redacted:private-key]', 'g');
+  -- a run of credential-shaped characters: long (40) with a digit, or shorter (24) mixing upper case, lower case and a digit
+  for r in select (regexp_matches(t, '[A-Za-z0-9_+/=-]{24,}', 'g'))[1] as run loop
+    if r.run ~ '[0-9]' and (length(r.run) >= 40 or (r.run ~ '[a-z]' and r.run ~ '[A-Z]')) then
+      t := replace(t, r.run, '[redacted:long-opaque]');
+    end if;
+  end loop;
   return t;
 end
 $$;
 
 comment on function app.activity_redact(text) is
-  'Takes credential-shaped text out. SQL twin of redactSecrets (src/text/secrets.ts) plus a PEM private key header; parity is proved by scripts/isolated/activity-redaction.ts.';
+  'Takes credential-shaped text out, strictly: bounded to 4000 characters, NFKC-normalised, invisible characters removed, then the office''s families plus vendor keys, URL credentials, credential-named assignments, Token:value and long credential-shaped runs. SQL twin of redactStrict (src/text/secrets.ts); parity is proved by scripts/isolated/activity-redaction.ts. Not a universal detector (SECURITY.md).';
 
 -- Metadata is DATA the writer chose, so it is refused when it is abusive and cleaned when it is merely careless.
 --   refused:  not an object; more than 40 keys at one level; a key that is not a short snake_case word; deeper than 4 levels; over 4 KB.
@@ -359,7 +371,7 @@ begin
     if jsonb_typeof(v) = 'number' and k ~ '^((prompt|completion|input|output|total|max)_tokens|token_(budget|count|limit|total|usage))$' then
       -- a COUNT of tokens is a number about a model call, not a credential, and a budget event has to be able to say it
       out := out || jsonb_build_object(k, v);
-    elsif k ~* '(secret|token|passw|authorization|api_?key|cookie|credential|bearer|private_?key|session|signature)' then
+    elsif k ~* '(secret|token|passw|pwd|passphrase|authorization|api_?key|cookie|credential|bearer|private_?key|session|signature|dsn|connection_?string|webhook|(^|_)(auth|key|otp|pin|jwt|cert|seed)($|_))' then
       out := out || jsonb_build_object(k, '[redacted:key]');
     elsif k ~* '^(body|text|content|transcript|instruction|prompt|message|document|payload|raw|headers|email|address|phone|query)$' then
       out := out || jsonb_build_object(k, '[not stored: reference the record]');
@@ -539,6 +551,44 @@ $$;
 comment on function app.record_activity_safely(uuid, text, text, text, text, text, text, text, text, uuid, uuid, uuid, text, jsonb, jsonb) is
   'Best-effort writer for the worker path: never raises, never recurses, counts what it could not write in activity_write_failures (bounded to 200 an hour per office).';
 
+-- What an outside worker may put in metadata: a fixed list of short, scalar, descriptive keys (counts, durations, model and cost figures,
+-- an outcome). Anything else is DROPPED and counted in `dropped_keys`, so a worker's data is never stored by accident and the omission is
+-- visible. It is an allowlist because "a credential-shaped value under an unlisted key" is the failure a denylist cannot rule out.
+-- The values that remain are still cleaned (redacted, cut) by app.activity_clean when the strict writer stores them.
+create or replace function app.activity_external_metadata(p_meta jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = 'pg_catalog'
+as $$
+declare
+  k text; v jsonb; out jsonb := '{}'::jsonb; dropped integer := 0;
+begin
+  if p_meta is null then return '{}'::jsonb; end if;
+  if jsonb_typeof(p_meta) <> 'object' then
+    raise exception 'activity metadata must be a JSON object' using errcode = '22023';
+  end if;
+  if pg_column_size(p_meta) > 16384 then
+    raise exception 'external activity metadata is larger than 16 KB' using errcode = '22023';
+  end if;
+  for k, v in select key, value from jsonb_each(p_meta) loop
+    if k = any (array['step', 'phase', 'outcome', 'duration_ms', 'latency_ms', 'count', 'items', 'attempt', 'verdict', 'score', 'sandbox',
+                      'model', 'provider', 'prompt_tokens', 'completion_tokens', 'total_tokens', 'cost_usd', 'cost_status', 'status_code',
+                      'error_class', 'reason_code', 'version', 'kind', 'task', 'tool'])
+       and jsonb_typeof(v) in ('string', 'number', 'boolean') then
+      out := out || jsonb_build_object(k, v);
+    else
+      dropped := dropped + 1;
+    end if;
+  end loop;
+  if dropped > 0 then out := out || jsonb_build_object('dropped_keys', dropped); end if;
+  return out;
+end
+$$;
+
+comment on function app.activity_external_metadata(jsonb) is
+  'The allowlist for an external worker''s metadata: listed short scalar keys are kept, everything else is dropped and counted in dropped_keys.';
+
 -- The one door for what an external worker reports. Nothing the worker supplies can widen its own reach: the type must be one the
 -- taxonomy marks external_writable, the actor is forced to external:<worker>, visibility is the taxonomy's, severity cannot be
 -- critical, status cannot claim confirmation, and the office is whatever the CALLER (an authenticated application boundary) names
@@ -627,7 +677,7 @@ begin
     p_office => p_office, p_event_type => p_event_type, p_idempotency_key => v_key,
     p_actor_kind => 'external', p_actor => 'external:' || p_worker, p_summary => p_summary, p_status => p_status,
     p_severity => p_severity, p_visibility => v_type.default_visibility, p_project_id => p_project_id, p_job_id => p_job_id,
-    p_correlation_id => v_corr, p_source_interface => 'external', p_metadata => p_metadata,
+    p_correlation_id => v_corr, p_source_interface => 'external', p_metadata => app.activity_external_metadata(p_metadata),
     p_evidence_ref => v_evidence, p_provenance => 'external');
 end
 $$;
@@ -639,6 +689,7 @@ comment on function app.record_external_activity(uuid, text, text, text, text, t
 revoke all on function app.activity_ledger_on() from public, anon, authenticated;
 revoke all on function app.activity_redact(text) from public, anon, authenticated;
 revoke all on function app.activity_clean(jsonb, integer) from public, anon, authenticated;
+revoke all on function app.activity_external_metadata(jsonb) from public, anon, authenticated;
 revoke all on function app.record_activity(uuid, text, text, text, text, text, text, text, text, text, uuid, uuid, uuid, uuid, uuid, text, text, text, jsonb, jsonb, timestamptz, uuid, text) from public, anon, authenticated;
 revoke all on function app.record_activity_safely(uuid, text, text, text, text, text, text, text, text, uuid, uuid, uuid, text, jsonb, jsonb) from public, anon, authenticated;
 revoke all on function app.record_external_activity(uuid, text, text, text, text, text, text, uuid, uuid, uuid, jsonb, jsonb) from public, anon, authenticated;

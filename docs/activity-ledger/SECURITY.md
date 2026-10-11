@@ -58,9 +58,14 @@ the one above it: **content never enters the ledger**; it holds references to re
   them from the two branches; nothing else depends on them.
 - **`app.activity_for_the_page` splits the summary into a verb and an object at the first space** to fit the existing renderer; that is cosmetic and can read oddly.
 - **Timing and size side channels** (whether a filtered read was fast because it found nothing) were not analysed.
-- **The redactor does not know these shapes** (the TypeScript twin does not either, so there is no parity gap): a URL's userinfo (`postgresql://user:password@host`), `password=value`, a short
-  Stripe key, `Token:value` with no space, and a token split by a zero-width space. They matter only where a native caller writes free text; the control is that native callers pass references and short
-  summaries. Teaching both redactors these shapes is a change to the office-wide redactor and was not made here.
+- **The strict redactor (phase 3) and what it still does not catch.** The ledger uses its own redactor, `app.activity_redact` (SQL) with a byte-identical TypeScript twin `redactStrict`
+  (`src/text/secrets.ts`); the office-wide `redactSecrets` is unchanged. It reads at most 4 000 characters, NFKC-normalises (full-width letters, unusual spaces), removes invisible
+  format characters (zero-width, bidi, soft hyphen, variation selectors), then removes vendor keys (including Stripe, SendGrid, npm, Hugging Face, GitLab, Twilio, Slack webhooks), credentials
+  in a URL, `Token:value`, an assignment to a credential-named key (`password=`, `"token": "..."`) and a long mixed run, in linear time. Token counts and durations are left alone.
+  `scripts/isolated/activity-redaction.ts` (71 checks, with a fuzz) fails on any SQL/TS difference. **It does not claim to find every secret.** Not caught, and pinned as limitation tests:
+  a short secret in prose with no key name; a credential-named key written in look-alike letters from another script; percent-encoded or base64-wrapped values; a secret split by ordinary
+  punctuation; a value in a language the key list does not know. The control that bounds the rest is that native callers pass references and short summaries and that external metadata
+  passes a strict allowlist (`app.activity_external_metadata`).
 - **Native events make a project permanently undeletable** (a same-office foreign key on an append-only table), the same class as a project that has gathered a job. `app.project_delete` refuses it gracefully; no
   product path writes a native event to a project with no job yet. A fixture project that a suite tears down must not receive native events.
 - **Timestamps of a settled delivery are its row's last change**: `delivery.failed` and `delivery.suppressed` are dated `updated_at`, the only column that records when, and a later update to the settled row moves the
