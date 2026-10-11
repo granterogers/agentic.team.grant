@@ -42,6 +42,8 @@ SABOTAGES=(
   "S28|60|'([a-z][a-z0-9+.-]{1,20}://)(?:|'([a-z][a-z0-9+.-]{1,20}://ZZ)(?:|activity-redaction|url user and password"
   "S29|60|pass(?:word|passZZ(?:word|activity-redaction|password assignment"
   "S30|60|(r.run ~ '[a-z]' and r.run ~ '[A-Z]')|false|activity-redaction|mixed-case run a vendor never listed"
+  "S31|60|perform pg_advisory_xact_lock(hashtextextended(|perform pg_try_advisory_xact_lock(hashtextextended(|activity-external-attack|quota: 480 concurrent"
+  "S32|60|length(p_idempotency_key) not between 1 and 150|length(p_idempotency_key) not between 0 and 150|activity-external-attack|identity: an empty, over-long"
   "S13|gw|if (!/^\\d{1,3}\$/.test(text))|if (false)|activity-gateway|refused by name"
   "S14|gw|    requireOne: ['job', 'correlation'],||activity-gateway|a chain with neither"
   "S17|60|    if exists (select 1 from public.activity_event_types t where t.event_type = p_event_type and t.durability = 'critical') then|    if false then|activity-ledger-durability|the best-effort writer refuses a critical type"

@@ -632,7 +632,14 @@ begin
   if p_status in ('confirmed', 'authorised') then
     raise exception 'an external worker may not claim % ', p_status using errcode = '42501';
   end if;
+  if p_idempotency_key is null or length(p_idempotency_key) not between 1 and 150 or p_idempotency_key ~ '[[:cntrl:]]' then
+    raise exception 'an external report needs a stable idempotency key of 1 to 150 printable characters' using errcode = '22023';
+  end if;
   v_key := 'ext:' || p_worker || ':' || p_idempotency_key;
+
+  -- One office's external reports are counted and written one at a time: without this two workers could both read 299, both pass and
+  -- both insert. The lock is per office and held to the end of the transaction; it is taken before the count, never inside it.
+  perform pg_advisory_xact_lock(hashtextextended('activity.external:' || p_office::text, 0));
 
   -- A report that was already recorded is answered by the strict writer (idempotent, and it refuses a key reused for another type);
   -- only a NEW row is subject to the limits below, so a retry of an accepted report is never refused for volume.

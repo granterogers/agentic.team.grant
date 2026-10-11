@@ -55,8 +55,13 @@ export const EXTENDED: readonly Proof[] = [
   ),
   p(
     'activity-redaction',
-    30,
-    'the SQL redactor the ledger stores through and the TypeScript one the office already uses agree on every credential family, and neither touches ordinary text',
+    60,
+    'the SQL strict redactor the ledger stores through and its TypeScript twin agree byte for byte on every credential family, evasion and neighbour, in linear time, and the limits are pinned',
+  ),
+  p(
+    'activity-external-attack',
+    36,
+    'the external-worker door under concurrent writers holds its 300 per worker and 1000 per office, cannot be varied past by name or key, cannot claim a review, confirmation or approval, and the ledger tables are closed to browser roles and to edits',
   ),
 
   // ---- answers, acknowledgements, questions --------------------------------------------------------------------------
