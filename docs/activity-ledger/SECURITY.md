@@ -43,6 +43,10 @@ the one above it: **content never enters the ledger**; it holds references to re
 - **Rendering.** The summary is plain text. The page escapes text it renders (`esc()`); the database does not HTML-sanitise. A new consumer must escape.
 - **Redaction is pattern-based.** A credential in a shape no pattern knows, written to a free-text field by a native caller, is stored. The control
   that bounds this is that native callers pass references and short summaries; there is no path for a long free-text body.
+- **Approval and impediment summaries carry the office's own one-line description** of what it asked (`blockers.requested_action`, `job_impediments.needed`),
+  cut at 160 characters and redacted. They are sentences a handler composes ("Create the Slack channel for the venue project"), not a person's message, and
+  they are shown only to the office they belong to, but they can name a project or a person's work. A deployment that wants them out of the feed removes
+  them from the two branches; nothing else depends on them.
 - **`app.activity_for_the_page` splits the summary into a verb and an object at the first space** to fit the existing renderer; that is cosmetic and can read oddly.
 - **Timing and size side channels** (whether a filtered read was fast because it found nothing) were not analysed.
 - **`public.activity_write_failures` is not pruned** (it is a bounded counter, at most 200 rows an hour per office). A prune after 90 days is proposed, not built.
