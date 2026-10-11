@@ -36,7 +36,7 @@ SABOTAGES=(
   "S10|60|  exception when others then|  exception when no_data_found then|activity-ledger|the safe writer never raises"
   "S11|61|    and ((q.vis_override is null and app.activity_type_visrank(q.type) <= \$10) or q.vis_override <= \$10)|    and (true)|activity-ledger|native diagnostic events"
   "S12|61|where \$10 >= 1 and u.office_id = \$1|where \$10 >= 1|activity-ledger|neither feed"
-  "S13|gw|const ISO =|const ISO_UNUSED =|activity-gateway|refused by name"
+  "S13|gw|if (!/^\\d{1,3}\$/.test(text))|if (false)|activity-gateway|refused by name"
   "S14|gw|    requireOne: ['job', 'correlation'],||activity-gateway|a chain with neither"
   "S15|gw|args = { ...args, [extra.arg]: text }|args = { ...args, [extra.arg]: new Date(Date.parse(text)).toISOString() }|activity-gateway|cursor the first page returns"
 )

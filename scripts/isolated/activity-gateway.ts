@@ -80,6 +80,20 @@ try {
   const page2 = await get(S_A, 'activity_feed', `visibility=diagnostic&limit=1&before_at=${encodeURIComponent(String(next?.at))}&before_id=${String(next?.id)}`)
   check('paging: the cursor the first page returns opens the second page, and they do not overlap', events(page).length === 1 && events(page2).length === 1 && events(page)[0].id !== events(page2)[0].id, `${String(events(page)[0]?.id).slice(0, 8)} then ${String(events(page2)[0]?.id).slice(0, 8)}`)
 
+  // Two events a few microseconds apart, inside one millisecond: a cursor that is rounded to milliseconds skips the older one.
+  for (const [i, at] of ['2026-01-01T00:00:00.123456Z', '2026-01-01T00:00:00.123123Z', '2026-01-01T00:00:00.123001Z'].entries())
+    await one(`select app.record_activity(p_office => ${lit(officeA)}::uuid, p_event_type => 'budget.threshold_reached', p_idempotency_key => ${lit(`micro-${i}-${run}`)}, p_actor_kind => 'system', p_actor => 'office', p_summary => 'micro ${i}', p_occurred_at => ${lit(at)}::timestamptz) as v`)
+  const walked: string[] = []
+  let cur = ''
+  for (let i = 0; i < 6; i++) {
+    const p = await get(S_A, 'activity_feed', `since=2026-01-01T00:00:00Z&until=2026-01-01T00:00:01Z&limit=1${cur}`)
+    for (const e of events(p)) walked.push(String(e.summary))
+    const n = payload(p).next
+    if (n === null || n === undefined) break
+    cur = `&before_at=${encodeURIComponent(String(n.at))}&before_id=${String(n.id)}`
+  }
+  check('paging: events microseconds apart inside one millisecond are neither skipped nor repeated at a page boundary', walked.join(',') === 'micro 0,micro 1,micro 2', walked.join(','))
+
   const adapter = await get(S_A, 'activity_ledger')
   const row = (payload(adapter).office ?? [])[0] ?? {}
   check('adapter: the Team HQ shape (who, verb, what, project, when, at, via, category) over the gateway', adapter.status === 200 && payload(adapter).enabled === true && ['who', 'verb', 'what', 'at', 'category'].every((k) => k in row), `first: ${String(row.verb)} ${String(row.what)}`)
