@@ -252,6 +252,9 @@ create index if not exists activity_events_office_time_idx on public.activity_ev
 create index if not exists activity_events_project_time_idx on public.activity_events (project_id, occurred_at desc) where project_id is not null;
 create index if not exists activity_events_job_idx on public.activity_events (job_id, occurred_at) where job_id is not null;
 create index if not exists activity_events_correlation_idx on public.activity_events (correlation_id, occurred_at) where correlation_id is not null;
+-- The user's newest page reads user-visible events only; diagnostic ones (tool calls, usage) are the commonest and must not sit between it
+-- and the newest rows. A partial index, so it costs only what the user-visible events cost (activity_read pushes the ceiling in, 1061).
+create index if not exists activity_events_user_time_idx on public.activity_events (office_id, occurred_at desc, activity_id desc) where visibility = 'user';
 -- The external door's quota counts (per worker, per office, per deployment) read only what an outside worker wrote, newest first.
 create index if not exists activity_events_external_idx on public.activity_events (occurred_at desc) where actor_kind = 'external';
 create unique index if not exists activity_events_one_correction on public.activity_events (supersedes_activity_id) where supersedes_activity_id is not null;

@@ -19,6 +19,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: 'NOT a gate: rehearses the ledger deployment failure modes (a failing migration, an interrupted concurrent index build, a transaction-wrapped connection) on a clone with only 1060 applied; run by hand through its .sh wrapper',
   },
   {
+    stem: 'activity-read-concurrency',
+    role: 'NOT a gate: p50 and p95 of the newest page, a diagnostic page and a sparse filter for one reader and for several at once, on a database activity-ledger-perf has seeded; reports and asserts shape only',
+  },
+  {
     stem: 'activity-mixed-version',
     role: "NOT a gate: the new worker's ledger writers over a schema WITHOUT the ledger (a deploy ordering mistake); run by hand on a clone of a replica built from main",
   },

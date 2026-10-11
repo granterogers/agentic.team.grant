@@ -730,6 +730,12 @@ begin
   v_sel[14] := v_sel[14] || case when v_sevrank is not null and v_sevrank > 1 then ' and false'
                                  when p_type is not null then ' and e0.action_type = $16' else '' end;
   v_sel[15] := v_sel[15] || case when p_type is not null or p_category is not null then ' and a0.event_type = any($20::text[])' else '' end;
+  -- The visibility ceiling is applied to the native source's own pool, with a literal so the partial index on user-visible events can serve
+  -- it. Without this the pool is the newest rows of ALL visibilities: tool calls, which are diagnostic and by far the commonest native
+  -- event, filled the pool of a page that shows none of them, the validity check then widened it again and again, and the user's newest
+  -- page went from 110 ms to 1.9 s once about two thousand of them were the newest rows (measured on the replica, 3 500 to 5 550 events).
+  -- Only ever WIDER than the outer filter (it is the same test, earlier): `q.vis_override <= $10`.
+  v_sel[15] := v_sel[15] || case v_maxvis when 0 then ' and a0.visibility = ''user''' when 1 then ' and a0.visibility in (''user'', ''diagnostic'')' else '' end;
   v_ag := array[
     'c0.addressed_to = $3',
     'exists (select 1 from public.jobs ja where ja.job_id = r0.job_id and ja.recipient_agent = $3)',

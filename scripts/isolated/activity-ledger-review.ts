@@ -190,6 +190,25 @@ try {
   const hermesReaders = await one(`select count(*) as c from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'activity\\_%' and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute'))`)
   check('Hermes: the activity readers are not executable by a public key either', Number(hermesReaders.c) === 0, `${hermesReaders.c} public-key-executable readers`)
 
+  // ---------------------------------------------------------------------------------------------- phase 4: diagnostic events do not starve the user's page
+  // Tool calls are diagnostic and by far the commonest native event. A user's newest page reads user-visible events only; when thousands of
+  // diagnostic ones were the NEWEST rows, the native source's pool was all of them, the validity check widened it again and again and a
+  // page of events the user should see took 1.9 s (110 ms before them) or, past the widening ceiling of 16 384 rows, came back partial.
+  const userBefore = await read(grant)
+  const wantIds = (userBefore.events as Ev[]).filter((e) => e.src === 'activity_events' || e.provenance === 'native').length
+  void wantIds
+  await db.execute(`select app.record_activity(${lit(grant)}::uuid, 'budget.threshold_reached', ${lit(`starve-user-${run}`)}, 'system', 'office', 'A user-visible event older than the flood')`)
+  await db.execute(`insert into public.activity_events (office_id, event_type, occurred_at, actor_kind, actor, summary, idempotency_key, provenance, status, severity, visibility, source_interface)
+    select ${lit(grant)}::uuid, 'tool.call_completed', now() + interval '1 second' + (g || ' milliseconds')::interval, 'agent', 'a', 'Tool finished', 'starve-diag-${run}-' || g, 'native', 'completed', 'info', 'diagnostic', 'worker' from generate_series(1, 17000) g`)
+  const tFlood = Date.now()
+  const flooded = await read(grant, { p_limit: 50 })
+  const floodMs = Date.now() - tFlood
+  const mine = (flooded.events as Ev[]).some((e) => String(e.summary).startsWith('A user-visible event older than the flood'))
+  check('phase 4: 17 000 newer diagnostic events do not hide a user-visible one from the user\'s newest page (the pool is filtered by visibility before it is cut)', mine && flooded.partial !== true, `found ${mine}, partial ${flooded.partial}, ${floodMs} ms`)
+  check('phase 4: and the page is not slow for it', floodMs < 3000, `${floodMs} ms`)
+  const diagRead = await read(grant, { p_visibility: 'diagnostic', p_limit: 50 })
+  check('phase 4: a diagnostic reader still sees those events (positive control)', (diagRead.events as Ev[]).some((e) => e.type === 'tool.call_completed'), `${(diagRead.events as Ev[]).length} events`)
+
   const failed = results.filter((r) => !r.ok).length
   console.log(`\n${results.length - failed}/${results.length} passed`)
   exit = failed === 0 ? 0 : 1
