@@ -795,18 +795,31 @@ export const dequeue = async (
    */
   requestedBy?: string,
 ): Promise<Job | null> => {
-  const { rows } = await db.execute(
-    `select job_id::text as job_id, kind, correlation_id::text as correlation_id,
-            project_id::text as project_id, idempotency_key, attempt, office_id::text as office_id
-     from app.dequeue_job(${lit(workerId)}, ${canTranscribe ? 'true' : 'false'},
+  const claimArgs = `${lit(workerId)}, ${canTranscribe ? 'true' : 'false'},
                           ${canSubprocess ? 'true' : 'false'},
                           ${
                             kinds === undefined
                               ? 'null'
                               : `array[${kinds.map(lit).join(', ')}]::text[]`
                           },
-                          ${requestedBy === undefined ? 'null' : lit(requestedBy)})`,
-  )
+                          ${requestedBy === undefined ? 'null' : lit(requestedBy)}`
+  const columns = `job_id::text as job_id, kind, correlation_id::text as correlation_id,
+            project_id::text as project_id, idempotency_key, attempt, office_id::text as office_id`
+  /*
+    1078: this worker carries the Hermes engine seam, so it SAYS so when it claims (p_can_engine = true) and may take a message the person
+    sent to Hermes. A worker built before the seam calls the five-argument function, which says false, and is refused those messages by the
+    database; that is the whole of the stale-worker protection. A schema without the core (older than 1078) has no Hermes message to
+    refuse, so the five-argument call is exactly what this worker always did there.
+  */
+  let rows: Record<string, unknown>[]
+  try {
+    rows = (await db.execute(`select ${columns} from app.dequeue_job_core(${claimArgs}, true)`))
+      .rows as Record<string, unknown>[]
+  } catch (error) {
+    if (!/42883|does not exist/i.test(String((error as Error)?.message ?? error))) throw error
+    rows = (await db.execute(`select ${columns} from app.dequeue_job(${claimArgs})`))
+      .rows as Record<string, unknown>[]
+  }
   const r = rows[0]
   if (r === undefined) return null
   // The number of the claim just made (0625). Read back by the claim itself - this worker, this attempt - because

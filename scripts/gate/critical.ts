@@ -388,6 +388,12 @@ export const CRITICAL: readonly Proof[] = [
     'a message a person sent to Hermes that the team answered (a worker that predates the engine seam, a rollback, a skipped deploy step) can be FOUND: reported by job id and channel with no text, and not a Hermes job that opened a run, a team job, one still waiting, harness traffic or another office; an office is always named and no browser key can ask (5 sabotages)',
   ),
 
+  p(
+    'engine-gate',
+    20,
+    'a worker that does not know about Hermes cannot claim a message sent to it (the database claim, migration 1078): a worker that does not say it can answer an engine is refused a Hermes message however often it asks and still served every team message; one that can is served both; a REAL PRE-HERMES WORKER BUILD (the pinned base commit, run as its own process with its own handler and a counting model stub) cannot claim the Hermes message, so no team answer, delivery, usage or run exists for it, while it still works the team message; the current worker claims both; a Stop cancels a waiting message at once; a repeat is one job; a schema without the core falls back (5 sabotages, one of them run through the old worker)',
+  ),
+
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p(
     'replay-parity',

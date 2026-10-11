@@ -10,7 +10,17 @@ const dir = 'migrations'
 const keepsFairShare = (sql: string): boolean =>
   sql.includes('v_share') && /busy\s+b\s+where\s+b\.office_id\s*=\s*j\.office_id/.test(sql)
 const replacesDequeue = (sql: string): boolean =>
-  /create\s+or\s+replace\s+function\s+app\.dequeue_job/i.test(sql)
+  /create\s+or\s+replace\s+function\s+app\.dequeue_job\b(?!_core)/i.test(sql)
+const replacesCore = (sql: string): boolean =>
+  /create\s+or\s+replace\s+function\s+app\.dequeue_job_core/i.test(sql)
+/** 1078: the five-argument claim is a one-line wrapper that says the worker cannot answer an engine. */
+const isTheWrapper = (sql: string): boolean =>
+  /dequeue_job_core\(p_worker, p_can_transcribe, p_can_subprocess, p_kinds, p_requested_by, false\)/.test(
+    sql,
+  ) &&
+  !/for\s+update|leased_by|advisory/i.test(
+    sql.slice(sql.search(/create\s+or\s+replace\s+function\s+app\.dequeue_job\s*\(/i)),
+  )
 
 describe('migrations that replace app.dequeue_job', () => {
   const files = readdirSync(dir)
@@ -18,12 +28,45 @@ describe('migrations that replace app.dequeue_job', () => {
     .sort()
   const after1044 = files.filter((f) => f >= '1044')
 
-  it('every file from 1044 on that replaces it keeps the per-office fair share', () => {
-    const bad = after1044.filter((f) => {
-      const sql = readFileSync(`${dir}/${f}`, 'utf8')
-      return replacesDequeue(sql) && !keepsFairShare(sql)
-    })
+  it('every file from 1044 up to 1077 that replaces it keeps the per-office fair share', () => {
+    const bad = after1044
+      .filter((f) => f < '1078')
+      .filter((f) => {
+        const sql = readFileSync(`${dir}/${f}`, 'utf8')
+        return replacesDequeue(sql) && !keepsFairShare(sql)
+      })
     expect(bad).toEqual([])
+  })
+
+  it('1078 and after: app.dequeue_job may only ever be the wrapper that says p_can_engine = false, and the claim lives in the core, which keeps the fair share AND the engine gate', () => {
+    // A later migration that gave app.dequeue_job a body of its own would turn the stale-worker gate off without anybody deciding to
+    // (the deferred efficiency migration is exactly that shape: its change belongs in app.dequeue_job_core).
+    const later = files.filter((f) => f >= '1078')
+    const badWrapper = later.filter((f) => {
+      const sql = readFileSync(`${dir}/${f}`, 'utf8')
+      return replacesDequeue(sql) && !isTheWrapper(sql)
+    })
+    expect(badWrapper).toEqual([])
+    const badCore = later.filter((f) => {
+      const sql = readFileSync(`${dir}/${f}`, 'utf8')
+      return (
+        replacesCore(sql) &&
+        !(
+          (keepsFairShare(sql) && /p_can_engine\s+or\s+not\s+exists/i.test(sql)) ||
+          /pg_get_functiondef\('app\.dequeue_job/.test(sql)
+        )
+      )
+    })
+    expect(badCore).toEqual([])
+  })
+
+  it('CONTROL: a full-body replacement of app.dequeue_job after 1078 is exactly the shape this refuses, and the wrapper is exactly the shape it accepts', () => {
+    const fullBody =
+      'create or replace function app.dequeue_job(p_worker text) returns table(job_id uuid) language plpgsql as $f$ begin perform 1 from public.jobs for update skip locked; end $f$;'
+    expect(replacesDequeue(fullBody) && !isTheWrapper(fullBody)).toBe(true)
+    const f = readdirSync(dir).find((x) => x.startsWith('1078_')) as string
+    const wrapper = readFileSync(`${dir}/${f}`, 'utf8')
+    expect(replacesDequeue(wrapper) && isTheWrapper(wrapper)).toBe(true)
   })
 
   it('1044 itself is such a file (so the property is not vacuous)', () => {

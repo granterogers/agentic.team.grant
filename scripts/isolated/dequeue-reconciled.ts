@@ -37,13 +37,20 @@ const body = (file: string, as: string): string => {
   if (m === null) throw new Error(`no function in ${file}`)
   return m[0].replace(/app\.dequeue_job/i, as)
 }
+// 1078 moved the claim into app.dequeue_job_core (six arguments) and left app.dequeue_job as a one-line wrapper that says p_can_engine = false.
+// What this proof compares is the CLAIM, so the live claim is the core with the engine gate held open and the five-argument header it had in 1044.
 const live = String(
   (
     await rows(
-      `select pg_get_functiondef('app.dequeue_job(text,boolean,boolean,text[],text)'::regprocedure) d`,
+      `select pg_get_functiondef('app.dequeue_job_core(text,boolean,boolean,text[],text,boolean)'::regprocedure) d`,
     )
   )[0]?.d,
 )
+  .replace(
+    'app.dequeue_job_core(p_worker text, p_can_transcribe boolean, p_can_subprocess boolean, p_kinds text[], p_requested_by text, p_can_engine boolean)',
+    'app.dequeue_job(p_worker text, p_can_transcribe boolean DEFAULT true, p_can_subprocess boolean DEFAULT true, p_kinds text[] DEFAULT NULL::text[], p_requested_by text DEFAULT NULL::text)',
+  )
+  .replaceAll('p_can_engine', 'true')
 check(
   live.includes('v_share') && live.includes('v_may_reflect'),
   'the live function is 1044 as integrated: it has the fair-share term and the eager ceiling flag',

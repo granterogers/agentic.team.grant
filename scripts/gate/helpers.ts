@@ -36,6 +36,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: 'the bridge as its own process, spawned and killed by engine-bridge to prove a restarted bridge re-attaches; loopback only, never used on its own',
   },
   {
+    stem: 'engine-oldworker-child',
+    role: 'the PRE-HERMES worker as its own process: engine-gate copies it into a worktree of the pinned pre-Hermes commit and runs it there against the replica, to prove a worker that never heard of Hermes cannot claim a message sent to it; never used on its own',
+  },
+  {
     stem: 'shown',
     role: 'fixture: a question that reached him (superseded by fixtures-approvals markShown)',
   },

@@ -14,6 +14,11 @@
 -- WHAT IT KEEPS from 1044: the per-office fair share (an ORDER BY term, never a refusal), the ready-offices count, the in-flight count by office,
 -- priority outranking fairness, the concurrency limit and its scope, the active-office filter, the lease, claim_gen and every return column.
 --
+-- HERMES 1078 (11 October 2026) CHANGES WHERE THIS GOES. The claim is now app.dequeue_job_core (six arguments, the last is p_can_engine) and app.dequeue_job is a
+-- one-line wrapper that says p_can_engine = false: that is what stops a worker built before Hermes from claiming a message sent to Hermes. THIS FILE AS WRITTEN
+-- REPLACES app.dequeue_job WITH A FULL BODY AND WOULD SILENTLY REMOVE THE GATE. Apply its change (the lazy ceiling) to app.dequeue_job_core instead, keeping
+-- both `p_can_engine or not exists (...)` predicates, and leave the wrapper alone. tests/migrations/dequeue-redefinition.test.ts fails a migration that does not.
+--
 -- TO USE IT (a release decision, not part of the V1 release): (1) read app.schema_migrations; (2) take the next free number above every applied
 -- file (1053 or later at the time of writing); (3) read the LIVE app.dequeue_job with pg_get_functiondef and confirm it is still 1044's (the proof
 -- `scripts/isolated/dequeue-reconciled.ts` shows how); (4) put this body in a numbered file with the usual header; (5) never apply efficiency's own
