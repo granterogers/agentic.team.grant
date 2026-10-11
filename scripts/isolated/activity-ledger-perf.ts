@@ -15,6 +15,7 @@
  * Seeding uses the product's own writers where there is one (a real turn, enqueue_child, the transition trigger) and set-based inserts for the
  * volume tables (model usage, deliveries, native events) so a run is minutes, not hours.
  */
+import { ensureActivityIndexes } from '../../src/activity/indexes.ts'
 import { PgExecutor } from '../../src/db/pg-executor.ts'
 import { isolated } from './guard.ts'
 import { realParent } from './real-telegram.ts'
@@ -22,6 +23,8 @@ import { realParent } from './real-telegram.ts'
 const dbName = process.argv[2] ?? 'ledger'
 const JOBS = Number(process.argv[3] ?? 3000)
 const db = await isolated(dbName)
+// The migration creates no access path (src/activity/indexes.ts); the measurement is of the deployed shape, so build them first.
+if (process.env.PERF_NO_INDEXES !== '1') await ensureActivityIndexes(db)
 const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
 const one = async (sql: string) => (await db.execute(sql)).rows[0] as Record<string, unknown>
 const ms = async (f: () => Promise<unknown>): Promise<number> => {

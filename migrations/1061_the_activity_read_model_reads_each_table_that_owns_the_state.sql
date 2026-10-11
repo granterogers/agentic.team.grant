@@ -626,18 +626,31 @@ comment on function app.activity_read(uuid, uuid, text, uuid, uuid, timestamptz,
 
 -- ------------------------------------------------------------------------------------------------ the indexes the reads need
 
--- One per-office, newest-first access path for each source that did not have one. Additive; none changes a result.
-create index if not exists inbound_commands_office_received_idx on public.inbound_commands (office_id, received_at desc);
-create index if not exists deliveries_office_updated_idx on public.deliveries (office_id, updated_at desc);
-create index if not exists deliveries_office_sent_idx on public.deliveries (office_id, sent_at desc) where sent_at is not null;
-create index if not exists deliveries_office_send_started_idx on public.deliveries (office_id, send_started_at desc) where send_started_at is not null;
-create index if not exists blockers_office_created_idx on public.blockers (office_id, created_at desc);
-create index if not exists inference_usage_office_time_idx on public.inference_usage (office_id, occurred_at desc);
-create index if not exists events_office_time_idx on public.events (office_id, occurred_at desc);
-create index if not exists job_transitions_time_idx on public.job_state_transitions (occurred_at desc);
-create index if not exists outputs_created_idx on public.outputs (created_at desc);
-create index if not exists outputs_reviewed_idx on public.outputs (reviewed_at desc) where reviewed_at is not null;
-create index if not exists job_impediments_time_idx on public.job_impediments (created_at desc);
+-- NOT created here. A plain CREATE INDEX holds a write lock on a table the worker writes on every job for the whole build, and
+-- CREATE INDEX CONCURRENTLY cannot run inside the batch the runner applies a file as. The eleven access paths are built by a
+-- separate, resumable step (npm run activity:indexes, src/activity/indexes.ts), and this function says which are missing, so
+-- activation can refuse to switch the ledger on until none is. The read model is correct without them and only slower.
+-- The list is held equal to src/activity/indexes.ts by tests/activity/indexes.test.ts.
+create or replace function app.activity_index_gaps()
+returns text[]
+language sql
+stable
+security definer
+set search_path = 'public', 'pg_catalog'
+as $$
+  select coalesce(array_agg(w.name order by w.name), '{}'::text[])
+    from unnest(array[
+      'inbound_commands_office_received_idx', 'deliveries_office_updated_idx', 'deliveries_office_sent_idx',
+      'deliveries_office_send_started_idx', 'blockers_office_created_idx', 'inference_usage_office_time_idx',
+      'events_office_time_idx', 'job_transitions_time_idx', 'outputs_created_idx', 'outputs_reviewed_idx',
+      'job_impediments_time_idx']) as w(name)
+   where not exists (
+     select 1 from pg_class c join pg_index i on i.indexrelid = c.oid
+      where c.relnamespace = 'public'::regnamespace and c.relname = w.name and i.indisvalid)
+$$;
+revoke all on function app.activity_index_gaps() from public, anon, authenticated, service_role;
+comment on function app.activity_index_gaps() is
+  'Names of the expected activity access paths that are absent or invalid. Empty when the staged index build has completed.';
 
 -- ------------------------------------------------------------------------------------------------ one chain, from request to delivery
 
@@ -753,6 +766,7 @@ begin
     'write_failures_24h', (select count(*) from public.activity_write_failures f where f.office_id = p_office and f.occurred_at > app.now_utc() - interval '24 hours'),
     'last_write_failure', (select jsonb_build_object('at', f.occurred_at, 'event_type', f.event_type, 'sqlstate', f.sqlstate)
                              from public.activity_write_failures f where f.office_id = p_office order by f.occurred_at desc limit 1),
+    'indexes_missing', to_jsonb(app.activity_index_gaps()),
     'retry_backlog', (select count(*) from public.jobs j where j.office_id = p_office and j.state = 'retrying' and not app.harness_job(j.job_id)),
     'generated_at', app.now_utc());
 end

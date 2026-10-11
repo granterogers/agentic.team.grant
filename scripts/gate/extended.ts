@@ -19,6 +19,11 @@ export const EXTENDED: readonly Proof[] = [
     "the worker's recovery sweep records one system.recovered event per reclaimed job, once, only when the ledger is on, and never fails the sweep when the ledger cannot be written",
   ),
   p(
+    'activity-indexes',
+    11,
+    'the read model access paths are built one at a time with CREATE INDEX CONCURRENTLY while the worker keeps writing: no write refused or stalled, a plain build of the same index shown to stall (the control), a second run changes nothing, an invalid leftover is dropped and rebuilt, and the health reading names what is missing',
+  ),
+  p(
     'activity-redaction',
     30,
     'the SQL redactor the ledger stores through and the TypeScript one the office already uses agree on every credential family, and neither touches ordinary text',
