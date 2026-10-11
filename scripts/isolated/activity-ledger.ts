@@ -123,8 +123,8 @@ try {
   await db.execute(`update public.jobs set state = 'committed' where job_id = ${lit(child)}::uuid`)
   await db.execute(`update public.jobs set state = 'notifying' where job_id = ${lit(child)}::uuid`)
   await db.execute(`update public.jobs set state = 'complete' where job_id = ${lit(child)}::uuid`)
-  await db.execute(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, office_id)
-    values (${lit(project)}::uuid, ${lit(root)}::uuid, 'Create the Slack channel for the ledger project', 'It needs a room', 'No room until you answer', array['Yes','No'], 'chief-of-staff', true, ${lit(grant)}::uuid)`)
+  await db.execute(`insert into public.blockers (project_id, job_id, requested_action, why_needed, consequences_of_delay, approval_options, originating_agent, work_can_continue, office_id, decline_option, on_answer)
+    values (${lit(project)}::uuid, ${lit(root)}::uuid, 'Create the Slack channel for the ledger project', 'It needs a room', 'No room until you answer', array['Yes','No'], 'chief-of-staff', true, ${lit(grant)}::uuid, 'No', '{"option":"Yes","kind":"channel.create","payloads":[]}'::jsonb)`)
   const blocker = String((await one(`select blocker_id::text as b from public.blockers where job_id = ${lit(root)}::uuid`)).b)
   await db.execute(`update public.blockers set state = 'resolved', resolved_at = now(), answered_option = 'Yes', answered_by = 'grant' where blocker_id = ${lit(blocker)}::uuid`)
   await one(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, state, attempt, lease_expires_at, correlation_id, job_id, message_ref, send_started_at, sent_at, office_id)
@@ -202,9 +202,9 @@ try {
   const nonIncreasing = full.every((e, i) => i === 0 || `${full[i - 1]?.at}|${full[i - 1]?.id}` >= `${e.at}|${e.id}`)
   check('paging: newest first and the order is total', nonIncreasing, `${full.length} rows`)
   // One source holding many rows, walked one at a time: the case a per-source limit of exactly the page size gets wrong (the gateway proof found it).
-  for (let i = 0; i < 6; i++) await db.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.requested', ${lit(`walk-${i}-${run}`)}, 'agent', 'research-director', 'Asked for a tool ${i}')`)
-  const nativeFull = await pages({ p_visibility: 'diagnostic', p_type: 'tool.requested' }, grant, 200)
-  const nativeWalk = await pages({ p_visibility: 'diagnostic', p_type: 'tool.requested' }, grant, 1)
+  for (let i = 0; i < 6; i++) await db.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_requested', ${lit(`walk-${i}-${run}`)}, 'agent', 'research-director', 'Asked for a tool ${i}')`)
+  const nativeFull = await pages({ p_visibility: 'diagnostic', p_type: 'tool.call_requested' }, grant, 200)
+  const nativeWalk = await pages({ p_visibility: 'diagnostic', p_type: 'tool.call_requested' }, grant, 1)
   check('paging: a walk of one at a time over a single source returns every row, once', nativeFull.length >= 6 && JSON.stringify(nativeWalk.map((e) => e.id)) === JSON.stringify(nativeFull.map((e) => e.id)), `${nativeWalk.length} of ${nativeFull.length}`)
   const tiny = await read({ p_limit: 1, p_visibility: 'diagnostic' }, grant)
   const huge = await read({ p_limit: 100000, p_visibility: 'diagnostic' }, grant)
@@ -302,12 +302,12 @@ try {
   const viaCursor = await probe(officeA, { p_before_at: String(stolen?.at), p_before_id: String(stolen?.id) })
   check('isolation: another office\'s cursor opens nothing of that office', !viaCursor.some((e) => e.correlation_id === corr || e.project_id === project), `${viaCursor.length} rows, none foreign`)
   const w1 = await refused(`select app.record_activity(${lit(officeA)}::uuid, 'budget.threshold_reached', ${lit(`x1-${run}`)}, 'system', 'office', 'cross-office project', 'recorded', null, null, null, ${lit(projB)}::uuid)`)
-  const w2 = await refused(`select app.record_activity(${lit(officeA)}::uuid, 'tool.completed', ${lit(`x2-${run}`)}, 'agent', 'a', 'cross-office job', 'recorded', null, null, null, null, ${lit(root)}::uuid)`)
+  const w2 = await refused(`select app.record_activity(${lit(officeA)}::uuid, 'tool.call_completed', ${lit(`x2-${run}`)}, 'agent', 'a', 'cross-office job', 'recorded', null, null, null, null, ${lit(root)}::uuid)`)
   check('isolation: a write cannot attach another office\'s project or job', w1.includes('activity_events_project_same_office') && w2.includes('activity_events_job_same_office'), `${w1.slice(0, 40)} | ${w2.slice(0, 40)}`)
   const w3 = await refused(`select app.record_external_activity(${lit(officeA)}::uuid, 'hermes', 'external.output_produced', 'x3-${run}', 'borrowed project', 'recorded', null, ${lit(projB)}::uuid)`)
   check('isolation: an external report cannot attach another office\'s project', w3.includes('activity_events_project_same_office'), w3.slice(0, 60))
   const noOffice = await refused(`select app.activity_read(p_office => '00000000-0000-0000-0000-000000000000'::uuid)`)
-  const noOffice2 = await refused(`select app.record_activity(p_office => '00000000-0000-0000-0000-000000000000'::uuid, p_event_type => 'tool.completed', p_idempotency_key =>'k-${run}-abcdef', p_actor_kind => 'agent', p_actor => 'a', p_summary => 's')`)
+  const noOffice2 = await refused(`select app.record_activity(p_office => '00000000-0000-0000-0000-000000000000'::uuid, p_event_type => 'tool.call_completed', p_idempotency_key =>'k-${run}-abcdef', p_actor_kind => 'agent', p_actor => 'a', p_summary => 's')`)
   check('isolation: no office, or a disabled one, is refused rather than defaulted', noOffice.includes('no_office') && noOffice2.includes('no_office'), 'read and write both refuse')
   const roles = await one(`select has_function_privilege('anon', 'public.activity_read(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz,text,text,text,text,text,text,timestamptz,uuid,integer)', 'execute') as a,
     has_function_privilege('authenticated', 'public.activity_read(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz,text,text,text,text,text,text,timestamptz,uuid,integer)', 'execute') as u,
@@ -318,17 +318,17 @@ try {
 
   // ---------------------------------------------------------------------------------------------- integrity
   const key = `idem-${run}`
-  const write = async () => String(((await one(`select app.record_activity(${lit(grant)}::uuid, 'tool.completed', ${lit(key)}, 'agent', 'research-director', 'Tool finished', 'completed') as v`).catch((e: Error) => ({ v: `ERR ${e.message.slice(0, 60)}` }))) as { v: unknown }).v)
+  const write = async () => String(((await one(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_completed', ${lit(key)}, 'agent', 'research-director', 'Tool finished', 'completed') as v`).catch((e: Error) => ({ v: `ERR ${e.message.slice(0, 60)}` }))) as { v: unknown }).v)
   const first = await write()
   const second = await write()
   const rows = Number((await one(`select count(*) as c from public.activity_events where idempotency_key = ${lit(key)}`)).c)
   check('integrity: the same key twice is one row and the same id', first === second && rows === 1, `rows ${rows}`)
-  const reuse = await refused(`select app.record_activity(${lit(grant)}::uuid, 'tool.failed', ${lit(key)}, 'agent', 'research-director', 'a different event')`)
+  const reuse = await refused(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_failed', ${lit(key)}, 'agent', 'research-director', 'a different event')`)
   check('integrity: a key reused for a different event is refused, not silently answered with the other event\'s id', reuse.includes('different activity type'), reuse.slice(0, 70))
   const conns = await Promise.all(Array.from({ length: 12 }, fresh))
   const ckey = `conc-${run}`
-  const same = await Promise.all(conns.map((c) => c.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.requested', ${lit(ckey)}, 'agent', 'a', 'same event, twelve writers') as v`).then((r) => String((r.rows[0] as { v: string }).v))))
-  const distinct = await Promise.all(conns.map((c, i) => c.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.requested', ${lit(`${ckey}-${i}`)}, 'agent', 'a', 'different event ${i}') as v`).then((r) => String((r.rows[0] as { v: string }).v))))
+  const same = await Promise.all(conns.map((c) => c.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_requested', ${lit(ckey)}, 'agent', 'a', 'same event, twelve writers') as v`).then((r) => String((r.rows[0] as { v: string }).v))))
+  const distinct = await Promise.all(conns.map((c, i) => c.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_requested', ${lit(`${ckey}-${i}`)}, 'agent', 'a', 'different event ${i}') as v`).then((r) => String((r.rows[0] as { v: string }).v))))
   await Promise.all(conns.map((c) => c.end()))
   const sameRows = Number((await one(`select count(*) as c from public.activity_events where idempotency_key = ${lit(ckey)}`)).c)
   check('integrity: twelve concurrent writers of one event produce one row and one id', sameRows === 1 && new Set(same).size === 1, `rows ${sameRows}, ids ${new Set(same).size}`)
@@ -340,9 +340,9 @@ try {
   check('integrity: append-only - update, delete, truncate and moving an event to another office are refused', u1 !== '' && d1 !== '' && t1 !== '' && o1 !== '', `${u1.slice(0, 30)} | ${d1.slice(0, 30)} | ${t1.slice(0, 30)}`)
   const corrId = String((await one(`select app.record_activity(${lit(grant)}::uuid, 'activity.corrected', ${lit(`corr-${run}`)}, 'system', 'office', 'The earlier tool event was recorded against the wrong tool', 'recorded', null, null, null, null, null, null, null, null, null, null, null, '{}'::jsonb, null, null, ${lit(first)}::uuid) as v`)).v)
   const corr2 = await refused(`select app.record_activity(${lit(grant)}::uuid, 'activity.corrected', ${lit(`corr2-${run}`)}, 'system', 'office', 'second correction', 'recorded', null, null, null, null, null, null, null, null, null, null, null, '{}'::jsonb, null, null, ${lit(first)}::uuid)`)
-  const shown = (await pages({ p_visibility: 'diagnostic', p_type: 'tool.completed' }, grant, 50)).find((e) => e.id === first)
+  const shown = (await pages({ p_visibility: 'diagnostic', p_type: 'tool.call_completed' }, grant, 50)).find((e) => e.id === first)
   check('integrity: a correction supersedes and the original stays, marked; a second correction of the same event is refused', corrId.length > 0 && corr2.includes('activity_events_one_correction') && shown?.metadata.superseded_by === corrId, `superseded_by ${String(shown?.metadata.superseded_by).slice(0, 8)}`)
-  const vis = await refused(`insert into public.activity_events (office_id, event_type, actor_kind, actor, status, severity, visibility, summary, idempotency_key) values (${lit(grant)}::uuid, 'tool.requested', 'agent', 'a', 'recorded', 'info', 'user', 'diagnostic dressed as ordinary', ${lit(`vis-${run}-abcdef`)})`)
+  const vis = await refused(`insert into public.activity_events (office_id, event_type, actor_kind, actor, status, severity, visibility, summary, idempotency_key) values (${lit(grant)}::uuid, 'tool.call_requested', 'agent', 'a', 'recorded', 'info', 'user', 'diagnostic dressed as ordinary', ${lit(`vis-${run}-abcdef`)})`)
   check('integrity: a diagnostic type cannot be written as ordinary activity', vis.includes('may not be shown more widely'), vis.slice(0, 70))
   const unk = await refused(`select app.record_activity(${lit(grant)}::uuid, 'job.completed', ${lit(`unk-${run}-abcdef`)}, 'agent', 'a', 'projected types are not writable')`)
   const unk2 = await refused(`select app.record_activity(${lit(grant)}::uuid, 'made.up_type', ${lit(`unk2-${run}-abcdef`)}, 'agent', 'a', 'unknown')`)
@@ -358,7 +358,7 @@ try {
   const countsBefore = Number((await one(`select count(*) as c from public.activity_events`)).c)
   await db.execute(`select app.activity_ledger_health(${lit(grant)}::uuid)`)
   check('metrics: reading the health writes no activity (no self-monitoring loop)', Number((await one(`select count(*) as c from public.activity_events`)).c) === countsBefore, 'unchanged')
-  const tx = await db.execute(`begin; select app.record_activity(${lit(grant)}::uuid, 'tool.completed', 'tx-${run}-abcdef', 'agent', 'a', 'rolled back with its transaction'); rollback;`).catch(() => null)
+  const tx = await db.execute(`begin; select app.record_activity(${lit(grant)}::uuid, 'tool.call_completed', 'tx-${run}-abcdef', 'agent', 'a', 'rolled back with its transaction'); rollback;`).catch(() => null)
   const txRows = Number((await one(`select count(*) as c from public.activity_events where idempotency_key = 'tx-${run}-abcdef'`)).c)
   check('integrity: the strict writer commits or rolls back with the caller\'s transaction', tx !== undefined && txRows === 0, `rows after rollback ${txRows}`)
 
@@ -367,7 +367,7 @@ try {
   const sk = ['s', 'k-', 'or-v1-0123456789abcdefghijklmnop'].join('')
   const jwt = ['ey', 'JhbGciOiJIUzI1NiJ9', '.', 'eyJzdWIiOiIxMjM0NTY3ODkwIn0', '.', 'abcdefghijklmnopqrstuvwxyz'].join('')
   const meta = JSON.stringify({ note: `leaked ${tok} and ${sk}`, api_key: 'plain-value', session_cookie: 'abc', body: 'the full message text', transcript: 'a voice transcript', nested: { auth_token: 'x', jwt }, list: [`Bearer abcdefghijklmnop`, 'fine'] })
-  const rid = String((await one(`select app.record_activity(${lit(grant)}::uuid, 'tool.failed', ${lit(`red-${run}-abcdef`)}, 'agent', 'a', ${lit(`Failed with ${tok} in the message`)}, 'failed', null, null, null, null, null, null, null, null, null, null, null, ${lit(meta)}::jsonb) as v`)).v)
+  const rid = String((await one(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_failed', ${lit(`red-${run}-abcdef`)}, 'agent', 'a', ${lit(`Failed with ${tok} in the message`)}, 'failed', null, null, null, null, null, null, null, null, null, null, null, ${lit(meta)}::jsonb) as v`)).v)
   const stored = await one(`select summary, metadata::text as m from public.activity_events where activity_id = ${lit(rid)}::uuid`)
   const everything = `${stored.summary} ${stored.m}`
   check('redaction: no credential family survives in a stored summary or metadata', secretFamilies(everything).length === 0 && !everything.includes('plain-value') && !everything.includes('the full message text') && !everything.includes('a voice transcript'), `families left: ${secretFamilies(everything).join(',') || 'none'}`)
@@ -382,12 +382,12 @@ try {
   const abuseOut: string[] = []
   let abuseOk = true
   for (const [name, expr] of abuse) {
-    const msg = await refused(`select app.record_activity(${lit(grant)}::uuid, 'tool.failed', ${lit(`abuse-${name.replace(/\W/g, '')}-${run}`)}, 'agent', 'a', 'abusive metadata', 'failed', null, null, null, null, null, null, null, null, null, null, null, ${expr})`)
+    const msg = await refused(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_failed', ${lit(`abuse-${name.replace(/\W/g, '')}-${run}`)}, 'agent', 'a', 'abusive metadata', 'failed', null, null, null, null, null, null, null, null, null, null, null, ${expr})`)
     abuseOk = abuseOk && msg !== '' && !msg.includes('activity_events_idempotent')
     abuseOut.push(`${name}: ${msg.slice(0, 32)}`)
   }
   check('redaction: abusive metadata is refused for the right reason (shape, keys, depth, size)', abuseOk, abuseOut.join(' | '))
-  const longSummary = await refused(`select app.record_activity(${lit(grant)}::uuid, 'tool.failed', ${lit(`long-${run}-abcdef`)}, 'agent', 'a', ${lit('x'.repeat(500))})`)
+  const longSummary = await refused(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_failed', ${lit(`long-${run}-abcdef`)}, 'agent', 'a', ${lit('x'.repeat(500))})`)
   const lsRow = await one(`select length(summary) as l from public.activity_events where idempotency_key = ${lit(`long-${run}-abcdef`)}`)
   check('redaction: an over-long summary is cut, not refused and not stored whole', longSummary === '' && Number(lsRow.l) === 300, `stored ${String(lsRow.l)} characters`)
 
@@ -420,7 +420,7 @@ try {
 
   const ordinary = await pages({ p_visibility: 'user' }, grant, 200)
   const diagnostic = await pages({ p_visibility: 'diagnostic' }, grant, 200)
-  check('visibility: native diagnostic events (tool calls) are absent from the ordinary view and present in the diagnostic one', !ordinary.some((e) => e.type === 'tool.requested') && diagnostic.some((e) => e.type === 'tool.requested') && ordinary.some((e) => e.type === 'tool.failed') === false, `ordinary ${ordinary.length}, diagnostic ${diagnostic.length}`)
+  check('visibility: native diagnostic events (tool calls) are absent from the ordinary view and present in the diagnostic one', !ordinary.some((e) => e.type === 'tool.call_requested') && diagnostic.some((e) => e.type === 'tool.call_requested') && ordinary.some((e) => e.type === 'tool.call_failed') === false, `ordinary ${ordinary.length}, diagnostic ${diagnostic.length}`)
 
   const deepFull = (await pages({ p_visibility: 'diagnostic', p_category: 'integration' }, grant, 200)).map((e) => e.summary)
   const deepWalk = (await pages({ p_visibility: 'diagnostic', p_category: 'integration' }, grant, 1)).map((e) => e.summary)

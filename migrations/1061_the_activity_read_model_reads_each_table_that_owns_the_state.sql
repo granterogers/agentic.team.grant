@@ -128,11 +128,16 @@ declare
   v_z       text[];
   v_ts      text[];
   v_idx     text[];
+  v_sel     text[] := '{}';
+  v_sa      text[];
+  v_sj      text[];
+  v_sp      text[];
+  v_sc      text[];
   v_result  jsonb;
 begin
   perform app.require_office(p_office);
 
-  if p_visibility not in ('user', 'diagnostic', 'operator') then
+  if p_visibility is null or p_visibility not in ('user', 'diagnostic', 'operator') then
     raise exception 'unknown visibility %', p_visibility using errcode = '22023';
   end if;
   if p_min_severity is not null and v_sevrank is null then
@@ -149,7 +154,7 @@ begin
   v_f := $f$
         ($2::uuid is null or q.project_id = $2)
     and ($3::text is null or q.agent = $3)
-    and ($4::uuid is null or q.job_id = $4 or q.root_job = $4)
+    and ($4::uuid is null or q.job_id in (select js.job_id from jset js))
     and ($5::uuid is null or q.correlation_id = $5)
     and ($6::text is null or app.activity_type_category(q.type) = $6)
     and ($7::int is null or app.activity_sev_rank(q.sev) >= $7)
@@ -181,6 +186,7 @@ begin
      where c.office_id = $1 and c.callback_action is null and not c.synthetic
        and c.received_at >= coalesce($11, '-infinity') and c.received_at <= least(coalesce($12, 'infinity'), coalesce($13, 'infinity'))
        and (j.job_id is null or not (j.synthetic or j.is_fixture))
+       and not exists (select 1 from public.projects fp where fp.project_id = c.project_id and fp.is_fixture)
   $b$::text;
 
   -- 2. routing: who was asked to handle it, from the routing decision
@@ -210,9 +216,18 @@ begin
                       when 'job.completed' then 'completed' when 'job.failed' then 'failed' when 'job.cancelled' then 'cancelled'
                       when 'retry.scheduled' then 'scheduled' else 'recorded' end,
            app.activity_type_severity(ty.ty),
-           case when ty.ty = 'job.delegated' then 'agent' when ty.ty = 'job.created' then 'system' else 'agent' end,
-           case when ty.ty = 'job.delegated' then coalesce(pj.recipient_agent, 'office')
-                when ty.ty = 'job.created' then 'office' else coalesce(j.recipient_agent, 'office') end,
+           -- who acted: a person's stop is theirs; a worker's bookkeeping (queued, parked, waiting, retry, a state step) is the office's;
+           -- a hand-off is the parent's agent; everything else is the agent the job belongs to, or the office where it has none.
+           case when ty.ty = 'job.cancelled' and j.stop_requested_by is not null then 'user'
+                when ty.ty = 'job.cancelled' then 'system'
+                when ty.ty in ('job.created', 'job.state_changed', 'job.paused', 'job.waiting', 'retry.scheduled') then 'system'
+                when (ty.ty = 'job.delegated' and pj.recipient_agent is null) or (ty.ty <> 'job.delegated' and j.recipient_agent is null) then 'system'
+                else 'agent' end,
+           case when ty.ty = 'job.cancelled' and j.stop_requested_by is not null then 'you'
+                when ty.ty = 'job.cancelled' then 'office'
+                when ty.ty = 'job.delegated' then coalesce(pj.recipient_agent, 'office')
+                when ty.ty in ('job.created', 'job.state_changed', 'job.paused', 'job.waiting', 'retry.scheduled') then 'office'
+                else coalesce(j.recipient_agent, 'office') end,
            j.recipient_agent, j.project_id, j.job_id, coalesce(j.root_job_id, j.job_id), j.parent_job_id, j.correlation_id,
            case when ty.ty = 'job.delegated' then
                   (select app.activity_pid('job_state_transitions', pt.transition_id::text, 'transition')
@@ -231,20 +246,23 @@ begin
                       when 'job.waiting' then 'Waiting: ' || j.kind
                       else 'Moved ' || j.kind || ' to ' || t.to_state::text end,
            jsonb_strip_nulls(jsonb_build_object('kind', j.kind, 'attempt', t.attempt, 'from_state', t.from_state::text,
-             'to_state', t.to_state::text, 'reason', left(app.activity_redact(t.reason), 200))),
+             'to_state', t.to_state::text,
+             -- state_reason is copied onto every later transition of the job, so it is the reason only where the state is one a reason explains
+             'reason', case when t.to_state in ('failed', 'cancelled', 'retrying', 'paused', 'waiting_external', 'waiting_user')
+                            then left(app.activity_redact(t.reason), 200) end)),
            jsonb_build_object('kind', 'job', 'id', j.job_id), 'projected', 'job_state_transitions', null::int,
            t.transition_id, j.job_id
       from {z} t
       join public.jobs j on j.job_id = t.job_id and j.office_id = $1
       left join public.jobs pj on pj.job_id = j.parent_job_id
       cross join lateral (select case
-              when t.from_state is null then (case when j.parent_job_id is null then 'job.created' else 'job.delegated' end)
+              when t.from_state is null then (case when j.parent_job_id is null or coalesce(j.origin_kind, 'child') <> 'child' then 'job.created' else 'job.delegated' end)
               when t.to_state = 'running' then 'job.started' when t.to_state = 'complete' then 'job.completed'
               when t.to_state = 'failed' then 'job.failed' when t.to_state = 'cancelled' then 'job.cancelled'
               when t.to_state = 'retrying' then 'retry.scheduled' when t.to_state = 'paused' then 'job.paused'
               when t.to_state in ('waiting_external', 'waiting_user') then 'job.waiting' else 'job.state_changed' end as ty) ty
      where t.occurred_at >= coalesce($11, '-infinity') and t.occurred_at <= least(coalesce($12, 'infinity'), coalesce($13, 'infinity'))
-       and ($10 >= 1 or t.to_state in ('complete', 'failed', 'cancelled') or (t.from_state is null and j.parent_job_id is not null))
+       and ($10 >= 1 or t.to_state in ('complete', 'failed', 'cancelled') or (t.from_state is null and j.parent_job_id is not null and coalesce(j.origin_kind, 'child') = 'child'))
        and not (j.synthetic or j.is_fixture)
   $b$::text;
 
@@ -263,20 +281,32 @@ begin
      where b.office_id = $1
        and b.created_at >= coalesce($11, '-infinity') and b.created_at <= least(coalesce($12, 'infinity'), coalesce($13, 'infinity'))
        and (j.job_id is null or not (j.synthetic or j.is_fixture))
+       and not exists (select 1 from public.projects fp where fp.project_id = b.project_id and fp.is_fixture)
   $b$::text;
 
-  -- 4b. ... and how it ended. A question closed with no option chosen is "withdrawn", never "granted": no yes was recorded.
+  -- 4b. ... and how it ended. The data says "yes" only where a question is positively an approval (it names what answering performs
+  -- or grants) and the answer was not the option its writer named as the decline; it says "no" only for that named option. Any other
+  -- answer is "answered", with the option text, because the record cannot say which it was; a question the office closed itself is
+  -- "withdrawn". A yes or a no is never inferred.
   v_branches := v_branches || $b$
     select app.activity_pid('blockers', b.blocker_id::text, 'decided'), d.at, d.ty,
-           case d.ty when 'approval.granted' then 'authorised' when 'approval.denied' then 'declined' when 'approval.expired' then 'expired' else 'cancelled' end,
+           case d.ty when 'approval.granted' then 'authorised' when 'approval.denied' then 'declined' when 'approval.expired' then 'expired'
+                     when 'approval.answered' then 'recorded' else 'cancelled' end,
            app.activity_type_severity(d.ty),
-           case when d.ty in ('approval.granted', 'approval.denied') then 'user' else 'system' end,
-           case when d.ty in ('approval.granted', 'approval.denied') then 'you' else 'office' end,
+           case when d.ty in ('approval.granted', 'approval.denied', 'approval.answered') and b.answered_by is not null then 'user' else 'system' end,
+           case when d.ty in ('approval.granted', 'approval.denied', 'approval.answered') and b.answered_by is not null then 'you' else 'office' end,
            b.originating_agent, b.project_id, b.job_id, coalesce(j.root_job_id, j.job_id), j.parent_job_id, j.correlation_id,
            app.activity_pid('blockers', b.blocker_id::text, 'approval.requested'), j.origin_channel, null, null,
            case d.ty when 'approval.granted' then 'You said yes: ' when 'approval.denied' then 'You said no: '
-                     when 'approval.expired' then 'No answer, lapsed: ' else 'Withdrawn: ' end || left(app.activity_redact(b.requested_action), 160),
-           jsonb_strip_nulls(jsonb_build_object('standing', b.standing_option is not null and b.answered_option = b.standing_option)),
+                     when 'approval.expired' then 'No answer, lapsed: '
+                     when 'approval.answered' then case when b.answered_by is not null then 'Answered: ' else 'Closed: ' end
+                     else 'Withdrawn: ' end || left(app.activity_redact(b.requested_action), 160),
+           jsonb_strip_nulls(jsonb_build_object(
+             'answer', case when d.ty = 'approval.answered' then left(app.activity_redact(b.answered_option), 80) end,
+             'standing', case when d.ty = 'approval.granted' and b.standing_option is not null and b.answered_option = b.standing_option
+                                   and exists (select 1 from public.standing_authorizations sa
+                                                where sa.office_id = b.office_id and sa.tool = b.standing_tool and sa.revoked_at is null
+                                                  and sa.granted_at >= b.created_at) then true end)),
            jsonb_build_object('kind', 'blocker', 'id', b.blocker_id), 'projected', 'blockers', null::int,
            b.blocker_id, j.job_id
       from {z} b
@@ -284,12 +314,14 @@ begin
       cross join lateral (select coalesce(b.resolved_at, b.updated_at) as at,
               case when b.state = 'expired' then 'approval.expired'
                    when b.state = 'withdrawn' then 'approval.withdrawn'
-                   when b.answered_option is null then 'approval.withdrawn'
-                   when b.decline_option is not null and b.answered_option = b.decline_option then 'approval.denied'
-                   else 'approval.granted' end as ty) d
+                   when b.answered_option is not null and b.decline_option is not null and b.answered_option = b.decline_option then 'approval.denied'
+                   when b.answered_option is not null and b.decline_option is distinct from b.answered_option
+                        and (b.on_answer is not null or b.standing_option is not null) then 'approval.granted'
+                   else 'approval.answered' end as ty) d
      where b.office_id = $1 and b.state <> 'open'
        and d.at >= coalesce($11, '-infinity') and d.at <= least(coalesce($12, 'infinity'), coalesce($13, 'infinity'))
        and (j.job_id is null or not (j.synthetic or j.is_fixture))
+       and not exists (select 1 from public.projects fp where fp.project_id = b.project_id and fp.is_fixture)
   $b$::text;
 
   -- 5. impediments (append-only): a permission nobody granted is "action.blocked" and shown; the rest is diagnostic
@@ -353,19 +385,25 @@ begin
     select app.activity_pid('deliveries', d.delivery_id::text, x.ty), x.at, x.ty,
            case x.ty when 'delivery.attempted' then 'attempted' when 'delivery.failed' then 'failed'
                      when 'delivery.suppressed' then 'cancelled'
-                     else case when d.message_ref is not null then 'confirmed' else 'completed' end end,
+                     else case when d.message_ref is not null and d.message_ref not like 'confirmed-by-person:%' then 'confirmed' else 'completed' end end,
            app.activity_type_severity(x.ty), 'system', 'office', s.slug, j.project_id, d.job_id, coalesce(j.root_job_id, j.job_id),
            j.parent_job_id, coalesce(d.correlation_id, j.correlation_id),
            case when x.ty in ('delivery.succeeded', 'delivery.failed') and d.send_started_at is not null
                 then app.activity_pid('deliveries', d.delivery_id::text, 'delivery.attempted') end,
            d.channel, null, null,
            case x.ty when 'delivery.attempted' then 'Sending to ' || app.activity_channel_label(d.channel)
-                     when 'delivery.succeeded' then 'Sent to ' || app.activity_channel_label(d.channel)
-                     when 'delivery.failed' then 'Could not send to ' || app.activity_channel_label(d.channel)
+                     when 'delivery.succeeded' then case when d.message_ref like 'confirmed-by-person:%'
+                          then 'Marked as delivered by you: ' || app.activity_channel_label(d.channel)
+                          else 'Sent to ' || app.activity_channel_label(d.channel) end
+                     when 'delivery.failed' then case when d.error_code like 'indeterminate:%'
+                          then 'Could not confirm delivery to ' || app.activity_channel_label(d.channel)
+                          else 'Could not send to ' || app.activity_channel_label(d.channel) end
                      else 'Not sent to ' || app.activity_channel_label(d.channel) end,
            jsonb_strip_nulls(jsonb_build_object('purpose', d.purpose, 'attempt', d.attempt,
-             'provider_confirmed', d.message_ref is not null,
-             'error_code', left(app.activity_redact(d.error_code), 80),
+             'provider_confirmed', d.message_ref is not null and d.message_ref not like 'confirmed-by-person:%',
+             'confirmed_by_person', case when d.message_ref like 'confirmed-by-person:%' then true end,
+             'indeterminate', case when d.error_code like 'indeterminate:%' then true end,
+             'error_code', case when d.state <> 'sent' then left(app.activity_redact(d.error_code), 80) end,
              'suppressed_reason', left(app.activity_redact(d.suppressed_reason), 80))),
            jsonb_build_object('kind', 'delivery', 'id', d.delivery_id), 'projected', 'deliveries', null::int,
            d.delivery_id, j.job_id
@@ -421,6 +459,7 @@ begin
        and e.occurred_at >= coalesce($11, '-infinity') and e.occurred_at <= least(coalesce($12, 'infinity'), coalesce($13, 'infinity'))
        and not app.harness_label(e.actor)
        and (j.job_id is null or not (j.synthetic or j.is_fixture))
+       and not exists (select 1 from public.projects fp where fp.project_id = e.project_id and fp.is_fixture)
   $b$::text;
 
   -- 10. native ledger rows
@@ -567,10 +606,32 @@ begin
   -- A page is trusted only when nothing unread could belong in it: a source whose z returned a full $18 rows must reach strictly
   -- further back than the page's last row, and a page short of survivors needs every candidate read. Otherwise the answer is
   -- rebuilt with a pool eight times wider, up to 16384, and past that it says partial: true instead of pretending to be complete.
-  v_sql := 'with ';
+  -- SELECTIVE FILTERS ARE PUSHED INTO STAGE 0. A job, a correlation or a project names a small set of rows however busy the office
+  -- is, so each source is asked for that set directly (by its own job / correlation / project column, each indexed) instead of for
+  -- its newest N rows among which the matches might not be. Without this a filter met a busy office as a partial answer, or
+  -- worse, as a complete-looking one with the older half of the work missing. The predicates below are only ever WIDER than the
+  -- filter the outer stage applies, never narrower, so they can drop nothing the filter would have kept.
+  --   jset  the job and every job under it, at any depth (the contract says a job filter includes its descendants)
+  --   cset  the jobs of one correlation
+  v_sa := array['c0', 'r0', 't0', 'b0', 'b0', 'i0', 'o0', 'o0', 'd0', 'd0', 'd0', 'd0', 'u0', 'e0', 'a0'];
+  v_sj := array['job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'related_job_id', 'job_id'];
+  v_sp := array['project_id', '', '', 'project_id', 'project_id', 'project_id', '', '', '', '', '', '', '', 'project_id', 'project_id'];
+  v_sc := array['', '', '', '', '', '', '', '', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id'];
+  for i in 1 .. array_length(v_sa, 1) loop
+    v_sel := v_sel || format($s$ and ($4::uuid is null or %1$s.%2$s in (select js.job_id from jset js))
+          and ($5::uuid is null or %1$s.%2$s in (select cs.job_id from cset cs)%3$s)
+          and ($2::uuid is null or %4$s exists (select 1 from public.jobs jp where jp.job_id = %1$s.%2$s and jp.project_id = $2)) $s$,
+      v_sa[i], v_sj[i],
+      case when v_sc[i] <> '' then format(' or %s.%s = $5', v_sa[i], v_sc[i]) else '' end,
+      case when v_sp[i] <> '' then format('%s.%s = $2 or', v_sa[i], v_sp[i]) else '' end);
+  end loop;
+
+  v_sql := 'with jset as materialized (with recursive t(job_id) as (select j.job_id from public.jobs j where j.job_id = $4::uuid and j.office_id = $1 '
+    || 'union select c.job_id from public.jobs c join t on c.parent_job_id = t.job_id where c.office_id = $1) select job_id from t), '
+    || 'cset as materialized (select j.job_id from public.jobs j where $5::uuid is not null and j.correlation_id = $5::uuid and j.office_id = $1), ';
   for i in 1 .. array_length(v_branches, 1) loop
     v_sql := v_sql || case when i > 1 then ', ' else '' end
-      || 'z' || i || ' as materialized (' || replace(replace(v_z[i], '{ts}', v_ts[i]), '{id}', v_idx[i]) || '), '
+      || 'z' || i || ' as materialized (' || replace(replace(replace(v_z[i], 'order by {ts}', v_sel[i] || ' order by {ts}'), '{ts}', v_ts[i]), '{id}', v_idx[i]) || '), '
       || 's' || i || ' as (select * from (select * from (' || replace(v_branches[i], '{z}', 'z' || i) || ') b(' || v_cols || ')) q'
       || ' where ' || v_f || ')';
   end loop;
@@ -664,6 +725,7 @@ security definer
 set search_path = 'public', 'pg_catalog'
 as $$
 declare v_corr uuid := p_correlation; v_pages jsonb := '[]'::jsonb; v_page jsonb; v_at timestamptz; v_id uuid; v_n integer := 0; v_more boolean := false;
+        v_partial boolean := false;
 begin
   perform app.require_office(p_office);
   if p_job is null and p_correlation is null then
@@ -679,16 +741,21 @@ begin
     end if;
   end if;
   loop
+    -- the page size never lets the total pass 500, so the bound is exact
     v_page := app.activity_read(p_office, p_correlation => v_corr, p_visibility => p_visibility,
-                                p_before_at => v_at, p_before_id => v_id, p_limit => 200);
+                                p_before_at => v_at, p_before_id => v_id, p_limit => least(200, 500 - v_n));
     v_pages := v_pages || coalesce(v_page -> 'events', '[]'::jsonb);
     v_n := v_n + jsonb_array_length(coalesce(v_page -> 'events', '[]'::jsonb));
+    -- a page the read model could not finish (partial) makes the chain incomplete, whatever its cursor says
+    v_partial := v_partial or coalesce((v_page ->> 'partial')::boolean, false);
     exit when v_page -> 'next' is null or jsonb_typeof(v_page -> 'next') = 'null';
     if v_n >= 500 then v_more := true; exit; end if;
     v_at := (v_page -> 'next' ->> 'at')::timestamptz;
     v_id := (v_page -> 'next' ->> 'id')::uuid;
   end loop;
-  return jsonb_build_object('enabled', true, 'correlation_id', v_corr, 'complete', not v_more,
+  -- newest first is how the pages are read, so a chain cut at the bound is missing its OLDEST events, which is where the request is
+  return jsonb_build_object('enabled', true, 'correlation_id', v_corr, 'complete', not v_more and not v_partial,
+    'truncated', case when v_more then 'oldest' end, 'partial', v_partial,
     'events', (select coalesce(jsonb_agg(e order by e ->> 'at', e ->> 'id'), '[]'::jsonb) from jsonb_array_elements(v_pages) e));
 end
 $$;
@@ -720,7 +787,10 @@ begin
     'office', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', e ->> 'id',
-               'who', case when e ->> 'actor' = 'you' then 'you' else coalesce(app.activity_name(e ->> 'agent'), e ->> 'actor') end,
+               -- the raw actor, as hq_studio_lately sends it: the page looks a face up by slug, and a display name matches nobody and
+               -- falls back to the first crew member. The name a person reads is a separate key.
+               'who', e ->> 'actor',
+               'who_name', case when e ->> 'actor' = 'you' then 'You' else coalesce(app.activity_name(e ->> 'actor'), e ->> 'actor') end,
                'kind', e ->> 'actor_kind',
                'verb', split_part(e ->> 'summary', ' ', 1),
                'what', substr(e ->> 'summary', length(split_part(e ->> 'summary', ' ', 1)) + 2),

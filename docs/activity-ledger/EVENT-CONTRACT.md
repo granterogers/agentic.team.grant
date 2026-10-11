@@ -89,14 +89,14 @@ Projected (read from the table that owns the fact):
 | any `public.events` action type | (action ledger) | user | `events` |
 
 Native (written to `public.activity_events`): `system.recovered` (operator), `budget.threshold_reached` (user), `integration.rate_limited`,
-`tool.requested`, `tool.completed`, `tool.failed` (diagnostic), `activity.corrected` (user).
+`tool.call_requested`, `tool.call_completed`, `tool.call_failed` (diagnostic), `activity.corrected` (user).
 
 External (`external_writable`): `external.research_started`, `external.research_completed`, `external.output_produced`, `external.skill_proposed`,
 `external.evaluation_completed`, `external.usage_recorded`, `external.worker_error`, `external.review_decided`. See `EXTERNAL-AGENT-CONTRACT.md`.
 
 The candidate names in the brief that the office already represents differently are **not duplicated**: `request.transcribed` is `metadata.transcribed`
-on `request.received`; `job.timed_out` and `retry.executed` are the `retry.scheduled` and the next `job.started`; `tool.requested` and
-`tool.completed` for a **consequential** action are the action ledger's own type (the action ledger is the audit record with a reversal); `approval.*` is the existing
+on `request.received`; `job.timed_out` and `retry.executed` are the `retry.scheduled` and the next `job.started`; `tool.call_requested` and
+`tool.call_completed` for a **consequential** action are the action ledger's own type (the action ledger is the audit record with a reversal); `approval.*` is the existing
 approval vocabulary; `delivery.*` is the existing state machine; `system.recovered`, `budget.threshold_reached` and `integration.rate_limited` are native because nothing records them.
 
 ## Reading

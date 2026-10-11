@@ -111,9 +111,9 @@ describe('both directions', () => {
         'activity.corrected',
         'budget.threshold_reached',
         'integration.rate_limited',
-        'tool.completed',
-        'tool.failed',
-        'tool.requested',
+        'tool.call_completed',
+        'tool.call_failed',
+        'tool.call_requested',
       ].sort(),
     )
     expect(written).toEqual(['system.recovered'])

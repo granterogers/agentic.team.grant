@@ -75,7 +75,7 @@ try {
   }
   const native = async (n: number) => {
     await db.execute(`insert into public.activity_events (office_id, event_type, occurred_at, actor_kind, actor, status, severity, visibility, summary, idempotency_key, project_id, correlation_id)
-      select ${lit(grant)}::uuid, (array['tool.requested','tool.completed','tool.failed','integration.rate_limited','budget.threshold_reached'])[1 + g % 5],
+      select ${lit(grant)}::uuid, (array['tool.call_requested','tool.call_completed','tool.call_failed','integration.rate_limited','budget.threshold_reached'])[1 + g % 5],
              now() - (g || ' seconds')::interval, 'agent', 'research-director', 'recorded', (array['info','info','warning','warning','notice'])[1 + g % 5],
              case when g % 5 in (4) then 'user' else 'diagnostic' end, 'seeded ' || g, 'perf-seed-' || g || '-' || md5(random()::text), ${lit(proj)}::uuid, ${lit(corr)}::uuid
         from generate_series(1, ${n}) g`)
@@ -125,14 +125,14 @@ try {
   // ---- write cost -------------------------------------------------------------------------------------------------------------
   const N = 500
   const strict = await ms(async () => {
-    for (let i = 0; i < N; i++) await db.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.completed', ${lit(`perf-w1-${i}-${Date.now()}`)}, 'agent', 'a', 'Tool finished')`)
+    for (let i = 0; i < N; i++) await db.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_completed', ${lit(`perf-w1-${i}-${Date.now()}`)}, 'agent', 'a', 'Tool finished')`)
   })
   const safe = await ms(async () => {
-    for (let i = 0; i < N; i++) await db.execute(`select app.record_activity_safely(${lit(grant)}::uuid, 'tool.completed', ${lit(`perf-w2-${i}-${Date.now()}`)}, 'agent', 'a', 'Tool finished')`)
+    for (let i = 0; i < N; i++) await db.execute(`select app.record_activity_safely(${lit(grant)}::uuid, 'tool.call_completed', ${lit(`perf-w2-${i}-${Date.now()}`)}, 'agent', 'a', 'Tool finished')`)
   })
   await db.execute(`update public.system_config set value = 'false'::jsonb where key = 'activity.ledger_enabled'`)
   const off = await ms(async () => {
-    for (let i = 0; i < N; i++) await db.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.completed', ${lit(`perf-w3-${i}-${Date.now()}`)}, 'agent', 'a', 'Tool finished')`)
+    for (let i = 0; i < N; i++) await db.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_completed', ${lit(`perf-w3-${i}-${Date.now()}`)}, 'agent', 'a', 'Tool finished')`)
   })
   await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
   console.log(`\n== native writes, ${N} each, one round trip per write: strict ${(strict / N).toFixed(2)} ms, safe ${(safe / N).toFixed(2)} ms, switched off ${(off / N).toFixed(2)} ms`)
@@ -157,7 +157,7 @@ try {
   await Promise.all(conns.map(async (c, w) => {
     for (let i = 0; i < PER; i++) {
       // every writer also repeats a shared key, so duplicates are suppressed under contention, not just distinct rows inserted
-      await c.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.requested', ${lit(`perf-c-${tag}-${w}-${i}`)}, 'agent', 'a', 'concurrent'), app.record_activity(${lit(grant)}::uuid, 'tool.requested', ${lit(`perf-c-${tag}-shared-${i}`)}, 'agent', 'a', 'shared')`).catch(() => { errors++ })
+      await c.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.call_requested', ${lit(`perf-c-${tag}-${w}-${i}`)}, 'agent', 'a', 'concurrent'), app.record_activity(${lit(grant)}::uuid, 'tool.call_requested', ${lit(`perf-c-${tag}-shared-${i}`)}, 'agent', 'a', 'shared')`).catch(() => { errors++ })
     }
   }))
   const took = performance.now() - cstart
