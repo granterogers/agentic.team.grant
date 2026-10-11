@@ -98,3 +98,11 @@ Trial merges and comparisons used throwaway worktrees under the scratchpad, neve
 
 Branch `feature/unified-activity-ledger`; `git log origin/main..HEAD` lists the commits. `main` and production are untouched: the branch is based on, and never merged into, `origin/main`; no migration was applied to any database
 but local replica clones; no deploy command was run; no production flag was set.
+
+## Phase 3 (final security hardening, merge preparation, production readiness)
+
+Done, in commit order: P0 strict redactor in SQL and TypeScript (`9b6cb58`); P2 atomic external quota and the attack proof (`bff830b`); P3 output review never attributed to a person (`26307b9`); P4 four-stage migration plan and interruption rehearsal (`f8d16dc`); P1 fixes from a second independent SQL review (`74caae7`); then the Team HQ render harness, sabotage repair (S23) and this record.
+Current counts: critical 68/68, extended ledger proofs 8 (207 assertions) plus `activity-ledger` 79, `activity-gateway` 17, the rehearsal 17, sabotage 38 of 38, `npm test` 6 831 (6 933 merged).
+**To resume:** rebuild the replica (`bash scripts/isolated/replica.sh`), then follow "How to resume" above; sabotage is `bash scripts/isolated/activity-ledger-sabotage.sh` in batches of ten (38 rows); the rehearsal is `bash scripts/isolated/activity-migration-rehearsal.sh`.
+Nothing is pending on the branch. Open items for a person are `RELEASE-READINESS.md` phase 3 addendum items 10 and 11, and one finding to file: the Activity row at 390 px overlaps a wrapped title with its meta line (existing list, not the ledger).
+Process slips this phase: one `sed -i`-free session for repository files (all edits used Edit or Write); the editing tool turned `\u` escapes into raw characters, found by a byte scan and fixed; one unsuccessful Edit on an NBSP line left a raw no-break space in a proof specimen (visible, deliberate, not an invisible or bidi character).

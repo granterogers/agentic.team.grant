@@ -58,7 +58,7 @@ SABOTAGES=(
   "S20|61|[\"job.failed\", \"t0.to_state = 'failed'\"]|[\"job.failed\", \"t0.to_state = 'cancelled'\"]|activity-ledger-equivalence|every filter returns exactly"
   "S21|61|and (\$4::uuid is null or q.job_id in (select js.job_id from jset js))|and (\$4::uuid is null or q.job_id = \$4)|activity-ledger-review|includes its grandchildren"
   "S22|61|d.message_ref is not null and d.message_ref not like 'confirmed-by-person:%'|d.message_ref is not null|activity-ledger-review|marked as arrived is not provider-confirmed"
-  "S23|60|  t := left(p_text, 4000);|  t := p_text;|activity-ledger-review|redacting an 80 000 character"
+  "S23|60|  t := left(p_text, 4000);~~  t := left(normalize(t, NFKC), 4000);|  t := p_text;~~  t := normalize(t, NFKC);|activity-ledger-review|redacting an 80 000 character"
   "S24|60|a.occurred_at > app.now_utc() - interval '1 hour') >= 300 then|a.occurred_at > app.now_utc() - interval '1 hour') >= 300000000 then|activity-ledger-review|limited per hour"
   "S25|61|and not exists (select 1 from public.projects fp where fp.project_id = b.project_id and fp.is_fixture)||activity-ledger-review|fixture project, with no job"
   "S15|gw|args = { ...args, [extra.arg]: text }|args = { ...args, [extra.arg]: new Date(Date.parse(text)).toISOString() }|activity-gateway|microseconds apart"
