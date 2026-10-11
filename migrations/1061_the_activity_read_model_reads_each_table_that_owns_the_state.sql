@@ -168,7 +168,7 @@ begin
   -- operator visibility is the deployment's own: anybody else asking for it is given diagnostic, never an error that names the difference.
   v_maxvis := least(app.activity_vis_rank(p_visibility), case when app.office_sees_the_deployment(p_office) then 2 else 1 end);
 
-  if not app.activity_ledger_on() then
+  if not app.activity_ledger_on(p_office) then
     return jsonb_build_object('enabled', false, 'events', '[]'::jsonb, 'next', null, 'generated_at', app.now_utc());
   end if;
 
@@ -857,7 +857,7 @@ begin
   if p_job is null and p_correlation is null then
     raise exception 'a chain needs a job or a correlation' using errcode = '22023';
   end if;
-  if not app.activity_ledger_on() then
+  if not app.activity_ledger_on(p_office) then
     return jsonb_build_object('enabled', false, 'events', '[]'::jsonb);
   end if;
   if v_corr is null then
@@ -959,7 +959,10 @@ as $$
 begin
   perform app.require_office(p_office);
   return jsonb_build_object(
-    'enabled', app.activity_ledger_on(),
+    'enabled', app.activity_ledger_on(p_office),
+    -- where the switch stands: the master switch, and whether an allowlist narrows it (one row, activity.ledger_offices)
+    'master_on', app.activity_ledger_on(),
+    'scope', case when exists (select 1 from public.system_config a where a.key = 'activity.ledger_offices') then 'allowlist' else 'all_offices' end,
     'native_events_24h', (select count(*) from public.activity_events a where a.office_id = p_office and a.occurred_at > app.now_utc() - interval '24 hours'),
     'native_events_total', (select count(*) from public.activity_events a where a.office_id = p_office),
     'last_native_event_at', (select max(a.occurred_at) from public.activity_events a where a.office_id = p_office),
