@@ -1,11 +1,13 @@
+// biome-ignore-all format: a dense harness helper kept readable as written
 /**
  * Starts a REAL Hermes API server (the pinned source, installed outside this repository) with a per-run home directory.
  *
  * Hermes is untrusted code: it gets a minimal environment (no credential from this shell), its own HERMES_HOME, and a working
  * directory that is not inside either its own source or this repository. The caller stops it.
  */
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chownSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { learnProfileConfig } from '../../src/engines/hermes/learn-profile.ts'
 import { type Child, sleep, start, waitFor } from './lib.ts'
 
 /** Every built-in toolset the contracts disable (INTERFACE-CONTRACTS.md section 6). */
@@ -82,6 +84,15 @@ export interface HermesOptions {
   readonly keepHome?: boolean
   /** skills.create_dir: where Hermes writes a skill it creates (an isolated directory the bridge can harvest). */
   readonly skillsCreateDir?: string
+  /**
+   * Serve a second profile, `hermes-learn`, under `/p/hermes-learn/` (Hermes multiplexes profiles): the skills toolset on, `skills.create_dir` and
+   * `skills.external_dirs` as given. Rendered by the product's own learn-profile module, so what is run here is what the host kit installs.
+   */
+  readonly learnProfile?: { readonly createDir: string; readonly exportDir: string }
+  /** Run Hermes as this unprivileged user (setpriv), and give it its own home and work directory: the operating system, not Hermes, decides what it may write. */
+  readonly runAs?: { readonly uid: number; readonly gid: number }
+  /** Paths Hermes sees READ-ONLY (a private mount namespace with each bind-mounted read-only), as a systemd unit's ReadOnlyPaths= would. */
+  readonly readOnlyPaths?: readonly string[]
   /** skills.external_dirs: read-only reference directories Hermes lists beside its own skills (M8 audit probe). */
   readonly skillsExternalDirs?: readonly string[]
   /** The fetch used for the start-up health probe. A proof whose global fetch is wrapped by the edge emulator passes the real one. */
@@ -159,6 +170,36 @@ export const startHermes = async (o: HermesOptions): Promise<HermesHost> => {
   const work = join(o.hostDir, 'work')
   mkdirSync(work, { recursive: true })
   writeFileSync(join(o.home, 'config.yaml'), configYaml(o))
+  if (o.learnProfile !== undefined) {
+    const dir = join(o.home, 'profiles', 'hermes-learn')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(
+      join(dir, 'config.yaml'),
+      learnProfileConfig({
+        modelBlock: ['model:', '  provider: custom', `  default: "${o.modelName ?? 'mock-model'}"`, `  base_url: "${o.modelBase}/v1"`, `  api_key: "${o.modelKey ?? 'dummy-model-key'}"`, `  context_length: ${String(o.contextLength ?? 131_072)}`].join('\n'),
+        createDir: o.learnProfile.createDir,
+        exportDir: o.learnProfile.exportDir,
+        mcpUrl: o.mcpUrl ?? 'http://127.0.0.1:1/mcp',
+        ...(o.mcpInclude === undefined ? {} : { mcpInclude: o.mcpInclude }),
+      }),
+    )
+  }
+  if (o.learnProfile !== undefined) {
+    // With two profiles Hermes MULTIPLEXES, and then a secret is read from the profile's own .env (a process environment variable is NOT seen: the MCP
+    // server of a profile is "not set in this profile's .env or secret source"), and so is the API server's own switch and key. Found 11 October.
+    const env = (extra: string[]): string => `${extra.join('\n')}\n`
+    writeFileSync(join(o.home, '.env'), env([`API_SERVER_ENABLED=true`, `API_SERVER_HOST=127.0.0.1`, `API_SERVER_PORT=${String(o.port)}`, `API_SERVER_KEY=${o.apiKey}`, ...(o.mcpToken === undefined ? [] : [`OFFICE_ENGINE_MCP_TOKEN=${o.mcpToken}`])]))
+    writeFileSync(join(o.home, 'profiles', 'hermes-learn', '.env'), env([`API_SERVER_KEY=${o.apiKey}`, ...(o.mcpToken === undefined ? [] : [`OFFICE_ENGINE_MCP_TOKEN=${o.mcpToken}`])]))
+  }
+  if (o.runAs !== undefined) {
+    // The home and the work directory belong to the unprivileged user; nothing else does, so what it can write is exactly what it owns.
+    const own = (path: string): void => {
+      chownSync(path, o.runAs?.uid ?? 0, o.runAs?.gid ?? 0)
+      if (statSync(path).isDirectory()) for (const e of readdirSync(path)) own(join(path, e))
+    }
+    own(o.home)
+    own(work)
+  }
   const env: Record<string, string> = {
     PATH: `${join(o.hostDir, 'venv/bin')}:/usr/bin:/bin`,
     HOME: work,
@@ -170,7 +211,29 @@ export const startHermes = async (o: HermesOptions): Promise<HermesHost> => {
     ...(o.mcpToken === undefined ? {} : { OFFICE_ENGINE_MCP_TOKEN: o.mcpToken }),
     ...(o.env ?? {}),
   }
-  const child = start(join(o.hostDir, 'venv/bin/hermes'), ['gateway', 'run'], {
+  const hermesBin = join(o.hostDir, 'venv/bin/hermes')
+  // The command is Hermes, optionally as an unprivileged user, optionally inside a PRIVATE MOUNT NAMESPACE in which the listed paths are bind-mounted
+  // read-only. That is what systemd's ReadOnlyPaths= / ProtectSystem=strict make for a unit: the kernel refuses a write to them (EROFS) for every
+  // process in the namespace, the same user or root included, while a process outside it (the bridge) writes them as ever.
+  const asUser = o.runAs === undefined ? [] : ['setpriv', `--reuid=${String(o.runAs.uid)}`, `--regid=${String(o.runAs.gid)}`, '--clear-groups']
+  const inner = [...asUser, hermesBin, 'gateway', 'run']
+  const [command, args] =
+    o.readOnlyPaths === undefined || o.readOnlyPaths.length === 0
+      ? [inner[0] as string, inner.slice(1)]
+      : [
+          'unshare',
+          [
+            '--mount',
+            '--propagation',
+            'private',
+            'sh',
+            '-c',
+            `${o.readOnlyPaths.map((p) => `mount --bind '${p}' '${p}' && mount -o remount,bind,ro '${p}'`).join(' && ')} && exec "$@"`,
+            'sh',
+            ...inner,
+          ],
+        ]
+  const child = start(command as string, args as string[], {
     env,
     cwd: work,
     logFile: join(o.outDir, `hermes-${o.label}.log`),

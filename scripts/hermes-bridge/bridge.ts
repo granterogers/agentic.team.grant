@@ -13,6 +13,7 @@
  *   - the answer, the failure sentence and every size it sends are bounded, and nothing it logs holds a body or a credential.
  */
 import { rm } from 'node:fs/promises'
+import { LEARN_TOOLS, learnToolsetsOk } from '../../src/engines/hermes/learn-profile.ts'
 import { convertSkill } from '../../src/engines/hermes/skills.ts'
 import {
   ENGINE_READ_TOOLS,
@@ -164,6 +165,8 @@ export class Bridge {
   private readonly now: () => number
   private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>
   private preflightAt = 0
+  private learnPreflightAt = 0
+  private learnPreflightOk = false
   private preflightOk = { hermes_ok: false, toolsets_ok: false }
 
   constructor(deps: BridgeDeps) {
@@ -178,6 +181,29 @@ export class Bridge {
   }
 
   /** The three checks of section 5.1. A failure is reported in the claim, so the gateway records the bridge as not ready. */
+  /**
+   * Whether the learning profile is safe to run a learning run on: healthy, and its enabled toolsets are the office server and the skills toolset
+   * and NOTHING else. Read on the learning profile itself (`/p/hermes-learn/v1/toolsets`), never inferred from the default profile, because a
+   * profile has its own configuration and the default's preflight says nothing about it. Cached for the preflight interval.
+   */
+  async learningPreflight(): Promise<boolean> {
+    if (this.learning === undefined) return false
+    if (
+      this.learnPreflightAt !== 0 &&
+      this.now() - this.learnPreflightAt < this.timing.preflightEveryMs
+    )
+      return this.learnPreflightOk
+    const healthy = await this.learning.hermes.healthy()
+    const enabled = healthy ? await this.learning.hermes.enabledToolsets() : null
+    this.learnPreflightOk = healthy && learnToolsetsOk(enabled)
+    this.learnPreflightAt = this.now()
+    if (!this.learnPreflightOk)
+      this.log(
+        `learning preflight failed: the learning profile is not healthy or enables a toolset it must not (${enabled === null ? 'unreadable' : enabled.join(',')})`,
+      )
+    return this.learnPreflightOk
+  }
+
   async preflight(): Promise<{ hermes_ok: boolean; toolsets_ok: boolean }> {
     const healthy = await this.hermes.healthy()
     const capable = healthy && (await this.hermes.capable())
@@ -360,11 +386,20 @@ export class Bridge {
     }
     const ac = new AbortController()
     const hermes = this.hermesFor(run)
+    const learningRun = this.learns(run)
 
     // An earlier attempt's Hermes run is stopped before this attempt starts (its key would replay a dead run).
     if (run.previous_hermes_run_id !== null) await hermes.stop(run.previous_hermes_run_id)
 
     if (state.hermesRunId === null) {
+      // A learning run is started only on a learning profile that has been checked: its own toolsets, not the default profile's.
+      if (this.learns(run) && !(await this.learningPreflight()))
+        return this.finish(
+          run,
+          'failed',
+          { failure: 'learning_profile_unsafe', tools_started: 0, approvals_denied: 0 },
+          'learning_profile_unsafe',
+        )
       let started: Awaited<ReturnType<HermesClient['startRun']>>
       try {
         started = await hermes.startRun(canonicalBody(run.request, run.run_id), key)
@@ -432,9 +467,11 @@ export class Bridge {
       if (name === 'tool.started') {
         state.tools += 1
         const tool = String(data.tool ?? data.name ?? '')
+        // The office's read tools, and, for a LEARNING run only, the skills toolset's three tools. Nothing else, ever.
         const ok =
-          tool.startsWith(this.config.officeToolPrefix) &&
-          ENGINE_READ_TOOLS.includes(tool.slice(this.config.officeToolPrefix.length))
+          (tool.startsWith(this.config.officeToolPrefix) &&
+            ENGINE_READ_TOOLS.includes(tool.slice(this.config.officeToolPrefix.length))) ||
+          (learningRun && LEARN_TOOLS.includes(tool))
         if (!ok) decide({ outcome: 'failed', failure: `containment: ${safeName(tool)}` })
       } else if (name === 'approval.request') {
         state.denied += 1

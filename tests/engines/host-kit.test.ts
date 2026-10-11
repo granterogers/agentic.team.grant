@@ -98,6 +98,14 @@ describe('the service units', () => {
       expect(exportDir.startsWith(`${path.replace(/\/$/, '')}/`) || exportDir === path, `the Hermes unit may write ${path}, which holds the export directory`).toBe(false)
     }
     expect(rw(hermesUnit)).toEqual(['/var/lib/hermes'])
+    // And it is made read-only for Hermes by name, not left to the absence of a ReadWritePaths line: the kernel's read-only mount is what the
+    // real-Hermes proof (engine-learning-host) showed to refuse skill_manage's edit and delete with EROFS, even for the same user. The parent is
+    // mounted, because the bridge replaces its directory by rename.
+    const ro = [...noComments(hermesUnit).matchAll(/^ReadOnlyPaths=(.*)$/gm)].flatMap((m) => (m[1] ?? '').trim().split(/\s+/)).map((p) => p.replace(/^-/, ''))
+    expect(ro).toContain('/var/lib/hermes-skills-export')
+    expect(rw(bridgeUnit)).not.toContain('/var/lib/hermes')
+    expect(noComments(hermesUnit)).toMatch(/^RestrictNamespaces=true$/m)
+    expect(noComments(hermesUnit)).toMatch(/^CapabilityBoundingSet=$/m)
   })
   it('the bridge listens on no port and is started after Hermes', () => {
     expect(noComments(bridgeUnit)).not.toMatch(/ListenStream|ListenAddress|_PORT|\bPort=/i)

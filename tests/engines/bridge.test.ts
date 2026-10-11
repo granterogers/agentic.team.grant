@@ -142,7 +142,8 @@ describe('configuration', () => {
 
 describe('what the bridge is allowed to import', () => {
   // M8b: the pure skill converter (src/engines/hermes/skills.ts, no I/O) and, for the two skill directories only, the file-system modules.
-  const ALLOWED = [/^\.\/[a-z-]+\.ts$/, /^\.\.\/\.\.\/src\/engines\/hermes\/(types|timing|skills)\.ts$/, /^\.\.\/\.\.\/src\/safety\/require-production-writes\.ts$/, /^node:(fs\/promises|path)$/]
+  // Host completion: the pure learning-profile module (learn-profile.ts, no I/O) which says which toolsets a learning profile may enable.
+  const ALLOWED = [/^\.\/[a-z-]+\.ts$/, /^\.\.\/\.\.\/src\/engines\/hermes\/(types|timing|skills|learn-profile)\.ts$/, /^\.\.\/\.\.\/src\/safety\/require-production-writes\.ts$/, /^node:(fs\/promises|path)$/]
   const importsOf = (source: string): string[] =>
     [...source.matchAll(/(?:^|\n)\s*(?:import|export)\s[^'";]*?\sfrom\s+['"]([^'"]+)['"]|(?:^|\n)\s*import\s+['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)|require\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => String(m[1] ?? m[2] ?? m[3] ?? m[4]))
   const forbidden = (specs: string[]): string[] => specs.filter((s) => !ALLOWED.some((re) => re.test(s)))

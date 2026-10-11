@@ -10,8 +10,10 @@ import { GatewayClient } from '../../scripts/hermes-bridge/gateway-client.ts'
 import { HermesClient } from '../../scripts/hermes-bridge/hermes-client.ts'
 import { clearExport, emptyDir, harvestDrafts, writeExport } from '../../scripts/hermes-bridge/skills-sync.ts'
 import type { ClaimedRun } from '../../src/engines/hermes/types.ts'
-import { FakeGateway, FakeHermes } from './bridge-fakes.ts'
+import { FakeGateway, FakeHermes, type ScriptedEvent } from './bridge-fakes.ts'
 
+const completed = (output: string, afterMs = 5): ScriptedEvent => ({ afterMs, data: { event: 'run.completed', output, usage: { input_tokens: 12, output_tokens: 7 }, runtime: { model: 'vendor/model:free' } } })
+const tool_ = (name: string, afterMs = 5): ScriptedEvent => ({ afterMs, data: { event: 'tool.started', tool: name, preview: '' } })
 const RUN = '33333333-3333-4333-8333-333333333333'
 const TOKEN = `ebt_${'a'.repeat(64)}`
 const FAST: Partial<Timing> = { heartbeatMs: 40, noProgressMs: 400, tickMs: 10, stopWaitMs: 600, deadlineGraceMs: 0, leaseGiveUpMs: 2_000, finishRetryMs: 20, finishGiveUpMs: 500, reconnectDelayMs: 10 }
@@ -75,6 +77,49 @@ describe('learning is off unless the host configures it AND the office opens the
     expect(g.of('/skills')).toHaveLength(0)
     expect(await exists(join(learnDir, 'keep.txt'))).toBe(true)
     expect(h2.started).toHaveLength(0)
+  })
+
+  it('the LEARNING profile is preflighted on its own toolsets: one that enables a terminal is never started, the run fails in plain words, nothing is proposed and nothing is left behind', async () => {
+    // The default profile's preflight says nothing about this one: a profile has its own configuration (found 11 October, host completion).
+    h2.toolsets = [{ name: 'office', enabled: true }, { name: 'skills', enabled: true }, { name: 'terminal', enabled: true }]
+    await writeExport(exportDir, [SKILL('skill-aaaaaaaaaaaa', 'Old')])
+    const ended = await make().runClaimed(claimed({ profile: 'hermes-learn' }))
+    expect(ended.outcome).toBe('failed')
+    expect(h2.started).toHaveLength(0)
+    expect(h.started).toHaveLength(0)
+    expect(g.of('/proposal')).toHaveLength(0)
+    expect((g.of('/finish')[0]?.body as any)?.result?.failure).toBe('learning_profile_unsafe')
+    expect(await exists(learnDir)).toBe(false)
+  })
+
+  it('and the allowed pair (the office server and the skills toolset) is started', async () => {
+    h2.toolsets = [{ name: 'office', enabled: true }, { name: 'skills', enabled: true }, { name: 'terminal', enabled: false }]
+    const ended = await make().runClaimed(claimed({ profile: 'hermes-learn' }))
+    expect(ended.outcome).toBe('completed')
+    expect(h2.started).toHaveLength(1)
+  })
+
+  it('a learning profile whose toolsets cannot be read is not started either (unreadable is not safe)', async () => {
+    h2.toolsets = null as any
+    const ended = await make().runClaimed(claimed({ profile: 'hermes-learn' }))
+    expect(ended.outcome).toBe('failed')
+    expect(h2.started).toHaveLength(0)
+  })
+
+  it('the skills toolset\'s three tools are allowed on a LEARNING run and on nothing else; a terminal is never allowed (the real Hermes calls skill_manage to draft a skill, and the bridge used to kill the run for it)', async () => {
+    for (const tool of ['skills_list', 'skill_view', 'skill_manage']) {
+      h2.queue = [{ script: [tool_(tool, 10), completed('done', 20)] }]
+      const ok = await make().runClaimed(claimed({ profile: 'hermes-learn' }))
+      expect(ok.outcome, tool).toBe('completed')
+    }
+    h2.queue = [{ script: [tool_('terminal', 10), completed('done', 200)] }]
+    const bad = await make().runClaimed(claimed({ profile: 'hermes-learn' }))
+    expect(bad.outcome).toBe('failed')
+    expect(bad.reason).toMatch(/containment/)
+    h.queue = [{ script: [tool_('skill_manage', 10), completed('done', 200)] }]
+    const ordinary = await make().runClaimed(claimed({ profile: 'default' }))
+    expect(ordinary.outcome).toBe('failed')
+    expect(ordinary.reason).toMatch(/containment/)
   })
 
   it('a run with no profile in the claim (an office that predates it) is an ordinary run', async () => {

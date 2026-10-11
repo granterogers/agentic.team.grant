@@ -1,0 +1,45 @@
+Hermes M8 host completion: the hermes-learn profile on a REAL Hermes with REAL operating-system isolation.
+Command:  HERMES_HOST_DIR=/opt/hermes-host npx tsx scripts/isolated/engine-learning-host.ts     (root; unprivileged user "hermesx")
+Date:     11 October 2026 (UTC), base commit 97040341 plus the host-completion working tree (committed with this file).
+Hermes:   NousResearch/hermes-agent at the pinned commit d4d2ab7b ("Hermes Agent v0.21.6+636.gd4d2ab7"), Python 3.14.8, ONE gateway serving TWO profiles
+          (the default one, and hermes-learn under /p/hermes-learn/), run as an UNPRIVILEGED user inside a PRIVATE MOUNT NAMESPACE (unshare --mount) in which
+          the parent of the skills export directory is bind-mounted READ-ONLY: what systemd's ReadOnlyPaths= / ProtectSystem=strict make for a unit.
+MOCK:     the MODEL is scripts/hermes-m0/llm-double.ts (a scripted OpenAI-compatible endpoint). NO real provider, NO model call, NO spend. The office gateway is the
+          bridge unit tests' fake; the "office MCP" is a one-tool server. Nothing here says anything about a model's quality or about the office's own functions.
+REAL:     Hermes, its skill_manage tool, the operating system's mount enforcement, the product's bridge (scripts/hermes-bridge), its skill writer and harvester, and
+          the learn-profile module (src/engines/hermes/learn-profile.ts) that renders the profile.
+How the isolation is kept honest: the export is written by root with umask 0 and chowned to the very user Hermes runs as, so UNIX PERMISSIONS WOULD LET
+HERMES WRITE IT (C0 proves that premise). The only thing between Hermes and the reference skills is the read-only mount, and a control host without it (D1, D2)
+shows the same skill_manage edit and delete succeeding.
+Findings made while building it (all fixed in this commit):
+  * with two profiles Hermes multiplexes and reads a secret, and the API server's own key, from the PROFILE'S OWN .env: a process environment variable is not seen
+    (first symptoms: the API server never came up; the MCP server "is not set in this profile's .env"; HTTP 401 on the learning profile);
+  * /v1/toolsets lists only Hermes's BUILT-IN toolsets (the office MCP server is not one), so a learning profile reports ["skills"] and the default reports [];
+  * the bridge killed every learning run that called skill_manage ("containment: skill_manage"): fakes could not show it, the real Hermes did;
+  * a bind mount of the export directory itself goes stale when the bridge replaces it by rename, so the mount must cover its PARENT.
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ok   A1 the learning profile is served under /p/hermes-learn/ by the same Hermes, and is healthy
+ok   A2 the only built-in toolset the learning profile enables is skills (Hermes lists no other as on), the verdict function agrees, and the default profile enables none - learn ["skills"] default []
+ok   A3 the learning model is offered the skill tools beside the office tool, and the default profile is offered the office tool alone - TOOLS: ["mcp__office__list_projects","skill_manage","skill_view","skills_list"] | TOOLS: ["mcp__office__list_projects"]
+ok   A4 a profile the host does not serve is refused (404), never answered by another profile - refused 404 {"error":"Unknown or unconfigured profile"}
+ok   B1 Hermes READS the approved reference skills on the learning profile (both are in front of the model)
+ok   B2 and the default profile is shown none of them (control: the profile is what carries the reference)
+ok   C0 (premise) Unix permissions alone would let Hermes write the reference skill: the file is writable by the user Hermes runs as - test -w says yes
+ok   C1 Hermes CANNOT edit an approved reference skill - OSError: [Errno 30] Read-only file system: '.../skills-export/office/skill-0123456789ab/.tmp_....tmp'
+ok   C2 Hermes CANNOT delete an approved reference skill - OSError: [Errno 30] Read-only file system: PosixPath('.../skills-export/office/skill-0123456789ab')
+ok   C3 Hermes cannot replace a reference skill through a path traversal or an absolute path: both refused, file byte-identical
+ok   C4 Hermes cannot replace one through a symlink (a file link or a directory link planted where it may write): byte-identical, no file appeared beside them
+ok   C5 nothing in the reference directory changed across every attempt: the same entries, the same bytes
+ok   C6 a skill Hermes writes under an approved skill's NAME cannot touch the reference file: "A skill named 'planbeforebudget' already exists" (refused)
+ok   D1 CONTROL: on a host WITHOUT the read-only mount the same skill_manage edit DOES change the reference skill - {"success": true, "operations_applied": 1}
+ok   D2 CONTROL: and the delete succeeds there too
+ok   E1 a tampered or deleted export is restored from the office's own list at the next run
+ok   E2 a withdrawn skill is gone at the next run (no stale cache): the model is no longer shown it
+ok   E3 a replaced skill is the NEW one at the next run
+ok   F1 a learning run on the real learning profile: Hermes writes a draft skill, the bridge PROPOSES it (name, when, procedure, tools, dropped), the run completes
+ok   F2 the draft is NOT installed anywhere Hermes loads from; the approved reference directory is byte-identical and the learn directory is deleted
+ok   F3 the bridge's only calls to the office are the run's own, reading the approved list, and the one proposal: /skills,/heartbeat,/finish,/proposal
+ok   F4 a FAILED learning run leaves nothing behind: nothing proposed, the learn directory deleted
+ok   F5 a hostile draft can only ever be a PROPOSAL of the closed shape (scope, project and source in its front matter are ignored; terminal and code-execution tools and the code block are not carried)
+
+23/23 checks passed

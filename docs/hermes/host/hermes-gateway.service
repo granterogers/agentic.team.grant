@@ -20,6 +20,14 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 ReadWritePaths=/var/lib/hermes
+# Learning only (RUNBOOK 9a). The approved-skills directory is the BRIDGE'S: Hermes sees it read-only, enforced by the kernel (a read-only mount in this
+# unit's private mount namespace), because Hermes's own skill_manage will edit and delete a skill in skills.external_dirs unless the operating system
+# refuses (measured on the pinned Hermes; scripts/isolated/engine-learning-host.ts). The leading minus keeps the unit starting while learning is not set up.
+# It names the PARENT of the bridge's directory: the bridge replaces its directory by rename, and a mount of the directory itself would go stale.
+ReadOnlyPaths=-/var/lib/hermes-skills-export
+# Without these a process that may create a user namespace could try to remount; with them it has no capability to do so and no namespace to try in.
+RestrictNamespaces=true
+CapabilityBoundingSet=
 
 [Install]
 WantedBy=multi-user.target

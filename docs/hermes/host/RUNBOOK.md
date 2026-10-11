@@ -82,23 +82,43 @@ else, stop both services and tell the office's operator.
 
 ## 9a. Learning (optional, off by default; M8)
 
-Skip this unless the operator has put the office in `engine.hermes.learning_offices` (an empty list by default; never in production without Grant).
-**It is not finished on the host side**, and the real Hermes explains why (checked against the pinned commit with `scripts/hermes-m0/m8-learning-probe.ts`, scripted model, no spend):
+Skip this unless the operator has put the office in `engine.hermes.learning_offices` (an empty list by default; never in production without Grant). Everything below was
+run on the pinned Hermes with a scripted model and no spend (`docs/hermes/m8-evidence/engine-learning-host-2026-10-11.txt`, 23 checks). It has NOT been run with a real model.
 
-* The default profile cannot learn and cannot see an approved skill. With the `skills` toolset off (this kit), a skill in `skills.external_dirs` is NOT put in front of the model.
-* A `/p/hermes-learn/` prefix is refused by a Hermes that does not serve that profile (HTTP 404 "Unknown or unconfigured profile"), so a learning run on a host without the profile fails; it is never answered by the default profile. Serving it needs Hermes's profile multiplexing (`gateway.multiplex_profiles`, a `hermes-learn` profile home with the `skills` toolset on, `skills.create_dir` set to the learn directory and `skills.external_dirs` set to the export directory). Creating and verifying that profile is a host task this kit does not yet script (blocker B3 in `docs/hermes/RELEASE-READINESS.md`).
-* With the `skills` toolset on, Hermes offers its model `skill_manage`, and that tool CAN edit or delete a skill that lives in `skills.external_dirs`: Hermes does not treat an external directory as read-only. The only thing that stops it is the operating system, so the export directory MUST be a place Hermes's own unit cannot write.
+**What a learning run is.** The office opens it on a second Hermes profile, `hermes-learn`, served by the same gateway under `/p/hermes-learn/`. A Hermes that does not serve that
+profile answers 404 and the run fails in plain words; it is never answered by the default profile. The learning profile differs from the default in three things only: the `skills`
+toolset is on, `skills.create_dir` is the learn directory, and `skills.external_dirs` is the export directory. Hermes's `/v1/toolsets` lists only built-in toolsets, so a correct
+learning profile reports exactly `["skills"]` and the default reports `[]`; the bridge checks that on the learning profile itself before every learning run (`learning_profile_unsafe`
+fails the run if anything else is on, or the list cannot be read).
 
-Directories (both absolute, different, neither inside the other, set in `/etc/hermes-bridge/bridge.env`):
+**Directories** (both absolute, different, neither inside the other, set in `/etc/hermes-bridge/bridge.env`):
 
-* `HERMES_SKILLS_EXPORT_DIR=/var/lib/hermes-skills-export`: the office's approved skills, written by the bridge as reference and replaced atomically before each run, emptied if anything is in doubt. It is OUTSIDE `/var/lib/hermes`, so Hermes's unit (`ProtectSystem=strict`, writable only under `/var/lib/hermes`) cannot write it. `hermes-bridge.service` lists it in `ReadWritePaths`.
-* `HERMES_LEARN_DIR=/var/lib/hermes/learn`: where the learning profile writes a draft (`skills.create_dir`); the bridge reads at most three `SKILL.md` files (20 KB each, no symlinks), proposes them to the office, and always deletes the directory.
+* `HERMES_SKILLS_EXPORT_DIR=/var/lib/hermes-skills-export/office`: the office's approved skills, written by the bridge and replaced by rename before each run. It is OUTSIDE `/var/lib/hermes`.
+  Its PARENT, `/var/lib/hermes-skills-export`, is owned by the bridge's user and is what Hermes's unit sees read-only (see below).
+* `HERMES_LEARN_DIR=/var/lib/hermes/learn`: where the learning profile writes a draft (`skills.create_dir`); the bridge reads at most three `SKILL.md` files (20 KB each, no symlinks), proposes them,
+  and deletes the directory after every learning run, success or failure.
 
-Check before turning learning on, as the `hermes` user on the host: `touch /var/lib/hermes-skills-export/x` from inside Hermes's unit's sandbox (`systemd-run -p ProtectSystem=strict -p ReadWritePaths=/var/lib/hermes -p User=hermes touch /var/lib/hermes-skills-export/x`) must FAIL. If it succeeds the isolation is not in place; do not enable learning.
+**Isolation is the operating system's, and it is required.** Hermes's own `skill_manage` edits and deletes a skill in `skills.external_dirs`: a control host without isolation did both. Two units
+run as one user here, so permissions cannot separate them; the kernel's read-only mount does. `hermes-gateway.service` has `ReadOnlyPaths=-/var/lib/hermes-skills-export` (the parent, because the
+bridge replaces its directory by rename and a mount of the directory itself would go stale), `RestrictNamespaces=true` and `CapabilityBoundingSet=`; `hermes-bridge.service` lists the export and learn
+directories in `ReadWritePaths`. The proof made every file world-writable and owned by Hermes's own user, so only the mount stood in the way: edit and delete answered
+`OSError: [Errno 30] Read-only file system`, a path traversal, an absolute path and a symlink changed nothing, and a skill written under an approved skill's name was refused.
 
-What happens: after a finished run the bridge PROPOSES a draft to the office. Nothing is used until a person reads the procedure under Settings, Requests and presses Keep it. Nothing the office does ever writes into Hermes's own skill folder. To stop learning: remove the office from `engine.hermes.learning_offices` (the export empties at the next run) or retire the bridge.
+**Steps (as the user Hermes runs as):**
 
-Python: the pinned Hermes needs Python 3.14 here. Its `pyproject.toml` pins `ruamel.yaml` and other core dependencies only for Python 3.14, so a 3.13 virtualenv installs and then fails at start with `ModuleNotFoundError: ruamel`/`dotenv` (found 11 October). Create the virtualenv with `uv venv --python 3.14`.
+1. Python **3.14** (`uv venv --python 3.14`). The pinned Hermes pins its core dependencies for 3.14 only; a 3.13 virtualenv installs and then fails at start (`ModuleNotFoundError: ruamel`/`dotenv`).
+2. `npm run hermes:learn-profile -- --hermes-home=/var/lib/hermes/home --learn-dir=/var/lib/hermes/learn --export-dir=/var/lib/hermes-skills-export/office --mcp-url=https://<project-ref>.supabase.co/functions/v1/mcp --model=<a :free slug>`.
+   It writes `profiles/hermes-learn/config.yaml` (rendered by `src/engines/hermes/learn-profile.ts`, identical to `learn-profile.config.yaml` here) and a 0600 `.env` copied from the default profile's
+   (`API_SERVER_KEY`, `OFFICE_ENGINE_MCP_TOKEN`, `OPENROUTER_API_KEY`). **With two profiles Hermes multiplexes and reads secrets from each profile's own `.env`, not from the process environment**,
+   so the default profile's `.env` must also hold `API_SERVER_ENABLED`, `API_SERVER_HOST`, `API_SERVER_PORT` (as in `.env.example`). It refuses a model that does not end in `:free`.
+3. `sudo mkdir -p /var/lib/hermes-skills-export && sudo chown hermes: /var/lib/hermes-skills-export`; add the two directories to `bridge.env`; restart `hermes-gateway` then `hermes-bridge`.
+4. **Check before enabling anything:** `curl -s -H "Authorization: Bearer $HERMES_API_KEY" http://127.0.0.1:8642/p/hermes-learn/v1/toolsets` lists only `skills` as enabled; the default prefix lists none;
+   and from Hermes's sandbox `systemd-run --pipe -p User=hermes -p ProtectSystem=strict -p ReadWritePaths=/var/lib/hermes -p ReadOnlyPaths=/var/lib/hermes-skills-export touch /var/lib/hermes-skills-export/x`
+   must FAIL with a read-only file system. If either check is wrong, do not enable learning.
+
+What happens: after a finished learning run the bridge PROPOSES a draft to the office. Nothing is used until a person reads the procedure under Settings, Requests and presses Keep it. Nothing the
+office does ever writes into Hermes's own skill folder, and the bridge never writes the office's skills registry: its only calls are the run's own, reading the approved list, and the proposal.
+To stop learning: remove the office from `engine.hermes.learning_offices` (the export empties at the next run) or retire the bridge.
 
 ## 10. What this runbook does not promise
 

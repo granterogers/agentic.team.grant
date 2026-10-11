@@ -1,0 +1,36 @@
+# The hermes-learn profile (docs/hermes/host/RUNBOOK.md 9a). Rendered by src/engines/hermes/learn-profile.ts; do not hand-edit.
+# It differs from the default profile in exactly the skills toolset, skills.create_dir and skills.external_dirs.
+model:
+  provider: openrouter
+  default: "nvidia/nemotron-3-super-120b-a12b:free"
+auxiliary:
+  free_only: true
+background_review:
+  enabled: false
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+skills:
+  creation_nudge_interval: 0
+  create_dir: "/var/lib/hermes/learn"
+  external_dirs:
+    - "/var/lib/hermes-skills-export/office"
+gateway:
+  api_server:
+    max_concurrent_runs: 1
+platform_toolsets:
+  api_server: [office, skills]
+agent:
+  disabled_toolsets: [terminal, file, web, search, browser, vision, image_gen, skills_hub, todo, tts, cronjob, memory, session_search, code_execution, delegation, clarify, messaging, connections, kanban, project, context_engine, computer_use]
+tools:
+  tool_search:
+    enabled: "off"
+mcp_servers:
+  office:
+    url: "https://<project-ref>.supabase.co/functions/v1/mcp"
+    headers:
+      Authorization: "Bearer ${OFFICE_ENGINE_MCP_TOKEN}"
+    trust: full
+    connect_timeout: 20
+    tools:
+      include: [check_job, inspect_activity, list_events, list_projects, list_staff, list_tasks, read_document, recent_work, search_documents, search_project]

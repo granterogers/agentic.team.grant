@@ -107,6 +107,8 @@ export const failureInWords = (failure: string | null): string => {
   const f = (failure ?? '').toLowerCase().replace(/_/g, ' ')
   if (f.includes('bridge lost') || f.includes('retired'))
     return 'the computer running it stopped answering'
+  if (f.includes('learning profile'))
+    return 'the learning setup on that computer is not safe to use'
   if (f.includes('containment')) return 'it tried to use something the office does not allow'
   if (f.includes('deadline')) return 'it ran out of time'
   if (f.includes('429') || f.includes('rate')) return 'the free model it uses was busy'
