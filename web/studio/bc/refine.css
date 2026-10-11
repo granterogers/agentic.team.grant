@@ -936,3 +936,7 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
 
 /* A to-do card answers the pointer like every other pressable row (the card rule above set its own background over the row hover). */
 [data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem:has(button, a[href], input):hover { background: var(--bc-hover); }
+
+/* Two classes the markup used and no rule defined (basecamp-classes): the centred button row of the empty board, and the quieter second half of the Sample bar's sentence. */
+[data-experience='basecamp'] .bcvoidrow { display: flex; justify-content: center; }
+[data-experience='basecamp'] .bcsamplemore { color: var(--bc-text-muted); }

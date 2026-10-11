@@ -335,6 +335,14 @@ EXPECTED.push({
     ? TUNNEL
     : /^https?:\/\/office\.invalid\/\S* net::(ERR_TUNNEL_CONNECTION_FAILED|ERR_NAME_NOT_RESOLVED)/,
 })
+/*
+  A request the PAGE cancels itself (it left the screen the request was for, or a newer read replaced it) is ERR_ABORTED and is not a
+  failure; the same reading stress-browser makes. Allowed for the harness host only, so an abort of a real origin still fails the pass.
+*/
+EXPECTED.push({
+  why: 'a read to the harness office that the page cancelled itself',
+  re: /^https?:\/\/office\.invalid\/\S* net::ERR_ABORTED/,
+})
 const unexplained = (s: string): boolean => !EXPECTED.some((e) => e.re.test(s))
 
 const badConsole = consoleErrs.filter(unexplained)

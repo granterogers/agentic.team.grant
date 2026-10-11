@@ -215,6 +215,11 @@ const VIEWPORTS = [
   { name: 'phone', w: 390, h: 844, touch: true },
 ]
 const HOUR = 3600_000
+await db.execute(
+  `select app.hq_project_look(${lit(OFFICE)}::uuid, ${lit(P.slug)}, 'rocket', 'p-plum', null, null)`,
+)
+const looked = await one(`select icon, icon_hue from public.projects where slug = ${lit(P.slug)}`)
+check('the office stores a project look (mark and colour)', looked.icon === 'rocket' && looked.icon_hue === 'p-plum', JSON.stringify(looked))
 
 const open = async (vp: (typeof VIEWPORTS)[number], scheme: 'dark' | 'light') => {
   const ctx = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, hasTouch: vp.touch, isMobile: vp.touch })
@@ -447,6 +452,9 @@ for (const vp of VIEWPORTS) {
 
     /* ---- Home board and long project name ---- */
     await go(page, `/p/${P.slug}`, '.bcstage [data-mod]')
+    // The project's chosen mark and colour persist in the office and reach the page (the replica twin of basecamp-look's production leg).
+    const mark = (await page.evaluate(`(() => { const m = [...document.querySelectorAll('.bcprojmark')].find((x) => x.className.includes('p-plum')); return m ? m.className : [...document.querySelectorAll('.bcprojmark')].map((x) => x.className).join(' | ') })()`)) as string
+    check(`[${tag}] a project's chosen colour, written through the office, reaches the board`, mark.includes('p-plum') && !mark.includes('bcprojmark--letter'), mark)
     await shot('board')
     await audit('Project board')
     await go(page, `/p/${LONGNAME.slug}`, '.bcstage [data-mod], .bchome')

@@ -66,9 +66,58 @@ const open = async (
       await route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } })
       return
     }
-    /* Reads fail, so the page draws its prototype rows — which carry a waiting
-       item on purpose (#151). Writes are answered here. */
+    /*
+      READS ARE ANSWERED WITH A REAL-SHAPED OFFICE THAT HOLDS ONE WAITING QUESTION. They used to fail so that the page would
+      draw its prototype rows, which carry a waiting item on purpose (#151); a signed-in person whose read fails is now shown
+      nothing invented (#426), so the premise is gone and the office has to be stood in for. Writes are answered below.
+    */
     if (!body.includes('"action"')) {
+      const section = new URL(route.request().url()).searchParams.get('section') ?? ''
+      if (section === 'studio' || section === 'layout') {
+        const data =
+          section === 'layout'
+            ? { panels: null, rev: 0, now: Date.now() }
+            : {
+                generated_at: new Date().toISOString(),
+                crew: [{ slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' }],
+                projects: [
+                  {
+                    slug: slug.replace(/^\/p\//, ''),
+                    name: 'Stale answer project',
+                    purpose: 'A made-up project.',
+                    tasks: [],
+                    documents: [],
+                    contacts: [],
+                    sources: [],
+                    activity: [],
+                    modules: [],
+                    requests: [],
+                    layout_board: null,
+                    waiting: [
+                      {
+                        id: 'w1',
+                        what: 'Generate the audio overview for the notebook',
+                        why: 'It costs about 10 of the notebook allowance.',
+                        who: 'Claire',
+                        when: '2 days ago',
+                        at: null,
+                        overdue: false,
+                        blocks: false,
+                        cost: 'The window resets at midnight.',
+                        due: null,
+                        options: ['Go ahead', 'Not now'],
+                      },
+                    ],
+                  },
+                ],
+              }
+        await route.fulfill({
+          status: 200,
+          headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+          body: JSON.stringify({ data }),
+        })
+        return
+      }
       await route.abort('connectionfailed')
       return
     }
