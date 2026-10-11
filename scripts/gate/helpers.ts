@@ -15,6 +15,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: 'NOT a proof: breaks each protection of the unified activity ledger on a copy and requires the named proof to go red, then runs the unmodified control; run by hand (about 15 minutes)',
   },
   {
+    stem: 'activity-migration-rehearsal',
+    role: 'NOT a gate: rehearses the ledger deployment failure modes (a failing migration, an interrupted concurrent index build, a transaction-wrapped connection) on a clone with only 1060 applied; run by hand through its .sh wrapper',
+  },
+  {
     stem: 'guard',
     role: 'the connection every proof uses and the refusal that keeps it isolated (marker table, local socket)',
   },

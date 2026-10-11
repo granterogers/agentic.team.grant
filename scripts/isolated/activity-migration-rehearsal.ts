@@ -18,7 +18,7 @@
  *   default off             after every step the switch is still false and the read model answers disabled
  */
 import { readFileSync, readdirSync } from 'node:fs'
-import { ACTIVITY_INDEXES, ACTIVITY_INDEX_NAMES, createStatement, ensureActivityIndexes, inspectActivityIndexes } from '../../src/activity/indexes.ts'
+import { ACTIVITY_INDEX_NAMES, ACTIVITY_INDEXES, createStatement, ensureActivityIndexes, inspectActivityIndexes } from '../../src/activity/indexes.ts'
 import { isolated } from './guard.ts'
 
 const dbName = process.argv[2] ?? 'ledger_rh'

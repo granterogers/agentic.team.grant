@@ -226,6 +226,8 @@ create index if not exists activity_events_office_time_idx on public.activity_ev
 create index if not exists activity_events_project_time_idx on public.activity_events (project_id, occurred_at desc) where project_id is not null;
 create index if not exists activity_events_job_idx on public.activity_events (job_id, occurred_at) where job_id is not null;
 create index if not exists activity_events_correlation_idx on public.activity_events (correlation_id, occurred_at) where correlation_id is not null;
+-- The external door's quota counts (per worker, per office, per deployment) read only what an outside worker wrote, newest first.
+create index if not exists activity_events_external_idx on public.activity_events (occurred_at desc) where actor_kind = 'external';
 create unique index if not exists activity_events_one_correction on public.activity_events (supersedes_activity_id) where supersedes_activity_id is not null;
 
 drop trigger if exists a1_office_write_once on public.activity_events;
@@ -447,6 +449,7 @@ declare
   v_id uuid;
   v_existing public.activity_events%rowtype;
   v_meta jsonb;
+  v_evidence jsonb;
 begin
   perform app.require_office(p_office);
   if not app.activity_ledger_on() then
@@ -457,8 +460,23 @@ begin
   if not found or v_type.source <> 'native' then
     raise exception 'activity type % is not a native type', p_event_type using errcode = '23503';
   end if;
+  -- Authority is not a parameter. A native caller cannot write as an outside worker, cannot write an outside worker's type (a person's
+  -- review decision has no native writer yet, so none may forge one), and only the outside-worker door passes provenance 'external'.
+  if p_provenance = 'native' and (p_actor_kind = 'external' or p_event_type like 'external.%') then
+    raise exception 'a native writer cannot record an external worker or an external activity type' using errcode = '42501';
+  end if;
+  if p_actor_kind = 'external' and p_provenance <> 'external' then
+    raise exception 'an external actor must be recorded through the external door' using errcode = '42501';
+  end if;
 
   v_meta := app.activity_clean(p_metadata);
+  -- Evidence, like metadata and the summary, is cleaned and bounded on this path too: the table is append-only, so what it stores is for good.
+  if p_evidence_ref is not null then
+    v_evidence := app.activity_clean(p_evidence_ref);
+    if pg_column_size(v_evidence) > 1024 then
+      raise exception 'an evidence reference is larger than 1 KB' using errcode = '22023';
+    end if;
+  end if;
   -- An event is recorded when it happens or shortly after: one dated in the future would pin itself to the top of every feed.
   if p_occurred_at is not null and p_occurred_at > app.now_utc() + interval '5 minutes' then
     raise exception 'an activity cannot be dated in the future' using errcode = '22023';
@@ -469,10 +487,12 @@ begin
     correlation_id, causation_id, source_interface, status, severity, visibility, tool, model, summary,
     metadata, evidence_ref, idempotency_key, supersedes_activity_id, provenance
   ) values (
-    p_office, p_event_type, coalesce(p_occurred_at, app.now_utc()), p_actor_kind, p_actor, p_agent_slug, p_project_id, p_job_id,
+    p_office, p_event_type, coalesce(p_occurred_at, app.now_utc()), p_actor_kind, left(app.activity_redact(p_actor), 120),
+    left(app.activity_redact(p_agent_slug), 80), p_project_id, p_job_id,
     p_parent_job_id, p_correlation_id, p_causation_id, p_source_interface, p_status,
-    coalesce(p_severity, v_type.default_severity), coalesce(p_visibility, v_type.default_visibility), p_tool, p_model,
-    left(app.activity_redact(p_summary), 300), v_meta, p_evidence_ref, p_idempotency_key, p_supersedes, p_provenance
+    coalesce(p_severity, v_type.default_severity), coalesce(p_visibility, v_type.default_visibility),
+    left(app.activity_redact(p_tool), 120), left(app.activity_redact(p_model), 120),
+    left(app.activity_redact(p_summary), 300), v_meta, v_evidence, p_idempotency_key, p_supersedes, p_provenance
   )
   on conflict (office_id, idempotency_key) do nothing
   returning activity_id into v_id;
@@ -518,6 +538,10 @@ security definer
 set search_path = 'pg_catalog', 'public'
 as $$
 begin
+  -- Off means off: nothing is written, not even the failure counter.
+  if not app.activity_ledger_on() then
+    return null;
+  end if;
   begin
     -- A best-effort writer must not be the way a critical fact is recorded: it would turn "the audit trail says so" into "the audit
     -- trail says so unless the write was lost". Refused and counted, so the misuse shows in the health reading.
@@ -619,6 +643,10 @@ declare
   v_evidence jsonb;
 begin
   perform app.require_office(p_office);
+  -- Off means off: no validation, no lock, no quota arithmetic, and no error an outsider could read as an answer.
+  if not app.activity_ledger_on() then
+    return null;
+  end if;
   if p_worker is null or p_worker !~ '^[a-z][a-z0-9_-]{1,39}$' then
     raise exception 'external worker name is not valid' using errcode = '22023';
   end if;
@@ -639,7 +667,8 @@ begin
 
   -- One office's external reports are counted and written one at a time: without this two workers could both read 299, both pass and
   -- both insert. The lock is per office and held to the end of the transaction; it is taken before the count, never inside it.
-  perform pg_advisory_xact_lock(hashtextextended('activity.external:' || p_office::text, 0));
+  -- (A deployment-wide cap needs one lock for every office, so the lock is deployment-wide; external reports are low-volume by design.)
+  perform pg_advisory_xact_lock(hashtextextended('activity.external', 0));
 
   -- A report that was already recorded is answered by the strict writer (idempotent, and it refuses a key reused for another type);
   -- only a NEW row is subject to the limits below, so a retry of an accepted report is never refused for volume.
@@ -652,6 +681,16 @@ begin
     if (select count(*) from public.activity_events a
          where a.office_id = p_office and a.actor_kind = 'external' and a.occurred_at > app.now_utc() - interval '1 hour') >= 1000 then
       raise exception 'external workers have reached the hourly limit of activity reports for this office' using errcode = '54000';
+    end if;
+    -- Rotating worker names cannot lift the office cap, and no office or set of offices can fill the append-only table: a daily cap per
+    -- office and an hourly cap for the whole deployment (the free tier is 500 MB and the table is never pruned).
+    if (select count(*) from public.activity_events a
+         where a.office_id = p_office and a.actor_kind = 'external' and a.occurred_at > app.now_utc() - interval '1 day') >= 4000 then
+      raise exception 'external workers have reached the daily limit of activity reports for this office' using errcode = '54000';
+    end if;
+    if (select count(*) from public.activity_events a
+         where a.actor_kind = 'external' and a.occurred_at > app.now_utc() - interval '1 hour') >= 5000 then
+      raise exception 'external workers have reached the deployment-wide hourly limit of activity reports' using errcode = '54000';
     end if;
   end if;
 
@@ -682,7 +721,9 @@ begin
 
   return app.record_activity(
     p_office => p_office, p_event_type => p_event_type, p_idempotency_key => v_key,
-    p_actor_kind => 'external', p_actor => 'external:' || p_worker, p_summary => p_summary, p_status => p_status,
+    p_actor_kind => 'external', p_actor => 'external:' || p_worker,
+    -- Marked in the text itself so a report can never read as the office's own words ("You said yes: ...") on a page that shows the summary alone.
+    p_summary => '[external:' || p_worker || '] ' || coalesce(p_summary, ''), p_status => p_status,
     p_severity => p_severity, p_visibility => v_type.default_visibility, p_project_id => p_project_id, p_job_id => p_job_id,
     p_correlation_id => v_corr, p_source_interface => 'external', p_metadata => app.activity_external_metadata(p_metadata),
     p_evidence_ref => v_evidence, p_provenance => 'external');

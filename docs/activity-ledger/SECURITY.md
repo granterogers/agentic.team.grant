@@ -57,6 +57,14 @@ the one above it: **content never enters the ledger**; it holds references to re
   they are shown only to the office they belong to, but they can name a project or a person's work. A deployment that wants them out of the feed removes
   them from the two branches; nothing else depends on them.
 - **`app.activity_for_the_page` splits the summary into a verb and an object at the first space** to fit the existing renderer; that is cosmetic and can read oddly.
+- **Independent model review of 1060 to 1062 (phase 3; a model, NOT a human security approval).** It found no cross-office read or write path and no SQL injection, and these hardening gaps, all fixed in the unapplied files and
+  each with a regression check and sabotage (`activity-external-attack`, S31 to S38): the best-effort writer wrote a failure counter while the switch was off, and the external door did validation and quota work while off (both now return null first);
+  native `evidence_ref`, `actor`, `tool` and `model` were stored uncleaned (now redacted, evidence bounded to 1 KB); the strict writer trusted its actor and provenance, so a holder of EXECUTE could forge `external.review_decided` or an external actor (a native writer
+  now cannot write an `external.*` type or an external actor); an external summary could imitate "You said yes:" (now prefixed `[external:<worker>]`); five read functions had `public` before `pg_catalog` in `search_path` (proved hijackable by a role holding CREATE on
+  `public`; now `pg_catalog` first); rotating worker names could add about 1 000 undeletable rows an hour per office (now a daily per-office cap of 4 000 and a deployment-wide cap of 5 000 an hour); a filter that matches nothing widened every source's pool
+  (a status outside the vocabulary is now refused outright and `activity_read` carries an 8 s statement timeout). **Not changed, documented:** the first row to supersede an activity claims its one correction permanently (any strict-writer holder can pre-empt a correction);
+  a native `correlation_id` from another office is not validated on the native path (nothing leaks: reads are office-bound, the row only stores the uuid); `activity_health` shows the deployment-level `indexes_missing` list to a signed-in office (counts are per office);
+  helper functions are PUBLIC-executable but nobody holds USAGE on schema `app`. Every one of those requires holding EXECUTE on `app` functions, which only the owner and the worker's database role do.
 - **Timing and size side channels** (whether a filtered read was fast because it found nothing) were not analysed.
 - **The strict redactor (phase 3) and what it still does not catch.** The ledger uses its own redactor, `app.activity_redact` (SQL) with a byte-identical TypeScript twin `redactStrict`
   (`src/text/secrets.ts`); the office-wide `redactSecrets` is unchanged. It reads at most 4 000 characters, NFKC-normalises (full-width letters, unusual spaces), removes invisible

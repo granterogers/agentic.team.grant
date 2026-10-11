@@ -113,7 +113,7 @@ After the switch: (1) `activity_health` for the office: `write_failures_1h` is 0
 
 On the replica: `npm run verify:critical` (70 proofs, including `activity-ledger` and `activity-gateway`); `npx tsx scripts/gate/run.ts --tier extended --only
 activity-ledger-review,activity-ledger-equivalence,activity-indexes,activity-ledger-durability,activity-native-writers,activity-worker,activity-redaction,activity-external-attack`;
-`bash scripts/isolated/activity-ledger-sabotage.sh` (33 sabotages, in batches of a few so each call fits ten minutes); `bash scripts/isolated/activity-migration-rehearsal.sh`;
+`bash scripts/isolated/activity-ledger-sabotage.sh` (38 sabotages, in batches of a few so each call fits ten minutes); `bash scripts/isolated/activity-migration-rehearsal.sh`;
 `npx tsx scripts/isolated/activity-ledger-perf.ts <db> 3000` for the timings. The seven production-catalogue checks run against the replica with `--replica` (`scripts/lib/catalogue-db.ts`) and are listed with
 their status in `RELEASE-READINESS.md`; with production access a reviewer grants, run them again without the flag.
 

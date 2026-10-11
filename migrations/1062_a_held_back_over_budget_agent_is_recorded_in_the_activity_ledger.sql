@@ -16,7 +16,7 @@ create or replace function app.defer_over_budget()
  returns jsonb
  language plpgsql
  security definer
- set search_path to 'public', 'pg_catalog'
+ set search_path to 'pg_catalog', 'public'
 as $function$
 declare
   v_held int := 0;

@@ -32,8 +32,11 @@ app.record_external_activity(
 ) returns uuid
 ```
 
-Bounds on what a worker can add (the table is append-only on a 500 MB tier): at most **300 new reports an hour per worker and 1 000 per office** (refused with `54000`; a retry of an already-accepted report is never refused and another worker is
-unaffected), the summary and every string value are redacted and cut, and the redactor itself reads only the first 4 000 characters. `external.review_decided` is **not** writable by a worker: a person's decision is recorded by the office.
+Bounds on what a worker can add (the table is append-only on a 500 MB tier): at most **300 new reports an hour per worker, 1 000 an hour and 4 000 a day per office, and 5 000 an hour for the whole deployment** (refused with `54000`; a retry
+of an already-accepted report is never refused and another worker is unaffected up to the office cap, so rotating worker names cannot lift it). Counting and inserting happen under one deployment-wide advisory lock, so concurrent workers cannot
+all pass the cap (proved with 8 connections; without the lock 304 of a 300 cap were accepted). The idempotency key is 1 to 150 printable characters (the stored key is `ext:<worker>:<key>` and the table allows 200). The summary and every string value are redacted and cut,
+the stored summary always begins `[external:<worker>] ` so a report cannot read as the office's own words, and the redactor itself reads only the first 4 000 characters. With the ledger switched off the door returns null before validating anything.
+The **boundary must bind the worker name to the credential**: the door trusts `p_worker` as the boundary gave it, so a boundary that lets a worker choose its name lets it squat another's idempotency keys. `external.review_decided` is **not** writable by a worker: a person's decision is recorded by the office.
 
 What it forces, whatever the worker sends: `actor_kind = external`, `actor = external:<worker>`, `provenance = external`, `source_interface = external`,
 visibility from the taxonomy (never chosen by the worker). What it refuses: a type that is not `external_writable`; severity `critical`; status

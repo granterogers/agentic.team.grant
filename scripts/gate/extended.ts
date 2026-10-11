@@ -60,7 +60,7 @@ export const EXTENDED: readonly Proof[] = [
   ),
   p(
     'activity-external-attack',
-    36,
+    47,
     'the external-worker door under concurrent writers holds its 300 per worker and 1000 per office, cannot be varied past by name or key, cannot claim a review, confirmation or approval, and the ledger tables are closed to browser roles and to edits',
   ),
 

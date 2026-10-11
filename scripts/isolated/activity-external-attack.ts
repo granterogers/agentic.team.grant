@@ -201,6 +201,44 @@ try {
   const sm = json((await one(`select metadata from public.activity_events where activity_id =${lit(String(sneaky.v))}::uuid`)).metadata)
   check('cost: free-text and credential-named keys are dropped and counted, the figure survives', sm.duration_ms === 5 && sm.notes === undefined && sm.authorization === undefined && sm.nested === undefined && sm.dropped_keys === 3, JSON.stringify(sm))
 
+  // ---------------------------------------------------------------------------------------------- review findings (phase 3)
+  const nat = (type: string, key: string, actorKind: string, actor: string, extraArgs = '') =>
+    `select app.record_activity(${lit(B)}::uuid, ${lit(type)}, ${lit(key)}, ${lit(actorKind)}, ${lit(actor)}, 'native report'${extraArgs}) as v`
+  await deny('native: a native writer cannot record a person\'s review decision (no writer exists for it)', nat('external.review_decided', 'nat-review-1', 'user', 'you', `, p_status => 'authorised', p_visibility => 'user'`), /native writer cannot/)
+  await deny('native: a native writer cannot record as an external worker', nat('tool.call_completed', 'nat-ext-0001', 'external', 'external:claire'), /native writer cannot|external door/)
+  check('native: an ordinary native event is still accepted (positive control)', typeof (await one(nat('system.recovered', 'nat-ok-00001', 'system', 'worker'))).v === 'string', 'accepted')
+  const evNat = await one(nat('system.recovered', 'nat-ev-00001', 'system', 'worker', `, p_evidence_ref => ${lit(JSON.stringify({ kind: 'x', id: 'y', note: `sk-${'a'.repeat(30)}` }))}::jsonb`))
+  const evStored = JSON.stringify((await one(`select evidence_ref from public.activity_events where activity_id = ${lit(String(evNat.v))}::uuid`)).evidence_ref)
+  check('native: evidence is redacted on the native path too', !evStored.includes('a'.repeat(30)), evStored.slice(0, 80))
+  const evBig = await refused(nat('system.recovered', 'nat-ev-00002', 'system', 'worker', `, p_evidence_ref => ${lit(JSON.stringify({ kind: 'x', id: 'y', a: 'z'.repeat(900), b: 'z'.repeat(900) }))}::jsonb`))
+  const evBigSize = evBig === '' ? Number((await one(`select pg_column_size(evidence_ref) as n from public.activity_events where office_id = ${lit(B)}::uuid and idempotency_key = 'nat-ev-00002'`)).n) : 0
+  check('native: an evidence reference over 1 KB is refused or cut below it', evBig !== '' || evBigSize <= 1024, evBig.slice(0, 70) || `stored ${evBigSize} bytes`)
+  const look = await one(call(B, 'claire', 'lookalike-1', 'external.output_produced').replace(`'report'`, `'You said yes: Approve payment of 5000'`))
+  const lookRow = await one(`select summary from public.activity_events where activity_id = ${lit(String(look.v))}::uuid`)
+  check('external: a look-alike summary is marked in its own text as an external worker\'s', String(lookRow.summary).startsWith('[external:claire] '), String(lookRow.summary).slice(0, 60))
+  const sp = await one(`select count(*) as c from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('app', 'public') and p.prosecdef and p.proname like 'activity\\_%' and p.proname <> 'activity_category' and (p.proconfig is null or p.proconfig[1] not like 'search_path=pg_catalog%' and p.proconfig[1] <> 'search_path=""')`)
+  check('search_path: every security-definer ledger function resolves pg_catalog first (or nothing)', Number(sp.c) === 0, `${sp.c} with another order`)
+  // daily cap: backdated rows (three hours old, so the hourly caps are untouched) bring office B to one below the daily cap
+  const cur = await count(B)
+  await db.execute(`insert into public.activity_events (office_id, event_type, occurred_at, actor_kind, actor, summary, idempotency_key, provenance, source_interface, visibility, status, severity)
+    select ${lit(B)}::uuid, 'external.usage_recorded', now() - interval '3 hours', 'external', 'external:bulk', '[external:bulk] filler', 'bulk-key-' || g, 'external', 'external', 'diagnostic', 'recorded', 'info' from generate_series(1, ${3999 - cur}) g`)
+  const last = await refused(call(B, 'daily-a', 'daily-last'))
+  const over = await refused(call(B, 'daily-b', 'daily-over'))
+  check('quota: a daily cap of 4 000 per office holds under rotating worker names', last === '' && /daily limit/.test(over), `${last || 'accepted'} then ${over.slice(0, 60)}`)
+  const bogus = Date.now()
+  const badStatus = await refused(`select app.activity_read(p_office => ${lit(B)}::uuid, p_status => 'zzz')`)
+  check('read: a status outside the vocabulary is refused immediately instead of scanning every source', /unknown status/.test(badStatus) && Date.now() - bogus < 1000, `${badStatus.slice(0, 40)}, ${Date.now() - bogus} ms`)
+  const goodStatus = await refused(`select app.activity_read(p_office => ${lit(B)}::uuid, p_status => 'completed')`)
+  check('read: a real status still reads (positive control)', goodStatus === '', goodStatus.slice(0, 60) || 'ok')
+  // off means off: nothing, not even a failure counter or an answer
+  await db.execute(`update public.system_config set value = 'false'::jsonb where key = 'activity.ledger_enabled'`)
+  const fBefore = Number((await one(`select count(*) as c from public.activity_write_failures`)).c)
+  const safeOff = await one(`select app.record_activity_safely(${lit(B)}::uuid, 'activity.corrected', 'k-off-000001', 'system', 'w', 's') as v`)
+  const extOff = await refused(`select app.record_external_activity(${lit(B)}::uuid, 'BAD NAME', 'job.completed', 'x', 'x') as v`)
+  const fAfter = Number((await one(`select count(*) as c from public.activity_write_failures`)).c)
+  check('flag off: the best-effort writer writes no failure counter, and the door answers nothing, not even a validation error', safeOff.v === null && fAfter === fBefore && extOff === '', `counter ${fBefore} -> ${fAfter}, door ${extOff || 'silent'}`)
+  await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
+
   const failed = results.filter((r) => !r.ok).length
   console.log(`\n${results.length - failed}/${results.length} passed`)
   exit = failed === 0 ? 0 : 1

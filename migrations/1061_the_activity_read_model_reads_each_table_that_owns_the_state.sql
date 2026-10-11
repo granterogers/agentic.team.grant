@@ -110,11 +110,14 @@ returns jsonb
 language plpgsql
 stable
 security definer
-set search_path = 'public', 'pg_catalog'
+set search_path = 'pg_catalog', 'public'
 -- JIT is switched off for this function: the query it builds is wide (fifteen sources) so its estimated cost crosses jit_above_cost
 -- and the compile step then took about 650 ms of a 70 ms query (measured on the replica, 24 000 transitions). A page of fifty rows
 -- gains nothing from compiled expressions. Harmless where the host already has JIT off.
 set jit = off
+-- A bound on the work one read can do however its filters are chosen: a filter that matches nothing widens the candidate pool in every
+-- source, and measured on 20 000 transitions that was 0.7 s without the supporting indexes. An abusive or unlucky read is stopped, not queued.
+set statement_timeout = '8s'
 as $$
 declare
   v_limit   integer := least(greatest(coalesce(p_limit, 50), 1), 200);
@@ -143,6 +146,11 @@ begin
 
   if p_visibility is null or p_visibility not in ('user', 'diagnostic', 'operator') then
     raise exception 'unknown visibility %', p_visibility using errcode = '22023';
+  end if;
+  -- A status that is not in the vocabulary can match nothing, so it is refused before any source is read (it used to widen every pool to find nothing).
+  if p_status is not null and p_status not in ('recorded','requested','authorised','declined','attempted','completed','confirmed',
+                                                'failed','blocked','cancelled','scheduled','expired') then
+    raise exception 'unknown status' using errcode = '22023';
   end if;
   if p_min_severity is not null and v_sevrank is null then
     raise exception 'unknown severity %', p_min_severity using errcode = '22023';
@@ -805,7 +813,7 @@ returns text[]
 language sql
 stable
 security definer
-set search_path = 'public', 'pg_catalog'
+set search_path = 'pg_catalog', 'public'
 as $$
   select coalesce(array_agg(w.name order by w.name), '{}'::text[])
     from unnest(array[
@@ -830,7 +838,7 @@ returns jsonb
 language plpgsql
 stable
 security definer
-set search_path = 'public', 'pg_catalog'
+set search_path = 'pg_catalog', 'public'
 as $$
 declare v_corr uuid := p_correlation; v_pages jsonb := '[]'::jsonb; v_page jsonb; v_at timestamptz; v_id uuid; v_n integer := 0; v_more boolean := false;
         v_partial boolean := false;
@@ -881,7 +889,7 @@ returns jsonb
 language plpgsql
 stable
 security definer
-set search_path = 'public', 'pg_catalog'
+set search_path = 'pg_catalog', 'public'
 as $$
 declare v_page jsonb;
 begin
@@ -931,7 +939,7 @@ returns jsonb
 language plpgsql
 stable
 security definer
-set search_path = 'public', 'pg_catalog'
+set search_path = 'pg_catalog', 'public'
 as $$
 begin
   perform app.require_office(p_office);
