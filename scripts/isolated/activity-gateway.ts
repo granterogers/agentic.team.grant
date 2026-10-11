@@ -311,7 +311,13 @@ try {
     )
   const answers = async (bearer: string) =>
     Promise.all(sections.map(async ([s, q]) => payload(await get(bearer, s, q)).enabled === true))
-  const state = async (master: boolean, list: string | null, label: string, wantA: boolean, wantB: boolean) => {
+  const state = async (
+    master: boolean,
+    list: string | null,
+    label: string,
+    wantA: boolean,
+    wantB: boolean,
+  ) => {
     await setMaster(master)
     await setList(list)
     const [ra, rb] = [await answers(S_A), await answers(S_B)]
@@ -331,13 +337,38 @@ try {
   await state(true, '"' + officeA + '"', 'master on, a scalar office id', false, false)
   await state(true, '{"mode":"all"}', 'master on, object without a version', false, false)
   await state(true, '{"version":2,"mode":"all"}', 'master on, unknown version', false, false)
-  await state(true, '{"version":1,"mode":"all","extra":1}', 'master on, explicit all with an extra key', false, false)
-  await state(true, JSON.stringify([officeA, 'not-an-id', 42]), 'master on, mixed list: valid id kept, junk ignored', true, false)
-  await state(true, JSON.stringify([officeA.toUpperCase()]), 'master on, upper-case id is not a match', false, false)
+  await state(
+    true,
+    '{"version":1,"mode":"all","extra":1}',
+    'master on, explicit all with an extra key',
+    false,
+    false,
+  )
+  await state(
+    true,
+    JSON.stringify([officeA, 'not-an-id', 42]),
+    'master on, mixed list: valid id kept, junk ignored',
+    true,
+    false,
+  )
+  await state(
+    true,
+    JSON.stringify([officeA.toUpperCase()]),
+    'master on, upper-case id is not a match',
+    false,
+    false,
+  )
   await state(true, '{"version":1,"mode":"all"}', 'master on, explicit all', true, true)
   await state(false, '{"version":1,"mode":"all"}', 'master off beats explicit all', false, false)
-  await state(false, JSON.stringify([officeA, officeB]), 'master off beats the allowlist', false, false)
-  const scopeOf = async (bearer: string) => String(payload(await get(bearer, 'activity_health')).scope ?? '')
+  await state(
+    false,
+    JSON.stringify([officeA, officeB]),
+    'master off beats the allowlist',
+    false,
+    false,
+  )
+  const scopeOf = async (bearer: string) =>
+    String(payload(await get(bearer, 'activity_health')).scope ?? '')
   await setMaster(true)
   await setList(JSON.stringify([officeA]))
   const sa = await scopeOf(S_A)
