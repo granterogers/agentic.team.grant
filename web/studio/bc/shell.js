@@ -49,6 +49,7 @@ import * as bcDrive from './drive.js'
 import * as todos from './todos.js'
 import * as account from './account.js'
 import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, tool } from './parts.js'
+import * as activity from './activity.js'
 
 /*
   What app.js hands us at boot. Set once; never reassigned, so a stale
@@ -64,6 +65,15 @@ export const mount = (c) => {
   */
   bcMini.mount(c)
   todos.mount(c)
+  activity.configure({
+    esc,
+    read,
+    crew: () => ctx?.crew ?? [],
+    projects: () => PROJECTS,
+    avatar: (person, size) => avatar(person, size),
+    go: (to) => ctx.goAnywhere(to),
+    repaintShell: () => ctx.render(),
+  })
   contacts.mount(c)
   compose.mount(c)
   account.mount(c)
@@ -3295,7 +3305,13 @@ const SURFACE = {
   documents: documentsSurface,
   contacts: contactsSurface,
   sources: sourcesSurface,
-  activity: activitySurface,
+  // The ledger's timeline when it is on for this office and answers; otherwise the older page, whole (see activity.js).
+  activity: (p) =>
+    activity.render(p.slug, () => activitySurface(p), () => `${crumbFor(p, 'activity')}
+    <div class="bcrecordhead"><h1>${esc(toolById('activity')?.name ?? 'Activity')}</h1></div>
+    <p class="bcpmeta bcprose bcgap-l">
+      What has happened on this project, most recent first. Each line says who did it and, where it is known, which door it came through.
+    </p>`),
   board: boardSurface,
   schedule: scheduleSurface,
   chat: chatSurface,
@@ -3729,7 +3745,7 @@ const body = () => {
   const s = state()
   if (s.view === 'bcsearch') return search()
   if (s.view === 'tasks') return myTasks()
-  if (s.view === 'lately') return allActivity()
+  if (s.view === 'lately') return activity.render('', () => allActivity(), () => '<h1 class="bcsectiontitle">Activity</h1>')
   if (s.view === 'project') {
     const p = project()
     if (p === null || p === undefined) {

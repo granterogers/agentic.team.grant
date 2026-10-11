@@ -226,7 +226,8 @@ the extracted source run through each of those states, and each wiring property 
 
 Known differences while the ledger is on, none a regression of the page: the ledger's rows are not folded (the existing list folds a burst into one line with a count, so there is no `times`),
 and the counters above the list (`jobs_done` and the like) still come from `hq_studio_lately`, so a person can see a count and a list drawn from two sources. A richer page (filters, a chain view,
-severity badges, links to the evidence record) is a design task and is not attempted here.
+severity badges, links to the project records) was not attempted in phases 4 and 5; it is the Phase 6 work on the branch `feature/activity-ledger-ux`
+(`docs/activity-ledger/PHASE-6-UX.md`), which reads `activity_feed` and `activity_chain` and keeps this older list as the fallback.
 
 ## 7. Historical data
 

@@ -99,6 +99,12 @@ Trial merges and comparisons used throwaway worktrees under the scratchpad, neve
 Branch `feature/unified-activity-ledger`; `git log origin/main..HEAD` lists the commits. `main` and production are untouched: the branch is based on, and never merged into, `origin/main`; no migration was applied to any database
 but local replica clones; no deploy command was run; no production flag was set.
 
+## Phase 6 (Activity UX, on the branch `feature/activity-ledger-ux`)
+
+A new Team HQ Activity screen on the ledger read model (timeline, server-side filters, Needs attention, Happening now, details, related activity), with the older list as the fallback.
+Everything is in `docs/activity-ledger/PHASE-6-UX.md` (audit, semantics, screenshots, measurements, limitations, merge notes). **To resume:** `bash scripts/isolated/replica.sh`, then
+`bash scripts/isolated/activity-ux-browser.sh` (about 8 minutes; `--baseline` photographs the page before a change) and `bash scripts/isolated/activity-ui-browser.sh` (the fallback proof). The Phase 5 evidence above is unchanged.
+
 ## Phase 5 (fail-closed activation, final verification, merge preparation)
 
 Done: `app.activity_ledger_covers` fails closed (an array of office UUIDs, exactly `{"version":1,"mode":"all"}`, anything else covers nobody; the master always wins) and the health `scope` says `none | allowlist | all_offices | invalid`; the operator tool is rewritten around a pure planner with compare-and-swap statements and a pure command-line parser (`src/activity/switch.ts`, `switch-cli.ts`, `scripts/ops/activity-switch.ts`); `activity-office-scope` is a 16-check state machine over 150 combinations; the gateway proof and the browser harness gained activation matrices; the other ledger proofs name their offices explicitly; the rehearsal proves the migrations enable nobody; sabotage is 50 rows (all caught); the trial merge of main and every merged-tree gate are green; `MIGRATION-PLAN.md` stage D, `RELEASE-READINESS.md` (Phase 5 addendum, truth table, three-stage checklist, current hashes), `SECURITY.md`, `ARCHITECTURE.md` and `EVENT-CONTRACT.md` describe the fail-closed model.

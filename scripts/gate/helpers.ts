@@ -35,6 +35,18 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: 'the genuine ledger records activity-ui-browser draws (written to the owning tables and through the ledger writers); not a proof',
   },
   {
+    stem: 'activity-ux-browser',
+    role: 'NOT a gate: the Activity UX (timeline, filters, Needs attention, details, related activity) in a real browser through the real gateway at 1440, 768, 390 and 320 with two signed-in offices; run by hand through its .sh wrapper (about 7 minutes); --baseline photographs the page before a change',
+  },
+  {
+    stem: 'activity-ux-checks',
+    role: 'the assertions activity-ux-browser runs (compared with the gateway answer and the database); not a proof on its own',
+  },
+  {
+    stem: 'activity-ux-seed',
+    role: 'the genuine multi-day, mixed-actor records activity-ux-browser draws (jobs, approvals, deliveries, native and external events; backdated in a disposable replica only); not a proof',
+  },
+  {
     stem: 'guard',
     role: 'the connection every proof uses and the refusal that keeps it isolated (marker table, local socket)',
   },

@@ -3,8 +3,6 @@
   "why": {
     "action:grant_standing": "FOR AN AGENT, and deliberately hard to reach: a standing authorization is granted by answering a blocker, where the offer states exactly what it grants (ADR-0018). A general button for it would be an approval detached from the thing approved.",
     "action:set_google_secret": "REACHED ANOTHER WAY. The Settings page posts the Google credential through its own form; this binding exists so the same value can be set without a browser.",
-    "section:activity_feed": "FOR AN AGENT HOLDING THE BEARER TOKEN AND FOR DIAGNOSIS (#13). The page reads `activity_ledger`, which has the Activity module's row shape; this is the full contract (filters, cursor, three visibility levels) for an agent, an operator and the Hermes branch. A richer Activity page that presses it is a design task, not attempted (docs/activity-ledger/ARCHITECTURE.md section 6). Default-off: it answers `enabled: false` until the ledger switch is on.",
-    "section:activity_chain": "FOR AN AGENT HOLDING THE BEARER TOKEN AND FOR DIAGNOSIS (#13). The whole story of one piece of work, oldest first; a chain view on the page is the same design task as `activity_feed`.",
     "section:activity_health": "FOR AN OPERATOR. The ledger's own health (write failures, retry backlog, missing indexes); activation is checked from it (docs/activity-ledger/RELEASE-READINESS.md). The page does not need it.",
     "section:staff": "SUPERSEDED. The page reads `team`, which is the shape it renders; `hq_staff` is the older reader and CLAUDE.md records a verification that fed one to the other and passed for months.",
     "section:artifacts": "NOT NEEDED BY THE PAGE. Documents carry what the gallery shows.",
@@ -22,8 +20,6 @@
     "action:document_new_version",
     "action:grant_standing",
     "action:set_google_secret",
-    "section:activity_chain",
-    "section:activity_feed",
     "section:activity_health",
     "section:artifacts",
     "section:bots",
