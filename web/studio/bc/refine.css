@@ -1,0 +1,942 @@
+/*
+  Team HQ refinement layer (10-hour aesthetic sprint, 9 October 2026). Loaded last, after polish.css.
+  Rule: only the same interface, finished better. Every value is a token from tokens.css; nothing here introduces a colour.
+  Sections: 1 overlays and sheets, 2 type floor, 3 materials and elevation, 4 controls, 5 motion.
+*/
+
+/* ---------------------------------------------------------------- 1. overlays and sheets --- */
+
+/* The command bar's label sat on the input's top edge; it is a heading for the field, so it gets its own line and room. */
+[data-experience='basecamp'] .bcjumphead .bclabel {
+  display: block;
+  margin: 2px 2px 8px;
+  line-height: 1.3;
+}
+
+/* ---------------------------------------------------------------- 3. looks, glass and depth --- */
+
+/*
+  LOOKS. The default ("original") is the interface as it already is and needs no rule. The others change only what the
+  surfaces are made of (canvas, surface, popover edge); the accent is the person's other choice and is never touched here,
+  so any look can wear any accent. Each pair is checked for contrast by tests/web/looks.test.ts and the surface lab.
+*/
+:root:root[data-experience='basecamp'][data-look='silver'][data-scheme='dark'] { --bc-canvas: #0d1114; --bc-surface: #1c2227; --bc-border-popover: #4a5258; --bc-text-muted: #a9b0b6; }
+:root:root[data-experience='basecamp'][data-look='forest'][data-scheme='dark'] { --bc-canvas: #0a1511; --bc-surface: #18291f; --bc-border-popover: #43544a; --bc-text-muted: #a7b3ab; }
+:root:root[data-experience='basecamp'][data-look='graphite'][data-scheme='dark'] { --bc-canvas: #131110; --bc-surface: #262220; --bc-border-popover: #55504b; --bc-text-muted: #b0aaa4; }
+:root:root[data-experience='basecamp'][data-look='silver'][data-scheme='light'] { --bc-canvas: #d4d7da; --bc-surface: #eff1f3; --bc-border-popover: #b3b9be; }
+:root:root[data-experience='basecamp'][data-look='forest'][data-scheme='light'] { --bc-canvas: #d2d6cb; --bc-surface: #eef0e8; --bc-border-popover: #b1b6a8; }
+:root:root[data-experience='basecamp'][data-look='graphite'][data-scheme='light'] { --bc-canvas: #d9d4cd; --bc-surface: #f2efea; --bc-border-popover: #bcb5ab; }
+/* A person who follows the device has no data-scheme: the same looks, chosen by the system. */
+@media (prefers-color-scheme: dark) {
+  :root:root[data-experience='basecamp'][data-look='silver']:not([data-scheme]) { --bc-canvas: #0d1114; --bc-surface: #1c2227; --bc-border-popover: #4a5258; --bc-text-muted: #a9b0b6; }
+  :root:root[data-experience='basecamp'][data-look='forest']:not([data-scheme]) { --bc-canvas: #0a1511; --bc-surface: #18291f; --bc-border-popover: #43544a; --bc-text-muted: #a7b3ab; }
+  :root:root[data-experience='basecamp'][data-look='graphite']:not([data-scheme]) { --bc-canvas: #131110; --bc-surface: #262220; --bc-border-popover: #55504b; --bc-text-muted: #b0aaa4; }
+}
+@media (prefers-color-scheme: light) {
+  :root:root[data-experience='basecamp'][data-look='silver']:not([data-scheme]) { --bc-canvas: #d4d7da; --bc-surface: #eff1f3; --bc-border-popover: #b3b9be; }
+  :root:root[data-experience='basecamp'][data-look='forest']:not([data-scheme]) { --bc-canvas: #d2d6cb; --bc-surface: #eef0e8; --bc-border-popover: #b1b6a8; }
+  :root:root[data-experience='basecamp'][data-look='graphite']:not([data-scheme]) { --bc-canvas: #d9d4cd; --bc-surface: #f2efea; --bc-border-popover: #bcb5ab; }
+}
+
+/* DEPTH multiplies the one shadow scale in tokens.css (--bc-sh-*): flat is a hairline, deep is a pronounced lift. */
+:root[data-experience='basecamp'] { --bc-depth: 1; --lf-canvas: var(--bc-canvas); --lf-face: var(--bc-surface); }
+:root[data-experience='basecamp'][data-depth='flat'] { --bc-depth: 0.35; }
+:root[data-experience='basecamp'][data-depth='deep'] { --bc-depth: 1.45; }
+
+/*
+  GLASS is how much the floating surfaces (menus, the command bar, popovers) let the board show through. Only floating
+  surfaces use it: a module face, a maximised view and every row of text stay opaque so reading is never against a texture.
+  --bc-glass-keep is the share of the surface colour that stays; --bc-glass-blur is the frosting.
+*/
+:root[data-experience='basecamp'] { --bc-glass-keep: 94%; --bc-glass-blur: 16px; --bc-shade-ink: #28241c; }
+:root[data-experience='basecamp'][data-glass='off'] { --bc-glass-keep: 100%; --bc-glass-blur: 0px; }
+:root[data-experience='basecamp'][data-glass='rich'] { --bc-glass-keep: 82%; --bc-glass-blur: 24px; }
+[data-experience='basecamp'] :is(.bcmenupanel, .bcsheet, .bcpop, .bcmenu) {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bc-text-strong) 6%, var(--bc-surface)) 0%, var(--bc-surface) 40%, color-mix(in srgb, var(--bc-canvas) 20%, var(--bc-surface)) 100%);
+  background-color: color-mix(in srgb, var(--bc-surface) var(--bc-glass-keep), transparent);
+  -webkit-backdrop-filter: blur(var(--bc-glass-blur)) saturate(1.15);
+  backdrop-filter: blur(var(--bc-glass-blur)) saturate(1.15);
+}
+/* The gradient above would hide the glass, so a translucent surface paints its gradient at the same share. */
+[data-experience='basecamp'][data-glass='soft'] :is(.bcmenupanel, .bcsheet, .bcpop, .bcmenu),
+[data-experience='basecamp'][data-glass='rich'] :is(.bcmenupanel, .bcsheet, .bcpop, .bcmenu),
+:root[data-experience='basecamp']:not([data-glass]) :is(.bcmenupanel, .bcsheet, .bcpop, .bcmenu) {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, color-mix(in srgb, var(--bc-text-strong) 6%, var(--bc-surface)) var(--bc-glass-keep), transparent) 0%, color-mix(in srgb, var(--bc-surface) var(--bc-glass-keep), transparent) 40%, color-mix(in srgb, color-mix(in srgb, var(--bc-canvas) 20%, var(--bc-surface)) var(--bc-glass-keep), transparent) 100%);
+}
+
+/* The Look picker in Settings > Appearance: four cards, each a small canvas with a module face on it. */
+#settings .st-looks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+#settings .st-look {
+  appearance: none;
+  display: grid;
+  gap: 4px;
+  padding: 10px 10px 12px;
+  border-radius: 14px;
+  border: 1.5px solid var(--bc-border-control);
+  background: color-mix(in srgb, var(--bc-text) 4%, transparent);
+  color: var(--bc-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+#settings .st-look:hover { border-color: var(--bc-border-popover); }
+#settings .st-look[aria-pressed='true'] { border-color: color-mix(in oklab, var(--bc-accent) 60%, transparent); background: color-mix(in oklab, var(--bc-accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bc-accent) 60%, transparent); }
+#settings .st-look b { font: 600 14px/1.3 var(--bc-font); margin-top: 4px; }
+#settings .st-look small { font: 400 12px/1.4 var(--bc-font); color: var(--bc-text-muted); }
+#settings .st-lookface {
+  position: relative;
+  height: 64px;
+  border-radius: 9px;
+  background: var(--lf-canvas);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-text-strong) 10%, transparent);
+  overflow: hidden;
+}
+#settings .st-lookface i {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  width: 38%;
+  border-radius: 6px;
+  background: var(--lf-face);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25), inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+#settings .st-lookface i:first-child { left: 10px; }
+#settings .st-lookface i:last-child { right: 10px; }
+@media (max-width: 860px) {
+  #settings .st-looks { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px; }
+  #settings .st-look small { display: none; }
+}
+
+/*
+  A backdrop filter only sees what is painted inside the nearest ancestor that has one. The top bar is frosted, so a menu
+  hanging from it would blur nothing but the bar; while a panel is open the bar keeps its tint and drops its own filter.
+*/
+[data-experience='basecamp'] .bctop:has(.bcmenupanel:not([hidden]):not(.bcmenupanel-ghost)) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background-color: color-mix(in srgb, var(--bc-canvas) 94%, transparent);
+}
+
+/* The one offer in the Layouts menu that changes the arrangement: it says so by being the accent's, and spans the menu. */
+[data-experience='basecamp'] .bcpopfit {
+  width: 100%;
+  margin-top: 8px;
+  justify-content: center;
+  border-color: color-mix(in oklab, var(--bc-accent) 55%, transparent);
+  background: color-mix(in oklab, var(--bc-accent) 16%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcpopfit:hover { background: color-mix(in oklab, var(--bc-accent) 26%, transparent); }
+
+/*
+  A module header whose meta is a pair of switches (Mine / The team's) has a width it needs, and a narrow module (the chat open
+  beside it) cannot give it: the pair was cut mid-word ("8 te"). A module is a size container; below 300px the switch keeps its
+  numbers and drops the words (its accessible name keeps them, and the title attribute shows them on hover).
+*/
+/* Only on the canvas (wider than a phone): size containment lets a module collapse to nothing in the stacked phone layout. */
+@media (min-width: 861px) {
+  [data-experience='basecamp'] .bccomp--c .bcstage .bcmod.bcmod--placed { container-type: inline-size; container-name: bcmod; }
+  @container bcmod (max-width: 300px) {
+    [data-experience='basecamp'] .bcsplitbtn .bcsplitlab { display: none; }
+  }
+}
+
+/*
+  TACTILE DETAIL. A primary button is a raised key: a faint light from above on its face, a darker lower edge, a hairline of
+  highlight on top and a small contact shadow whose strength follows the Depth setting. Pressed, it sits into the page. The accent
+  stays the fill, so every accent and every look wears it unchanged. Nothing here changes a size.
+*/
+[data-experience='basecamp'] :is(.bcbtn--primary, .bccal2btn--primary) {
+  background-image: linear-gradient(180deg, color-mix(in srgb, #fff 11%, transparent) 0%, transparent 55%, color-mix(in srgb, #000 6%, transparent) 100%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--bc-shadow-ink) 18%, transparent),
+    0 1px 2px color-mix(in srgb, var(--bc-shadow-ink) calc(26% * var(--bc-depth, 1)), transparent);
+  transition: background-color var(--bc-t-focus) var(--bc-ease-out), box-shadow var(--bc-t-focus) var(--bc-ease-out), transform var(--bc-t-focus) var(--bc-ease-out);
+}
+[data-experience='basecamp'] :is(.bcbtn--primary, .bccal2btn--primary):hover:not(:disabled) {
+  background-image: linear-gradient(180deg, color-mix(in srgb, #fff 18%, transparent) 0%, color-mix(in srgb, #fff 3%, transparent) 55%, color-mix(in srgb, #000 5%, transparent) 100%);
+}
+[data-experience='basecamp'] :is(.bcbtn--primary, .bccal2btn--primary):active:not(:disabled) {
+  background-image: linear-gradient(180deg, color-mix(in srgb, #000 10%, transparent), transparent 70%);
+  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) 38%, transparent);
+  transform: translateY(0.5px);
+}
+/* The track of a segmented control (Day / Week / Month, the scheme switch) is a shallow groove; the selected segment sits in it. */
+[data-experience='basecamp'] .bccal2views:not(.bccal2views--mini) { box-shadow: var(--bc-well); }
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] :is(.bcbtn--primary, .bccal2btn--primary):active:not(:disabled) { transform: none; }
+}
+
+/*
+  THE PAGE MENU (How this project looks / Document style / The team / Sources / Project settings) was the one menu that had not
+  been given the menu system: it inherited an 18px face, a square-ish corner and no lift, beside a project menu that has all
+  three. It now has the same panel, type, spacing and entry as every other menu.
+*/
+[data-experience='basecamp'] .bcmenu {
+  min-width: 264px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--bc-text) 16%, transparent);
+  border-radius: 18px;
+  box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-2);
+  transform-origin: calc(100% - 20px) -10px;
+  animation: bc-menu-in 180ms var(--bc-ease-out) both;
+}
+[data-experience='basecamp'] .bcmenu button {
+  font: 500 14px/21px var(--bc-font);
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+@media (prefers-reduced-motion: reduce) { [data-experience='basecamp'] .bcmenu { animation: none; } }
+
+/*
+  SELECT BOXES wear the interface, not the browser: the platform arrow is replaced by a small chevron drawn from the text colour
+  (two gradients, so it follows the scheme and the look with no image), and the box keeps its own height and padding.
+*/
+[data-experience='basecamp'] select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline-end: 30px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* The Settings content area is a scroll region a keyboard can enter; its ring sits inside its edge so the page frame does not clip it. */
+#settings .stg-main:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: -3px; }
+/* The agenda under a narrow month scrolls, so it is a keyboard stop; the ring is drawn inside it so the board does not clip it. */
+[data-experience='basecamp'] .bccal2day:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: -2px; border-radius: 6px; }
+
+/* The empty-module action is accent text on an accent wash: on the light scheme that is under 4.5:1, so the text is the accent drawn toward the text colour. */
+[data-experience='basecamp'] .bcmptyact { color: color-mix(in oklab, var(--bc-accent) 68%, var(--bc-text-strong)); }
+
+/*
+  PAGE CARDS. My Tasks, Activity, Search and Project Settings are a rounded card (the main area itself) and sat flush against the
+  edge above them (the top bar, or the prototype strip). One rule for every page that is a card: the same 12px the board's frame keeps.
+  The project board is not a card and is excluded.
+*/
+[data-experience='basecamp'] .bcmain:not(:has(> .bchome)) { margin-top: 12px; }
+
+/*
+  ONE MATERIAL, FIXED TO THE WINDOW (ADR-0072, amending ADR-0069 decision 3).
+  The chosen material is painted once, on the page (#root, polish.css), and the board lets it show through. The board keeps only
+  the person's Shade and Opacity (two flat layers over it), so the material is continuous across the top bar, the board and the
+  margins, and it does not move when the board is panned or zoomed. The dots, the modules and every saved position stay in the
+  board's own coordinates; nothing about them changes. Cover, fit and centre pictures were already window-anchored and are now
+  the same layer for the whole window rather than a second copy on the board.
+*/
+[data-experience='basecamp'] .bcpanes[data-bg]:is([data-bg-mode], :not([data-bg-mode])) {
+  background-color: transparent;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--bc-shade-ink) var(--bc-bg-shadep, 0%), transparent), color-mix(in srgb, var(--bc-shade-ink) var(--bc-bg-shadep, 0%), transparent)),
+    linear-gradient(color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) var(--bc-bg-veilp, 0%), transparent), color-mix(in srgb, var(--bc-bg-solid, var(--bc-canvas)) var(--bc-bg-veilp, 0%), transparent));
+  background-repeat: no-repeat, no-repeat;
+  background-size: 100% 100%, 100% 100%;
+  background-position: 0 0, 0 0;
+}
+
+/* Text that sits straight on the window needs a face of its own once the window can be a light or patterned material: the prototype strip. */
+[data-experience='basecamp'] #root.shell[data-bg-page] .bcnotlive {
+  background-color: color-mix(in srgb, var(--bc-canvas) 84%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/*
+  THE UNDO STRIP (the one transient notice the product has). It was the canvas colour with an inverted button: near-black in both
+  schemes, and it cut what had been done to one line with an ellipsis, which is the whole point of the strip. It is now a floating
+  surface like every other (menu surface, popover edge, the pop shadow), says what happened in up to three lines, and Undo is the
+  accent's primary key. A failure (the .bad strip) is the danger colour on the same surface, never a different one.
+*/
+[data-experience='basecamp'] .undobar {
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-border-popover);
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-pop);
+  padding: 8px 8px 8px 16px;
+}
+[data-experience='basecamp'] .undoword {
+  font: 500 14px/1.4 var(--bc-font);
+  color: var(--bc-text-strong);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+[data-experience='basecamp'] .undobar.bad { border-color: color-mix(in srgb, var(--bc-danger) 55%, var(--bc-border-popover)); }
+[data-experience='basecamp'] .undobar.bad .undoword { color: var(--bc-danger); }
+[data-experience='basecamp'] .undogo {
+  border: 0;
+  border-radius: 10px;
+  background-color: var(--bc-accent);
+  background-image: linear-gradient(180deg, color-mix(in srgb, #fff 11%, transparent), transparent 55%, color-mix(in srgb, #000 6%, transparent));
+  color: var(--bc-accent-ink);
+  font: 600 14px/1 var(--bc-font);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--bc-shadow-ink) 18%, transparent);
+}
+[data-experience='basecamp'] .undoshut { color: var(--bc-text-muted); }
+[data-experience='basecamp'] .undoshut:hover { color: var(--bc-text-strong); background: var(--bc-hover); }
+@media (prefers-reduced-motion: reduce) { [data-experience='basecamp'] .undobar { animation: none; } }
+
+/* ---------------------------------------------------------------- 4. touch --- */
+
+/*
+  On a touch screen the drawn control stays the size the design chose; the part that answers a finger grows around it
+  (a transparent pseudo-element), so nothing looks bigger and nothing is hard to hit. 44px is the floor.
+*/
+@media (pointer: coarse) {
+  [data-experience='basecamp'] :is(.bccal2num, .bccal2chip, .bctasklist .bccheck, .bclists .bccheck) { position: relative; }
+  [data-experience='basecamp'] .bccal2num::after { content: ''; position: absolute; inset: -12px -6px; }
+  [data-experience='basecamp'] .bccal2chip::after { content: ''; position: absolute; inset: -6px 0; }
+  [data-experience='basecamp'] :is(.bctasklist .bccheck, .bclists .bccheck)::before { content: ''; position: absolute; inset: -14px -13px; }
+  [data-experience='basecamp'] .bccal2views:not(.bccal2views--mini) .bccal2btn--seg,
+  [data-experience='basecamp'] .bccal2views .bccal2btn--seg { min-height: 44px; }
+  /* A form field on a phone is 44px tall and 16px type, or iOS zooms the page when it is focused. */
+  [data-experience='basecamp'] .bccal2fl :is(input, select, textarea) { min-height: 44px; font-size: 16px; }
+  [data-experience='basecamp'] .bccal2check { min-height: 44px; display: flex; align-items: center; gap: 10px; }
+  [data-experience='basecamp'] .bccal2check input { width: 22px; height: 22px; }
+  [data-experience='basecamp'] .hueswatch { width: 40px; height: 40px; border-radius: 12px; }
+  [data-experience='basecamp'] .bdfield .in, [data-experience='basecamp'] .bdsheet .in { min-height: 44px; font-size: 16px; }
+  [data-experience='basecamp'] #viewer :is(.seg, .btn) { min-height: 44px; }
+  [data-experience='basecamp'] #viewer input[data-icon-search] { min-height: 44px; font-size: 16px; }
+  [data-experience='basecamp'] .iconpick { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
+  [data-experience='basecamp'] .iconopt { min-height: 44px; }
+  [data-experience='basecamp'] .bcentrylink { display: inline-flex; align-items: center; min-height: 44px; padding-inline: 6px; }
+  [data-experience='basecamp'] .dockhead .closeconv { position: relative; }
+  [data-experience='basecamp'] .dockhead .closeconv::after { content: ''; position: absolute; inset: -6px; }
+  /* The agenda under a month is a list a finger works down: its rows are the 44px a row should be. */
+  [data-experience='basecamp'] :is(.bccal2agenda, .bccal2day) .bccal2chip { min-height: 40px; display: flex; align-items: center; }
+  [data-experience='basecamp'] :is(.bccal2agenda, .bccal2day) .bccal2chip::after { inset: -2px 0; }
+}
+
+/*
+  A document that has no picture yet is drawn as a page of paper (--bc-paper) with ink lines (--bc-paper-ink). Both were
+  derived from the text colour, which is a soft grey in the dark scheme and a heavy near-black slab in the light one.
+  Paper is paper in both; the dark scheme keeps the dim-room tone it already had.
+*/
+:root[data-experience='basecamp'][data-scheme='light'] { --bc-paper: #fbf9f4; --bc-paper-ink: var(--bc-text-strong); }
+@media (prefers-color-scheme: light) {
+  :root[data-experience='basecamp']:not([data-scheme]) { --bc-paper: #fbf9f4; --bc-paper-ink: var(--bc-text-strong); }
+}
+
+/* On a phone the background choices are one scrolling row. Three and a bit are shown, so the cut-off tile says there are more. */
+@media (max-width: 560px) {
+  [data-experience='basecamp'] .bdgrid { display: flex; grid-template-columns: none; }
+  [data-experience='basecamp'] .bdthumb { flex: 0 0 calc((100% - 24px) / 3.4); }
+}
+
+/* ---------------------------------------------------------------- 2. type floor --- */
+
+/* The scale itself (12, 13, 14, 15, 16, 18, whole pixels; nothing under 12) is declared where each rule is written and held by tests/web/type-scale.test.ts. */
+.bdfield > .t-label { font-size: 12px; letter-spacing: 0.05em; }
+
+/*
+  The tick on a My Tasks page row. The modules draw their own tick (compose.css, .bctasklist and .bclists); the page rows (.bclist .bcitem)
+  were left as the browser's native control, which bc.css renders in the dark scheme whatever the board is, so in the light scheme it was a
+  solid dark square. Same drawing as the module tick, same size (bc.css still grows it on a touch device), still a real checkbox.
+*/
+[data-experience='basecamp'] .bclist .bcitem > .bccheck {
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--bc-text-muted);
+  position: relative;
+}
+[data-experience='basecamp'] .bclist .bcitem > .bccheck:disabled { cursor: default; opacity: 0.55; }
+[data-experience='basecamp'] .bclist .bcitem > .bccheck:checked { background: var(--bc-accent); box-shadow: none; }
+[data-experience='basecamp'] .bclist .bcitem > .bccheck:checked::after {
+  content: '';
+  position: absolute;
+  left: 34%;
+  top: 22%;
+  width: 26%;
+  height: 46%;
+  border: 2px solid var(--bc-accent-ink);
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(40deg);
+}
+
+/* The selected Jump row is tinted with the person's accent; muted text on a light accent (the Ink palette's gold, dark scheme) fell under 4.5:1. */
+[data-experience='basecamp'] .bcjumprow[aria-selected='true'] .bckind { color: var(--bc-text); }
+
+/* ---------------------------------------------------------------- staging validation: realistic data volumes --- */
+
+/* A month chip keeps its own height (calendar.js fitMonth hides the ones a cell has no room for); it was allowed to shrink and its text was cut. */
+[data-experience='basecamp'] .bccal2chips .bccal2chip,
+[data-experience='basecamp'] .bccal2chips .bccal2more { flex: none; }
+[data-experience='basecamp'] .bccal2chips :is(.bccal2chip, .bccal2more)[hidden] { display: none; }
+
+/*
+  A project with a very long name pushed the project menu 784px wide on a 390px phone: the list is a grid with an automatic column, so
+  the nowrap name set the column's minimum and the ellipsis never had anything to clip. One flexible column that may shrink fixes it.
+*/
+[data-experience='basecamp'] .bcmenulist { grid-template-columns: minmax(0, 1fr); }
+[data-experience='basecamp'] .bcmenuitem { min-width: 0; max-width: 100%; }
+
+@media (pointer: coarse) {
+  /* A one-line Card table card was 30px tall; a card is a control, so it is 44px on a touch screen (a two-line card already is). */
+  [data-experience='basecamp'] .bcminicard { min-height: 44px; -webkit-box-pack: center; }
+  /* Settings' segmented choices (scheme, glass, depth) were 36px on a touch screen wider than a portrait phone (a landscape phone, a tablet). */
+  #settings .st-seg button { min-height: 44px; }
+  /* Notes show on a landscape phone and a tablet, where the add and remove controls were 44x20: the header row grows to fit a finger. */
+  [data-experience='basecamp'] :is(.bcpostitx, .bcpostitplus) { width: 44px; height: 44px; }
+  /* The tick on a My Tasks row is drawn 28px; the part that answers a finger grows around it, as it does in the modules. */
+  [data-experience='basecamp'] .bclist .bcitem > .bccheck::before { content: ''; position: absolute; inset: -8px; }
+}
+
+/* ======================================================================================================================
+   10 October 2026: one top bar, one material, a grid that is always visible, a roomier project menu, a colour for every
+   module. Last in the file on purpose: several of these override phone and desktop rules written earlier in other sheets.
+   ====================================================================================================================== */
+
+/*
+  ONE MATERIAL. The bar used to paint its own copy of the stone texture (or, over a chosen material, a frosted mix of it)
+  on top of the page's, so the strip at the very top was a different shade from everything under it. It now INHERITS the
+  page's background exactly, and the page and the bar both anchor it to the viewport, so the two cannot differ by a pixel.
+*/
+[data-experience='basecamp'] body,
+[data-experience='basecamp'] #root.shell,
+[data-experience='basecamp'] #root.shell .bctop,
+[data-experience='basecamp'] #root.shell[data-bg-page] .bctop {
+  background-attachment: fixed;
+}
+[data-experience='basecamp'] #root.shell .bctop,
+[data-experience='basecamp'] #root.shell[data-bg-page] .bctop {
+  background: inherit;
+  background-attachment: fixed;
+  background-blend-mode: inherit;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+[data-experience='basecamp'] #root.shell .bctop:has(.bcmenupanel:not([hidden]):not(.bcmenupanel-ghost)) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ONE ROW. On the freeform workspace the project's tools sit in the top bar (shell.js workTools), not in a band under it. */
+[data-experience='basecamp'] .bctop.bctop--work {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 12px;
+  --bc-nav-h: 36px;
+}
+[data-experience='basecamp'] .bctop--work .bcleft { flex: none; }
+[data-experience='basecamp'] .bctop--work .bchere { flex: 0 1 auto; max-width: min(240px, 26vw); padding: 0 4px; height: 36px; }
+[data-experience='basecamp'] .bctop--work .bcworktools { flex: 1 1 620px; min-width: 0; }
+[data-experience='basecamp'] .bctop--work .bcright { flex: none; margin-left: auto; gap: 4px; }
+[data-experience='basecamp'] .bctop--work .bcheadrow { flex-wrap: nowrap; gap: 10px; width: 100%; margin: 0; }
+[data-experience='basecamp'] .bctop--work .bcworkbar { flex: 1 1 auto; justify-content: center; min-width: 0; margin: 0; min-height: 0; }
+[data-experience='basecamp'] .bctop--work .bcworkbar .bcdock { margin: 0; }
+[data-experience='basecamp'] .bctop--work .bcheadacts { flex: none; flex-wrap: nowrap; gap: 6px; }
+[data-experience='basecamp'] .bctop--work .bccounts { padding: 2px; border-radius: 11px; }
+[data-experience='basecamp'] .bctop--work .bccountn { font-size: 15px; }
+[data-experience='basecamp'] .bctop--work .bccountw { font-size: 12px; }
+@media (pointer: fine) {
+  [data-experience='basecamp'] .bctop--work .bccount { min-height: 30px; line-height: 30px; padding: 0 9px; gap: 5px; }
+  [data-experience='basecamp'] .bctop--work .bcheadacts .bcbtn { min-height: 36px; height: 36px; padding-inline: 14px; }
+  [data-experience='basecamp'] .bctop--work .bcheadacts .bcbtn.bcmic,
+  [data-experience='basecamp'] .bctop--work .bcheadacts .bcbtn.bcicon { width: 36px; min-width: 36px; padding: 0; }
+  [data-experience='basecamp'] .bctop--work .bcheadacts .bcmic svg { width: 18px; height: 18px; }
+}
+/* Labels give way to icons before the bar runs out of room; every dock button keeps its title and accessible name. */
+@media (max-width: 1580px) {
+  [data-experience='basecamp'] .bctop--work .bcdock .bcdockbtn > span { display: none; }
+}
+/*
+  Below a desktop the bar is two rows. The tools' wrappers dissolve (display: contents) so every control is a direct child of
+  the bar and can be ordered: row one is the burger, the project's name, the project menu, Attention, office menu and Sign out;
+  row two is the counters, Chat with Team and the microphone.
+*/
+/* With the chat dock open the bar is about 1100px wide, which still has to hold one row (opening the chat must not move the board down): the name is capped, Attention is a bell, the dock is tighter. */
+@container bartools (max-width: 1250px) {
+  [data-experience='basecamp'] .bctop--work .bchere { max-width: 150px; }
+  [data-experience='basecamp'] .bctop--work .bcattbell { display: block; }
+  [data-experience='basecamp'] .bctop--work .bcattword { display: none; }
+  [data-experience='basecamp'] .bctop--work [data-bc-attention] { position: relative; width: 44px; min-width: 44px; padding: 0; }
+  @media (pointer: fine) {
+    [data-experience='basecamp'] .bctop--work [data-bc-attention] { width: 36px; min-width: 36px; }
+  }
+  [data-experience='basecamp'] .bctop--work [data-bc-attention] .bcstatus { position: absolute; top: 2px; right: 0; }
+  [data-experience='basecamp'] .bctop--work .bcworktools { flex-basis: 560px; }
+  [data-experience='basecamp'] .bctop--work .bcheadrow { gap: 8px; }
+  [data-experience='basecamp'] .bctop--work .bcdockbtn { padding-inline: 7px; }
+}
+@container bartools (max-width: 1000px) {
+  [data-experience='basecamp'] .bctop--work :is(.bcworktools, .bcheadrow, .bcheadacts) { display: contents; }
+  [data-experience='basecamp'] .bctop--work .bcleft { order: 1; }
+  [data-experience='basecamp'] .bctop--work .bchere { order: 2; flex: 1 1 0; max-width: none; min-width: 0; }
+  [data-experience='basecamp'] .bctop--work .bcheadacts > .bcmenuwrap { order: 3; }
+  [data-experience='basecamp'] .bctop--work .bcright { order: 4; margin-left: 0; }
+  [data-experience='basecamp'] .bctop--work::after { content: ''; order: 4; flex: 1 0 100%; height: 0; }
+  [data-experience='basecamp'] .bctop--work .bcstate { order: 5; flex: 0 1 auto; width: auto; min-width: 0; margin: 0; padding-bottom: 0; overflow-x: auto; }
+  [data-experience='basecamp'] .bctop--work .bcworkbar { order: 6; flex: 1 1 auto; justify-content: center; margin: 0; }
+  [data-experience='basecamp'] .bctop--work [data-bc-dock] { order: 7; flex: none; padding-inline: 10px; }
+  [data-experience='basecamp'] .bctop--work .bccountn { font-size: 14px; }
+  [data-experience='basecamp'] .bctop--work .bcmic { order: 8; flex: none; }
+  [data-experience='basecamp'] .bctop--work .bccallsay { order: 9; flex: 1 0 100%; }
+  /* Nothing waiting means nothing to open: the bell is not drawn on a phone then (its count rides on it when there is one). */
+  [data-experience='basecamp'] .bctop--work .bccount { padding: 0 4px; gap: 3px; }
+  [data-experience='basecamp'] .bctop--work .bccounts { gap: 0; padding: 2px; }
+  [data-experience='basecamp'] .bctop--work button.bccount { min-width: 44px; justify-content: center; }
+  [data-experience='basecamp'] .bctop--work .bccountw { font-size: 12px; }
+  [data-experience='basecamp'] .bctop--work [data-bc-dock] { padding-inline: 8px; }
+}
+
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bctop.bctop--work { gap: 0 6px; padding: 4px 10px 6px; }
+  /* A phone: the counters take the room that is left beside Chat and the microphone, and the (hidden) dock's put-back chips get a row of their own. */
+  [data-experience='basecamp'] .bctop--work .bcstate { flex: 1 1 0; }
+  [data-experience='basecamp'] .bctop--work [data-bc-dock] { order: 6; }
+  [data-experience='basecamp'] .bctop--work .bcmic { order: 7; }
+  [data-experience='basecamp'] .bctop--work .bccallsay { order: 8; }
+  [data-experience='basecamp'] .bctop--work .bcworkbar { order: 9; flex: 1 0 100%; justify-content: flex-start; }
+  [data-experience='basecamp'] .bctop--work .bcworkbar:not(:has(.bcoffchip)) { display: none; }
+  [data-experience='basecamp'] .bctop--work [data-bc-attention][disabled] { display: none; }
+}
+/* The bar is a size container: the page beside an open chat dock is narrower than the window, and the bar must answer to ITS width, not the window's. */
+[data-experience='basecamp'] .bctop { container: bartools / inline-size; }
+
+/* THE GRID IS ALWAYS VISIBLE. The dots are stronger on every material, and each is drawn with a halo of the opposite lightness (stage.js). */
+[data-experience='basecamp'] .bcpanes:not([data-bg-tone]) { --bc-dot: color-mix(in srgb, var(--bc-text) 50%, transparent); }
+/* A phone stacks its modules and has no canvas to draw on, so the same dots are laid behind the stack (they were off there entirely). */
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcpanes { position: relative; }
+  [data-experience='basecamp'] .bcpanes::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle, var(--bc-dot) 0 1.3px, transparent 1.9px);
+    background-size: 24px 24px;
+    background-position: 12px 12px;
+  }
+  [data-experience='basecamp'] .bcpanes > .bcstage { position: relative; z-index: 1; }
+}
+
+/* THE PROJECT MENU HAS ROOM: rows are apart from one another, the badges are smaller than the rows, and the panel scrolls rather than clipping. */
+[data-experience='basecamp'] .bcmenupanel {
+  width: min(340px, calc(100vw - 16px));
+  max-height: calc(100vh - 84px);
+  max-height: calc(100dvh - 84px);
+  padding: 12px;
+}
+[data-experience='basecamp'] .bcmenuhead { margin: 4px 10px 10px; }
+[data-experience='basecamp'] .bcmenulist { gap: 8px; }
+[data-experience='basecamp'] .bcmenuitem { min-height: 48px; padding: 0 12px; gap: 12px; }
+[data-experience='basecamp'] .bcmenumark .bcprojmark { width: 30px; height: 30px; border-radius: 9px; }
+[data-experience='basecamp'] .bcmenumark .bcprojmark svg { width: 17px; height: 17px; }
+[data-experience='basecamp'] .bcmenusep { margin: 14px 4px; }
+[data-experience='basecamp'] .bcmenucreate { margin-top: 10px; }
+[data-experience='basecamp'] .bcmenupanel > .bcmenuitem { margin-top: 4px; }
+
+/* A COLOUR FOR EVERY MODULE. The module's own hue (layout.js DEFAULT_TINT, or the person's choice) washes the face a little more
+   than before so it reads at a glance, the title's icon is drawn in it, and a dark scheme lifts the wash so it is not lost. */
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--tinted {
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--bc-tint) 17%, transparent), color-mix(in srgb, var(--bc-tint) 17%, transparent)),
+    var(--v2-face);
+  border-color: color-mix(in srgb, var(--bc-tint) 48%, transparent);
+}
+[data-experience='basecamp'][data-scheme='dark'] .bccomp--c .bcmod.bcmod--tinted {
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--bc-tint) 20%, transparent), color-mix(in srgb, var(--bc-tint) 20%, transparent)),
+    var(--v2-face);
+}
+[data-experience='basecamp'] .bcmodtitle { display: inline-flex; align-items: center; gap: 7px; }
+[data-experience='basecamp'] .bcmodicon { flex: none; color: var(--bc-tint, var(--bc-text-muted)); }
+[data-experience='basecamp'] .bcmod:not(.bcmod--tinted) .bcmodicon { color: var(--bc-text-muted); }
+
+/* A multi-line title in a My Tasks row (or an agenda line) overlapped the line under it on a touch screen: its 44px hit area was made with a negative margin that only suits one line. The padding gives the area; the margin cancels it. */
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcitemtitle,
+  [data-experience='basecamp'] .bcagendawhat { padding-block: 11px; }
+}
+
+/* ======================================================================================================================
+   11 October 2026: PROJECT APPEARANCE (Project settings, Appearance). Four per-project settings, stored on the project's
+   background record (layout.js): grid-dot opacity, the stone texture's strength, the minimised modules' face opacity (80% by
+   default) and whether a module's colour fills its card or only its title, icon and border.
+   ====================================================================================================================== */
+
+/*
+  THE STONE TEXTURE is two blended layers drawn on the page itself, so its strength can be anywhere from barely visible to
+  clearly pronounced. The soft layer is the look the page always had (it reaches full strength at 40%, the default); above 40% a
+  second, stronger overlay layer is faded in, so 100% is a plainly textured surface. The top bar inherits the page's colour and
+  sits in front of the same fixed layers, so it cannot be a different shade from what is under it.
+*/
+[data-experience='basecamp'] body,
+[data-experience='basecamp'] #root.shell:not([data-bg-page]) { background-image: none; }
+[data-experience='basecamp'] #root.shell { isolation: isolate; }
+[data-experience='basecamp'] #root.shell:not([data-bg-page])::before,
+[data-experience='basecamp'] #root.shell:not([data-bg-page])::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--bc-stone-tex);
+  background-size: 1024px 1024px;
+}
+[data-experience='basecamp'] #root.shell:not([data-bg-page])::before {
+  mix-blend-mode: soft-light;
+  opacity: clamp(0, calc(var(--bc-tex-op, 0.4) / 0.4), 1);
+}
+[data-experience='basecamp'] #root.shell:not([data-bg-page])::after {
+  mix-blend-mode: overlay;
+  opacity: clamp(0, calc((var(--bc-tex-op, 0.4) - 0.4) / 0.6 * 0.9), 0.9);
+}
+
+/*
+  A MINIMISED MODULE'S FACE is a layer behind its content so its opacity can be set without fading the words: the face, its
+  colour wash and its top rule all live on ::before, and the module itself paints no background. Opacity defaults to 80%.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod,
+[data-experience='basecamp'] .bccomp--c .bcmod:hover,
+[data-experience='basecamp'] .bccomp--c .bcmod:focus-within,
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--tinted,
+[data-experience='basecamp'][data-scheme='dark'] .bccomp--c .bcmod.bcmod--tinted { background: none !important; }
+[data-experience='basecamp'] .bccomp--c .bcmod { isolation: isolate; }
+[data-experience='basecamp'] .bccomp--c .bcmod:not(.bcmod--placed) { position: relative; }
+[data-experience='basecamp'] .bccomp--c .bcmod::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--bc-mod-op, 0.8);
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    var(--v2-face);
+}
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--tinted::before {
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--bc-tint) 17%, transparent), color-mix(in srgb, var(--bc-tint) 17%, transparent)),
+    var(--v2-face);
+}
+[data-experience='basecamp'][data-scheme='dark'] .bccomp--c .bcmod.bcmod--tinted::before {
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--bc-tint) 20%, transparent), color-mix(in srgb, var(--bc-tint) 20%, transparent)),
+    var(--v2-face);
+}
+/* TITLE AND BORDER COLOURED: the card stays neutral; the hue is carried by the title, the icon, the top rule and a stronger edge. */
+[data-experience='basecamp'] [data-modmode='edge'] .bcmod.bcmod--tinted::before,
+[data-experience='basecamp'][data-scheme='dark'] [data-modmode='edge'] .bcmod.bcmod--tinted::before {
+  background:
+    linear-gradient(var(--bc-mod-ink), var(--bc-mod-ink)) top left / 100% 3px no-repeat,
+    var(--v2-face);
+}
+[data-experience='basecamp'] [data-modmode='edge'] .bcmod.bcmod--tinted {
+  border-color: color-mix(in srgb, var(--bc-tint) 78%, transparent);
+  box-shadow: inset 0 1px 0 var(--bc-hi), 0 0 0 1px color-mix(in srgb, var(--bc-tint) 22%, transparent), var(--bc-sh-1);
+}
+[data-experience='basecamp'] [data-modmode='edge'] .bcmod.bcmod--tinted .bcmodtitle {
+  color: color-mix(in srgb, var(--bc-tint) 55%, var(--bc-text-strong));
+}
+[data-experience='basecamp'][data-scheme='dark'] [data-modmode='edge'] .bcmod.bcmod--tinted .bcmodtitle {
+  color: color-mix(in srgb, var(--bc-tint) 80%, var(--bc-text-strong));
+}
+[data-experience='basecamp'] [data-modmode='edge'] .bcmod.bcmod--tinted .bcmodicon { color: var(--bc-tint); }
+
+/* At the default 80% face opacity a little of the canvas shows through a module, so text coloured by a hue (column names, links)
+   is pulled slightly towards the strong text colour. Scheme-agnostic: it darkens on light and lightens on dark. */
+[data-experience='basecamp'] .bcmod .bcminicolname { color: color-mix(in srgb, var(--stage) 80%, var(--bc-text-strong)); }
+[data-experience='basecamp'] .bcmod :is(.bcdocsall a, .bclinky) { color: color-mix(in srgb, var(--bc-accent) 84%, var(--bc-text-strong)); }
+
+/*
+  THE CHAT PAGE USES THE WIDTH IT HAS. The thread was capped at 760px with a 68-character measure and the composer at 860px, so on
+  a 1440px screen 40% of the card was empty. The thread and composer now span the card (to a sensible 1280px on very wide screens),
+  each message is a panel, and the measure is a long but readable 118 characters.
+*/
+[data-experience='basecamp'] .bcchat--full { max-width: min(100%, 1280px); }
+[data-experience='basecamp'] .bcchat--full .bcsaid {
+  padding: 12px 16px 14px;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bc-surface) 72%, transparent);
+}
+[data-experience='basecamp'] .bcchat--full .bcsaid--mine {
+  background: color-mix(in srgb, var(--bc-accent) 8%, var(--bc-surface));
+  border-color: color-mix(in srgb, var(--bc-accent) 26%, transparent);
+}
+[data-experience='basecamp'] .bcchat--full .bcsaidbody { flex: 1 1 auto; min-width: 0; }
+[data-experience='basecamp'] .bcchat--full .bcsaidtext { max-width: 118ch; }
+[data-experience='basecamp'] .bcsay { max-width: min(100%, 1280px); }
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcchat--full .bcsaid { padding: 10px 12px 12px; }
+}
+
+/* THE JUMP OVERLAY wears the dashboard's identity: every row has a mark (a project's own icon and colour, a tool in its module's colour),
+   from the one table in identity.js. */
+[data-experience='basecamp'] .bcjumprow { display: flex; align-items: center; gap: 12px; }
+[data-experience='basecamp'] .bcjumpname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-experience='basecamp'] .bcjumpico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: color-mix(in srgb, var(--bc-tint) 78%, var(--bc-text-strong));
+  background: color-mix(in srgb, var(--bc-tint) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-tint) 34%, transparent);
+}
+[data-experience='basecamp'] .bcjumpico--project { background: none; box-shadow: none; color: inherit; }
+[data-experience='basecamp'] .bcjumpico--project .bcprojmark { width: 30px; height: 30px; border-radius: 9px; font-size: 15px; }
+[data-experience='basecamp'] .bcjumpico--project .bcprojmark svg { width: 17px; height: 17px; }
+[data-experience='basecamp'] .bcjumprow[aria-selected='true'] .bcjumpico { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-tint) 60%, transparent); }
+[data-experience='basecamp'] .bcjumpgroup { letter-spacing: 0.08em; }
+
+/* ---- MAXIMISED CONTACTS: cards on a responsive grid (shell.js contactCard). Shared maximised-view vocabulary: a grid, a card with a
+   head, labelled facts and a foot; nothing is drawn for a fact the record does not have. ---- */
+[data-experience='basecamp'] .bcctgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+[data-experience='basecamp'] .bcctcard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bc-surface) 78%, transparent);
+  box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-1);
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+[data-experience='basecamp'] .bcctcard:hover,
+[data-experience='basecamp'] .bcctcard:focus-within {
+  border-color: color-mix(in srgb, var(--bc-accent) 45%, transparent);
+  box-shadow: inset 0 1px 0 var(--bc-hi), var(--bc-sh-2);
+}
+[data-experience='basecamp'] .bcctcardhead { display: flex; align-items: center; gap: 12px; min-width: 0; }
+[data-experience='basecamp'] .bcctcardhead .bcface { flex: none; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; font-size: 17px; }
+[data-experience='basecamp'] .bcctwho { display: grid; gap: 1px; min-width: 0; }
+[data-experience='basecamp'] .bcctname {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font: 650 16px/22px var(--bc-font);
+  color: var(--bc-text-strong);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+[data-experience='basecamp'] .bcctname:hover { text-decoration: underline; }
+[data-experience='basecamp'] .bcctrole,
+[data-experience='basecamp'] .bcctwhere { font: 400 13px/18px var(--bc-font); color: var(--bc-text-muted); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcctlabels { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+[data-experience='basecamp'] .bcctlabel {
+  padding: 1px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--bc-border-control);
+  background: color-mix(in srgb, var(--bc-text) 5%, transparent);
+  font: 600 12px/20px var(--bc-font);
+  color: var(--bc-text);
+}
+[data-experience='basecamp'] .bcctrows { display: grid; gap: 4px; margin: 0; }
+[data-experience='basecamp'] .bcctrow { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; align-items: start; }
+[data-experience='basecamp'] .bcctrow dt { font: 600 12px/20px var(--bc-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcctrow dd { margin: 0; font: 400 14px/20px var(--bc-font); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcctrow a { color: color-mix(in srgb, var(--bc-accent) 84%, var(--bc-text-strong)); text-decoration: none; }
+[data-experience='basecamp'] .bcctrow a:hover { text-decoration: underline; }
+[data-experience='basecamp'] .bcctdue { margin-left: 4px; color: var(--bc-text-muted); font-size: 13px; }
+[data-experience='basecamp'] .bcctnote { margin: 0; font: 400 13px/19px var(--bc-font); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcctfoot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--bc-border-subtle); }
+[data-experience='basecamp'] .bcctproj { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+[data-experience='basecamp'] .bcctprojlabel { font: 600 12px/20px var(--bc-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcctprojchip { padding: 0 9px; border-radius: 8px; font: 500 12px/20px var(--bc-font); background: color-mix(in srgb, var(--bc-accent) 12%, transparent); color: var(--bc-text); }
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcctname { min-height: 44px; display: inline-flex; align-items: center; margin: -11px 0; padding: 11px 0; }
+  [data-experience='basecamp'] .bcctrow a { display: inline-block; padding-block: 11px; margin-block: -11px; }
+}
+
+/* The phone's CSS dots follow the same opacity setting as the canvas ones. */
+[data-experience='basecamp'] .bcpanes::before { opacity: var(--bc-dot-op, 1); }
+
+/* The Appearance pane in Project settings: the controls and a live sample board they act on. */
+[data-experience='basecamp'] .bcap { display: grid; gap: 18px; max-width: 760px; }
+[data-experience='basecamp'] .bcap h3 { margin: 0; font: 650 15px/22px var(--bc-font); }
+[data-experience='basecamp'] .bcap .t-meta { margin: 2px 0 0; }
+[data-experience='basecamp'] .bcapmodes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+[data-experience='basecamp'] .bcapmode {
+  appearance: none;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--bc-border-control);
+  background: var(--bc-surface);
+  color: var(--bc-text);
+  font: 600 14px/20px var(--bc-font);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcapmode[aria-checked='true'] {
+  border-color: var(--bc-accent);
+  box-shadow: inset 0 0 0 1px var(--bc-accent);
+  background: color-mix(in srgb, var(--bc-accent) 12%, var(--bc-surface));
+}
+[data-experience='basecamp'] .bcaprow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; }
+[data-experience='basecamp'] .bcaprow label { font: 600 14px/20px var(--bc-font); }
+[data-experience='basecamp'] .bcaprow output { font: 600 13px/20px var(--bc-font); font-variant-numeric: tabular-nums; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcaprow input[type='range'] { grid-column: 1 / -1; width: 100%; min-height: 44px; accent-color: var(--bc-accent); }
+[data-experience='basecamp'] .bcapnote { grid-column: 1 / -1; margin: 0; color: var(--bc-text-muted); font: 13px/19px var(--bc-font); }
+[data-experience='basecamp'] .bcap .bcapreset { justify-self: start; min-height: 44px; height: 44px; }
+[data-experience='basecamp'] .bcap input[type='range'] { box-sizing: border-box; max-width: 100%; margin: 0; }
+[data-experience='basecamp'] .bcap, [data-experience='basecamp'] .bcap > * { min-width: 0; }
+[data-experience='basecamp'] .bcapsample {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  min-height: 150px;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 14px;
+  background-color: var(--bc-canvas);
+  overflow: hidden;
+  isolation: isolate;
+}
+[data-experience='basecamp'] .bcapsample::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--bc-stone-tex);
+  background-size: 512px 512px;
+  mix-blend-mode: soft-light;
+  opacity: clamp(0, calc(var(--bc-tex-op, 0.4) / 0.4), 1);
+}
+[data-experience='basecamp'] .bcapsample::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--bc-text) 55%, transparent) 0 1.3px, transparent 1.9px);
+  background-size: 18px 18px;
+  opacity: clamp(0, var(--bc-dot-op, 1), 1);
+}
+[data-experience='basecamp'] .bcapsample .bcmod { min-height: 96px; padding: 10px 12px; border-radius: 12px; border: var(--v2-edge); }
+[data-experience='basecamp'] .bcapsample .bcmodtitle { font: 650 13px/18px var(--bc-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcapsample .bcmodbody { font-size: 13px; color: var(--bc-text); margin-top: 6px; }
+
+/* ---- Maximised To-dos: cards in a responsive grid (11 October 2026, 2.9) ---------------------------------------
+   Scoped to the surface by the sibling of its heading, so the minimised modules keep their compact rows. The tick, the title
+   button and the date keep their attributes; only the arrangement changes. */
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist :is(.bclist, .bcdonelist) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist :is(.bclist, .bcdonelist) > :not(.bcitem) { grid-column: 1 / -1; }
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'tick body' 'tick due';
+  align-content: start;
+  padding: 12px 14px;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 12px;
+  background: var(--bc-surface, transparent);
+}
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem > .bctickhit { grid-area: tick; }
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem > .bcitembody { grid-area: body; }
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem > .bcitemdue { grid-area: due; justify-self: start; font: var(--bc-compact); }
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem > .bcitemdue--late { color: var(--bc-danger, #b3261e); font-weight: 600; }
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem--done { opacity: .8; }
+.bctchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.bctchip {
+  font: 600 12px/18px var(--bc-font);
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bc-border-subtle);
+  color: var(--bc-text-muted);
+}
+.bctchip--urgent { color: var(--bc-danger, #b3261e); border-color: currentColor; }
+.bctchip--high { color: #9a5b00; border-color: currentColor; }
+:root[data-theme='dark'] .bctchip--high, [data-scheme='dark'] .bctchip--high { color: #f0b45a; }
+.bctchip--doing { color: var(--bc-accent); border-color: currentColor; }
+
+/* ---- Touch targets, the real ones (11 October 2026, release readiness) ---------------------------------------------
+   The minimised calendar's day numbers were 32x20 (phone) and 32x30 (tablet) with a transparent pseudo-element reaching to 44,
+   but the rows are closer than 44px apart so neighbouring hit areas overlapped and a tap could land on the wrong day. On a
+   coarse pointer the dense month's cells are now 44px tall and the number button fills its cell; the visible pill stays small
+   (drawn by a pseudo-element). The agenda rows are 44px themselves rather than 40px plus a hit area. */
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bccal2month--dense { grid-template-rows: auto repeat(6, 46px); }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2cell { min-height: 46px; padding: 0; }
+  [data-experience='basecamp'] .bccal2month:not(.bccal2month--dense) .bccal2num { min-width: 44px; height: 44px; }
+  [data-experience='basecamp'] .bccal2month:not(.bccal2month--dense) .bccal2num::after { content: none; }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2num {
+    align-self: stretch;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    position: relative;
+    background: transparent;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 0;
+  }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2num::after { content: none; }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2num::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    background: transparent;
+  }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2num:is(:hover, :focus-visible)::before { background: color-mix(in srgb, var(--bc-text) 14%, transparent); }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2cell.is-today .bccal2num { background: transparent; }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2cell.is-today .bccal2num::before { background: var(--bc-accent); }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2cell.is-today .bccal2num { color: var(--bc-accent-ink); }
+  [data-experience='basecamp'] :is(.bccal2agenda, .bccal2day) .bccal2chip { min-height: 44px; }
+  [data-experience='basecamp'] :is(.bccal2agenda, .bccal2day) .bccal2chip::after { content: none; }
+}
+
+@media (pointer: coarse) {
+  /* The dots under a day number must not take room from the 44px button. */
+  [data-experience='basecamp'] .bccal2month--dense .bccal2cell { position: relative; }
+  [data-experience='basecamp'] .bccal2month--dense .bccal2dots { position: absolute; left: 0; right: 0; bottom: 3px; pointer-events: none; justify-content: center; }
+}
+
+/* A control scrolled into view (by a keyboard, a link or a test) must not land under the sticky top bar. */
+html[data-experience='basecamp'] { scroll-padding-top: 96px; }
+
+.bctchip--done { color: var(--bc-text-muted); }
+
+/* A to-do card answers the pointer like every other pressable row (the card rule above set its own background over the row hover). */
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem:has(button, a[href], input):hover { background: var(--bc-hover); }
+
+/* Two classes the markup used and no rule defined (basecamp-classes): the centred button row of the empty board, and the quieter second half of the Sample bar's sentence. */
+[data-experience='basecamp'] .bcvoidrow { display: flex; justify-content: center; }
+[data-experience='basecamp'] .bcsamplemore { color: var(--bc-text-muted); }

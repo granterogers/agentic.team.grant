@@ -29,6 +29,8 @@ a **new** ADR superseding the old one — records are never edited away.
 | [0016](0016-routing-reads-the-roster.md) | Routing reads the roster, and the roster is data Grant edits | Accepted |
 | [0017](0017-a-skill-names-tools-never-addresses.md) | A skill may name a tool; it may never name an address | Accepted |
 | [0070](0070-layout-saves-are-compare-and-swap-and-a-custom-background-is-stored-in-the-office.md) | Layout saves are compare-and-swap on a revision; a custom background is stored in the office per office key (implemented on the replica, not applied) | Accepted for implementation |
+| [0071](0071-one-palette-and-a-geometry-that-follows-the-window-until-the-person-arranges-it.md) | One palette (the studio's colour names are aliases of Team HQ's), and board geometry follows the window until the person arranges it (`placed`) | Accepted (branch, not merged) |
+| [0072](0072-the-background-material-is-one-layer-fixed-to-the-window.md) | The background material is one layer fixed to the window; the board lets it show through (amends ADR-0069 decision 3) | Accepted (branch, not merged) |
 | [0018](0018-an-approval-is-a-record-with-limits.md) | An approval is a record with limits; a decline is durable and specific | Accepted |
 | [0019](0019-the-studio-becomes-the-product.md) | The studio becomes the product; `web/hq/index.html` is retired | Accepted |
 | [0020](0020-tasks-reach-the-diary-one-way.md) | Tasks reach the diary one way, and only ever touch events we made | Accepted |

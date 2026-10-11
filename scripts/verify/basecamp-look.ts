@@ -63,16 +63,6 @@ const dismissAll = async (): Promise<void> => {
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
 const db = accessToken === '' ? null : new ManagementApiExecutor(ref, accessToken)
-const officeToken =
-  db === null
-    ? ''
-    : String(
-        (
-          await db.execute(
-            `select decrypted_secret as v from vault.decrypted_secrets where name = 'hq.api_token'`,
-          )
-        ).rows[0]?.v ?? '',
-      )
 
 const PORT = 4679
 const server = await serveStudio(PORT)
@@ -196,43 +186,42 @@ await dismissAll()
   one that broke. The token is read from the vault, never printed, and this leg
   only opens a picker and shuts it.
 */
+/*
+  THE PREMISE CHANGED (8 October, 9bdb2121): Project Settings no longer carries a "how it looks" block, because the project menu
+  already offers it (project-settings.js says so), so there are not two doors any more. This leg used to need a writer token from
+  the vault to draw that block; it now asserts what is true: the ONE door is the project menu, it opens the picker with its icon
+  library, and Project Settings does not grow a second copy. It needs no office and no token.
+*/
 const wctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } })
-await wctx.addInitScript(
-  `try { localStorage.setItem('hq.token', ${JSON.stringify(officeToken)}) } catch {}`,
-)
 const wpage = await wctx.newPage()
 wpage.on('pageerror', (e) => {
   thrown.push(e.message)
 })
-await wpage.goto(url(`${slug}/settings`), { waitUntil: 'domcontentloaded' })
-await wpage.waitForTimeout(1400)
-const proj = wpage.locator('[data-setpane="project"]')
-if ((await proj.count()) > 0) {
-  await proj.click()
-  await wpage.waitForTimeout(700)
-}
-const pane = await wpage
-  .locator('.setproj')
-  .innerText()
-  .catch(() => '')
+await wpage.goto(url(slug), { waitUntil: 'domcontentloaded' })
+await wpage.waitForSelector('[data-bc-pagemenu]', { timeout: 15000 })
+await wpage.waitForTimeout(600)
+await wpage.locator('[data-bc-pagemenu]').first().click()
+await wpage.waitForTimeout(250)
 check(
-  'Project Settings says how this project looks',
-  /how it looks/i.test(pane),
-  pane.replace(/\n/g, ' / ').slice(0, 220),
+  'the project menu offers how this project looks',
+  (await wpage.locator('[data-bc-pagemenu-panel] [data-bc-look]').count()) > 0,
 )
-check('and offers the control to change it', (await wpage.locator('[data-open-look]').count()) > 0)
-if ((await wpage.locator('[data-open-look]').count()) > 0) {
-  await wpage.locator('[data-open-look]').first().click()
-  await wpage.waitForTimeout(1200)
-  const same = (await wpage.evaluate(
-    inPage(`const v = document.querySelector('#viewer')
+await wpage.locator('[data-bc-pagemenu-panel] [data-bc-look]').first().click()
+await wpage.waitForTimeout(1200)
+const same = (await wpage.evaluate(
+  inPage(`const v = document.querySelector('#viewer')
        if (v === null) return ''
        if (getComputedStyle(v).display === 'none') return 'hidden'
        return (v.querySelector('h2')?.textContent ?? '').trim()
          + '|' + v.querySelectorAll('[data-look-icon]').length`),
-  )) as string
-  check('and it opens the same picker, not a second one', /^How .+\|\d{2,}$/.test(same), same)
-}
+)) as string
+check('and it opens the picker, with its icon library', /^How .+\|\d{2,}$/.test(same), same)
+await wpage.goto(url(`${slug}/settings`), { waitUntil: 'domcontentloaded' })
+await wpage.waitForTimeout(1200)
+check(
+  'Project Settings does not carry a second copy of the picker',
+  (await wpage.locator('[data-open-look]').count()) === 0,
+)
 await wctx.close()
 
 await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
@@ -259,7 +248,7 @@ const markAfter = async (
        return {
          cls: m === null ? '' : m.className,
          tag: m === null ? '' : m.tagName.toLowerCase(),
-         hue: document.querySelector('.bchead')?.dataset.bcHue ?? '',
+         hue: document.querySelector('.bchead, .bcworktools')?.dataset.bcHue ?? '',
          src: m === null ? '' : (m.getAttribute('src') ?? ''),
        }`),
   )) as { cls: string; tag: string; hue: string; src: string }
@@ -339,7 +328,7 @@ if (both !== null) {
         inPage(`history.pushState({ path: '/basecamp/p/${which.slug}' }, '', '/basecamp/p/${which.slug}')
            window.dispatchEvent(new PopStateEvent('popstate', { state: { path: '/basecamp/p/${which.slug}' } }))
            return new Promise((go) => {
-             setTimeout(() => go(document.querySelector('.bchead')?.dataset.bcHue ?? ''), 600)
+             setTimeout(() => go(document.querySelector('.bchead, .bcworktools')?.dataset.bcHue ?? ''), 600)
            })`),
       )) as string,
     )

@@ -104,7 +104,7 @@
 [data-experience='basecamp'] .settings .settabs button[aria-selected='true'] {
   background: var(--bc-surface);
   color: var(--bc-text-strong);
-  box-shadow: 0 1px 0 var(--bc-border-subtle), 0 6px 14px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 1px 0 var(--bc-border-subtle), var(--bc-sh-1);
 }
 [data-experience='basecamp'] .bcsetframe .subtab:focus-visible,
 [data-experience='basecamp'] .settings .settabs button:focus-visible {
@@ -127,13 +127,13 @@
 }
 [data-experience='basecamp'] .settings .t-lead,
 [data-experience='basecamp'] .bcsetframe .t-lead {
-  font-size: 14.5px;
+  font-size: 15px;
   line-height: 1.55;
   color: var(--bc-text);
 }
 [data-experience='basecamp'] .settings .t-meta,
 [data-experience='basecamp'] .bcsetframe .t-meta {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--bc-text-muted);
 }
@@ -157,7 +157,7 @@
   background: var(--bc-surface);
   border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 20%, transparent);
   border-radius: 12px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--bc-sh-2);
   padding: var(--bc-4);
 }
 [data-experience='basecamp'] .settings .bhead {
@@ -186,7 +186,7 @@
   border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 26%, transparent);
   background: color-mix(in srgb, var(--bc-text) 6%, transparent);
   color: var(--bc-text-strong);
-  font: 500 13.5px/1 var(--bc-font);
+  font: 500 14px/1 var(--bc-font);
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
 }

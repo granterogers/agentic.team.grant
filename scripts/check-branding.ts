@@ -41,6 +41,10 @@ const INTERNAL: { token: RegExp; why: string }[] = [
     why: 'saved-layout storage key (dashboard_layouts.surface), a database value',
   },
   {
+    token: /\{\s*slug,\s*surface:\s*'basecamp'\s*\}/g,
+    why: 'the same saved-layout storage key, passed to the gateway layout read (dashboard_layouts.surface); a database value, never displayed',
+  },
+  {
     token: /bits\[0\] === 'basecamp'/g,
     why: 'the retired /basecamp prefix, read so an old link redirects to its canonical address',
   },

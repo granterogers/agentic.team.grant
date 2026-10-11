@@ -394,11 +394,22 @@ for (const size of SIZES) {
       'the stored appearance preference did not apply, so scheme independence was not actually tested',
     )
   } else {
-    const same = light.slice(light.indexOf('::')) === dark.slice(dark.indexOf('::'))
-    console.log(`  colours identical    ${same ? 'yes' : 'NO'}`)
-    if (!same) {
+    /*
+      THE PREMISE CHANGED (11 October 2026). This used to assert that the experience ignored the studio's scheme (one dark
+      palette, section 4.1). Team HQ now has a light and a dark theme that follow the person's choice, so the property is the
+      opposite one: choosing a scheme must actually reach the experience. Identical colours across the two schemes would mean
+      the preference did nothing, or that a rule pins a colour for both.
+    */
+    const a = light.slice(light.indexOf('::') + 2).split('|')
+    const b = dark.slice(dark.indexOf('::') + 2).split('|')
+    const changed = a.filter((x, i) => x !== b[i]).length
+    const share = a.length === 0 ? 0 : changed / a.length
+    console.log(
+      `  colours that follow the scheme   ${String(Math.round(share * 100))}% of ${String(a.length)} elements`,
+    )
+    if (share < 0.3) {
       problems.push(
-        'an element inside the experience changes colour with the studio scheme — a studio token has leaked into a rule that should use a bc token',
+        'the chosen scheme barely reaches the experience: under 30% of its elements change colour between light and dark',
       )
     }
   }

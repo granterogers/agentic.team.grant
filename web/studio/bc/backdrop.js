@@ -110,10 +110,24 @@ export const resolve = (bg, slug = '') => {
 }
 
 /** The inline style for a board, as a string for the first paint. Empty for the default. */
+/*
+  The appearance variables for a record: only the ones it carries, so a record without them leaves the CSS defaults alone.
+  --bc-dot-op is the dots' strength as a multiple of what they were drawn at before the slider existed (0.6 is that look),
+  --bc-tex-op the stone texture's strength (0 to 1), --bc-mod-op the minimised modules' face opacity.
+*/
+export const LOOK_VARS = ['--bc-dot-op', '--bc-tex-op', '--bc-mod-op']
+export const lookStyle = (bg) => {
+  const v = []
+  if (bg === null || bg === undefined) return v
+  if (bg.dots !== undefined) v.push(`--bc-dot-op:${String(Math.round((bg.dots / grid.LOOK_DEFAULT.dots) * 100) / 100)}`)
+  if (bg.tex !== undefined) v.push(`--bc-tex-op:${String(bg.tex)}`)
+  if (bg.mod !== undefined) v.push(`--bc-mod-op:${String(bg.mod)}`)
+  return v
+}
 export const styleFor = (bg, slug = '') => {
   const r = resolve(bg, slug)
-  if (r === null) return ''
-  const v = []
+  if (r === null) return lookStyle(bg).join(';')
+  const v = lookStyle(bg)
   v.push(`--bc-bg-img:${r.img}`)
   v.push(`--bc-bg-tw:${String(r.w)}px`)
   v.push(`--bc-bg-th:${String(r.h)}px`)
@@ -124,8 +138,21 @@ export const styleFor = (bg, slug = '') => {
 }
 export const attrsFor = (bg, slug = '') => {
   const r = resolve(bg, slug)
-  if (r === null) return ''
-  return `data-bg="${r.id}" data-bg-mode="${r.mode}" data-bg-tone="${r.tone}"`
+  const mm = bg?.modMode === 'edge' ? ' data-modmode="edge"' : ''
+  if (r === null) return mm.trim()
+  return `data-bg="${r.id}" data-bg-mode="${r.mode}" data-bg-tone="${r.tone}"${mm}`
+}
+
+/** Paint the appearance (dots, texture, module face, module colour mode) onto the live board, for a slider's preview. */
+export const paintLook = (board, bg) => {
+  if (board === null || board === undefined) return
+  for (const k of LOOK_VARS) board.style.removeProperty(k)
+  for (const part of lookStyle(bg)) {
+    const i = part.indexOf(':')
+    board.style.setProperty(part.slice(0, i), part.slice(i + 1))
+  }
+  if (bg?.modMode === 'edge') board.setAttribute('data-modmode', 'edge')
+  else board.removeAttribute('data-modmode')
 }
 
 /** Paint a background choice onto the live board without storing anything (a preview, or a repaint after a load). */
@@ -141,10 +168,13 @@ export const paint = (board, bg, slug = '') => {
   ])
     board.style.removeProperty(k)
   for (const a of ['data-bg', 'data-bg-mode', 'data-bg-tone']) board.removeAttribute(a)
+  /* A preview of a different material (the picker's) carries no appearance fields: the board keeps the ones it has. */
+  if (bg?.dots !== undefined || bg?.tex !== undefined || bg?.mod !== undefined || bg?.modMode !== undefined) paintLook(board, bg)
   const r = resolve(bg, slug)
   if (r === null) return
   for (const part of styleFor(bg, slug).split(';')) {
     const i = part.indexOf(':')
+    if (LOOK_VARS.includes(part.slice(0, i))) continue
     board.style.setProperty(part.slice(0, i), part.slice(i + 1))
   }
   board.setAttribute('data-bg', r.id)
@@ -556,4 +586,64 @@ export const optimise = async (file) => {
   } finally {
     bitmap.close?.()
   }
+}
+
+/* ------------------------------------------ the material, under the whole page --- */
+/*
+  Grant: choosing a background "doesn't work". It did, but only inside the board, which most of the window is covered by
+  panels and framed by the page's own stone, so the choice read as a thin strip. The page behind the bar and the heading
+  rows now wears the same material, still, as wallpaper (the board keeps its own, which pans with the modules).
+
+  The board stays the one source of the choice: this copies its variables to the shell root, whenever the board is drawn,
+  previewed or changed, and clears them when no board has a material. Nothing is stored here.
+*/
+const MIRROR = ['--bc-bg-img', '--bc-bg-tw', '--bc-bg-th', '--bc-bg-veilp', '--bc-bg-shadep', '--bc-bg-solid']
+const syncWallpaper = () => {
+  const root = document.getElementById('root')
+  if (root === null) return
+  /* The stone texture is drawn on the page, so its strength is copied from the board whether or not a material was chosen. */
+  const any = document.querySelector('[data-bc-board], [data-ap-sample]')
+  const tex = any?.style.getPropertyValue('--bc-tex-op') ?? ''
+  if (tex === '') root.style.removeProperty('--bc-tex-op')
+  else if (root.style.getPropertyValue('--bc-tex-op') !== tex) root.style.setProperty('--bc-tex-op', tex)
+  const board = document.querySelector('[data-bc-board][data-bg]')
+  if (board === null) {
+    if (root.hasAttribute('data-bg-page')) {
+      root.removeAttribute('data-bg-page')
+      root.removeAttribute('data-bg-mode')
+      root.removeAttribute('data-bg-tone')
+      for (const k of MIRROR) root.style.removeProperty(k)
+    }
+    return
+  }
+  const same = (a, v) => root.getAttribute(a) !== v && root.setAttribute(a, v)
+  same('data-bg-page', board.getAttribute('data-bg') ?? '')
+  same('data-bg-mode', board.getAttribute('data-bg-mode') ?? 'tile')
+  same('data-bg-tone', board.getAttribute('data-bg-tone') ?? 'light')
+  for (const k of MIRROR) {
+    const v = board.style.getPropertyValue(k)
+    if (v === '') root.style.removeProperty(k)
+    else if (root.style.getPropertyValue(k) !== v) root.style.setProperty(k, v)
+  }
+}
+if (typeof document !== 'undefined' && typeof MutationObserver === 'function') {
+  let queued = false
+  const soon = () => {
+    if (queued) return
+    queued = true
+    queueMicrotask(() => {
+      queued = false
+      syncWallpaper()
+    })
+  }
+  const start = () => {
+    const root = document.getElementById('root')
+    if (root === null) return
+    new MutationObserver((records) => {
+      if (records.some((r) => r.target !== root)) soon()
+    }).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-bg', 'data-bg-mode', 'data-bg-tone'] })
+    soon()
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true })
+  else start()
 }

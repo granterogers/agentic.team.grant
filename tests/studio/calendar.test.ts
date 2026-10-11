@@ -180,3 +180,36 @@ describe('a clock change inside an event', () => {
     }
   })
 })
+
+describe('the module chooses its view (9 October 2026)', () => {
+  const draw = (view: string): string => {
+    const s = C.uiOf('view-test')
+    s.view = view
+    /* A day with nothing on it, whatever invented events the prototype office carries. */
+    s.cursor = '2031-01-01'
+    s.sel = '2031-01-01'
+    return C.block({ slug: 'view-test', tasks: [] }) as string
+  }
+  it('offers Day, Week and Month in the small module, with the current one pressed', () => {
+    for (const view of ['day', 'week', 'month']) {
+      const html = draw(view)
+      for (const v of ['day', 'week', 'month'])
+        expect(html, `${view}/${v}`).toContain(
+          `data-cal-view="${v}" aria-pressed="${v === view ? 'true' : 'false'}"`,
+        )
+      expect(html).toContain(`data-view="${view}"`)
+    }
+  })
+  it('draws what each view means: a day list, the days of a week, or the month with its day', () => {
+    expect(draw('day')).toContain('Nothing on this day.')
+    expect(draw('day')).not.toContain('bccal2cell')
+    const week = draw('week')
+    expect(week.match(/bccal2agh/g)?.length).toBe(7)
+    expect(draw('month')).toContain('bccal2cell')
+  })
+  it('has previous and next that name the unit they move by', () => {
+    expect(draw('week')).toContain('aria-label="Previous week"')
+    expect(draw('day')).toContain('aria-label="Next day"')
+    expect(draw('month')).toContain('aria-label="Next month"')
+  })
+})

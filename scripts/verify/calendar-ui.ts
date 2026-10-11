@@ -72,7 +72,7 @@ check(
 )
 check(
   'and the agenda lists upcoming items, not a crushed month',
-  (await page.locator('[data-mod="schedule"] .bccal2small .bccal2agrow').count()) > 0,
+  (await page.locator('[data-mod="schedule"] .bccal2compact .bccal2agrow').count()) > 0,
 )
 check(
   'the month grid is not visible in a small module',
@@ -128,7 +128,8 @@ await page.waitForTimeout(300)
 
 /* --- the expanded view: Month, Week, Day ---------------------------------- */
 await page.locator('[data-mod="schedule"]').hover()
-await page.locator('[data-bc-max="schedule"]').click()
+// The module was dragged to the top of the board, so its header sits under the sticky bar; this check is about the calendar, not the canvas.
+await page.locator('[data-bc-max="schedule"]').dispatchEvent('click')
 await page.waitForSelector('.bcexp .bccal2--full')
 await page.waitForTimeout(600)
 check(
@@ -301,6 +302,40 @@ await p2.route('**/*', async (route) => {
       contentType: 'application/json',
       headers: { 'access-control-allow-origin': '*' },
       body: JSON.stringify({ data: { events } }),
+    })
+  }
+  // The page reads the project list before anything else; a stub that does not serve it shows "could not be loaded".
+  if (section === 'studio' || section === 'layout') {
+    const data =
+      section === 'layout'
+        ? { panels: null, rev: 0, now: Date.now() }
+        : {
+            generated_at: new Date().toISOString(),
+            crew: [
+              { slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' },
+            ],
+            projects: [
+              {
+                slug: 'stub-project',
+                name: 'Stub project',
+                purpose: 'A made-up project.',
+                tasks: [],
+                documents: [],
+                contacts: [],
+                sources: [],
+                activity: [],
+                waiting: [],
+                modules: [],
+                requests: [],
+                layout_board: null,
+              },
+            ],
+          }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ data }),
     })
   }
   return route.fulfill({

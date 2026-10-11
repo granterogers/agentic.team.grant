@@ -1,6 +1,6 @@
 # ADR-0069: A project's canvas background is a reference, tiling materials are anchored to the world, and a person's own picture stays in their browser until the office has a store for it
 
-Status: accepted, 9 October 2026. Tracked by #445 (the Canvas Background Library), under #439 and ADR-0068.
+Status: accepted, 9 October 2026. Decision 3 (tiles anchored to the world) is amended by [ADR-0072](0072-the-background-material-is-one-layer-fixed-to-the-window.md): the material is now one layer fixed to the window. Tracked by #445 (the Canvas Background Library), under #439 and ADR-0068.
 
 ## Context
 

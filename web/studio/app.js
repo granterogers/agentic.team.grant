@@ -45,7 +45,7 @@ import * as bcGrip from './bc/dockgrip.js'
 import * as bcDictate from './bc/dockdictate.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
-import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme } from './appearance.js'
+import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme, LOOKS, GLASS, DEPTHS } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as dictate from './dictate.js'
@@ -1833,12 +1833,12 @@ function paintDock() {
             : esc(p.slug === 'unnamed' ? 'Conversation' : p.name)
         }</span>
       </span>
-      <button class="closeconv" data-dock-close aria-label="Close the conversation">
+      <button class="closeconv" data-dock-close aria-label="Close the conversation" title="Close the conversation">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <div class="thread${messages.length === 0 ? ' empty' : ''}" data-dockthread>${
+    <div class="thread${messages.length === 0 ? ' empty' : ''}" data-dockthread${messages.length === 0 ? '' : ' role="list" aria-label="Conversation with the team"'}>${
       /*
         An empty conversation should look like an invitation, not like a fault.
 
@@ -2677,7 +2677,7 @@ function callSheet() {
       <div class="turns" id="turns" data-callturns></div>
     </details>
   </div>
-  <button class="close" aria-label="Close">
+  <button class="close" aria-label="Close" title="Close">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
   </button>`
@@ -3508,9 +3508,11 @@ function teamTab(p) {
 const saidBy = (who, m) => {
   const name = who === 'grant' ? 'You' : (crewBy(who)?.name ?? 'The office')
   const role = who === 'grant' ? '' : `, ${crewBy(who)?.role ?? ''}`
-  const at = m.at === undefined || m.at === null || m.at === ''
+  /* A message with no usable time says nothing about one: a screen reader was told "Invalid Date". */
+  const when = m.at === undefined || m.at === null || m.at === '' ? null : new Date(m.at)
+  const at = when === null || Number.isNaN(when.getTime())
     ? ''
-    : `, ${new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : `, ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
   const to = m.to === undefined || m.to === null || m.to === ''
     ? ''
     : `, to ${crewBy(m.to)?.name ?? String(m.to)}`
@@ -6884,7 +6886,25 @@ function channelsTab() {
 function appearanceTab() {
   const ui = settingsUi
   const now = appearance()
+  const shown = activeScheme(now)
+  const seg = (key, list, label) =>
+    `<span class="st-seg" role="group" aria-label="${label}">${list
+      .map((o) => `<button type="button" data-${key}-pick="${o.id}" aria-pressed="${now[key] === o.id}" title="${esc(o.note)}">${esc(o.name)}</button>`)
+      .join('')}</span>`
   return [
+    ui.section({
+      title: 'Look',
+      note: 'What the canvas and the faces of the modules are made of. Your accent colour goes on top of any of them.',
+      body: ui.card([
+        `<div class="st-looks" role="group" aria-label="Look">${LOOKS.map((l) => {
+          const [c, s] = l.faces[shown] ?? l.faces.dark
+          return `<button type="button" class="st-look" data-look-pick="${esc(l.id)}" aria-pressed="${now.look === l.id}">
+            <span class="st-lookface" style="--lf-canvas:${c};--lf-face:${s}" aria-hidden="true"><i></i><i></i></span>
+            <b>${esc(l.name)}</b><small>${esc(l.note)}</small>
+          </button>`
+        }).join('')}</div>`,
+      ]),
+    }),
     ui.section({
       title: 'Accent colour',
       note: 'Used for buttons, links, the selected item and the focus ring. It applies straight away and is saved to your account, so your other devices match.',
@@ -6903,9 +6923,33 @@ function appearanceTab() {
       body: ui.card([
         ui.row({
           name: 'Colour scheme',
-          desc: 'Team HQ is designed for a dark background in every light. There is no light version yet.',
-          kind: 'fact',
-          control: '<span class="st-value">Dark</span>',
+          desc: 'Light stone or dark slate, or follow your device. It applies straight away and is saved to your account.',
+          control: `<span class="st-seg" role="group" aria-label="Colour scheme">${[
+            ['light', 'Light'],
+            ['dark', 'Dark'],
+            ['system', 'Device'],
+          ]
+            .map(
+              ([id, name]) =>
+                `<button type="button" data-scheme-pick="${id}" aria-pressed="${now.scheme === id}">${name}</button>`,
+            )
+            .join('')}</span>`,
+        }),
+      ]),
+    }),
+    ui.section({
+      title: 'Materials',
+      note: 'How menus and panels sit above the board. Text is always read against a solid face.',
+      body: ui.card([
+        ui.row({
+          name: 'Frosted menus',
+          desc: 'How much of the board shows through menus and the command bar.',
+          control: seg('glass', GLASS, 'Frosted menus'),
+        }),
+        ui.row({
+          name: 'Depth',
+          desc: 'How far panels and menus lift off the board.',
+          control: seg('depth', DEPTHS, 'Depth'),
         }),
       ]),
     }),
@@ -6987,7 +7031,7 @@ function importSheet(p) {
         <h2 style="margin:2px 0 0">${esc(it.title)}</h2>
         <span class="t-meta">Into ${esc(p.name)}</span>
       </div>
-      <button class="close inhead" data-import-close aria-label="Close">✕</button>
+      <button class="close inhead" data-import-close aria-label="Close" title="Close">✕</button>
     </header>
 
     <label class="ifield">
@@ -8209,10 +8253,22 @@ function wireAppearance(v) {
     settingsSheet()          // redraw so the tick moves
     sheet(v, true)
   }
-  // The accent is the one appearance setting that changes Team HQ (see appearanceTab); the old scheme, density and
+  // The accent and the colour scheme change Team HQ (see appearanceTab); the old density and
   // texture controls were removed from the page and their wiring with them.
   for (const b of v.querySelectorAll('[data-palette-pick]')) {
     b.addEventListener('click', () => pick('palette', b.dataset.palettePick))
+  }
+  for (const b of v.querySelectorAll('[data-scheme-pick]')) {
+    b.addEventListener('click', () => pick('scheme', b.dataset.schemePick))
+  }
+  for (const b of v.querySelectorAll('[data-look-pick]')) {
+    b.addEventListener('click', () => pick('look', b.dataset.lookPick))
+  }
+  for (const b of v.querySelectorAll('[data-glass-pick]')) {
+    b.addEventListener('click', () => pick('glass', b.dataset.glassPick))
+  }
+  for (const b of v.querySelectorAll('[data-depth-pick]')) {
+    b.addEventListener('click', () => pick('depth', b.dataset.depthPick))
   }
 }
 
@@ -9618,7 +9674,7 @@ function drawShell() {
     : state.view === 'tasks' ? tasksView()
     : portfolio())
   // The room takes its colour from whatever is in front of you.
-  ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0].hue)
+  ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0]?.hue)
   breathe(root)
   scatter(root)
   /*
@@ -12203,7 +12259,7 @@ function taskSheet(t, p) {
         </div>
       </form>
     </div>
-    <button class="close" aria-label="Close">
+    <button class="close" aria-label="Close" title="Close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>`
@@ -12453,7 +12509,7 @@ function lookSheet(p, keepSearch = false) {
         </span>
       </div>
     </div>
-    <button class="close" aria-label="Close">
+    <button class="close" aria-label="Close" title="Close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>`
@@ -12740,7 +12796,7 @@ function openContact(c) {
              </div>`
       }
     </div>
-    <button class="close" aria-label="Close">
+    <button class="close" aria-label="Close" title="Close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>`
@@ -12811,7 +12867,7 @@ function labelEditor(after) {
           <button class="btn primary" type="submit">Add</button>
         </form>
       </div>
-      <button class="close" aria-label="Close">
+      <button class="close" aria-label="Close" title="Close">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>`
@@ -13020,7 +13076,7 @@ function openDoc(doc, from) {
   v.innerHTML = `<div class="sheet docsheet">
       <div class="sheethead">
         <span style="flex:1;min-width:0">${head}</span>
-        <button class="close inhead" aria-label="Close">
+        <button class="close inhead" aria-label="Close" title="Close">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>

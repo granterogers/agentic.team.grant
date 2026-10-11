@@ -233,7 +233,7 @@ export const newProject = ({ open }) => `<form class="bcnewproject" data-bc-newp
     <div class="bcfield">
       <label class="bclabel" for="bc-newproject-name">Project name</label>
       <input class="bcinput" id="bc-newproject-name" type="text" name="name" maxlength="80" autocomplete="off"
-        placeholder="For example: Spring product launch" required>
+        placeholder="For example: Spring launch" required>
       <span class="bclabel">You can rename it later, and add documents, tasks and people as you go.</span>
     </div>
     <div class="bcnewprojectrow">
