@@ -439,18 +439,63 @@ const SECTIONS: Readonly<
       {
         param: 'category',
         arg: 'p_category',
-        values: ['request', 'job', 'approval', 'output', 'delivery', 'tool', 'reliability', 'usage', 'integration', 'external', 'task', 'document', 'calendar', 'sync', 'research', 'other'],
+        values: [
+          'request',
+          'job',
+          'approval',
+          'output',
+          'delivery',
+          'tool',
+          'reliability',
+          'usage',
+          'integration',
+          'external',
+          'task',
+          'document',
+          'calendar',
+          'sync',
+          'research',
+          'other',
+        ],
       },
-      { param: 'severity', arg: 'p_min_severity', values: ['debug', 'info', 'notice', 'warning', 'error', 'critical'] },
+      {
+        param: 'severity',
+        arg: 'p_min_severity',
+        values: ['debug', 'info', 'notice', 'warning', 'error', 'critical'],
+      },
       {
         param: 'status',
         arg: 'p_status',
-        values: ['recorded', 'requested', 'authorised', 'declined', 'attempted', 'completed', 'confirmed', 'failed', 'blocked', 'cancelled', 'scheduled', 'expired'],
+        values: [
+          'recorded',
+          'requested',
+          'authorised',
+          'declined',
+          'attempted',
+          'completed',
+          'confirmed',
+          'failed',
+          'blocked',
+          'cancelled',
+          'scheduled',
+          'expired',
+        ],
       },
       {
         param: 'source',
         arg: 'p_source',
-        values: ['teamhq', 'chatgpt', 'claude', 'mcp', 'telegram', 'slack', 'voice', 'worker', 'system', 'external'],
+        values: [
+          'teamhq',
+          'chatgpt',
+          'claude',
+          'mcp',
+          'telegram',
+          'slack',
+          'voice',
+          'worker',
+          'system',
+          'external',
+        ],
       },
       { param: 'visibility', arg: 'p_visibility', values: ['user', 'diagnostic', 'operator'] },
       { param: 'before_at', arg: 'p_before_at', shape: 'time' },
@@ -3625,7 +3670,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     section.requireOne !== undefined &&
     !section.requireOne.some((p) => (url.searchParams.get(p) ?? '').trim() !== '')
   ) {
-    return json({ error: `that section needs one of: ${section.requireOne.join(', ')}`, section: name }, 400)
+    return json(
+      { error: `that section needs one of: ${section.requireOne.join(', ')}`, section: name },
+      400,
+    )
   }
   let args: Record<string, unknown> = section.args ?? {}
   if (section.arg !== undefined) {

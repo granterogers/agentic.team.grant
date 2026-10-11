@@ -22,10 +22,18 @@ const needLately = (src: string): string => {
 const properties = {
   readsTheLedgerSection: (t: string) => /await settles\(read\('activity_ledger'\)\)/.test(t),
   replacesOnlyWhenEnabledAndNonEmpty: (t: string) =>
-    /if \(ledger\?\.enabled === true && Array\.isArray\(ledger\.office\) && ledger\.office\.length > 0\) \{\s*latest\.lately = \{ \.\.\.latest\.lately, office: ledger\.office \}/.test(t),
-  keepsTheRestOfThePage: (t: string) => /latest\.lately = \{ \.\.\.latest\.lately, office: ledger\.office \}/.test(t),
-  ledgerFailureIsContained: (t: string) => /try \{\s*const ledger = await settles\(read\('activity_ledger'\)\)[\s\S]*?\} catch \{\s*\/\/ the existing list stands\s*\}/.test(t),
-  existingReadStillFirst: (t: string) => t.indexOf("read('lately')") > -1 && t.indexOf("read('lately')") < t.indexOf("read('activity_ledger')"),
+    /if \(ledger\?\.enabled === true && Array\.isArray\(ledger\.office\) && ledger\.office\.length > 0\) \{\s*latest\.lately = \{ \.\.\.latest\.lately, office: ledger\.office \}/.test(
+      t,
+    ),
+  keepsTheRestOfThePage: (t: string) =>
+    /latest\.lately = \{ \.\.\.latest\.lately, office: ledger\.office \}/.test(t),
+  ledgerFailureIsContained: (t: string) =>
+    /try \{\s*const ledger = await settles\(read\('activity_ledger'\)\)[\s\S]*?\} catch \{\s*\/\/ the existing list stands\s*\}/.test(
+      t,
+    ),
+  existingReadStillFirst: (t: string) =>
+    t.indexOf("read('lately')") > -1 &&
+    t.indexOf("read('lately')") < t.indexOf("read('activity_ledger')"),
 }
 
 describe('needLately', () => {
@@ -46,7 +54,10 @@ describe('needLately', () => {
     const mutants: Record<keyof typeof properties, [string, string]> = {
       readsTheLedgerSection: ["read('activity_ledger')", "read('lately')"],
       replacesOnlyWhenEnabledAndNonEmpty: ['ledger?.enabled === true && ', ''],
-      keepsTheRestOfThePage: ['{ ...latest.lately, office: ledger.office }', '{ office: ledger.office }'],
+      keepsTheRestOfThePage: [
+        '{ ...latest.lately, office: ledger.office }',
+        '{ office: ledger.office }',
+      ],
       ledgerFailureIsContained: ['// the existing list stands', 'throw new Error("ledger")'],
       existingReadStillFirst: ["read('lately')", "read('activity_ledger')"],
     }

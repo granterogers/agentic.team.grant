@@ -1,3 +1,4 @@
+// biome-ignore-all format: a dense measurement script kept readable as written
 /**
  * What the unified activity ledger costs (migrations 1060 and 1061), measured on the isolated replica.
  *

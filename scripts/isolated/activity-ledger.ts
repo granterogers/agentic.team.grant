@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noExplicitAny: the read model's answers are untyped JSON
+// biome-ignore-all format: a dense proof script kept readable as written
 /**
  * The unified activity ledger (migrations 1060 and 1061), driven end to end on the isolated replica.
  *
