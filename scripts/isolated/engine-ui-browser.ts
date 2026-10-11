@@ -159,6 +159,8 @@ try {
     await load(t.page, 'overview')
     await openDock(t.page)
     const sel = t.page.locator('.dock [data-engine]')
+    // The control is drawn when the engine status read comes back; under load that is after the dock opens (a flake seen in about one full run in three on 11 October).
+    await t.page.waitForSelector('.dock [data-engine]', { timeout: 10_000 }).catch(() => undefined)
     check(`2a ${label}: the dock draws the engine control, with the team selected`, (await picks(t.page)) === 1 && (await sel.inputValue()) === 'team')
     await shot(t.page, `${label}-dock-available`)
     const TEAM = `[engine ui ${run}] ${label} to the team`

@@ -17,14 +17,16 @@ The resume point for any session picking this up. Read `ARCHITECTURE-HANDOFF.md`
 | **M5 bridge and host kit** | **done (never run on a real host)** | `scripts/hermes-bridge/` (6 files), `tests/engines/{bridge,bridge-fakes,host-kit}` (72 checks, 7 sabotages), `scripts/isolated/engine-bridge.ts` **21/21 with a REAL Hermes** on the replica (scripted model; evidence `docs/hermes/m5-evidence/engine-bridge-acceptance-2026-10-11.txt`; not in `verify:critical` because it needs a Hermes install), `docs/hermes/host/{config.yaml,.env.example,RUNBOOK.md,*.service}`; D-23 to D-29 in `INTERFACE-CONTRACTS.md` §5.3 |
 | **M6 Team HQ selection and status, voice adapter** | **done (undeployed)** | migration `1072_…` (`app.engine_status`, `public.hq_engine_status`, the thread reader labels engine and hides the notes), `supabase/functions/voice/index.ts` (records only the word `hermes`; 503 `hermes_not_sent`, never a team fallback), hq-api section `engine_status`, `web/studio/engine.js` + `chat.js` + `app.js` + `studio.css`, `scripts/isolated/engine-ui.ts` **43/43** (in `verify:critical`, 73/73, 3,945 assertions; 7 database and 2 voice-door sabotages), `scripts/isolated/engine-ui-browser.ts` **33/33** in a real browser as a second person, desktop and phone (extended tier; 3 page sabotages), `deploy:voice` refuses unless the live worker carries the engine seam (`scripts/deploy/lib/engine-order.ts`, `tests/deploy/engine-order.test.ts`); D-30 to D-36 in `INTERFACE-CONTRACTS.md` §10.1. Screenshots (local, not uploaded): `.out/engine-ui-*.png` |
 | **M9 Telegram and Slack selection** | **done (undeployed)** | `telegramEngine` / `slackEngine` in the two adapters, one line in each door, `tests/engines/prefix.test.ts` (15), `scripts/isolated/engine-channels.ts` **18/18** through the REAL webhook and events doors (in `verify:critical`; 3 hand sabotages, all red and restored); D-37 to D-39 in `INTERFACE-CONTRACTS.md` §10.2 |
-| M7 live free run | gated on V6 (Grant's zero-credit key) and on the Activity Ledger branch | |
+| **M7 ledger events** | **complete on the Hermes side; blocked on the ledger's merge** | the mirror (1070) plus 1076 (stopped run, proposed skill); `scripts/isolated/engine-ledger.ts` **28/28 against the ledger branch's REAL door** (migrations 1060 to 1062 read from commit `96a7dec4`; 5 sabotages; extended tier); `docs/hermes/RELEASE-READINESS.md` section 3 |
+| M7 live free run | gated on V6 (Grant's zero-credit key: **blocked**, the only key here is the office's funded one, not used) | `RELEASE-READINESS.md` section 5 |
+| **Release audit, 11 Oct** | **done; nothing released** | migration `1077` (`app.engine_mismatches`: a message sent to Hermes that the team answered is findable), `npm run check:engine-mismatch`, `engine-mixed` **12/12** (5 sabotages, in `verify:critical`); real Hermes `engine-bridge` **21/21** re-run on the pinned commit; `m8-learning-probe`; nine defects found and fixed (`RELEASE-READINESS.md` section 2); **the release plan is `docs/hermes/RELEASE-READINESS.md`** |
 | **M8a/M8b reviewed skill transfer** | **done (undeployed; learning never enabled for any office)** | migrations `1073` (observed technique as a `teach_skill` proposal; one SQL validator `app.engine_skill_offer_problem`; `decide_suggestion` now passes `p_tools` and re-checks the run on the press), `1074` (`engine.hermes.learning_offices`, `engine_runs.profile`, `app.engine_propose_skill`, `app.engine_skills_for_export`), `1075` (Governance shows the procedure before the press); `/engine/proposal` and `GET /engine/skills`; bridge export/harvest (`scripts/hermes-bridge/skills-sync.ts`); proofs `engine-skills` **67/67** (15 sabotages) and `engine-learning` **88/88** (14 sabotages) in `verify:critical` (76/76, 4,118 assertions); `engine-skill-card-browser` **24/24** in a real browser as a second person, desktop and phone (extended tier, 3 page sabotages; screenshots `.out/engine-skill-*.png`); unit tests `tests/engines/{skills,bridge-learning,gateway-routes}`; D-40 onward in `INTERFACE-CONTRACTS.md` §10.3 |
 | M10, M11 | not started | M10 needs Grant's separate go-ahead |
 
 ### M8 UNPROVEN, stated plainly
 
 * A **real** Hermes learning profile (`/p/hermes-learn`, `skills.external_dirs`, `skill_manage`) has not been run: the bridge's harvest and export are proved against fakes and the isolated replica, and the profile URL prefix is an assumption (V10/V11 never validated it).
-* The Activity Ledger hooks (HD-11, `external.skill_proposed`) are NOT wired; M7 is still blocked.
+* The Activity Ledger hooks are wired and proved against the ledger's real door (M7, 1076); the ledger itself is not merged.
 * The learning flag was never enabled in production and must not be without Grant: `engine.hermes.learning_offices` is an empty list by default.
 * Nothing here has been deployed or applied to production (no migration, no function, no page).
 
@@ -89,11 +91,11 @@ emulator must give Hermes's health probe and the bridge's clients the real fetch
 
 ## Next: where to resume
 
-* **M7** is gated on Grant's V6 key and on `feature/unified-activity-ledger` merging; nothing to do until then (HD-11 calls are `to_regprocedure`-guarded).
+* **M7** is done on this side. It needs the ledger branch merged (your decision) before any event can reach a ledger, and V6 before a live free run. Start from `docs/hermes/RELEASE-READINESS.md`: its section 6 ranks the blockers and section 13 lists what only you can decide.
 * **M10** needs Grant's separate go-ahead (writes through policy). Do not start it without that.
-* **M8 is built** (see the state table). The next migration number is `1076` (check `app.schema_migrations` first; other branches use 1023 to 1035).
-  What remains before it can run for real: Grant enables Hermes for one office (G1 to G4), a real `hermes-learn` profile is validated on the host
-  (the unproven items above), and the ledger hook is wired once M7 unblocks.
+* **M8 is built** (see the state table). The next migration number is `1078` (check `app.schema_migrations` first; other branches use 1023 to 1035).
+  What remains before it can run for real: Grant enables Hermes for one office (G1 to G4), a real `hermes-learn` profile is built and validated on the host
+  (a multiplexed profile with the skills toolset on; the real Hermes answered 404 to a profile it does not serve and showed no external skill with skills off, see RELEASE-READINESS section 4).
 * **M11** is deferred and needs a decision.
 * Before any of it ships: the deploy order in the M6 notes, plus Grant's decisions G1 to G4 above and a run of the production-read checks he authorises.
 
@@ -174,3 +176,5 @@ evidence about SQL or a model's quality.
 hunks. Not run, because they contact production and need Grant's authorisation: `check:callers`, `check:consumed`, `check:pressable`,
 `check:gateway-wrappers`, `check:machine-key`, `check:anon-exposure`, `check:carrier-writers`. Cosmetic note: the card prints the tool as
 "Db: read"; left as is.
+
+**Disclosed slips in the release audit:** `python3` heredocs were used to edit three files I had just written (`engine-ledger.ts`, `m8-learning-probe.ts`, the RUNBOOK section) and the critical-gate registry, and `sed -i` was typed once as a SABOTAGE of `hermes-gateway.service` (it made the host-kit test red as intended and the file was restored with `git checkout`, with its `.bak` removed). The rule stands; the reflex is the trap.

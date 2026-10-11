@@ -82,6 +82,8 @@ export interface HermesOptions {
   readonly keepHome?: boolean
   /** skills.create_dir: where Hermes writes a skill it creates (an isolated directory the bridge can harvest). */
   readonly skillsCreateDir?: string
+  /** skills.external_dirs: read-only reference directories Hermes lists beside its own skills (M8 audit probe). */
+  readonly skillsExternalDirs?: readonly string[]
   /** The fetch used for the start-up health probe. A proof whose global fetch is wrapped by the edge emulator passes the real one. */
   readonly fetcher?: (input: string) => Promise<Response>
   readonly label: string
@@ -131,6 +133,9 @@ export const configYaml = (o: HermesOptions): string => {
     'skills:',
     '  creation_nudge_interval: 0',
     ...(o.skillsCreateDir === undefined ? [] : [`  create_dir: "${o.skillsCreateDir}"`]),
+    ...(o.skillsExternalDirs === undefined || o.skillsExternalDirs.length === 0
+      ? []
+      : ['  external_dirs:', ...o.skillsExternalDirs.map((d) => `    - "${d}"`)]),
     'gateway:',
     '  api_server:',
     `    max_concurrent_runs: ${String(o.maxConcurrentRuns ?? 1)}`,

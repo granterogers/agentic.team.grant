@@ -295,6 +295,7 @@
     "check:pressable": "tsx scripts/check-pressable.ts",
     "check:capabilities": "tsx scripts/check-capabilities.ts",
     "check:consumed": "tsx scripts/check-consumed.ts",
+    "check:engine-mismatch": "tsx scripts/check-engine-mismatch.ts",
     "check:suite-classes": "tsx scripts/check-suite-classes.ts",
     "suite": "tsx scripts/suite.ts",
     "sample:status": "tsx scripts/sample/sample.ts status",

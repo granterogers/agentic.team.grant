@@ -21,6 +21,10 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 ReadWritePaths=/opt/agentic-team/.out
+# Learning only (docs/hermes/host/RUNBOOK.md section 9a; leave these two lines out while learning is off). The export directory is the
+# office's approved skills, written by the bridge: it lives OUTSIDE /var/lib/hermes so that Hermes's unit (ProtectSystem=strict, writable
+# only under /var/lib/hermes) cannot write it. The learn directory is where Hermes may write a draft; the bridge reads and deletes it.
+ReadWritePaths=/var/lib/hermes-skills-export /var/lib/hermes/learn
 
 [Install]
 WantedBy=multi-user.target

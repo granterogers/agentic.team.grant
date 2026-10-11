@@ -382,6 +382,12 @@ export const CRITICAL: readonly Proof[] = [
     'Hermes may only propose: behind engine.hermes.learning_offices (off by default), a closed draft shape through the REAL engine gateway, one proposal per run fenced by the bridge that holds it, untrusted text refused before it is stored, nothing written to the executable skill directory, an export that is read-only, per claimed run, live skills only and empty when learning is off or the bridge is disabled, and a rejected, withdrawn or replaced skill never returns by a cache (14 sabotages)',
   ),
 
+  p(
+    'engine-mixed',
+    12,
+    'a message a person sent to Hermes that the team answered (a worker that predates the engine seam, a rollback, a skipped deploy step) can be FOUND: reported by job id and channel with no text, and not a Hermes job that opened a run, a team job, one still waiting, harness traffic or another office; an office is always named and no browser key can ask (5 sabotages)',
+  ),
+
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p(
     'replay-parity',

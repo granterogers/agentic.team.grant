@@ -88,6 +88,17 @@ describe('the service units', () => {
       expect(unit).toMatch(/^User=hermes$/m)
     }
   })
+  it('Hermes cannot write the skills export directory: it is outside every path Hermes\'s unit may write, and only the bridge lists it', () => {
+    // Hermes's own skill_manage edits and deletes a skill in skills.external_dirs (measured on the pinned commit), so the operating
+    // system is the only read-only guarantee the reference directory has. Both units run as the same user, so it is the sandbox that decides.
+    const rw = (unit: string): string[] => [...noComments(unit).matchAll(/^ReadWritePaths=(.*)$/gm)].flatMap((m) => (m[1] ?? '').trim().split(/\s+/))
+    const exportDir = '/var/lib/hermes-skills-export'
+    expect(rw(bridgeUnit)).toContain(exportDir)
+    for (const path of rw(hermesUnit)) {
+      expect(exportDir.startsWith(`${path.replace(/\/$/, '')}/`) || exportDir === path, `the Hermes unit may write ${path}, which holds the export directory`).toBe(false)
+    }
+    expect(rw(hermesUnit)).toEqual(['/var/lib/hermes'])
+  })
   it('the bridge listens on no port and is started after Hermes', () => {
     expect(noComments(bridgeUnit)).not.toMatch(/ListenStream|ListenAddress|_PORT|\bPort=/i)
     expect(bridgeUnit).toMatch(/Requires=hermes-gateway\.service/)

@@ -160,8 +160,9 @@ const mkBridge = (host: HermesHost, timing: Record<string, number> = {}): Bridge
 }
 let lastClaimAt = 0
 // The gateway's claim throttle is five seconds from the moment the PREVIOUS claim reached it, which is later than the moment this proof
-// started it (a preflight comes first), so the margin is generous.
-const spaced = async (): Promise<void> => { const w = lastClaimAt + 7_000 - Date.now(); if (w > 0) await sleep(w); lastClaimAt = Date.now() }
+// started it (a preflight comes first), so the margin is generous. 11 Oct audit: seven seconds was not enough on a slower host (R3 saw
+// `claim failed: rate_limited` because the first trial's preflight took about two seconds, which made the real gap 4.8): nine is.
+const spaced = async (): Promise<void> => { const w = lastClaimAt + 9_000 - Date.now(); if (w > 0) await sleep(w); lastClaimAt = Date.now() }
 
 interface Trial { job: string; ended: Awaited<ReturnType<Bridge['runClaimed']>> | null; state: string; out: Record<string, any>; row: Record<string, any>; calls: Record<string, any>[] }
 const trial = async (host: HermesHost, text: string, o: { stopAfterMs?: number; timing?: Record<string, number> } = {}): Promise<Trial> => {

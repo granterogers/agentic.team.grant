@@ -69,6 +69,8 @@ export class FakeHermes {
   readonly runs = new Map<string, FakeRun>()
   readonly started: { key: string | null; body: Record<string, unknown>; raw: string; id: string }[] = []
   readonly stops: string[] = []
+  /** How long the fake takes to answer a stop (0 = at once): a slow stop is what makes "the bridge did not wait for it" visible. */
+  stopDelayMs = 0
   readonly approvals: { run: string; body: Record<string, unknown> }[] = []
   readonly order: string[] = []
   /** The behaviour for the next run started; falls back to `defaults`. */
@@ -154,6 +156,7 @@ export class FakeHermes {
     const sub = m[2]
     if (run === undefined) return json(res, 404, { error: 'unknown run' })
     if (sub === 'stop') {
+      if (this.stopDelayMs > 0) await new Promise((r) => setTimeout(r, this.stopDelayMs))
       this.order.push(`stop ${run.id}`)
       this.stops.push(run.id)
       run.stopped = true

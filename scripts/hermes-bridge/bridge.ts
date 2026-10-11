@@ -406,10 +406,14 @@ export class Bridge {
     const hermesRunId = state.hermesRunId
     this.log(`run ${run.run_id}: attempt ${String(run.claim_gen)} is Hermes run ${hermesRunId}`)
 
+    // The stop is sent without making the loop wait for it, but the run is not over until it has gone: a bridge that returned first would
+    // poll for the next run while the last one still held Hermes's only slot (and a test could not see the stop it asked for).
+    let stopping: Promise<void> | null = null
     const stopHermes = async (): Promise<void> => {
       if (state.stopSent) return
       state.stopSent = true
-      await hermes.stop(hermesRunId)
+      stopping = hermes.stop(hermesRunId)
+      await stopping
     }
     const decide = (v: Verdict): void => {
       if (state.verdict === null) {
@@ -534,6 +538,7 @@ export class Bridge {
     await watch()
     ac.abort()
     await Promise.allSettled([reader, beater])
+    if (stopping !== null) await Promise.allSettled([stopping])
 
     if (state.abandoned) {
       this.log(`run ${run.run_id}: the claim was lost; the run is not reported`)

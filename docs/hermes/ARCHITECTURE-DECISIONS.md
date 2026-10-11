@@ -188,6 +188,8 @@ each harvest.
 
 ## HD-11 · Observation and audit: the office's rows are canonical; the Unified Activity Ledger is the read model when it merges
 
+> **Status 11 October 2026:** the events are wired (1070, 1076) and proved against the ledger branch's real door (`engine-ledger`); the ledger is still unmerged. See `RELEASE-READINESS.md` section 3.
+
 **Decision.** Canonical records are `engine_runs` (lifecycle) and `engine_run_calls` (every MCP call the office served to the run).
 When `feature/unified-activity-ledger` is merged, the engine gateway (which IS the "scoped application boundary" that contract asks
 for) additionally calls `app.record_external_activity` with `external.research_started`, `external.output_produced`,

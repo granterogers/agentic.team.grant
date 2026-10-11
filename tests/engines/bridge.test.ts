@@ -480,6 +480,15 @@ describe('the gateway side', () => {
     expect(g.of('/finish')).toHaveLength(0)
     expect(h.stops).toHaveLength(1)
   })
+  it('a run is not over until Hermes has been told to stop: a slow stop is awaited before the bridge returns', async () => {
+    // Found 11 October: this was a race the suite lost once in a full run (the stop was sent and not waited for). A slow stop makes it deterministic.
+    h.stopDelayMs = 120
+    h.queue = [{ script: [tool('mcp__office__list_tasks', 10), completed('x', 2_000)] }]
+    g.heartbeat = (n) => (n >= 2 ? { status: 409, body: { error: 'not_yours' } } : { status: 200, body: { stop: false, because: null, lease_until: null } })
+    const ended = await make().runClaimed(claimed())
+    expect(ended).toMatchObject({ outcome: 'abandoned', sent: false })
+    expect(h.stops).toHaveLength(1)
+  })
   it('retries a report while the gateway is unavailable, then lands it once', async () => {
     h.queue = [{ script: [completed('answer')] }]
     g.finish = (n) => (n <= 2 ? { status: 503, body: { error: 'unavailable' }, headers: { 'retry-after': '1' } } : { status: 200, body: { ok: true, resumed: true } })
