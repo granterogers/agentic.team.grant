@@ -1,0 +1,58 @@
+Hermes M5 acceptance: the real bridge with a REAL Hermes, end to end on the isolated replica.
+Command:  HERMES_HOST_DIR=<host dir with venv/> npx tsx scripts/isolated/engine-bridge.ts <clone of the replica>
+Date:     11 October 2026 (UTC), base commit a9a45b93 plus the M5 working tree (committed with this file).
+Hermes:   NousResearch/hermes-agent at the pinned source, `hermes --version` "Hermes Agent vunknown (2026.9.24)", started exactly as docs/hermes/host/config.yaml
+          configures it (every built-in toolset disabled, tool_search "off", one concurrent run), loopback only.
+MOCK:     the MODEL is scripts/hermes-m0/llm-double.ts (a scripted OpenAI-compatible endpoint) and Telegram is a scripted api.telegram.org. NO real provider is
+          configured on this host, so there was no model call and no spend. Nothing here says anything about what a free model answers or how well.
+REAL:     Hermes, the bridge (configured through parseBridgeConfig), the engine gateway and office MCP edge functions (run in Node by edge-emulator.ts, which
+          refuses every URL that is not the replica), the worker, the office.instruction handler, the SQL of migrations 1070 and 1071, the reply channel.
+          The crash test (R15, R16) runs the bridge as its own process (scripts/isolated/engine-bridge-child.ts) and SIGKILLs it.
+Pass mark (blueprint section 8): at least 8 of 10 designed outcomes, zero containment events, zero non-free calls. Result: 21 of 21 checks, 0 containment, 0 model calls.
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+Hermes is up on a loopback port ({"status":"ok","platform":"hermes-agent","version":"unknown"}); the model is the scripted double; no real provider is configured.
+     trial "say hello": bridge completed/completed; job complete; run completed
+ok   R1 a plain turn: the real bridge claims through the real gateway, the real Hermes answers, the job is woken and the answer is delivered to the chat as an inference - completed / complete / a plain answer
+ok   R2 the only usage on the job is Hermes's, at zero cost, and no team model was asked - [{"provider":"hermes","c":"0.00000000"}]
+     trial "CALL list_tasks {}": bridge completed/completed; job complete; run completed
+ok   R3 Hermes called an office tool through the real MCP function: the read is served, recorded against the run as a complete tasks read, and the answer is built from it - list_tasks:served / hermes:list_tasks
+     trial "CALL search_documents {"query":"zqbridge...": bridge completed/completed; job complete; run completed
+ok   R4 a document search through Hermes finds the project's document, is recorded as documents and NOT complete, and cites the tool
+     trial "CALL list_projects {}": bridge completed/completed; job complete; run completed
+ok   R5 the project list is a complete read of the projects domain
+     trial "RATELIMIT": bridge failed/hermes_failed; job complete; run failed HTTP 429: Rate limit exceeded: free-models-per-min.
+ok   R6 a provider rate limit (the free model is busy) fails the run; the person is told in plain words and nothing is retried by the team - Hermes couldn't finish this (the free model it uses was busy). Nothing was changed. Ask again, or se...
+     trial "ERR500": bridge failed/no_progress; job complete; run failed no_progress
+ok   R7 a provider 500 (which Hermes retries for ever) is stopped by the bridge's no-progress limit and told plainly - no_progress
+     trial "say hello again": bridge completed/completed; job complete; run completed
+ok   R8 and the Hermes slot was freed: the very next run is accepted (a stuck run would be refused as too many concurrent runs) - completed
+     trial "SLOW 30": bridge cancelled/stopped_by_office; job cancelled; run cancelled
+ok   R9 the person's Stop cancels the job, the next heartbeat reaches the real Hermes, the run is cancelled and nothing is answered or delivered - cancelled / cancelled
+     trial "say hello once more": bridge completed/completed; job complete; run completed
+ok   R10 and the slot is free again after the stop - completed
+     trial "FORCECALL terminal {"command":"touch /tmp/pwned"}": bridge completed/completed; job complete; run completed
+ok   R11 a tool call to something that is not offered (a terminal) executes nothing: the run ends, no containment was needed, and no file appeared - completed: OK: Tool 'terminal' does not exist. Available tools: mcp__office__check_job, mcp...
+ok   R12 and nothing was written to the machine
+     trial "TOOLS": bridge completed/completed; job complete; run completed
+ok   R13 with Hermes CONFIGURED to include write tools, the real Hermes still offers the model only the office's read tools: the server never lists a write tool to an engine client - TOOLS: ["mcp__office__list_projects","mcp__office__list_tasks"]
+     trial "FORCECALL mcp__office__create_task {...}": bridge completed/completed; job complete; run completed
+ok   R13b and a model that asks for a write tool anyway (a hallucinated call) cannot reach one: Hermes refuses it as unknown or repairs it onto an offered READ tool, every recorded call is a read tool, and no task is created - calls list_tasks
+ok   R14 the office's task count for the project is unchanged
+ok   R15 the first bridge process told the office its Hermes run id (so a restart can attach), and was then killed outright - run_49b30ec7d9c149d0b0717b29570500cd
+ok   R16 a restarted bridge re-attached to the SAME live Hermes run (one model conversation, not two) and the run completed with the same Hermes run id - state completed, model requests for that turn 1
+ok   R17 the job was answered from that run and delivered
+ok   R18 zero containment events across every run that was not deliberately given a write tool - none
+ok   R19 zero team-model calls and zero calls of any model other than the scripted double (there is no provider configured on this host)
+ok   R20 no run was left live and unowned - 0 live
+
+21/21 passed
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Findings recorded by this run (each also in docs/hermes/INTERFACE-CONTRACTS.md section 5.3):
+  * The gateway's claim throttle is measured from when the previous claim REACHED it; a client that spaces claims from when it STARTED them can be refused
+    ("rate_limited"), and the bridge then waits and the run waits with it. A real bridge polls every 15 s, so this only affected the proof's own spacing.
+  * Hermes repairs an unknown tool name to the nearest offered one (a request for create_task landed on list_tasks). Harmless here because only read tools are
+    offered, but it means a hallucinated call can be served as a different read than the model named; the recorded call (engine_run_calls) says which.
+  * The office's MCP function narrows tools/list for an engine client, so Hermes configured with write tools in its include list is still never offered them.
+  * A provider 500 keeps a Hermes run alive for ever; the bridge's no-progress limit is what ends it, and it frees Hermes's single slot (R7, R8).

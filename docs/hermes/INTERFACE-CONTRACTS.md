@@ -273,6 +273,29 @@ choices`; the approval POST body is `{choice, request_id?}` (an unknown choice i
 refused 429 "Too many concurrent runs (max 1)"; the host config must set `tools.tool_search.enabled: "off"` (quoted: bare `off` is a
 YAML boolean) or the MCP tools are hidden behind a bridge tool; in multiplex mode every profile reads its own `.env` (D-6).
 
+### 5.3 M5 as built (`scripts/hermes-bridge/`, `docs/hermes/host/`)
+
+Canonical: `scripts/hermes-bridge/{sse,hermes-client,gateway-client,config,bridge,main}.ts`. Proved by `tests/engines/bridge.test.ts` (58 checks against a fake
+Hermes and a fake gateway on loopback, 7 sabotages recorded in `IMPLEMENTATION-PROGRESS.md`), `tests/engines/host-kit.test.ts`, and
+`scripts/isolated/engine-bridge.ts` (21 checks with a REAL Hermes, evidence in `docs/hermes/m5-evidence/`). The Hermes shapes were OBSERVED
+(`scripts/hermes-m0/m5-observe.ts`), not read from source. Differences from 5.1 and 5.2, each with its reason:
+
+| Id | Contract said | Built | Why |
+|---|---|---|---|
+| D-23 | `GET /v1/toolsets` lists every enabled toolset; any but the office server fails | `{data: [{name, enabled, tools}]}`; the bridge fails the preflight if any ENABLED name is not `office`, or if the list cannot be read (`toolsets_ok: false`, not undefined). | M0 V1 left the response shape an assumption; observed here. An unreadable list fails closed. |
+| D-24 | The bridge refuses a non-loopback Hermes URL and a non-https gateway URL | Also refuses: credentials, a query or a fragment in the gateway URL; any `SUPABASE_*`, `DATABASE_URL`, `POSTGRES*` in its environment; `HERMES_YOLO_MODE` when on. The one exception, loopback http for the gateway, needs `ENGINE_BRIDGE_ALLOW_INSECURE_LOOPBACK=1` and exists for the replica proofs. The error text names the variable, never a value. | "No database client, no Supabase key" is enforced, not hoped for. |
+| D-25 | The bridge imports only `types.ts` and `timing.ts` | Plus `src/safety/require-production-writes.ts` in `main.ts` only, first. `tests/engines/bridge.test.ts` reads every file's imports (with a control that proves the reader can fail). `npm run hermes:bridge` is in the production-write list: on a real host the person sets `ALLOW_PRODUCTION_CHECKS=1` and `ALLOW_PRODUCTION_WRITES=1` in the service's own environment, so an authoring session without them cannot start it. | The bridge writes to the office's database through the gateway; the repository's rule is that anything that does needs the same switches a deploy needs. |
+| D-26 | `approval.request` is denied with `{"choice":"deny","all":true}` | `{"choice":"deny","request_id":<id>}` | M0 observed the accepted body (`choice` and an optional `request_id`). |
+| D-27 | After a stop, read events up to 30 s, then finish | The bridge's OWN decision (containment, no progress, the deadline, the office's Stop) is final: it wins over whatever Hermes then reports, and the report goes at the earlier of Hermes's terminal event and the stop wait. | A stopped run whose model then "completes" must not be reported as an answer. |
+| D-28 | One heartbeat every 5 s | The first heartbeat goes out at once and carries `hermes_run_id`, so the office knows which Hermes run a restarted bridge should attach to. A heartbeat the gateway answers 409 abandons the run: Hermes is stopped and NOTHING is reported (the office already moved on). A bridge that has had no heartbeat accepted for 80 s abandons the run too, because its lease has gone. | The restart proof (R15, R16) and a lost claim. |
+| D-29 | (not specified) a finish the gateway cannot take | Retried every 5 s for up to 60 s while the gateway is down (the lease outlives a short outage and a dropped report drops the answer), never retried on a 409 or 401, and a 400 is replaced by a plain `bridge_result_invalid` failure the office accepts. A result that fails `resultProblem` is replaced the same way. | Every outbound shape is validated by the same function the database mirrors. |
+
+Observed about the real Hermes (all in the M5 evidence): a provider 429 fails the run itself (`run.failed`, `HTTP 429: Rate limit exceeded...`); a provider
+500 keeps the run alive for ever, so the no-progress limit is what ends it and frees Hermes's single slot; Hermes **repairs an unknown tool name to the nearest
+offered one** (a request for `create_task` ran as `list_tasks`), which is harmless while only read tools are offered and is why `engine_run_calls` records the tool
+that actually ran; and the office's MCP function narrows `tools/list` for an engine client, so a Hermes configured with write tools in its `include` list still
+never offers them. A restarted bridge re-attaches to the SAME live Hermes run: one model conversation, not two.
+
 ---
 
 ## 6. Hermes host configuration (`docs/hermes/host/config.yaml`, committed as a template in M5)

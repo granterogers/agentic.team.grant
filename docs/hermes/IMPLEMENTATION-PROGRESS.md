@@ -14,8 +14,8 @@ The resume point for any session picking this up. Read `ARCHITECTURE-HANDOFF.md`
 | **M2 engine gateway and bridge credentials** | **done (undeployed)** | `supabase/functions/engine`, `scripts/isolated/engine-gateway.ts` 33/33 with 6 sabotages (`verify:critical` 70/70, 3,846 assertions), `tests/engines/{gateway-routes,credentials}.test.ts`, `scripts/deploy/engine.ts`, `scripts/ops/engine-bridge-credential.ts` (never run against production); D-14, D-15 in `INTERFACE-CONTRACTS.md` §4 |
 | **M3 MCP server: the engine client kind** | **done (undeployed)** | migration `1071_…` (the gate names the project and the run), `supabase/functions/mcp/{index,tools}.ts`, `scripts/isolated/engine-mcp.ts` 27/27 with 5 sabotages (`verify:critical` 71/71, 3,873 assertions), `tests/engines/mcp-engine-tools.test.ts` (13, one sabotage), V4a golden unchanged and V4b 11/11 re-run through the changed function. Notes: D-16 below |
 | **M4 handler seam** | **done (undeployed)** | `src/engines/hermes/{turn,brief,result,drain}.ts`, two calls in `src/handlers/instruction.ts`, `scripts/isolated/engine-turn.ts` 29/29 (`verify:critical` 72/72, 3,902 assertions), `tests/engines/{brief,result,turn,drain}.test.ts`, `npm run engine:drain` (never run); D-17 to D-22 in `INTERFACE-CONTRACTS.md` §8.6 |
-| **M5 bridge and host kit** | **next** | `IMPLEMENTATION-TASKS.md` M5, `INTERFACE-CONTRACTS.md` §5 and §6 |
-| M6 | not started | |
+| **M5 bridge and host kit** | **done (never run on a real host)** | `scripts/hermes-bridge/` (6 files), `tests/engines/{bridge,bridge-fakes,host-kit}` (72 checks, 7 sabotages), `scripts/isolated/engine-bridge.ts` **21/21 with a REAL Hermes** on the replica (scripted model; evidence `docs/hermes/m5-evidence/engine-bridge-acceptance-2026-10-11.txt`; not in `verify:critical` because it needs a Hermes install), `docs/hermes/host/{config.yaml,.env.example,RUNBOOK.md,*.service}`; D-23 to D-29 in `INTERFACE-CONTRACTS.md` §5.3 |
+| **M6 Team HQ selection and status, voice adapter** | **next** | `IMPLEMENTATION-TASKS.md` M6, `INTERFACE-CONTRACTS.md` §10 |
 | M7 live free run | gated on V6 (Grant's zero-credit key) and on the Activity Ledger branch | |
 | M8 to M11 | not started | |
 
@@ -62,7 +62,35 @@ Grant's authorisation after M6.
 | S6 | the drain's order guard removed | E25 | the proof |
 | S7 | `engineRunFor` and `commandEngine` swallow errors | the two "THROWS" unit tests | `tests/engines/turn.test.ts` |
 
-## M5 start recipe
+## M5 sabotage record (bridge unit tests, seven defects put into `bridge.ts` together, each must turn a named probe red)
+
+| # | Defect | Red |
+|---|---|---|
+| S1 | the containment check never fires | four containment tests |
+| S2 | the idempotency key ignores the attempt | "the key follows the attempt" |
+| S3 | the office's stop in a heartbeat is ignored | "a heartbeat that says stop ..." |
+| S4 | the no-progress limit is a thousand times too long | the no-progress and the stop-wait tests |
+| S5 | an approval request is not denied | "denies every approval request ..." |
+| S6 | an earlier attempt's Hermes run is not stopped | "stops an earlier attempt's Hermes run ..." |
+| S7 | a lost claim still reports the run | "a lost claim ... abandons the run" |
+
+Eleven tests went red together and all seven restored green (55 of 55, then 58 of 58). The real-Hermes proof found three things the fakes could not: the gateway's claim
+throttle is measured from when the previous claim REACHED the gateway; Hermes repairs unknown tool names; and a harness whose global fetch is wrapped by the edge
+emulator must give Hermes's health probe and the bridge's clients the real fetch (captured before the emulator exists).
+
+## M6 start recipe
+
+1. Read `INTERFACE-CONTRACTS.md` §10 and `IMPLEMENTATION-TASKS.md` M6. The page is `web/studio` (no build step); the adapter is `supabase/functions/voice/index.ts`.
+2. hq-api: new section `engine_status` (`office: true`) reading `app.engine_available`, and action `engine_retire_bridge`; classify both in
+   `tests/gateway/operator-only.test.ts` and `check:pressable`. `public` wrappers only where PostgREST reaches them (`check:gateway-wrappers` is a production read: ask Grant).
+3. Voice `/turn`: copy `body.engine === 'hermes' ? 'hermes' : 'team'` into the `inbound_commands` row; any other value is `team`. `deploy:voice` preflight: refuse unless the live
+   worker bundle contains `engineRunFor` (blueprint section 10), read through `scripts/forensics/capture-functions.ts`.
+4. Team HQ composer: a two-state Team / Hermes control, disabled with the reason as its label when `engine_status` says no; the label "Hermes" on an answer is read from the run,
+   never from text; the parked "Hermes is working on it" output rows (about fifteen a run at most) must NOT render as messages (D-22).
+5. Level 1B UX QA: render, open the PNG, desktop and phone, keyboard, console and network, the failure and empty states. Attach screenshots to a build step and paste the URLs.
+6. Lint, typecheck, `npm test`, `check:secrets` (read `$?`), `verify:critical`; commit with the footer; push; update this file.
+
+## M5 start recipe (kept for history)
 
 1. `bash scripts/isolated/replica.sh`; if `verify:critical` reports `replay-parity` or a stale proof, `drop database gate_cand` (the candidate is reused
    when the pending file list is unchanged; see the M3 notes).

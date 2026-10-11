@@ -1,0 +1,56 @@
+# Hermes host configuration TEMPLATE (INTERFACE-CONTRACTS section 6, as validated in M0).
+# Copy to $HERMES_HOME/config.yaml on the host and replace the two <...> values. Never put a credential in this file:
+# every secret is an environment variable (see .env.example). Hermes interpolates ${NAME} from its own environment.
+#
+# What this file is for: Hermes may call the office's read-only MCP server and NOTHING ELSE. Every built-in toolset is switched off,
+# memory and skill creation are off, and only one run can be live at a time. The office enforces policy again server side, so this
+# file is the second line of defence, not the first. The bridge refuses to claim work if a toolset other than `office` is enabled.
+
+model:
+  provider: openrouter
+  # A :free model with tool calling and at least 64K of context (M0 V5). The primary measured in M0; change it only after re-running
+  # the model check, and never to a slug that is not :free.
+  default: "nvidia/nemotron-3-super-120b-a12b:free"
+
+auxiliary:
+  free_only: true            # Hermes's own side calls (titles, summaries) may only use free models
+
+background_review:
+  enabled: false             # no post-turn self-improvement fork (reviewed skill transfer is a later, gated step)
+
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+
+skills:
+  creation_nudge_interval: 0 # Hermes is never nudged to write a skill
+
+gateway:
+  api_server:
+    max_concurrent_runs: 1   # one run at a time; a second concurrent run is refused (429)
+
+platform_toolsets:
+  api_server: [office]       # the MCP server below is the ONLY toolset
+
+agent:
+  # Runs last and overrides everything above. The list is every built-in toolset Hermes has; the bridge's preflight reads
+  # GET /v1/toolsets and refuses to claim if any of them reads enabled.
+  disabled_toolsets: [terminal, file, web, search, browser, vision, image_gen, skills, skills_hub, todo, tts, cronjob,
+                      memory, session_search, code_execution, delegation, clarify, messaging, connections, kanban,
+                      project, context_engine, computer_use]
+
+tools:
+  tool_search:
+    # QUOTED. A bare off is a YAML boolean, and with "auto" Hermes hides MCP tools behind three bridge tools the office never sees.
+    enabled: "off"
+
+mcp_servers:
+  office:
+    url: "https://<project-ref>.supabase.co/functions/v1/mcp"
+    headers:
+      Authorization: "Bearer ${OFFICE_ENGINE_MCP_TOKEN}"
+    trust: full              # the office enforces policy server side (the engine client kind is read-only and gated per run)
+    connect_timeout: 20
+    tools:
+      include: [list_projects, search_documents, read_document, search_project, list_tasks, list_staff,
+                recent_work, check_job, inspect_activity, list_events]

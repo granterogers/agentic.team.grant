@@ -82,6 +82,8 @@ export interface HermesOptions {
   readonly keepHome?: boolean
   /** skills.create_dir: where Hermes writes a skill it creates (an isolated directory the bridge can harvest). */
   readonly skillsCreateDir?: string
+  /** The fetch used for the start-up health probe. A proof whose global fetch is wrapped by the edge emulator passes the real one. */
+  readonly fetcher?: (input: string) => Promise<Response>
   readonly label: string
 }
 
@@ -172,7 +174,7 @@ export const startHermes = async (o: HermesOptions): Promise<HermesHost> => {
   try {
     await waitFor(
       'the Hermes API server',
-      async () => (await fetch(`${url}/health`)).ok,
+      async () => (await (o.fetcher ?? fetch)(`${url}/health`)).ok,
       90_000,
       500,
     )

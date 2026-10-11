@@ -1,0 +1,25 @@
+# systemd unit for Hermes itself (a TEMPLATE). It listens on loopback only and runs as an unprivileged user with no access to the
+# office's repository, database credentials or any other secret: its only credentials are its own API key, the zero-limit OpenRouter
+# key and the office MCP token, all in $HERMES_HOME/.env.
+[Unit]
+Description=Hermes Agent API server (loopback only) for the office
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hermes
+Environment=HERMES_HOME=/var/lib/hermes/home
+Environment=HOME=/var/lib/hermes/work
+WorkingDirectory=/var/lib/hermes/work
+ExecStart=/opt/hermes/venv/bin/hermes gateway run
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/hermes
+
+[Install]
+WantedBy=multi-user.target

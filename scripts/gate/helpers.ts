@@ -28,6 +28,14 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: 'NOT a proof: the controlled real-model run (a real provider, a few cents, answers vary); it reports deterministic and model-dependent lines separately and is read by a person, so it is never a gate',
   },
   {
+    stem: 'engine-bridge',
+    role: 'NOT a gate proof: the Hermes M5 acceptance run with a REAL Hermes (needs an installed Hermes, HERMES_HOST_DIR, and a few minutes), a scripted model, no provider and no spend; read by a person, evidence in docs/hermes/m5-evidence. The bridge itself is covered in tests/engines/bridge.test.ts, which runs in npm test',
+  },
+  {
+    stem: 'engine-bridge-child',
+    role: 'the bridge as its own process, spawned and killed by engine-bridge to prove a restarted bridge re-attaches; loopback only, never used on its own',
+  },
+  {
     stem: 'shown',
     role: 'fixture: a question that reached him (superseded by fixtures-approvals markShown)',
   },

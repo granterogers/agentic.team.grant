@@ -1,0 +1,26 @@
+# systemd unit for the bridge (a TEMPLATE; adjust User, paths and the checkout location). Hermes has its own unit (hermes-gateway.service).
+# The bridge is outbound only: it listens on no port. It holds a bridge token and the Hermes API key and nothing else.
+[Unit]
+Description=Hermes bridge for the office (outbound only)
+After=network-online.target hermes-gateway.service
+Wants=network-online.target
+Requires=hermes-gateway.service
+
+[Service]
+Type=simple
+User=hermes
+WorkingDirectory=/opt/agentic-team
+EnvironmentFile=/etc/hermes-bridge/bridge.env
+ExecStart=/usr/bin/npm run --silent hermes:bridge
+Restart=on-failure
+RestartSec=30
+# A bridge whose token was retired exits 1; do not restart it into a polling loop.
+RestartPreventExitStatus=1 2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/agentic-team/.out
+
+[Install]
+WantedBy=multi-user.target
