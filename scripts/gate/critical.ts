@@ -341,7 +341,7 @@ export const CRITICAL: readonly Proof[] = [
   ),
   p(
     'activity-ledger-review',
-    32,
+    35,
     "each defect the independent review demonstrated stays fixed: no yes or no is invented for an answer the data cannot classify, a person-marked delivery is not provider-confirmed, a stopped job is the person's, a job filter includes every descendant, a fixture project's job-less rows are hidden, a selective filter on a busy office is complete, the page gets slugs, and a chain says when it is not complete",
   ),
   p(

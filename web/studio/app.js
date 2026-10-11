@@ -15316,26 +15316,44 @@ function needSettings(retry = false) {
   return settingsAsked
 }
 
+// The unified activity ledger's rows (docs/activity-ledger/), or null when there is nothing trustworthy to put in their place.
+// Null for: switched off, an answer of the wrong shape, no rows, or no row the page could draw. A row is kept only when it has a
+// string id nobody else has and an instant that parses; the page keys and orders by those two. Never throws.
+function ledgerRows(ledger) {
+  if (ledger === null || typeof ledger !== 'object' || ledger.enabled !== true || !Array.isArray(ledger.office)) return null
+  const seen = new Set()
+  const rows = []
+  for (const row of ledger.office) {
+    if (row === null || typeof row !== 'object') continue
+    const id = typeof row.id === 'string' ? row.id : ''
+    if (id === '' || seen.has(id) || typeof row.at !== 'string' || Number.isNaN(Date.parse(row.at))) continue
+    seen.add(id)
+    rows.push(row)
+  }
+  return rows.length > 0 ? rows : null
+}
+
 async function needLately() {
   if (latest.lately !== null) return
+  // Both reads start together and the page draws from the existing one the moment it arrives. The ledger can only improve what is
+  // already there: a slow or failing ledger costs the page nothing, and one that is switched off was never waited for.
+  const ledgerAsked = settles(read('activity_ledger')).catch(() => null)
   try {
     latest.lately = await settles(read('lately'))
-    // The unified activity ledger (docs/activity-ledger/), when it is switched on: the same rows in the same shape, so the page
-    // is unchanged. Switched off, absent or failing, the list above stands; nothing here can empty it.
-    try {
-      const ledger = await settles(read('activity_ledger'))
-      if (ledger?.enabled === true && Array.isArray(ledger.office) && ledger.office.length > 0) {
-        latest.lately = { ...latest.lately, office: ledger.office }
-      }
-    } catch {
-      // the existing list stands
-    }
   } catch {
     // Left null. The view says there is nothing rather than showing an error,
     // which on a history page is nearly the same sentence.
     latest.lately = { office: [], building: {}, today: {} }
   }
+  const mine = latest.lately
   render()
+  // Replaces only the list, and only if this is still the copy the page holds: a refresh in the meantime has already asked again,
+  // and older rows must not overwrite newer ones.
+  const rows = ledgerRows(await ledgerAsked)
+  if (rows !== null && latest.lately === mine) {
+    latest.lately = { ...mine, office: rows }
+    render()
+  }
 }
 
 async function refresh() {

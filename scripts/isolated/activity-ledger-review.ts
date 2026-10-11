@@ -177,6 +177,19 @@ try {
   const failEvent = (await read(grant, { p_job: root, p_visibility: 'user', p_limit: 200 })).events as Ev[]
   check('L8: an ordinary reader is not shown a failure reason, only a diagnostic reader is', failEvent.every((e) => e.metadata?.reason === undefined), 'no reason at user visibility')
 
+  // ---------------------------------------------------------------------------------------------- Hermes: there is no write door over HTTP
+  const door = await one(`select
+      (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in ('record_activity', 'record_activity_safely', 'record_external_activity')) as wrappers,
+      (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'app' and p.proname in ('record_activity', 'record_activity_safely', 'record_external_activity')
+          and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('service_role', p.oid, 'execute'))) as reachable,
+      has_schema_privilege('service_role', 'app', 'usage') as svc_usage,
+      has_schema_privilege('anon', 'app', 'usage') or has_schema_privilege('authenticated', 'app', 'usage') as public_usage`)
+  check('Hermes: no public wrapper exists for any activity writer, so PostgREST (the only door a key reaches) cannot call one', Number(door.wrappers) === 0, `${door.wrappers} wrappers`)
+  check('Hermes: no HTTP role can execute an activity writer, and none has usage on the schema they live in', Number(door.reachable) === 0 && door.svc_usage === false && door.public_usage === false, `executable by an http role: ${door.reachable}; usage service ${door.svc_usage} public ${door.public_usage}`)
+  const hermesReaders = await one(`select count(*) as c from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'activity\\_%' and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute'))`)
+  check('Hermes: the activity readers are not executable by a public key either', Number(hermesReaders.c) === 0, `${hermesReaders.c} public-key-executable readers`)
+
   const failed = results.filter((r) => !r.ok).length
   console.log(`\n${results.length - failed}/${results.length} passed`)
   exit = failed === 0 ? 0 : 1
