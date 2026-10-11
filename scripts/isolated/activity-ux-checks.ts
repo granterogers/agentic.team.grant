@@ -306,6 +306,12 @@ export async function runAll(H: any): Promise<void> {
       await press(page,'[data-act-panel]')
       check(`${tag}: the project filter is not offered inside a project (it cannot be widened by mistake)`, (await page.$$('[data-act-sel="project"]')).length === 0, '')
       await shot(page, `after-project-activity-${vp.name}`)
+      // the project dashboard's own Latest Activity module is a different surface and must be undisturbed (and draws without error)
+      await goto(page, `/p/${slug}`, 'main, .bcboard, .bcpanes')
+      await page.waitForTimeout(800)
+      const o2 = await overflowOf(page)
+      check(`${tag}: the project dashboard (with its Latest Activity module) still draws, with no page error and no overflow`, seen.pageErrors.length === 0 && o2.scroll <= o2.vw, `${o2.scroll} of ${o2.vw}`)
+      await shot(page, `after-project-dashboard-${vp.name}`)
       await close()
     }
     // ---------------------------------------------------------------------------------------------- states
@@ -385,6 +391,57 @@ export async function runAll(H: any): Promise<void> {
       check(`${tag}: reduced motion: the detail does not animate`, anim === 'none', anim)
       await close()
     }
+  }
+
+  // ------------------------------------------------------------------------------------------------ axe-core, over the screen in four of its states
+  for (const v of VIEWPORTS.filter((x: any) => x.name === '1440' || x.name === '390')) {
+    const { page, close } = await open(v)
+    await ready(page)
+    await page.addScriptTag({ path: 'node_modules/axe-core/axe.min.js' })
+    const scan = async (label: string) => {
+      const r = (await page.evaluate(`axe.run('.bcact', { resultTypes: ['violations'] }).then(function (r) { return r.violations.map(function (x) { return { id: x.id, impact: x.impact, n: x.nodes.length, first: x.nodes.slice(0, 3).map(function (n) { return (n.html || '').slice(0, 70) + ' [' + ((n.any[0] && n.any[0].message) || '').slice(0, 90) + ']' }).join(' ; ') } }) })`)) as any[]
+      check(`${v.name}px axe: ${label}: no accessibility violation`, r.length === 0, r.map((x) => `${x.id}(${x.impact}) x${x.n} ${x.first}`).join(' | ') || 'none')
+    }
+    await scan('timeline')
+    const first = (await rowsOf(page))[0]
+    await press(page, `[data-act-toggle="${first.id}"]`)
+    await press(page, `#bcact-d-${first.id} [data-act-chain]`).catch(() => undefined)
+    await page.waitForTimeout(1200)
+    await scan('an opened event with its related activity')
+    await press(page, '[data-act-panel]')
+    await scan('the filter panel open')
+    const zoomRisk = (await page.evaluate(`Array.prototype.slice.call(document.querySelectorAll('.bcact select, .bcact input, .bcact textarea')).filter(function (e) { return e.offsetParent !== null && parseFloat(getComputedStyle(e).fontSize) < 16 }).length`)) as number
+    check(`${v.name}px: every input and select is at least 16px, so iOS Safari does not zoom the page on focus`, zoomRisk === 0, `${zoomRisk} below 16px`)
+    await press(page, '[data-act-view="attention"]')
+    await page.waitForTimeout(1500)
+    await scan('Needs attention')
+    await close()
+  }
+
+  // ------------------------------------------------------------------------------------------------ timings (local replica; production differs)
+  for (const v of VIEWPORTS.filter((x: any) => x.name === '1440' || x.name === '390')) {
+    const { page, seen, close } = await open(v)
+    const t0 = Date.now()
+    await page.goto(`${H.APP}/activity`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.bcact-item', { timeout: 20000 })
+    const first = Date.now() - t0
+    const feedMs = feedCalls(seen)[0]?.ms ?? -1
+    const t1 = Date.now()
+    await press(page, '[data-act-view="completed"]')
+    await page.waitForFunction(() => document.querySelector('[data-act-view="completed"][aria-pressed="true"]') !== null && document.querySelectorAll('.bcact-item').length > 0 && !document.querySelector('.bcact-note[role="status"]'))
+    const filter = Date.now() - t1
+    const row = (await rowsOf(page))[0]
+    const t2 = Date.now()
+    await press(page, `[data-act-toggle="${row.id}"]`)
+    await page.waitForSelector(`#bcact-d-${row.id} .bcact-detail-in`)
+    const detailMs = Date.now() - t2
+    const nodes = await page.evaluate(`document.querySelectorAll('.bcact *').length`)
+    H.timings[`${v.name}-page-to-first-row-ms`] = [first]
+    H.timings[`${v.name}-first-feed-call-ms`] = [feedMs]
+    H.timings[`${v.name}-filter-change-ms`] = [filter]
+    H.timings[`${v.name}-expand-detail-ms`] = [detailMs]
+    check(`${v.name}px: responsive on a ${H.hist.rows}-event history (page to first row ${first} ms of which the gateway ${feedMs} ms; filter ${filter} ms; opening an event ${detailMs} ms; ${nodes} DOM nodes for 40 rows)`, first < 6000 && filter < 4000 && detailMs < 500 && Number(nodes) < 6000, '')
+    await close()
   }
 
   // ------------------------------------------------------------------------------------------------ colour: contrast in both schemes

@@ -102,6 +102,10 @@ const open = async (vp: (typeof VIEWPORTS)[number], opts: Opts = {}) => {
     if (edge === null) return route.fulfill({ status: 404, headers: CORS, body: '{"error":"not served here"}' })
     const section = url.searchParams.get('section') ?? ''
     if (fn === 'hq-api') seen.sections.push(section || `POST:${(req.postData() ?? '').slice(0, 40)}`)
+    // Phase 6: the Activity screen's timeline reads activity_feed (activity-ux-browser.ts proves it). THIS harness proves the fallback
+    // beneath it - the older list drawn from the adapter's rows - so the timeline's reader is unavailable here, which is exactly the
+    // state in which the page must fall back to that list.
+    if (section === 'activity_feed' || section === 'activity_chain') return route.fulfill({ status: 500, headers: CORS, body: '{"error":"timeline reader unavailable (phase 4 harness)"}' })
     if (section === 'activity_ledger') {
       if (opts.ledger === 'hang') return new Promise(() => undefined)
       if (opts.ledger === 'fail') return route.fulfill({ status: 500, headers: CORS, body: '{"error":"ledger unavailable"}' })
@@ -139,7 +143,8 @@ const open = async (vp: (typeof VIEWPORTS)[number], opts: Opts = {}) => {
   await ctx.addInitScript(`try { localStorage.setItem('hq.session', JSON.stringify({ access_token: '${S}', refresh_token: 'r', expires_at: Date.now() + 36e5 })) } catch {}`)
   const page = await ctx.newPage()
   page.on('pageerror', (e) => seen.pageErrors.push(e.message.slice(0, 200)))
-  page.on('console', (m) => { if (m.type() === 'error') seen.consoleErrors.push(m.text().slice(0, 200)) })
+  // the browser logs the 500 this harness injects on the timeline's reader; that one is the experiment, not a defect
+  page.on('console', (m) => { if (m.type() === 'error' && !/section=activity_(feed|chain)/.test(m.location().url)) seen.consoleErrors.push(m.text().slice(0, 200)) })
   return { page, seen, close: () => ctx.close() }
 }
 
