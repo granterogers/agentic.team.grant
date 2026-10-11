@@ -147,6 +147,20 @@ GET  hq-api?section=activity_health                                      include
 Word lists and shapes are checked at the gateway and refused by name with a 400. A cursor's instant is passed on **as written** (it has microseconds).
 With the switch off every section answers `{ enabled: false }` and nothing else.
 
+### The Team HQ row (`activity_ledger`, phase 4)
+
+`app.activity_for_the_page` returns one row per user-visible event: `id`, `who` (the raw actor), `who_name` (what a person reads: "You", a specialist's role name, or "Name (external worker)"), `kind` (the actor kind),
+`summary` (the whole sentence), `verb` and `what` (the sentence split at its first space, kept for the older renderer), `project`, `when`, `at`, `via`, `category`, `severity`, `status`, `evidence`, `provenance`.
+Wording rules a consumer may rely on: a person's own act reads as a sentence starting "You" and an outside worker's report never does (it is named by `who_name`, and its stored `[external:<name>]` marker is not repeated in `summary`);
+a job is "a request" (`office.instruction`) or its dotted kind in words; an approval is "You said yes/no" only on the evidence rules above, otherwise "Answered"; a delivery is "Sent to <channel>" only when the provider confirmed it, "Marked as delivered by you"
+when a person said so, "Could not send" when it failed; a review with no recorded reviewer says "(reviewer not recorded)". Diagnostic events (tool calls, usage, worker errors, recoveries) are not in this answer; they are in `activity_feed?visibility=diagnostic`.
+A page must place the actor before the sentence only when `kind` is `agent` or `external` (`ledgerLine` in `web/studio/app.js`).
+
+### Per-office activation
+
+`activity.ledger_enabled` is the master switch. `activity.ledger_offices` (optional) narrows it: absent = every office the master covers, a JSON array of office ids = those offices, anything else = none. Every writer and reader asks `app.activity_ledger_covers(office)`;
+the zero-argument `app.activity_ledger_on()` is the master alone. The allowlist can never turn the ledger on by itself. The health reading (`activity_health`) reports `master_on`, `scope` (`all_offices` or `allowlist`) and `enabled` for the office.
+
 ## Versioning
 
 - Additive changes (a new type, a new metadata key, a new field) do not change `schema_version`. A consumer ignores what it does not know.

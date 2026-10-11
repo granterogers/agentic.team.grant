@@ -943,7 +943,7 @@ begin
                'evidence', e -> 'evidence',
                'provenance', e ->> 'provenance') order by (e ->> 'at') desc)
         from jsonb_array_elements(v_page -> 'events') e
-        cross join lateral (select regexp_replace(e ->> 'summary', '^\[external:[^]]*\] ', '') as s) x), '[]'::jsonb),
+        cross join lateral (select regexp_replace(e ->> 'summary', '^(\[external:[^]]*\] )+', '') as s) x), '[]'::jsonb),
     'next', v_page -> 'next',
     'generated_at', app.now_utc());
 end

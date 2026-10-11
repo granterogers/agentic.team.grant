@@ -29,7 +29,7 @@ try {
   try {
     await recordRecovered(db, [{ jobId: job, fromState: 'running', reason: 'lease expired' }])
     await recordToolCall(db, { jobId: job, capability: 'drive.read', step: 's1', phase: 'requested' })
-    await recordToolCall(db, { jobId: job, capability: 'drive.read', step: 's1', phase: 'failed', outcome: 'error', errorClass: 'timeout', durationMs: 1200 })
+    await recordToolCall(db, { jobId: job, capability: 'drive.read', step: 's1', phase: 'failed', outcome: 'nothing', errorClass: 'timeout', durationMs: 1200 })
   } catch (e) {
     threw = (e as Error).message
   }

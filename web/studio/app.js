@@ -15352,7 +15352,10 @@ function ledgerRows(ledger) {
 function ledgerLine(row) {
   const sentence = [row.verb, row.what].filter((x) => typeof x === 'string' && x !== '').join(' ').trim()
   const kind = typeof row.kind === 'string' ? row.kind : ''
-  const byline = kind === 'external' ? String(row.who_name ?? row.who ?? '') : kind === 'agent' ? String(crewBy(row.who).name ?? row.who ?? '') : ''
+  // crewBy falls back to the FIRST crew member for a slug it does not know, which would credit a retired or unknown specialist's line to
+  // somebody else; the roster is searched directly and an unknown one is named by the ledger's own name for them.
+  const known = (Array.isArray(CREW) ? CREW : []).find((c) => c.slug === row.who || c.staffSlug === row.who)
+  const byline = kind === 'external' ? String(row.who_name ?? row.who ?? '') : kind === 'agent' ? String(known?.name ?? row.who_name ?? row.who ?? '') : ''
   return { sentence, byline, kind }
 }
 

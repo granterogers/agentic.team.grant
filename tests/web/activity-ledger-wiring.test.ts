@@ -215,7 +215,7 @@ describe('needLately, by wiring (each detector can fail)', () => {
   A ledger sentence already names its actor, so the byline goes in front only for a specialist or an outside worker.
 */
 const ledgerLineSource = between(source, 'function ledgerLine(row)', '\nasync function needLately()')
-const ledgerLine = new Function('crewBy', `${ledgerLineSource}\nreturn ledgerLine`)((slug: string) => ({ name: slug === 'research-director' ? 'Emma' : undefined })) as (row: Row) => {
+const ledgerLine = new Function('CREW', `${ledgerLineSource}\nreturn ledgerLine`)([{ slug: 'research-director', name: 'Emma' }]) as (row: Row) => {
   sentence: string
   byline: string
   kind: string
@@ -229,6 +229,9 @@ describe('how a ledger row is worded (ledgerLine)', () => {
   })
   it('a specialist is named by the crew\'s name for them', () => {
     expect(ledgerLine({ who: 'research-director', kind: 'agent', verb: 'Finished', what: 'a request' }).byline).toBe('Emma')
+  })
+  it('a specialist the roster does not know is NOT credited to the first crew member: the ledger\'s own name is used', () => {
+    expect(ledgerLine({ who: 'retired-director', who_name: 'Retired Director', kind: 'agent', verb: 'Finished', what: 'a request' }).byline).toBe('Retired Director')
   })
   it('an outside worker is named as one, from the name the ledger gave, never from the crew', () => {
     expect(ledgerLine({ who: 'external:hermes', who_name: 'Hermes (external worker)', kind: 'external', verb: 'Proposed', what: 'a skill' }).byline).toBe('Hermes (external worker)')

@@ -34,7 +34,7 @@ SABOTAGES=(
   "S8|60|create trigger activity_events_visibility before insert on public.activity_events\n  for each row execute function|create trigger activity_events_visibility before insert on public.activity_events\n  for each row when (false) execute function|activity-ledger|diagnostic type cannot be written as ordinary"
   "S9|61|and not exists (select 1 from lastat l where (stats.minat, stats.minid) <= (l.at, l.id))) '|and false) '|activity-ledger|deeper than"
   "S10|60|  exception when others then|  exception when no_data_found then|activity-ledger|the safe writer never raises"
-  "S11|61|    and ((q.vis_override is null and app.activity_type_visrank(q.type) <= \$10) or q.vis_override <= \$10)|    and (true)|activity-ledger|native diagnostic events"
+  "S11|61|    and ((q.vis_override is null and app.activity_type_visrank(q.type) <= \$10) or q.vis_override <= \$10)~~when 0 then ' and a0.visibility = ''user'''~~when 1 then ' and a0.visibility in (''user'', ''diagnostic'')'|    and (true)~~when 0 then ''~~when 1 then ''|activity-ledger|native diagnostic events"
   "S12|61|where \$10 >= 1 and u.office_id = \$1~~where \$10 >= 1 and u0.office_id = \$1|where \$10 >= 1~~where \$10 >= 1|activity-ledger|neither feed"
   "S16|61|where hj.hjob is null or not hj.h|where true|activity-ledger|only the canonical predicate"
   "S26|60|t := left(normalize(t, NFKC), 4000);|t := left(t, 4000);|activity-redaction|key and value in full-width letters"

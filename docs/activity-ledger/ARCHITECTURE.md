@@ -188,6 +188,13 @@ delivery and approval ending; it goes red when one predicate is made too narrow.
 `partial: true` past 16 384 rows. Before this, a job or project older than the newest 16 384 transitions came back `partial`, and `activity_chain` reported `complete: true` over a lifecycle with its
 first events missing; the chain now reports `partial` and is bounded exactly (it drops the **oldest** events when it truncates, and says so).
 
+**The visibility floor reaches the native pool (phase 4).** A person's newest page reads user-visible events only. The native source's pool was the newest rows of every visibility, so when
+thousands of diagnostic events (tool calls, by far the commonest native event) were the newest rows, the pool held none a person could see, the validity check widened it again and again, and the
+read went from 110 ms (3 500 native events) to **1.9 s** (5 550) and, past the widening ceiling, would have returned `partial`. The visibility ceiling is now a literal predicate on that source's pool
+(`a0.visibility = 'user'`, or `in ('user','diagnostic')`), served by a partial index on user-visible events (`activity_events_user_time_idx`, in 1060 because the table is born there): 123 ms at 5 550.
+It is the same test the outer stage applies, applied earlier, so it is never narrower than the filter it precedes; `activity-ledger-review` floods the newest rows with 17 000 diagnostic events and requires the
+older user-visible one and a non-partial page (sabotage S45; S11 removes both defences, because removing one is hidden by the other).
+
 Writes (same run, one round trip each): strict **1.0 ms**, safe **1.1 ms**, with the switch off **0.2 ms**. Twenty concurrent connections, fifty rounds each, every round
 a distinct key plus a key all twenty repeat: no error, no lost event, shared keys written once, about 4 300 calls a second. A native event with its indexes
 is about **660 bytes**. The ledger adds **no trigger** to `jobs`, `job_state_transitions`, `deliveries`, `inbound_commands`, `blockers`, `outputs`
@@ -199,7 +206,16 @@ and resumably, and `activity_ledger_health.indexes_missing` says which are absen
 
 ## 6. Team HQ
 
-The existing Activity page is untouched visually. `app.activity_for_the_page` returns the ledger in the shape `app.hq_studio_lately.office[]` already
+**Phase 4 correction.** Until phase 4 the ledger hook fed only the classic studio (`/classic`, unlinked): Team HQ's Activity screen (`allActivity` in `web/studio/bc/shell.js`) draws each project's own `activity` list
+and never read the ledger, so activating the ledger would have changed nothing a person sees. This was found by drawing genuine ledger rows through the real gateway in a real browser
+(`scripts/isolated/activity-ui-browser.sh`, 126 checks at 1440, 390 and 320 px). Team HQ now asks `ctx.ledgerActivity()`, which is null unless the ledger answered enabled with a drawable row, and then uses those rows **instead of** the per-project lists (merging
+two accounts of one event is how it appears twice); null leaves exactly the old behaviour. A ledger summary is already a sentence ("You said yes: ...", "Sent to Telegram"), unlike the older feed's bare verbs, so the
+actor is named only where the sentence does not carry it (`ledgerLine`): a specialist by the crew's name, an outside worker as "Name (external worker)", and a person's own acts and the office's bookkeeping not at all. Without
+this a person's yes would read "Claire You said yes" and an outside worker would be shown under the first crew member. The adapter also drops the worker marker from the sentence (the name says it) and words a job as "a request"
+rather than its internal kind. The Activity rows get their own title rule (`.bcitem--log`): the shared `.bcitemtitle` touch rule is a 44 px hit area around a one-line title and made a wrapped title overprint its meta line on a phone; no other list is touched.
+Not changed: a project's own Activity tab still reads the project's list (the ledger can filter by project, wiring it is a design task).
+
+Below is the original adapter description (still true of the row shape). The existing Activity page is untouched visually apart from the above. `app.activity_for_the_page` returns the ledger in the shape `app.hq_studio_lately.office[]` already
 has (id, who, kind, verb, what, project, when, at, via, category, reversible, undo_with) plus severity, status, evidence and provenance, which the
 current renderer ignores. `who` is the raw actor slug, exactly as `hq_studio_lately` sends it, because the page looks a face up by slug and a display name matches nobody (it would
 render every agent row as the first crew member); the display name is `who_name`. `needLately` in `web/studio/app.js` starts the ledger read **alongside** the existing one, draws from the
@@ -233,7 +249,8 @@ of truth this design avoids. The one case that would want it (a faster read at m
 | Richer Activity UI | **Proposed** |
 | A materialised read model | **Not needed**; revisit only on measured need |
 | Retention policy | **Stated** in `SECURITY.md`; nothing deletes |
-| Rolling-deploy matrix on real versions | **Not run**: the new-worker-on-old-schema case is proved (writer missing); old-worker-on-new-schema is true by construction (additive) |
+| Per-office activation | **Implemented** (phase 4): `app.activity_ledger_covers(office)` = the master switch AND an optional allowlist `activity.ledger_offices` (no row = every office, an array = those listed, anything else = none); the master stays the kill switch and the allowlist can only narrow it; proof `activity-office-scope` (26) |
+| Rolling-deploy matrix | **Run on local replicas** (phase 4), not on deployed versions: the four worker/schema cells, the page/gateway cells and the new worker over a schema without the ledger (`RELEASE-READINESS.md`, "Mixed-version matrix"). The production matrix has not been run |
 
 ## 9. The production-catalogue checks
 
