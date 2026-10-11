@@ -13,7 +13,7 @@ import { chromium, type Page } from 'playwright'
 import { seedAppearance } from '../verify/seed-appearance.ts'
 import { serveStudio } from '../verify/serve-studio.ts'
 import { seedLedger } from './activity-ui-seed.ts'
-import { seedCycles, seedExternal, seedHistory } from './activity-ux-seed.ts'
+import { seedCycles, seedExternal, seedHistory, seedUnknownActor } from './activity-ux-seed.ts'
 import { startEdge } from './edge-emulator.ts'
 import { isolated } from './guard.ts'
 
@@ -68,6 +68,7 @@ const cyc = await seedCycles(db, seeded, run, Number(arg('cycles') ?? 60), 9)
 console.log(`     cycles: ${JSON.stringify(cyc)}`)
 const hist = await seedHistory(db, officeA, run, seeded.projects.map((p) => p.id), HISTORY, 9)
 await seedExternal(db, officeA, run, (seeded.projects[0] as { id: string }).id)
+await seedUnknownActor(db, officeA, run, (seeded.projects[0] as { id: string }).id)
 const mkB = async (n: string) => String(json((await one(`select app.hq_create_project(${lit(officeB)}::uuid, ${lit(n)}, 'upload', ${lit(`${n}-${run}`.toLowerCase())}, ${lit(n)}, true) as v`)).v).project_id)
 const projB = await mkB('Bravo Private')
 // B's own record is written while B is covered (an uncovered office's writes are refused: fail closed), then B is taken OUT of the

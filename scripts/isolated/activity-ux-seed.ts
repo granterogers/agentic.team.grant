@@ -103,6 +103,13 @@ export async function seedCycles(db: PgExecutor, s: { office: string; root: stri
   return { jobs: cycles, approvals, deliveries, openApprovals, failedDeliveries }
 }
 
+/** A user-visible event whose actor is a specialist the roster does not hold (a retired one): the screen must not credit anyone else. */
+export async function seedUnknownActor(db: PgExecutor, office: string, run: string, project: string): Promise<void> {
+  await db.execute(`select app.record_activity(p_office => ${lit(office)}::uuid, p_event_type => 'budget.threshold_reached', p_idempotency_key => ${lit(`hist-unknown-${run}`)},
+    p_actor_kind => 'agent', p_actor => 'retired-director', p_summary => 'A retired specialist was held back: the day budget is used', p_status => 'blocked', p_severity => 'warning',
+    p_agent_slug => 'retired-director', p_project_id => ${lit(project)}::uuid)`)
+}
+
 export async function seedExternal(db: PgExecutor, office: string, run: string, project: string): Promise<void> {
   const ext = (worker: string, type: string, key: string, summary: string, status: string) =>
     db.execute(`select app.record_external_activity(${lit(office)}::uuid, ${lit(worker)}, ${lit(type)}, ${lit(`${key}-${run}`)}, ${lit(summary)}, ${lit(status)}, null, ${lit(project)}::uuid)`)
