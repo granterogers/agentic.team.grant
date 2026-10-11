@@ -241,7 +241,7 @@ try {
 
   // Two native events an hour old: later in the proof many newer native events are written, so these lie deeper in their source than the
   // newest rows it reads first. A filter that matches only them must still find them (the validity check, not the first read, decides).
-  for (const i of [1, 2]) await db.execute(`select app.record_activity(p_office => ${lit(grant)}::uuid, p_event_type => 'budget.threshold_reached', p_idempotency_key => ${lit(`early-budget-${i}-${run}`)}, p_actor_kind => 'system', p_actor => 'office', p_summary => 'Early budget threshold ${i}', p_occurred_at => now() - interval '1 hour')`)
+  for (const i of [1, 2]) await db.execute(`select app.record_activity(p_office => ${lit(grant)}::uuid, p_event_type => 'integration.rate_limited', p_idempotency_key => ${lit(`early-limit-${i}-${run}`)}, p_actor_kind => 'system', p_actor => 'office', p_summary => 'Early rate limit ${i}', p_occurred_at => now() - interval '1 hour')`)
 
   // ---------------------------------------------------------------------------------------------- harness traffic
   const fixtureKey = `verify:${run}`
@@ -420,9 +420,9 @@ try {
   const diagnostic = await pages({ p_visibility: 'diagnostic' }, grant, 200)
   check('visibility: native diagnostic events (tool calls) are absent from the ordinary view and present in the diagnostic one', !ordinary.some((e) => e.type === 'tool.requested') && diagnostic.some((e) => e.type === 'tool.requested') && ordinary.some((e) => e.type === 'tool.failed') === false, `ordinary ${ordinary.length}, diagnostic ${diagnostic.length}`)
 
-  const deepFull = (await pages({ p_visibility: 'diagnostic', p_category: 'usage' }, grant, 200)).map((e) => e.summary)
-  const deepWalk = (await pages({ p_visibility: 'diagnostic', p_category: 'usage' }, grant, 1)).map((e) => e.summary)
-  check('paging: a filter whose matches lie deeper than the newest rows its source reads first still finds them', deepFull.filter((s) => s.startsWith('Early budget')).length === 2 && JSON.stringify(deepWalk) === JSON.stringify(deepFull), `${deepFull.length} usage events, walked ${deepWalk.length}`)
+  const deepFull = (await pages({ p_visibility: 'diagnostic', p_category: 'integration' }, grant, 200)).map((e) => e.summary)
+  const deepWalk = (await pages({ p_visibility: 'diagnostic', p_category: 'integration' }, grant, 1)).map((e) => e.summary)
+  check('paging: a filter whose matches lie deeper than the newest rows its source reads first still finds them', deepFull.length === 2 && deepFull.every((s) => s.startsWith('Early rate limit')) && JSON.stringify(deepWalk) === JSON.stringify(deepFull), `${deepFull.length} integration events, walked ${deepWalk.length}`)
 
   // ---------------------------------------------------------------------------------------------- adapter
   const page = json((await one(`select app.activity_for_the_page(${lit(grant)}::uuid, 40) as v`)).v)
