@@ -239,6 +239,10 @@ try {
   const sevFull = await f({ p_min_severity: 'warning' })
   check('filter: a filtered page is the newest matches, not the matches among the newest', sevPage.length === sevFull.length && sevPage.length > 1, `${sevPage.length} walked one at a time`)
 
+  // Two native events an hour old: later in the proof many newer native events are written, so these lie deeper in their source than the
+  // newest rows it reads first. A filter that matches only them must still find them (the validity check, not the first read, decides).
+  for (const i of [1, 2]) await db.execute(`select app.record_activity(p_office => ${lit(grant)}::uuid, p_event_type => 'budget.threshold_reached', p_idempotency_key => ${lit(`early-budget-${i}-${run}`)}, p_actor_kind => 'system', p_actor => 'office', p_summary => 'Early budget threshold ${i}', p_occurred_at => now() - interval '1 hour')`)
+
   // ---------------------------------------------------------------------------------------------- harness traffic
   const fixtureKey = `verify:${run}`
   const hcmd = await one(`insert into public.inbound_commands (office_id, project_id, origin_channel, origin_ref, actor, instruction, dedupe_key, subject)
@@ -415,6 +419,10 @@ try {
   const ordinary = await pages({ p_visibility: 'user' }, grant, 200)
   const diagnostic = await pages({ p_visibility: 'diagnostic' }, grant, 200)
   check('visibility: native diagnostic events (tool calls) are absent from the ordinary view and present in the diagnostic one', !ordinary.some((e) => e.type === 'tool.requested') && diagnostic.some((e) => e.type === 'tool.requested') && ordinary.some((e) => e.type === 'tool.failed') === false, `ordinary ${ordinary.length}, diagnostic ${diagnostic.length}`)
+
+  const deepFull = (await pages({ p_visibility: 'diagnostic', p_category: 'usage' }, grant, 200)).map((e) => e.summary)
+  const deepWalk = (await pages({ p_visibility: 'diagnostic', p_category: 'usage' }, grant, 1)).map((e) => e.summary)
+  check('paging: a filter whose matches lie deeper than the newest rows its source reads first still finds them', deepFull.filter((s) => s.startsWith('Early budget')).length === 2 && JSON.stringify(deepWalk) === JSON.stringify(deepFull), `${deepFull.length} usage events, walked ${deepWalk.length}`)
 
   // ---------------------------------------------------------------------------------------------- adapter
   const page = json((await one(`select app.activity_for_the_page(${lit(grant)}::uuid, 40) as v`)).v)

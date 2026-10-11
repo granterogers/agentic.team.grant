@@ -32,7 +32,7 @@ SABOTAGES=(
   "S6|60|select * into v_type from public.activity_event_types where event_type = p_event_type and external_writable;|select * into v_type from public.activity_event_types where event_type = p_event_type;|activity-ledger|it cannot forge"
   "S7|61|c.callback_action is null and not c.synthetic~~c0.callback_action is null and not c0.synthetic|c.callback_action is null~~c0.callback_action is null|activity-ledger|a suite's message is not shown"
   "S8|60|create trigger activity_events_visibility before insert on public.activity_events\n  for each row execute function|create trigger activity_events_visibility before insert on public.activity_events\n  for each row when (false) execute function|activity-ledger|diagnostic type cannot be written as ordinary"
-  "S9|61|and not exists (select 1 from lastat l where (stats.minat, stats.minid) <= (l.at, l.id))) '|and false) '|activity-ledger|single source"
+  "S9|61|and not exists (select 1 from lastat l where (stats.minat, stats.minid) <= (l.at, l.id))) '|and false) '|activity-ledger|deeper than"
   "S10|60|  exception when others then|  exception when no_data_found then|activity-ledger|the safe writer never raises"
   "S11|61|    and ((q.vis_override is null and app.activity_type_visrank(q.type) <= \$10) or q.vis_override <= \$10)|    and (true)|activity-ledger|native diagnostic events"
   "S12|61|where \$10 >= 1 and u.office_id = \$1~~where \$10 >= 1 and u0.office_id = \$1|where \$10 >= 1~~where \$10 >= 1|activity-ledger|neither feed"
