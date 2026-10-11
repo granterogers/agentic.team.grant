@@ -15320,6 +15320,16 @@ async function needLately() {
   if (latest.lately !== null) return
   try {
     latest.lately = await settles(read('lately'))
+    // The unified activity ledger (docs/activity-ledger/), when it is switched on: the same rows in the same shape, so the page
+    // is unchanged. Switched off, absent or failing, the list above stands; nothing here can empty it.
+    try {
+      const ledger = await settles(read('activity_ledger'))
+      if (ledger?.enabled === true && Array.isArray(ledger.office) && ledger.office.length > 0) {
+        latest.lately = { ...latest.lately, office: ledger.office }
+      }
+    } catch {
+      // the existing list stands
+    }
   } catch {
     // Left null. The view says there is nothing rather than showing an error,
     // which on a history page is nearly the same sentence.

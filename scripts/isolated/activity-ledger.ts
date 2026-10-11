@@ -92,7 +92,13 @@ try {
   const offWrite = await one(`select app.record_activity(${lit(grant)}::uuid, 'system.recovered', 'switch-off-${run}', 'system', 'worker', 'off') as v`)
   const offRows = Number((await one(`select count(*) as c from public.activity_events`)).c)
   check('switch: a write while off returns null and stores nothing', offWrite.v === null && offRows === 0, `returned ${String(offWrite.v)}, rows ${offRows}`)
+  // Fails closed: with the setting ABSENT, or holding anything but the JSON value true, the ledger is off.
+  await db.execute(`delete from public.system_config where key = 'activity.ledger_enabled'`)
+  const absent = json((await one(`select to_jsonb(app.activity_ledger_on()) as v`)).v)
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_enabled', '"true"'::jsonb, 'proof')`)
+  const stringy = json((await one(`select to_jsonb(app.activity_ledger_on()) as v`)).v)
   await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
+  check('switch: fails closed - an absent setting, or the string "true", is off', absent === false && stringy === false, `absent -> ${String(absent)}, string -> ${String(stringy)}`)
   check('switch: on', json((await one(`select to_jsonb(app.activity_ledger_on()) as v`)).v) === true, 'activity.ledger_enabled = true')
 
   // ---------------------------------------------------------------------------------------------- build a real chain
@@ -119,9 +125,9 @@ try {
     values (${lit(project)}::uuid, ${lit(root)}::uuid, 'Create the Slack channel for the ledger project', 'It needs a room', 'No room until you answer', array['Yes','No'], 'chief-of-staff', true, ${lit(grant)}::uuid)`)
   const blocker = String((await one(`select blocker_id::text as b from public.blockers where job_id = ${lit(root)}::uuid`)).b)
   await db.execute(`update public.blockers set state = 'resolved', resolved_at = now(), answered_option = 'Yes', answered_by = 'grant' where blocker_id = ${lit(blocker)}::uuid`)
-  const delivery = String((await one(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, state, attempt, lease_expires_at, correlation_id, job_id, message_ref, send_started_at, sent_at, office_id)
+  await one(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, state, attempt, lease_expires_at, correlation_id, job_id, message_ref, send_started_at, sent_at, office_id)
     values ('telegram', ${lit(`led-${run}`)}, 'bot', '987654321', 'result', 'sent', 1, now(), ${lit(corr)}::uuid, ${lit(root)}::uuid, 'm-77', now() - interval '1 second', now(), ${lit(grant)}::uuid)
-    returning delivery_id::text as d`)).d)
+    returning delivery_id::text as d`)
   await db.execute(`insert into public.deliveries (channel, dedupe_key, account_ref, target_ref, purpose, state, attempt, lease_expires_at, correlation_id, job_id, error_code, send_started_at, office_id)
     values ('slack', ${lit(`led-f-${run}`)}, 'bot', 'CCHANNEL1X', 'result', 'failed', 2, now(), ${lit(corr)}::uuid, ${lit(root)}::uuid, 'channel_not_found', now(), ${lit(grant)}::uuid)`)
   await db.execute(`insert into public.inference_usage (provider, model_id, job_id, correlation_id, outcome, prompt_tokens, completion_tokens, provenance, office_id, latency_ms, cost_usd)
@@ -149,7 +155,7 @@ try {
   const mustHave = ['request.received', 'request.routed', 'job.created', 'job.delegated', 'job.started', 'job.completed', 'output.created', 'output.reviewed', 'approval.requested', 'approval.granted', 'action.blocked', 'delivery.attempted', 'delivery.succeeded', 'delivery.failed', 'inference.completed', 'task.created']
   const missing = mustHave.filter((t) => !has(t))
   check('chain: request to delivery is reconstructed from the owning tables', missing.length === 0 && chain.complete === true, missing.length === 0 ? `${evs.length} events, ${new Set(types).size} types` : `missing ${missing.join(', ')}`)
-  const ordered = evs.every((e, i) => i === 0 || String(evs[i - 1].at) <= String(e.at))
+  const ordered = evs.every((e, i) => i === 0 || String(evs[i - 1]?.at) <= String(e.at))
   check('chain: oldest first', ordered, `${evs.length} events in time order`)
   const byType = (t: string) => evs.find((e) => e.type === t) as Ev
   const received = byType('request.received')
@@ -191,8 +197,13 @@ try {
   const walked = await pages({ p_visibility: 'diagnostic' }, grant, 4)
   const ids = walked.map((e) => e.id)
   check('paging: a keyset walk of four at a time returns exactly the full set, once each, in the same order', ids.length === full.length && new Set(ids).size === ids.length && JSON.stringify(ids) === JSON.stringify(full.map((e) => e.id)), `${ids.length} of ${full.length}`)
-  const nonIncreasing = full.every((e, i) => i === 0 || `${full[i - 1].at}|${full[i - 1].id}` >= `${e.at}|${e.id}`)
+  const nonIncreasing = full.every((e, i) => i === 0 || `${full[i - 1]?.at}|${full[i - 1]?.id}` >= `${e.at}|${e.id}`)
   check('paging: newest first and the order is total', nonIncreasing, `${full.length} rows`)
+  // One source holding many rows, walked one at a time: the case a per-source limit of exactly the page size gets wrong (the gateway proof found it).
+  for (let i = 0; i < 6; i++) await db.execute(`select app.record_activity(${lit(grant)}::uuid, 'tool.requested', ${lit(`walk-${i}-${run}`)}, 'agent', 'research-director', 'Asked for a tool ${i}')`)
+  const nativeFull = await pages({ p_visibility: 'diagnostic', p_type: 'tool.requested' }, grant, 200)
+  const nativeWalk = await pages({ p_visibility: 'diagnostic', p_type: 'tool.requested' }, grant, 1)
+  check('paging: a walk of one at a time over a single source returns every row, once', nativeFull.length >= 6 && JSON.stringify(nativeWalk.map((e) => e.id)) === JSON.stringify(nativeFull.map((e) => e.id)), `${nativeWalk.length} of ${nativeFull.length}`)
   const tiny = await read({ p_limit: 1, p_visibility: 'diagnostic' }, grant)
   const huge = await read({ p_limit: 100000, p_visibility: 'diagnostic' }, grant)
   check('paging: a page is bounded', (tiny.events as Ev[]).length === 1 && (huge.events as Ev[]).length <= 200, `limit 1 -> 1, limit 100000 -> ${(huge.events as Ev[]).length}`)
@@ -214,7 +225,7 @@ try {
   const bySev = await f({ p_min_severity: 'error' })
   check('filter: minimum severity', bySev.length > 0 && bySev.every((e) => ['error', 'critical'].includes(e.severity)) && bySev.some((e) => e.type === 'delivery.failed'), `${bySev.length} at error or above`)
   const byStatus = await f({ p_status: 'confirmed' })
-  check('filter: status', byStatus.length === 1 && byStatus[0].type === 'delivery.succeeded', `${byStatus.length} confirmed`)
+  check('filter: status', byStatus.length === 1 && byStatus[0]?.type === 'delivery.succeeded', `${byStatus.length} confirmed`)
   const bySource = await f({ p_source: 'slack' })
   check('filter: source interface', bySource.length > 0 && bySource.every((e) => e.source_interface === 'slack'), `${bySource.length} on slack`)
   const byOneType = await f({ p_type: 'approval.requested' })
@@ -274,7 +285,7 @@ try {
   const xAgent = await probe(officeB, { p_agent: 'research-director' })
   check('isolation: naming another office\'s project, job, correlation or agent returns nothing', xProject.length === 0 && xJob.length === 0 && xCorr.length === 0 && (xChain.events as Ev[]).length === 0 && xAgent.every((e) => e.job_id !== child), `project ${xProject.length}, job ${xJob.length}, corr ${xCorr.length}, chain ${(xChain.events as Ev[]).length}`)
   const stolen = (await pages({ p_visibility: 'diagnostic' }, grant, 3))[1]
-  const viaCursor = await probe(officeA, { p_before_at: String(stolen.at), p_before_id: String(stolen.id) })
+  const viaCursor = await probe(officeA, { p_before_at: String(stolen?.at), p_before_id: String(stolen?.id) })
   check('isolation: another office\'s cursor opens nothing of that office', !viaCursor.some((e) => e.correlation_id === corr || e.project_id === project), `${viaCursor.length} rows, none foreign`)
   const w1 = await refused(`select app.record_activity(${lit(officeA)}::uuid, 'budget.threshold_reached', ${lit(`x1-${run}`)}, 'system', 'office', 'cross-office project', 'recorded', null, null, null, ${lit(projB)}::uuid)`)
   const w2 = await refused(`select app.record_activity(${lit(officeA)}::uuid, 'tool.completed', ${lit(`x2-${run}`)}, 'agent', 'a', 'cross-office job', 'recorded', null, null, null, null, ${lit(root)}::uuid)`)
@@ -293,8 +304,9 @@ try {
 
   // ---------------------------------------------------------------------------------------------- integrity
   const key = `idem-${run}`
-  const first = String((await one(`select app.record_activity(${lit(grant)}::uuid, 'tool.completed', ${lit(key)}, 'agent', 'research-director', 'Tool finished', 'completed') as v`)).v)
-  const second = String((await one(`select app.record_activity(${lit(grant)}::uuid, 'tool.completed', ${lit(key)}, 'agent', 'research-director', 'Tool finished', 'completed') as v`)).v)
+  const write = async () => String(((await one(`select app.record_activity(${lit(grant)}::uuid, 'tool.completed', ${lit(key)}, 'agent', 'research-director', 'Tool finished', 'completed') as v`).catch((e: Error) => ({ v: `ERR ${e.message.slice(0, 60)}` }))) as { v: unknown }).v)
+  const first = await write()
+  const second = await write()
   const rows = Number((await one(`select count(*) as c from public.activity_events where idempotency_key = ${lit(key)}`)).c)
   check('integrity: the same key twice is one row and the same id', first === second && rows === 1, `rows ${rows}`)
   const reuse = await refused(`select app.record_activity(${lit(grant)}::uuid, 'tool.failed', ${lit(key)}, 'agent', 'research-director', 'a different event')`)
@@ -321,7 +333,7 @@ try {
   const unk = await refused(`select app.record_activity(${lit(grant)}::uuid, 'job.completed', ${lit(`unk-${run}-abcdef`)}, 'agent', 'a', 'projected types are not writable')`)
   const unk2 = await refused(`select app.record_activity(${lit(grant)}::uuid, 'made.up_type', ${lit(`unk2-${run}-abcdef`)}, 'agent', 'a', 'unknown')`)
   check('integrity: only native taxonomy types are writable', unk.includes('not a native type') && unk2.includes('not a native type'), `${unk.slice(0, 40)}`)
-  const safe = await one(`select app.record_activity_safely(${lit(grant)}::uuid, 'made.up_type', 'safe-${run}-abcdef', 'agent', 'a', 'will fail') as v`)
+  const safe = await one(`select app.record_activity_safely(${lit(grant)}::uuid, 'made.up_type', 'safe-${run}-abcdef', 'agent', 'a', 'will fail') as v`).catch(() => ({ v: 'RAISED' }))
   const f1 = Number((await one(`select count(*) as c from public.activity_write_failures where event_type = 'made.up_type'`)).c)
   check('integrity: the safe writer never raises, returns null and counts the failure', safe.v === null && f1 === 1, `failures counted ${f1}`)
   for (let i = 0; i < 230; i++) await db.execute(`select app.record_activity_safely(${lit(grant)}::uuid, 'made.up_type', 'storm-${run}-${i}-abcd', 'agent', 'a', 's')`)
@@ -392,9 +404,13 @@ try {
   const persOp = (await pages({ p_visibility: 'operator' }, officeA, 100)).filter((e) => e.type === 'system.recovered')
   check('visibility: operator-level events are the deployment operator\'s alone; a person asking for them is quietly given diagnostic', opView.length === 1 && opDefault.length === 0 && persOp.length === 0, `operator ${opView.length}, diagnostic ${opDefault.length}, person ${persOp.length}`)
 
+  const ordinary = await pages({ p_visibility: 'user' }, grant, 200)
+  const diagnostic = await pages({ p_visibility: 'diagnostic' }, grant, 200)
+  check('visibility: native diagnostic events (tool calls) are absent from the ordinary view and present in the diagnostic one', !ordinary.some((e) => e.type === 'tool.requested') && diagnostic.some((e) => e.type === 'tool.requested') && ordinary.some((e) => e.type === 'tool.failed') === false, `ordinary ${ordinary.length}, diagnostic ${diagnostic.length}`)
+
   // ---------------------------------------------------------------------------------------------- adapter
   const page = json((await one(`select app.activity_for_the_page(${lit(grant)}::uuid, 40) as v`)).v)
-  const first1 = (page.office as Ev[])[0]
+  const first1: Ev = (page.office as Ev[])[0] ?? {}
   const keys = ['id', 'who', 'kind', 'verb', 'what', 'project', 'when', 'at', 'via', 'category']
   check('adapter: rows have the keys the existing Activity module reads', page.enabled === true && (page.office as Ev[]).length > 0 && keys.every((k) => k in first1), `keys ${Object.keys(first1).length}, first "${first1.verb} ${first1.what}"`)
   const hq = json((await one(`select app.hq_studio_lately(${lit(grant)}::uuid, 40) as v`)).v)

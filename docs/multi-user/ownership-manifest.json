@@ -3,6 +3,41 @@
   "baseline": "41de1965",
   "generated_from": "production catalogue read-only, 1 October 2026; derivation rule: a table derives only through a foreign key whose columns are NOT NULL in the schema",
   "tables": {
+    "activity_event_types": {
+      "class": "GLOBAL",
+      "why": "The activity taxonomy (1060): which event types exist, their category, default visibility and severity, and which an external worker may report. One vocabulary for every office; a per-office copy would let an office widen what a diagnostic type may show."
+    },
+    "activity_events": {
+      "class": "OFFICE_CARRIER",
+      "why": "Native activity with no other home (1060). office_id is written with the row and is its owner; the project, job and parent job are tied to it by same-office composite keys, so a native event cannot point into another office.",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "activity_events_project_same_office"
+        },
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "activity_events_job_same_office"
+        },
+        {
+          "columns": ["parent_job_id"],
+          "parent": "jobs",
+          "constraint": "activity_events_parent_job_same_office"
+        },
+        {
+          "columns": ["supersedes_activity_id"],
+          "parent": "activity_events",
+          "constraint": "activity_events_supersedes_same_office"
+        }
+      ]
+    },
+    "activity_write_failures": {
+      "class": "OFFICE_CARRIER",
+      "why": "A bounded counter of native activity writes that were refused or failed (1060). It names an office and nothing else; it holds no content and records no event about itself."
+    },
     "appearance_settings": {
       "class": "OFFICE_CARRIER",
       "why": "No NOT NULL foreign-key path to an owned table, so the schema cannot guarantee its owner by derivation."

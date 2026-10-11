@@ -274,6 +274,9 @@ revoke all on public.activity_write_failures from anon, authenticated;
 drop policy if exists activity_write_failures_app on public.activity_write_failures;
 create policy activity_write_failures_app on public.activity_write_failures for all to ai_team_app using (true) with check (true);
 create index if not exists activity_write_failures_office_time_idx on public.activity_write_failures (office_id, occurred_at desc);
+drop trigger if exists a1_office_write_once on public.activity_write_failures;
+create trigger a1_office_write_once before update of office_id on public.activity_write_failures
+  for each row execute function app.office_id_is_write_once();
 
 -- ------------------------------------------------------------------------------------------------ the redactor
 

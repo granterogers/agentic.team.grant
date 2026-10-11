@@ -420,11 +420,13 @@ begin
   $b$::text;
 
   -- Assemble: each branch is wrapped so the filters apply to its computed columns BEFORE its own newest-first limit.
+  -- The limit is the page PLUS ONE: whether there is a next page is decided by seeing one row beyond it, and a source that holds
+  -- every remaining row would otherwise be cut at exactly the page size and look exhausted (found by the gateway proof).
   v_sql := 'with branches as (';
   for i in 1 .. array_length(v_branches, 1) loop
     v_sql := v_sql || case when i > 1 then ' union all ' else '' end
       || '(select * from (select * from (' || v_branches[i] || ') b(' || v_cols || ', vis_override)) q'
-      || ' where ' || v_f || ' order by q.at desc, q.id desc limit $15)';
+      || ' where ' || v_f || ' order by q.at desc, q.id desc limit $15 + 1)';
   end loop;
   v_sql := v_sql || '), page as (select * from branches order by at desc, id desc limit $15 + 1) '
     || 'select jsonb_build_object(''enabled'', true, ''visibility'', $17::text, '
