@@ -442,7 +442,7 @@ try {
             if (
               shotsArg !== undefined &&
               !reduced &&
-              (r.label === 'home' || r.label === 'project overview')
+              (r.label === 'home' || r.label === 'project overview' || r.label === 'activity')
             )
               await page.screenshot({
                 path: `${shotsArg}/${who}-${vp.name}-${r.label.replace(/\W+/g, '-')}.png`,
