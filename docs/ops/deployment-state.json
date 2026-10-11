@@ -41,9 +41,11 @@
       "report": "docs/audit/V1-RELEASE-REPORT-2026-10-09.md"
     },
     "page": {
-      "deployment": "dpl_E1J5U7iX4SDAH9Jo4hW8g9W5DQ2W",
-      "previous": "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41",
+      "deployment": "dpl_3otBfKtZsGatfqgu1SgeJjVPb7Ld",
+      "deploymentNote": "11 October 2026: the Dashboard Polish release (PR #459, main f2044df6) shipped as the page alone with deploy:hq-page; 285 of 285 live files byte-identical to that tree; the previous page equalled main 3caaebfe plus the generated config.js; no function, migration or setting touched. Smoke record: docs/integration/dashboard-polish-production-release.md",
+      "previous": "dpl_E1J5U7iX4SDAH9Jo4hW8g9W5DQ2W",
       "rollback": [
+        "dpl_E1J5U7iX4SDAH9Jo4hW8g9W5DQ2W",
         "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41",
         "dpl_7Lfbc (id truncated in the release record)",
         "dpl_DhcRv (id truncated in the release record)",
