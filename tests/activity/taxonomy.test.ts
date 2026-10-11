@@ -68,9 +68,13 @@ describe('the taxonomy as written', () => {
       expect(r.type.startsWith('external.')).toBe(true)
       expect(r.visibility).not.toBe('operator')
     }
-    expect(taxonomy.filter((x) => x.type.startsWith('external.')).every((x) => x.external)).toBe(
-      true,
-    )
+    // The one external-named type a worker may NOT report is a person's decision: a worker cannot assert one.
+    expect(
+      taxonomy
+        .filter((x) => x.type.startsWith('external.') && x.type !== 'external.review_decided')
+        .every((x) => x.external),
+    ).toBe(true)
+    expect(taxonomy.find((x) => x.type === 'external.review_decided')?.external).toBe(false)
   })
 
   it('no external type is critical by default (the door refuses critical severity from outside)', () => {
@@ -110,6 +114,7 @@ describe('both directions', () => {
       [
         'activity.corrected',
         'budget.threshold_reached',
+        'external.review_decided',
         'integration.rate_limited',
         'tool.call_completed',
         'tool.call_failed',

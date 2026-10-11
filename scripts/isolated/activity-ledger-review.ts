@@ -137,6 +137,47 @@ try {
   const chain = json((await one(`select app.activity_chain(${lit(grant)}::uuid, p_correlation => ${lit(corr)}::uuid) as v`)).v)
   check('H3: the chain of that work is complete and starts from its creation', chain.complete === true && (chain.events as Ev[]).some((e) => e.type === 'job.created'), `complete=${chain.complete}, ${(chain.events as Ev[]).length} events`)
 
+  // ---------------------------------------------------------------------------------------------- M1: the external door
+  const fake = `${'xo'}xb-123456-abcdefghijkl`
+  const ext = (key: string, extra: string) => `select app.record_external_activity(p_office => ${lit(grant)}::uuid, p_worker => 'hermes', p_event_type => 'external.output_produced', p_idempotency_key => ${lit(`${key}-${run}`)}, p_summary => 'x'${extra})`
+  const evId = String((await one(`${ext('ev1', `, p_job_id => ${lit(root)}::uuid, p_evidence_ref => jsonb_build_object('kind', 'blocker', 'id', 'abc', 'note', ${lit(fake)}, 'secret_thing', 'x')`)} as id`)).id)
+  const stored = json((await one(`select evidence_ref as e from public.activity_events where activity_id = ${lit(evId)}::uuid`)).e)
+  check('M1: a worker\'s evidence cannot claim to be one of the office\'s own records', stored.kind === 'external', `kind ${stored.kind}`)
+  check('M1: a worker\'s evidence is cleaned like metadata', !JSON.stringify(stored).includes(fake) && stored.secret_thing === '[redacted:key]', JSON.stringify(stored).slice(0, 80))
+  const bigId = String((await one(`${ext('ev2', `, p_evidence_ref => jsonb_build_object('id', repeat('a b ', 50000))`)} as id`)).id)
+  const bigSize = Number((await one(`select pg_column_size(evidence_ref) as n from public.activity_events where activity_id = ${lit(bigId)}::uuid`)).n)
+  const manyKeys = await refused(`${ext('ev3', `, p_evidence_ref => (select jsonb_object_agg('k' || g, 'v') from generate_series(1, 60) g)`)}`)
+  check('M1: a 200 KB evidence value is cut, and an evidence object with too many keys is refused: nothing large is stored', bigSize <= 1024 && manyKeys.includes('too many keys'), `stored ${bigSize} bytes; many keys: ${manyKeys.slice(0, 50)}`)
+  const wrongCorr = await refused(`${ext('c1', `, p_job_id => ${lit(root)}::uuid, p_correlation_id => gen_random_uuid()`)}`)
+  check('M1: a correlation that is not the job\'s is refused', wrongCorr.includes('does not belong to that job'), wrongCorr.slice(0, 70))
+  const noWork = await refused(`${ext('c2', `, p_correlation_id => gen_random_uuid()`)}`)
+  check('M1: a correlation no work of the office has is refused', noWork.includes('no work of this office'), noWork.slice(0, 70))
+  const fromJob = String((await one(`${ext('c3', `, p_job_id => ${lit(root)}::uuid`)} as id`)).id)
+  const derived = String((await one(`select correlation_id::text as c from public.activity_events where activity_id = ${lit(fromJob)}::uuid`)).c)
+  check('M1: the correlation is taken from the job', derived === corr, derived)
+  const review = await refused(`select app.record_external_activity(p_office => ${lit(grant)}::uuid, p_worker => 'hermes', p_event_type => 'external.review_decided', p_idempotency_key => 'rv-${run}', p_summary => 'x')`)
+  check('M1: a worker cannot assert that a person reviewed something', review.includes('may not be reported by an external worker'), review.slice(0, 70))
+  await db.execute(`do $$ begin for i in 1 .. 300 loop perform app.record_external_activity(p_office => ${lit(grant)}::uuid, p_worker => 'floods', p_event_type => 'external.usage_recorded', p_idempotency_key => 'f-' || i || '-${run}', p_summary => 'x'); end loop; end $$`)
+  const over = await refused(`select app.record_external_activity(p_office => ${lit(grant)}::uuid, p_worker => 'floods', p_event_type => 'external.usage_recorded', p_idempotency_key => 'f-999-${run}', p_summary => 'x')`)
+  const replay = await refused(`select app.record_external_activity(p_office => ${lit(grant)}::uuid, p_worker => 'floods', p_event_type => 'external.usage_recorded', p_idempotency_key => 'f-1-${run}', p_summary => 'x')`)
+  const otherWorker = await refused(`select app.record_external_activity(p_office => ${lit(grant)}::uuid, p_worker => 'quiet', p_event_type => 'external.usage_recorded', p_idempotency_key => 'q-1-${run}', p_summary => 'x')`)
+  check('M1: a worker is limited per hour, a retry of an accepted report is not refused, and another worker is unaffected', over.includes('hourly limit') && replay === '' && otherWorker === '', `over: ${over.slice(0, 50)} / replay: ${replay || 'accepted'} / other: ${otherWorker || 'accepted'}`)
+
+  // ---------------------------------------------------------------------------------------------- M2: the redactor is bounded
+  const t0 = performance.now()
+  const long = String((await one(`select length(app.activity_redact(repeat('a-', 40000))) as n`)).n)
+  const redactMs = performance.now() - t0
+  check('M2: redacting an 80 000 character string takes well under a second and returns at most 4 000 characters', redactMs < 1000 && Number(long) <= 4000, `${redactMs.toFixed(0)} ms, ${long} chars`)
+
+  // ---------------------------------------------------------------------------------------------- L7: native writer edges
+  const future = await refused(`select app.record_activity(p_office => ${lit(grant)}::uuid, p_event_type => 'system.recovered', p_idempotency_key => 'fut-${run}', p_actor_kind => 'system', p_actor => 'worker', p_summary => 's', p_occurred_at => now() + interval '90 days')`)
+  check('L7: an activity cannot be dated in the future', future.includes('future'), future.slice(0, 60))
+  const budgetId = String((await one(`select app.record_activity(p_office => ${lit(grant)}::uuid, p_event_type => 'budget.threshold_reached', p_idempotency_key => 'bud-${run}', p_actor_kind => 'system', p_actor => 'worker', p_summary => 'Threshold', p_metadata => '{"prompt_tokens": 5000, "token_budget": 100000, "api_token": "x"}'::jsonb) as id`)).id)
+  const bm = json((await one(`select metadata as m from public.activity_events where activity_id = ${lit(budgetId)}::uuid`)).m)
+  check('L7: token COUNTS survive the cleaner and a token-named key is still blanked', bm.prompt_tokens === 5000 && bm.token_budget === 100000 && bm.api_token === '[redacted:key]', JSON.stringify(bm))
+  const failEvent = (await read(grant, { p_job: root, p_visibility: 'user', p_limit: 200 })).events as Ev[]
+  check('L8: an ordinary reader is not shown a failure reason, only a diagnostic reader is', failEvent.every((e) => e.metadata?.reason === undefined), 'no reason at user visibility')
+
   const failed = results.filter((r) => !r.ok).length
   console.log(`\n${results.length - failed}/${results.length} passed`)
   exit = failed === 0 ? 0 : 1

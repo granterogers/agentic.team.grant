@@ -135,7 +135,8 @@ insert into public.activity_event_types (event_type, category, source, default_v
   ('external.evaluation_completed','external','native',   'diagnostic', 'info',    true,  'An evaluation of an external worker''s output finished.'),
   ('external.usage_recorded',     'external', 'native',   'diagnostic', 'info',    true,  'An external worker reported the resources a task used.'),
   ('external.worker_error',       'external', 'native',   'diagnostic', 'error',   true,  'An external worker reported an error.'),
-  ('external.review_decided',     'external', 'native',   'user',       'info',    true,  'A person reviewed an external worker''s output.')
+  -- Not external_writable: a worker cannot assert that a person decided something. The office records it when a person does.
+  ('external.review_decided',     'external', 'native',   'user',       'info',    false, 'A person reviewed an external worker''s output.')
 on conflict (event_type) do nothing;
 
 -- ------------------------------------------------------------------------------------------------ the native ledger
@@ -289,9 +290,14 @@ language plpgsql
 immutable
 set search_path = 'pg_catalog'
 as $$
-declare t text := p_text;
+declare t text;
 begin
-  if t is null or t = '' then return t; end if;
+  if p_text is null or p_text = '' then return p_text; end if;
+  -- BOUNDED INPUT. The long-opaque pattern below looks ahead for a digit from every word start, which is quadratic in the length of an
+  -- unbroken run (measured: 5 000 characters 0.10 s, 20 000 1.55 s, 40 000 6.1 s), so an unbounded string at the external door is a
+  -- cheap way to hold a CPU. Only the first 4 000 characters are redacted and returned; every caller cuts to 300 or less anyway, and
+  -- the tail is dropped rather than returned unredacted.
+  t := left(p_text, 4000);
   t := regexp_replace(t, 'xox[abeprs]-[A-Za-z0-9-]{6,}', '[redacted:slack]', 'g');
   t := regexp_replace(t, 'sk-(?:proj-|or-|ant-|live-)?[A-Za-z0-9_-]{12,}', '[redacted:openai]', 'g');
   t := regexp_replace(t, 'sbp_[A-Za-z0-9]{16,}', '[redacted:supabase]', 'g');
@@ -337,7 +343,10 @@ begin
     if k !~ '^[a-z][a-z0-9_]{0,39}$' then
       raise exception 'activity metadata key is not a short snake_case word' using errcode = '22023';
     end if;
-    if k ~* '(secret|token|passw|authorization|api_?key|cookie|credential|bearer|private_?key|session|signature)' then
+    if jsonb_typeof(v) = 'number' and k ~ '^((prompt|completion|input|output|total|max)_tokens|token_(budget|count|limit|total|usage))$' then
+      -- a COUNT of tokens is a number about a model call, not a credential, and a budget event has to be able to say it
+      out := out || jsonb_build_object(k, v);
+    elsif k ~* '(secret|token|passw|authorization|api_?key|cookie|credential|bearer|private_?key|session|signature)' then
       out := out || jsonb_build_object(k, '[redacted:key]');
     elsif k ~* '^(body|text|content|transcript|instruction|prompt|message|document|payload|raw|headers|email|address|phone|query)$' then
       out := out || jsonb_build_object(k, '[not stored: reference the record]');
@@ -425,6 +434,10 @@ begin
   end if;
 
   v_meta := app.activity_clean(p_metadata);
+  -- An event is recorded when it happens or shortly after: one dated in the future would pin itself to the top of every feed.
+  if p_occurred_at is not null and p_occurred_at > app.now_utc() + interval '5 minutes' then
+    raise exception 'an activity cannot be dated in the future' using errcode = '22023';
+  end if;
 
   insert into public.activity_events (
     office_id, event_type, occurred_at, actor_kind, actor, agent_slug, project_id, job_id, parent_job_id,
@@ -531,7 +544,11 @@ language plpgsql
 security definer
 set search_path = 'pg_catalog', 'public'
 as $$
-declare v_type public.activity_event_types%rowtype;
+declare
+  v_type public.activity_event_types%rowtype;
+  v_key text;
+  v_corr uuid;
+  v_evidence jsonb;
 begin
   perform app.require_office(p_office);
   if p_worker is null or p_worker !~ '^[a-z][a-z0-9_-]{1,39}$' then
@@ -547,12 +564,53 @@ begin
   if p_status in ('confirmed', 'authorised') then
     raise exception 'an external worker may not claim % ', p_status using errcode = '42501';
   end if;
+  v_key := 'ext:' || p_worker || ':' || p_idempotency_key;
+
+  -- A report that was already recorded is answered by the strict writer (idempotent, and it refuses a key reused for another type);
+  -- only a NEW row is subject to the limits below, so a retry of an accepted report is never refused for volume.
+  if not exists (select 1 from public.activity_events a where a.office_id = p_office and a.idempotency_key = v_key) then
+    -- The table is append-only and the free tier is 500 MB, so what a worker can add is bounded per worker and per office.
+    if (select count(*) from public.activity_events a
+         where a.office_id = p_office and a.actor = 'external:' || p_worker and a.occurred_at > app.now_utc() - interval '1 hour') >= 300 then
+      raise exception 'external worker % has reached its hourly limit of activity reports', p_worker using errcode = '54000';
+    end if;
+    if (select count(*) from public.activity_events a
+         where a.office_id = p_office and a.actor_kind = 'external' and a.occurred_at > app.now_utc() - interval '1 hour') >= 1000 then
+      raise exception 'external workers have reached the hourly limit of activity reports for this office' using errcode = '54000';
+    end if;
+  end if;
+
+  -- The correlation is a fact about a job, so it is taken from the job; a report cannot attach itself to another piece of work.
+  if p_job_id is not null then
+    select j.correlation_id into v_corr from public.jobs j where j.job_id = p_job_id and j.office_id = p_office;
+    if not found then
+      raise exception 'that job does not belong to this office' using errcode = '23503';
+    end if;
+    if p_correlation_id is not null and p_correlation_id is distinct from v_corr then
+      raise exception 'the correlation does not belong to that job' using errcode = '22023';
+    end if;
+  elsif p_correlation_id is not null then
+    if not exists (select 1 from public.jobs j where j.correlation_id = p_correlation_id and j.office_id = p_office) then
+      raise exception 'no work of this office has that correlation' using errcode = '22023';
+    end if;
+    v_corr := p_correlation_id;
+  end if;
+
+  -- The evidence a worker supplies is a reference, not a link into the office's own records: it is cleaned like metadata, bounded to
+  -- 1 KB, and its kind is always "external", so a worker cannot point an event at an approval or a delivery and have it read as one.
+  if p_evidence_ref is not null then
+    v_evidence := app.activity_clean(p_evidence_ref) || jsonb_build_object('kind', 'external');
+    if pg_column_size(v_evidence) > 1024 then
+      raise exception 'an external evidence reference is larger than 1 KB' using errcode = '22023';
+    end if;
+  end if;
+
   return app.record_activity(
-    p_office => p_office, p_event_type => p_event_type, p_idempotency_key => 'ext:' || p_worker || ':' || p_idempotency_key,
+    p_office => p_office, p_event_type => p_event_type, p_idempotency_key => v_key,
     p_actor_kind => 'external', p_actor => 'external:' || p_worker, p_summary => p_summary, p_status => p_status,
     p_severity => p_severity, p_visibility => v_type.default_visibility, p_project_id => p_project_id, p_job_id => p_job_id,
-    p_correlation_id => p_correlation_id, p_source_interface => 'external', p_metadata => p_metadata,
-    p_evidence_ref => p_evidence_ref, p_provenance => 'external');
+    p_correlation_id => v_corr, p_source_interface => 'external', p_metadata => p_metadata,
+    p_evidence_ref => v_evidence, p_provenance => 'external');
 end
 $$;
 

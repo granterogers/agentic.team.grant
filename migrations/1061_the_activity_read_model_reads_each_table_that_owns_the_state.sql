@@ -248,7 +248,8 @@ begin
            jsonb_strip_nulls(jsonb_build_object('kind', j.kind, 'attempt', t.attempt, 'from_state', t.from_state::text,
              'to_state', t.to_state::text,
              -- state_reason is copied onto every later transition of the job, so it is the reason only where the state is one a reason explains
-             'reason', case when t.to_state in ('failed', 'cancelled', 'retrying', 'paused', 'waiting_external', 'waiting_user')
+             -- and only to a reader of diagnostic detail: a failure reason is handler or provider text, not a sentence written for a person
+             'reason', case when $10 >= 1 and t.to_state in ('failed', 'cancelled', 'retrying', 'paused', 'waiting_external', 'waiting_user')
                             then left(app.activity_redact(t.reason), 200) end)),
            jsonb_build_object('kind', 'job', 'id', j.job_id), 'projected', 'job_state_transitions', null::int,
            t.transition_id, j.job_id
@@ -658,7 +659,8 @@ begin
     ||   '''events'', coalesce((select jsonb_agg(x.e order by x.at desc, x.id desc) from ('
     ||     'select g.at, g.id, jsonb_build_object(''id'', g.id, ''type'', g.type, ''schema_version'', 1, ''at'', g.at,'
     ||       '''category'', app.activity_type_category(g.type), ''severity'', g.sev, ''status'', g.status,'
-    ||       '''visibility'', coalesce((select t.default_visibility from public.activity_event_types t where t.event_type = g.type), ''user''),'
+    ||       '''visibility'', case when g.vis_override is not null then (array[''user'', ''diagnostic'', ''operator''])[g.vis_override + 1]'
+    ||         ' else coalesce((select t.default_visibility from public.activity_event_types t where t.event_type = g.type), ''user'') end,'
     ||       '''actor_kind'', g.actor_kind, ''actor'', g.actor, ''agent'', g.agent, ''project_id'', g.project_id, ''project'', p.name,'
     ||       '''job_id'', g.job_id, ''parent_job_id'', g.parent_job_id, ''correlation_id'', g.correlation_id, ''causation_id'', g.causation_id,'
     ||       '''source_interface'', g.iface, ''tool'', g.tool, ''model'', g.model, ''summary'', g.summary, ''metadata'', g.meta,'
