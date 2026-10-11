@@ -11,8 +11,9 @@ The resume point for any session picking this up. Read `ARCHITECTURE-HANDOFF.md`
 | Architecture | done, commit `c3787c5a` | `docs/hermes/*`, ADR-0073 |
 | **M0 validation** | **done: PASS, V6 BLOCKED** | `VALIDATION-RESULTS.md`, `m0-evidence/`, `scripts/hermes-m0/` |
 | **M1 schema and SQL functions (replica only)** | **done** | migration `1070_…`, `scripts/isolated/engine-runs.ts` 131/131 with 15 sabotages (in `verify:critical`, 69/69 green, 3,813 assertions), `tests/engines/types.test.ts`, contract deviations D-7 to D-13 in `INTERFACE-CONTRACTS.md` §3.1 |
-| M2 engine gateway and bridge credentials | **next** | |
-| M3 to M6 | not started | |
+| **M2 engine gateway and bridge credentials** | **done (undeployed)** | `supabase/functions/engine`, `scripts/isolated/engine-gateway.ts` 33/33 with 6 sabotages (`verify:critical` 70/70, 3,846 assertions), `tests/engines/{gateway-routes,credentials}.test.ts`, `scripts/deploy/engine.ts`, `scripts/ops/engine-bridge-credential.ts` (never run against production); D-14, D-15 in `INTERFACE-CONTRACTS.md` §4 |
+| M3 MCP server: the engine client kind | **next** | |
+| M4 to M6 | not started | |
 | M7 live free run | gated on V6 (Grant's zero-credit key) and on the Activity Ledger branch | |
 | M8 to M11 | not started | |
 

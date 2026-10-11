@@ -340,6 +340,12 @@ export const CRITICAL: readonly Proof[] = [
     "an outside engine (Hermes) can open a run only for a person's own turn, claims only what is waiting in its own office, is fenced on every call, lapses at most three times, finishes once, is stopped by a Stop, reaches only the v1 read tools of its own run, leaves no credential behind, and the office router can never pick it (15 sabotages)",
   ),
 
+  p(
+    'engine-gateway',
+    26,
+    'the REAL engine gateway, driven as a bridge: only a live bridge token gets in (its office comes from the credential, never the body), a lost claim is a 409, a retired bridge is dead at the door, an oversized or malformed body is refused, the database being down is a 503 and never an answer, no credential appears in any response, and the function calls only its five functions (6 sabotages)',
+  ),
+
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p(
     'replay-parity',

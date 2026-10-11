@@ -198,6 +198,24 @@ Deno, `verify_jwt = false` (a bridge has no Supabase JWT, the same reason as `mc
 | `POST /engine/proposal` (M8) | `{run_id, claim_gen, skill: HermesSkillDraft}` | `{ok, suggestion_id?, refused?}` | See `LEARNING-AND-SKILL-TRANSFER.md` §4–5. |
 | `GET /engine/skills` (M8) | — | `{skills: {slug, name, when_to_use, procedure}[], generated_at}` | The office's live skills that are global or `source = hermes`, for the read-only export (`LEARNING-AND-SKILL-TRANSFER.md` §6). At most 200, procedures as stored. |
 
+**M2 as built** (`supabase/functions/engine/{index,routes}.ts`, proved by `scripts/isolated/engine-gateway.ts`, 33 checks and 6 sabotages in
+`verify:critical`; undeployed). Differences from the table above, each with its reason:
+
+* **D-14. Retired and unknown are both 401.** `app.engine_bridge_for` returns null for an unknown, retired or disabled bridge, so the gateway
+  cannot tell them apart; it never answers 403 `disabled` for a bridge. A 403 is only the database refusing an inactive office. "Hermes is
+  off for this office" is not a 403 either: a claim returns `{run: null}` and the office's own availability sentence says why.
+* **D-15. The throttle is best effort.** A stateless edge function remembers each bridge's last claim in memory per isolate (`Throttle`),
+  so the 429 is a courtesy against a runaway bridge, not a guarantee; the bridge's own 15 s poll is the rate and a claim is one indexed read.
+  It never refuses the first claim of an isolate.
+* A claim body is exactly `{bridge_version, hermes_ok, toolsets_ok}`; any other key (an `office_id`, say) is a 400 naming it. The gateway
+  calls `app.engine_bridge_report` with the preflight result before it claims (an unhealthy bridge is told so, handed nothing, and asked to
+  wait 60 s), and `poll_after_s` is 15 with no run and 0 with one.
+* A heartbeat or finish whose claim is lost is **409 `not_yours`** (the SQL `{stop:true, because:'not yours'}` is mapped, so the bridge cannot
+  misread it as a stop instruction); a finish for a run that is not running is 409 `not_running`; an unacceptable result is 400 with the reason.
+* The body ceiling is read while streaming (64 KB, 413), so an oversized request is never held in memory; `content-length` is only a shortcut.
+* `/engine/proposal` and `/engine/skills` are M8 and answer 404 until then. The bridge-credential command and `deploy:engine` exist, are
+  unit-tested, and have never been run against production.
+
 Errors: 400 `{error:'bad_request', field}` for shape errors; 401 unknown credential; 403 `{error:'disabled', because}` for a retired
 bridge or an office where Hermes is off; 409 `{error:'not_yours'}` for a fenced call that lost its claim; 429 when a bridge claims more than
 once per 5 s; 503 when the database is unavailable (the bridge backs off, never retries in a tight loop).
