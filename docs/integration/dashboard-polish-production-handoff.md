@@ -1,6 +1,6 @@
 # Dashboard polish: production deployment handoff (11 October 2026)
 
-**Status: MERGED to `main`; NOT DEPLOYED.** This document prepares the deployment. It does not authorise it, and nothing in it has been executed.
+**Status: SUPERSEDED. The release was authorised and deployed on 11 October 2026 (page `dpl_3otBfKtZsGatfqgu1SgeJjVPb7Ld`); the record is `dashboard-polish-production-release.md`.** What follows is the preparation as written before the deployment, kept as history: it was the plan, and the preflight and rollback steps in it were the ones executed.
 
 ## 1. References
 | | |
