@@ -64,7 +64,7 @@ as $$
 $$;
 
 comment on function app.activity_ledger_on() is
-  'The MASTER switch: true only when system_config activity.ledger_enabled is the JSON value true. Absent or anything else is off (fails closed). Every per-office decision is made by activity_ledger_on(office), which can only narrow this.';
+  'The MASTER switch: true only when system_config activity.ledger_enabled is the JSON value true. Absent or anything else is off (fails closed). Every per-office decision is made by activity_ledger_covers(office), which can only narrow this.';
 
 -- Per-office activation (a canary). The master switch above stays the kill switch: this can only NARROW it, never widen it, because it
 -- is the master AND an office test. The office test reads one optional setting, system_config activity.ledger_offices:
@@ -72,7 +72,9 @@ comment on function app.activity_ledger_on() is
 --   a JSON array of office ids     on only for the offices listed
 --   anything else (null, a string, an object, a number)   on for NO office (a malformed allowlist fails closed)
 -- Both settings are read on every call (a primary-key lookup each), so there is nothing to invalidate: a change is in force for the next call.
-create or replace function app.activity_ledger_on(p_office uuid)
+-- Named apart from the master switch ON PURPOSE: the repository forbids an office-less overload beside an office-first one (check in
+-- p3-app-attack: the office-less form is a door that answers without an office), and the two answer different questions.
+create or replace function app.activity_ledger_covers(p_office uuid)
 returns boolean
 language sql
 stable
@@ -87,7 +89,7 @@ as $$
          end
 $$;
 
-comment on function app.activity_ledger_on(uuid) is
+comment on function app.activity_ledger_covers(uuid) is
   'Master switch AND the office test: true when activity.ledger_enabled is true and the office is covered (no activity.ledger_offices row = every office; an array = the offices in it; anything else = none). Never wider than the master switch.';
 
 -- ------------------------------------------------------------------------------------------------ the taxonomy
@@ -476,7 +478,7 @@ declare
   v_evidence jsonb;
 begin
   perform app.require_office(p_office);
-  if not app.activity_ledger_on(p_office) then
+  if not app.activity_ledger_covers(p_office) then
     return null;
   end if;
 
@@ -563,7 +565,7 @@ set search_path = 'pg_catalog', 'public'
 as $$
 begin
   -- Off means off: nothing is written, not even the failure counter.
-  if not app.activity_ledger_on(p_office) then
+  if not app.activity_ledger_covers(p_office) then
     return null;
   end if;
   begin
@@ -668,7 +670,7 @@ declare
 begin
   perform app.require_office(p_office);
   -- Off means off: no validation, no lock, no quota arithmetic, and no error an outsider could read as an answer.
-  if not app.activity_ledger_on(p_office) then
+  if not app.activity_ledger_covers(p_office) then
     return null;
   end if;
   if p_worker is null or p_worker !~ '^[a-z][a-z0-9_-]{1,39}$' then
@@ -759,7 +761,7 @@ comment on function app.record_external_activity(uuid, text, text, text, text, t
 
 -- Execute rights: server side only. A browser key reaches none of these.
 revoke all on function app.activity_ledger_on() from public, anon, authenticated;
-revoke all on function app.activity_ledger_on(uuid) from public, anon, authenticated;
+revoke all on function app.activity_ledger_covers(uuid) from public, anon, authenticated;
 revoke all on function app.activity_redact(text) from public, anon, authenticated;
 revoke all on function app.activity_clean(jsonb, integer) from public, anon, authenticated;
 revoke all on function app.activity_external_metadata(jsonb) from public, anon, authenticated;

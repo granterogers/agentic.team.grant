@@ -50,7 +50,7 @@ try {
   const read = async (o: string) => json((await one(`select app.activity_read(p_office => ${lit(o)}::uuid, p_visibility => 'operator') as v`)).v)
   const page = async (o: string) => json((await one(`select app.activity_for_the_page(${lit(o)}::uuid, 10) as v`)).v)
   const rows = async (o: string) => Number((await one(`select count(*) as c from public.activity_events where office_id = ${lit(o)}::uuid`)).c)
-  const on = async (o: string) => (await one(`select app.activity_ledger_on(${lit(o)}::uuid) as v`)).v === true
+  const on = async (o: string) => (await one(`select app.activity_ledger_covers(${lit(o)}::uuid) as v`)).v === true
   const allThree = async (o: string) => ({ s: await strict(o), f: await safe(o), e: await ext(o) })
 
   // ---------------------------------------------------------------------------------------------- precedence

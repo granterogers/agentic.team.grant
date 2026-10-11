@@ -19,6 +19,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: 'NOT a gate: rehearses the ledger deployment failure modes (a failing migration, an interrupted concurrent index build, a transaction-wrapped connection) on a clone with only 1060 applied; run by hand through its .sh wrapper',
   },
   {
+    stem: 'activity-mixed-version',
+    role: "NOT a gate: the new worker's ledger writers over a schema WITHOUT the ledger (a deploy ordering mistake); run by hand on a clone of a replica built from main",
+  },
+  {
     stem: 'activity-ui-browser',
     role: 'NOT a gate: draws the Activity screen from genuine ledger rows through the real gateway in a real browser at 1440, 390 and 320; run by hand through its .sh wrapper (about 4 minutes)',
   },

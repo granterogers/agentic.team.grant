@@ -55,7 +55,7 @@ SABOTAGES=(
   "S41|60|  select app.activity_ledger_on()|  select true|activity-office-scope|precedence: the master switch OFF"
   "S42|60|jsonb_typeof(a.value) = 'array' and |false or |activity-office-scope|scope: a bare string naming the office"
   "S43|60|a.key = 'activity.ledger_offices') then true|a.key = 'activity.ledger_offices') then false|activity-office-scope|scope: no allowlist row"
-  "S44|61|if not app.activity_ledger_on(p_office) then|if not app.activity_ledger_on() then|activity-office-scope|enforcement: the read answers"
+  "S44|61|if not app.activity_ledger_covers(p_office) then|if not app.activity_ledger_on() then|activity-office-scope|enforcement: the read answers"
   "S13|gw|if (!/^\\d{1,3}\$/.test(text))|if (false)|activity-gateway|refused by name"
   "S14|gw|    requireOne: ['job', 'correlation'],||activity-gateway|a chain with neither"
   "S17|60|    if exists (select 1 from public.activity_event_types t where t.event_type = p_event_type and t.durability = 'critical') then|    if false then|activity-ledger-durability|the best-effort writer refuses a critical type"

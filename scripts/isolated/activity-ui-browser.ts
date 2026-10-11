@@ -40,8 +40,9 @@ const check = (name: string, ok: boolean, detail = '') => {
 const email = String((await one(`select email from public.office_members where kind = 'person' and owner_key = 'grant' limit 1`).catch(() => ({ email: '' }))).email ?? '')
 const OP_EMAIL = email !== '' ? email : 'operator-ui@example.invalid'
 await db.execute(`insert into auth.users (id, email) select gen_random_uuid(), ${lit(OP_EMAIL)} where not exists (select 1 from auth.users where email = ${lit(OP_EMAIL)})`)
-await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
-const S = `aaa.bbb.${'o'.repeat(70)}`
+const OLD_SCHEMA = process.env.OLD_SCHEMA === '1'
+if (!OLD_SCHEMA) await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
+const S =`aaa.bbb.${'o'.repeat(70)}`
 const seeded = await seedLedger(db, run)
 check('seeded: genuine rows in the owning tables (jobs, blockers, outputs, deliveries, usage) and through the ledger writers', true, `${seeded.projects.length} projects, root ${seeded.root.slice(0, 8)}`)
 
@@ -52,16 +53,18 @@ const dbFeed = async (vis = 'user', extra = '') => {
   void extra
   return typeof r.v === 'string' ? JSON.parse(r.v) : r.v
 }
-const feed = await dbFeed()
+const feed = OLD_SCHEMA ? { enabled: false, office: [] } : await dbFeed()
 const feedRows: any[] = Array.isArray(feed.office) ? feed.office : []
-check('oracle: the ledger read model answers enabled with rows for this office', feed.enabled === true && feedRows.length >= 12, `${feedRows.length} rows`)
+if (!OLD_SCHEMA) check('oracle: the ledger read model answers enabled with rows for this office', feed.enabled === true && feedRows.length >= 12, `${feedRows.length} rows`)
 const feedText = feedRows.map((r) => `${r.verb ?? ''} ${r.what ?? ''}`.trim())
 console.log(`     ledger says (newest first): ${feedText.slice(0, 40).map((t) => JSON.stringify(t.slice(0, 70))).join(' | ')}`)
 
 // ---- gateway, page, browser ----------------------------------------------------------------------------------------------------
 const env = { HQ_API_TOKEN: 'isolated-hq-token', SUPABASE_SERVICE_ROLE_KEY: 'isolated-service-key', SUPABASE_ANON_KEY: 'isolated-anon', SIGNIN_ALLOWED_ORIGIN: 'http://127.0.0.1:4656' }
 const authUsers = { [S]: OP_EMAIL }
-const gw = await startEdge({ db, edgeFile: 'supabase/functions/hq-api/index.ts', env, authUsers })
+// HQ_EDGE_FILE swaps the gateway for another checkout's (the mixed-version cells); the page is whatever web/studio the working directory holds.
+const gw = await startEdge({ db, edgeFile: process.env.HQ_EDGE_FILE ?? 'supabase/functions/hq-api/index.ts', env, authUsers })
+const COMPAT = process.argv.find((a) => a.startsWith('--compat='))?.slice(9)
 const signin = await startEdge({ db, edgeFile: 'supabase/functions/signin/index.ts', env, authUsers })
 const GW = 'https://gw.invalid/functions/v1'
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type, apikey, x-client-info', 'access-control-allow-methods': 'GET, POST, OPTIONS' }
@@ -177,7 +180,7 @@ const diagnosticOnly = ['Asked to read the pricing notes', 'Read the pricing not
 const fallbackMark = 'created this project'
 
 try {
-  for (const vp of VIEWPORTS) {
+  for (const vp of COMPAT === undefined ? VIEWPORTS : []) {
     const tag = `${vp.name}px`
     // ------------------------------------------------------------------------------------------ the ledger is the source
     {
@@ -265,8 +268,25 @@ try {
       await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
     }
   }
+  // ---------------------------------------------------------------------------------------------- a mixed-version cell (--compat=<label>)
+  // The page and the gateway are from different checkouts, over a schema that HAS the ledger switched on. Whatever is old cannot know the
+  // ledger, so the screen must simply keep drawing the list it always drew: no error, no overflow, no ledger row invented.
+  for (const vp of COMPAT === undefined ? [] : VIEWPORTS) {
+    const tag = `${vp.name}px (${COMPAT})`
+    const { page, seen, close } = await open(vp)
+    await gotoActivity(page)
+    const r = (await page.evaluate(READ)) as Read
+    const sections = [...new Set(seen.sections)]
+    console.log(`     [${tag}] gateway sections asked: ${sections.join(', ')}`)
+    check(`${tag}: the Activity screen draws the older list`, /Activity/.test(r.heading) && r.rows.length > 0 && r.body.includes(fallbackMark), `${r.rows.length} rows`)
+    check(`${tag}: no ledger row is shown`, !/said yes|Sent to Telegram|external worker/.test(r.body), 'none')
+    check(`${tag}: no page error and no horizontal overflow`, seen.pageErrors.length === 0 && r.scroll <= r.vw, `${seen.pageErrors.join(' | ') || 'clean'}; ${r.scroll} of ${r.vw}`)
+    const refusedAsk = seen.ledgerAnswers.length === 0 || seen.ledgerAnswers.every((a) => a?.enabled !== true)
+    check(`${tag}: nothing in the answer the page cannot use is drawn`, refusedAsk, `${seen.ledgerAnswers.length} ledger answers`)
+    await close()
+  }
   // ---------------------------------------------------------------------------------------------- user versus diagnostic, at the door
-  {
+  for (const _ of COMPAT === undefined ? [1] : []) {
     const call = async (q: string) => {
       const res = await gw.call(new Request(`${GW}/hq-api?section=activity_feed&${q}`, { headers: { authorization: `Bearer ${S}` } }))
       const j = JSON.parse(await res.text())

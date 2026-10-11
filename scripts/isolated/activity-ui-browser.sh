@@ -20,5 +20,8 @@ $P -d $DB -c "
   drop table if exists public.activity_events cascade;
   drop table if exists public.activity_event_types cascade;
   delete from public.system_config where key = 'activity.ledger_enabled';" >/dev/null 2>&1
-for f in migrations/1060_*.sql migrations/1061_*.sql migrations/1062_*.sql; do $P -d $DB -v ON_ERROR_STOP=1 -f $f 2>&1 | grep -v NOTICE; done
+# OLD_SCHEMA=1 leaves the ledger out entirely (the mixed-version cells: a new page and gateway over the schema as it is today)
+if [ "${OLD_SCHEMA:-0}" != "1" ]; then
+  for f in migrations/1060_*.sql migrations/1061_*.sql migrations/1062_*.sql; do $P -d $DB -v ON_ERROR_STOP=1 -f $f 2>&1 | grep -v NOTICE; done
+fi
 timeout 500 npx tsx scripts/isolated/activity-ui-browser.ts $DB "$@"

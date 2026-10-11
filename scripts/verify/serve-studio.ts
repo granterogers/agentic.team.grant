@@ -17,7 +17,8 @@ import { readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { extname, join } from 'node:path'
 
-const ROOT = 'web/studio'
+// STUDIO_ROOT serves another checkout's page (the mixed-version cells in scripts/isolated/activity-ui-browser.ts); unset, nothing changes.
+const ROOT = process.env.STUDIO_ROOT ?? 'web/studio'
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

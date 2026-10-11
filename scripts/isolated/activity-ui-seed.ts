@@ -92,6 +92,8 @@ export async function seedLedger(db: PgExecutor, run: string): Promise<Seeded> {
   const other = await mk('growth-director', root, project2)
   for (const s of ['running', 'output_created', 'quality_review', 'committing', 'committed', 'notifying', 'complete']) await set(other, s)
 
+  // OLD_SCHEMA=1: a database without the ledger (the mixed-version cells); the owning tables above are all the office has
+  if (process.env.OLD_SCHEMA === '1') return { office, projects, root, child, failedChild, corr }
   // native events, written by the ledger's own writers
   const nat = (type: string, key: string, kind: string, actor: string, summary: string, extra = '') =>
     db.execute(`select app.record_activity(p_office => ${lit(office)}::uuid, p_event_type => ${lit(type)}, p_idempotency_key => ${lit(`${key}-${run}`)}, p_actor_kind => ${lit(kind)}, p_actor => ${lit(actor)}, p_summary => ${lit(summary)}${extra})`)
