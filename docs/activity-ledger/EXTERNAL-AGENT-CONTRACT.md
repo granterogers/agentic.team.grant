@@ -26,11 +26,14 @@ app.record_external_activity(
   p_severity        text default null,
   p_project_id      uuid default null,   -- must belong to p_office (composite key)
   p_job_id          uuid default null,   -- must belong to p_office (composite key)
-  p_correlation_id  uuid default null,
+  p_correlation_id  uuid default null,   -- must be the job's own (taken from the job); with no job, one some job of p_office has
   p_metadata        jsonb default '{}',  -- cleaned by app.activity_clean
-  p_evidence_ref    jsonb default null   -- {"kind": "...", "id": "..."}
+  p_evidence_ref    jsonb default null   -- an object; cleaned like metadata, at most 1 KB, and stored with kind = "external" whatever it says
 ) returns uuid
 ```
+
+Bounds on what a worker can add (the table is append-only on a 500 MB tier): at most **300 new reports an hour per worker and 1 000 per office** (refused with `54000`; a retry of an already-accepted report is never refused and another worker is
+unaffected), the summary and every string value are redacted and cut, and the redactor itself reads only the first 4 000 characters. `external.review_decided` is **not** writable by a worker: a person's decision is recorded by the office.
 
 What it forces, whatever the worker sends: `actor_kind = external`, `actor = external:<worker>`, `provenance = external`, `source_interface = external`,
 visibility from the taxonomy (never chosen by the worker). What it refuses: a type that is not `external_writable`; severity `critical`; status
@@ -49,10 +52,10 @@ that is not an object, too deep, too large or has a malformed key; and everythin
 | `external.evaluation_completed` | diagnostic | An evaluation of an output finished (`metadata`: counts and verdicts, never content) |
 | `external.usage_recorded` | diagnostic | Resources a task used (`metadata`: durations, token counts, a cost with its provenance; never a number the worker did not measure) |
 | `external.worker_error` | diagnostic | An error, redacted, short |
-| `external.review_decided` | user | A person reviewed the output (written by the **boundary** on the person's act, not by the worker) |
+| `external.review_decided` | user | A person reviewed the output. **Not external-writable**: written by the office's own code on the person's act (no writer exists yet), never through this door |
 
 Sandboxed execution is `external.research_started` and `external.worker_error` with `metadata.sandbox` naming the sandbox; resource usage is
-`external.usage_recorded`; a human review decision is `external.review_decided`. No Hermes-specific table, type or column exists or is needed: a new kind of external event is a row in
+`external.usage_recorded`; a human review decision is `external.review_decided` (recorded by the office, not reported by the worker). No Hermes-specific table, type or column exists or is needed: a new kind of external event is a row in
 `public.activity_event_types` with `external_writable = true` and a name beginning `external.`.
 
 ## Boundary requirements (for whoever builds it)

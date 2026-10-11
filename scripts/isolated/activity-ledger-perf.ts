@@ -75,7 +75,7 @@ try {
   }
   const native = async (n: number) => {
     await db.execute(`insert into public.activity_events (office_id, event_type, occurred_at, actor_kind, actor, status, severity, visibility, summary, idempotency_key, project_id, correlation_id)
-      select ${lit(grant)}::uuid, (array['tool.call_requested','tool.call_completed','tool.call_failed','system.recovered','budget.threshold_reached'])[1 + g % 5],
+      select ${lit(grant)}::uuid, (array['tool.call_requested','tool.call_completed','tool.call_failed','external.usage_recorded','budget.threshold_reached'])[1 + g % 5],
              now() - (g || ' seconds')::interval, 'agent', 'research-director', 'recorded', (array['info','info','warning','warning','notice'])[1 + g % 5],
              case when g % 5 in (4) then 'user' else 'diagnostic' end, 'seeded ' || g, 'perf-seed-' || g || '-' || md5(random()::text), ${lit(proj)}::uuid, ${lit(corr)}::uuid
         from generate_series(1, ${n}) g`)

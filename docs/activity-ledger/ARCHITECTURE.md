@@ -164,17 +164,19 @@ after each source's newest rows; **after** pushes the selective filters into eac
 
 | Read | 300 jobs, before | 300 jobs, after | 3 000 jobs, before | 3 000 jobs, after |
 |---|---|---|---|---|
-| newest 50, ordinary | 63 | 83 | 100 | 104 |
-| newest 50, diagnostic | 85 | 90 | 201 | 199 |
-| one project, diagnostic | 86 | 85 | 183 | 206 |
-| page three by cursor | 84 | 82 | 177 | 191 |
-| one agent | 165 | **68** | 465 | **115** |
-| severity >= error (selective) | 242 | **53** | 1 468 | **94** |
-| one root job's chain (up to 500 events, three pages) | 503 | 461 | 929 | 895 |
-| the existing `hq_studio_lately`, for scale | 88 | 87 | 755 | 823 |
+| newest 50, ordinary | 63 | 107 | 100 | 108 |
+| newest 50, diagnostic | 85 | 107 | 201 | 194 |
+| one project, diagnostic | 86 | 107 | 183 | 201 |
+| page three by cursor | 84 | 90 | 177 | 272 |
+| one agent | 165 | **68** | 465 | **108** |
+| severity >= error (selective) | 242 | **69** | 1 468 | **92** |
+| one root job's chain (up to 500 events, three pages) | 503 | 456 | 929 | 911 |
+| the existing `hq_studio_lately`, for scale | 88 | 87 | 755 | 810 |
 
-The unchanged rows (newest page, project, cursor) are within the run-to-run spread of a shared laptop; the two selective reads that were the stated weak spot are 3.6 and 16 times faster
-at 24 000 transitions. Ten times the history cost the newest page **1.3 to 1.6 times** as much. JIT is switched off in the function: the query is wide enough to cross `jit_above_cost`
+The "after" column is the final code (sixteen sources, including the throttle projection). The rows that did not change (newest page, project, cursor) vary by tens of milliseconds between runs
+on a shared laptop (the same read measured 177 to 272 ms across four runs of the cursor case); the 300-job newest-page reads went from 63-86 ms to 107 ms between the first and the last measurement,
+which is not attributed (a shared machine and one more source are both candidates and neither was isolated), so read the unchanged rows as "no change worth a claim" and the 300-job rise as unexplained. The two selective reads that were the stated weak spot are 2.5 and 16 times faster at 24 000 transitions. Ten times the history cost
+the newest page **1.0 to 1.6 times** as much. JIT is switched off in the function: the query is wide enough to cross `jit_above_cost`
 and the compile took about 650 ms of a 70 ms query.
 
 **Pushdown.** A job, a correlation, a project, a severity, a category, a type or an agent names a small set of rows however busy the office is, so each is applied inside each source's own
