@@ -200,7 +200,9 @@ Base `http://127.0.0.1:8642`, header `Authorization: Bearer ${API_SERVER_KEY}`.
 
 ```
 POST /v1/runs
-  Idempotency-Key: engine-run-<run_id>              (stable across re-claims: a live Hermes replays, HD-7)
+  Idempotency-Key: engine-run-<run_id>-<attempt>    (PER ATTEMPT. M0 D-2: after a Hermes restart the same key replays the dead
+                                                     `interrupted` run, so a re-claim after a crash uses the next attempt number;
+                                                     a re-attach to a LIVE Hermes run goes by hermes_run_id, not by re-POST)
   Content-Type: application/json
   body: the claimed run's `request` serialised with sorted keys, PLUS {"session_id": "<run_id>"}   (byte-identical on every claim)
 → 202 {run_id: "run_<32 hex>", status: "started"|…}          [ASSUMPTION V2: exact accepted-response keys]
@@ -219,12 +221,19 @@ GET /v1/runs/<hermes_run_id>/events    (SSE; reconnect with Last-Event-ID on a d
 
 Every 5 s:  POST /engine/heartbeat → if stop: POST /v1/runs/<id>/stop, keep reading events until terminal (max 30 s), then finish cancelled.
 Deadline:   the bridge's own wall clock = deadline_at + 30 s → stop, finish failed('deadline').
+No progress: M0 D-3: Hermes retries a provider 500 indefinitely (run stays `running`), so the bridge also stops a run with no
+            event for `no_progress_s` (default 90) and finishes failed('no_progress'). A provider 429 fails the run by itself
+            ("HTTP 429: Rate limit exceeded: free-models-per-min") and maps to the plain sentence below.
 If the SSE stream cannot be re-established: GET /v1/runs/<id> for the terminal status and output.
 ```
 
 The event names, fields and terminal semantics are **[SRC api_server_runs.py:91-99, 176-200, 857-986]**. The tool name Hermes reports for
-an MCP tool (prefixing scheme) is **[ASSUMPTION V12]**; the bridge's containment check matches the office tool names from §9 against the
-reported name using the prefix observed in M0 and fails closed on anything else.
+an MCP tool is **observed in M0 (V12): `mcp__office__<tool>`** (so `BridgeConfig.officeToolPrefix = 'mcp__office__'`); the bridge's
+containment check matches the office tool names from §9 against the reported name with that prefix and fails closed on anything else.
+Also observed in M0: `approval.request` carries `command, pattern_key(s), description, allow_permanent, allow_session, request_id,
+choices`; the approval POST body is `{choice, request_id?}` (an unknown choice is 400, nothing pending 409); a second concurrent run is
+refused 429 "Too many concurrent runs (max 1)"; the host config must set `tools.tool_search.enabled: "off"` (quoted: bare `off` is a
+YAML boolean) or the MCP tools are hidden behind a bridge tool; in multiplex mode every profile reads its own `.env` (D-6).
 
 ---
 
@@ -480,7 +489,7 @@ Inference usage is written by `engine_run_finish`, not here, so `howComposed` is
 | Bridge never claims before the deadline | resume finds `expired` | "took longer than N minutes" | `expired` |
 | Bridge dies mid-run, comes back within 90 s | claim returns its own running run; it re-attaches by `hermes_run_id` | nothing extra | `running` |
 | Bridge dies and does not come back | lease lapses → `open`, reclaimed (≤3) → else `failed('bridge_lost')` | "couldn't finish" | as stated |
-| Hermes process restarted mid-run | `run.interrupted` on its side; re-POST with the same Idempotency-Key replays the stored status if the idempotency row survived, else conflict → failed | "couldn't finish" | `failed` |
+| Hermes process restarted mid-run | `run.interrupted` on its side; **observed (V2-5): the old run reads back `interrupted` and the same key replays that dead run**, so the bridge finishes it `failed('interrupted')` or retries under the next attempt's key (§5.2) | "couldn't finish" | `failed` |
 | Person presses Stop while paused | `request_stop` cancels the paused job **[REPO migrations/0741…:1092-1105]**; heartbeat sees the cancelled job → bridge stops Hermes → finish(cancelled) without resume | the Stop press is the acknowledgement | `cancelled` |
 | Hermes asks for a dangerous-command approval | bridge denies, notes it | nothing (the answer may say it couldn't do that) | unchanged |
 | Hermes reports a tool that is not an office tool | bridge stops the run: containment | "couldn't finish" | `failed('containment: <tool>')` |

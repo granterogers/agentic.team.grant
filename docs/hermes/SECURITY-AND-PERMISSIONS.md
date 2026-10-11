@@ -69,7 +69,7 @@ puts them in `.env` with mode 600. Tokens are generated with 32 random bytes and
 | S17 | Secrets in logs, rows or events | errors, previews | redaction in SQL on every excerpt and failure; Hermes redacts its own previews **[SRC api_server_runs.py:101-109]**; the bridge never logs request or answer bodies | T22 |
 | S18 | Denial of service on the office | a bridge polling hard | 429 on claims < 5 s apart; 64 KB bodies; adaptive polling | gateway unit tests |
 | S19 | Hermes supply chain | upstream update | pin a commit or release on the host, record it in the runbook, upgrade deliberately and re-run M0's V-checks | runbook |
-| S20 | Local transcript retention on the host | Hermes SQLite | runbook prunes Hermes sessions older than 7 days ([ASSUMPTION V13]); the host must be one Grant controls (G1) | runbook |
+| S20 | Local transcript retention on the host | Hermes SQLite | runbook deletes Hermes sessions older than 7 days OFFLINE with `hermes sessions delete` (V13: prune refuses while running); the host must be one Grant controls (G1) | runbook |
 
 ## 5. Data that leaves the office
 

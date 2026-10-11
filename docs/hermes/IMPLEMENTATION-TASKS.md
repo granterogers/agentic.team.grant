@@ -10,6 +10,9 @@ Order: **M0 → M1 → M2 → M3 → M4 → M5 → M6**, then M7–M10 independe
 
 ## M0 · Validation spike (no production, no office code changes)
 
+> **STATUS: DONE 11 October 2026. PASS; V6 BLOCKED on Grant.** See `VALIDATION-RESULTS.md` (matrix, six deviations D-1..D-6) and
+> `scripts/hermes-m0/` (the reproducible harness). M4 must honour D-2 and D-3, M5 D-1, M8 D-4 and D-6. M7 needs V6.
+
 **Objective.** Observe every `[ASSUMPTION Vn]` before building on it. Output: `docs/hermes/VALIDATION-RESULTS.md` with one row per V-item
 (command run, what was observed, pass/fail, and any change it forces in the contracts).
 

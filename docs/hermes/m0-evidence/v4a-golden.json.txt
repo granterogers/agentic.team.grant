@@ -1,0 +1,36 @@
+{
+  "initialize": {
+    "protocolVersion": "2024-11-05",
+    "serverInfo": {
+      "name": "ai-team-hq",
+      "version": "1.0.0"
+    }
+  },
+  "toolNames": [
+    "list_projects",
+    "search_documents",
+    "read_document",
+    "list_staff",
+    "recent_work",
+    "add_to_project",
+    "notebook_generate",
+    "push_to_notebook",
+    "ask_notebook",
+    "check_job",
+    "search_project",
+    "list_tasks",
+    "create_task",
+    "update_task",
+    "inspect_activity",
+    "ask_team",
+    "start_research",
+    "generate_artifact"
+  ],
+  "get": {
+    "status": 200,
+    "contentType": "application/json; charset=utf-8"
+  },
+  "delete": {
+    "status": 405
+  }
+}

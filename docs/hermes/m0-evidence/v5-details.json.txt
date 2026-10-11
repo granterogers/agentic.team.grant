@@ -1,0 +1,168 @@
+{
+  "pool": [
+    {
+      "id": "thinkingmachines/inkling-small:free",
+      "context": 1048576,
+      "nameSaysFree": true
+    },
+    {
+      "id": "thinkingmachines/inkling:free",
+      "context": 1048576,
+      "nameSaysFree": true
+    },
+    {
+      "id": "nvidia/nemotron-3.5-lightning:free",
+      "context": 1000000,
+      "nameSaysFree": true
+    },
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "context": 1000000,
+      "nameSaysFree": true
+    },
+    {
+      "id": "dots-studio/dots-3-note-preview:free",
+      "context": 512000,
+      "nameSaysFree": true
+    },
+    {
+      "id": "inclusionai/ling-3.1-flash",
+      "context": 262144,
+      "nameSaysFree": false
+    },
+    {
+      "id": "apodex/apodex-1.1-mini:free",
+      "context": 262144,
+      "nameSaysFree": true
+    },
+    {
+      "id": "poolside/laguna-s-2.1:free",
+      "context": 262144,
+      "nameSaysFree": true
+    },
+    {
+      "id": "poolside/laguna-xs-2.1:free",
+      "context": 262144,
+      "nameSaysFree": true
+    },
+    {
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "context": 262144,
+      "nameSaysFree": true
+    },
+    {
+      "id": "google/gemma-4-31b-it:free",
+      "context": 262144,
+      "nameSaysFree": true
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "context": 262144,
+      "nameSaysFree": true
+    },
+    {
+      "id": "cohere/north-mini-code:free",
+      "context": 256000,
+      "nameSaysFree": true
+    },
+    {
+      "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "context": 256000,
+      "nameSaysFree": true
+    },
+    {
+      "id": "liquid/lfm-2.5-2.6b:free",
+      "context": 65536,
+      "nameSaysFree": true
+    }
+  ],
+  "probes": [
+    {
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "status": 200,
+      "toolCallOk": true,
+      "ms": 1573,
+      "detail": "valid tool call"
+    },
+    {
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "status": 200,
+      "toolCallOk": true,
+      "ms": 858,
+      "detail": "valid tool call"
+    },
+    {
+      "model": "google/gemma-4-31b-it:free",
+      "status": 429,
+      "toolCallOk": false,
+      "ms": 116,
+      "detail": "Provider returned error"
+    },
+    {
+      "model": "google/gemma-4-31b-it:free",
+      "status": 429,
+      "toolCallOk": false,
+      "ms": 97,
+      "detail": "Provider returned error"
+    },
+    {
+      "model": "poolside/laguna-s-2.1:free",
+      "status": 200,
+      "toolCallOk": true,
+      "ms": 3071,
+      "detail": "valid tool call"
+    },
+    {
+      "model": "poolside/laguna-s-2.1:free",
+      "status": 200,
+      "toolCallOk": true,
+      "ms": 787,
+      "detail": "valid tool call"
+    },
+    {
+      "model": "thinkingmachines/inkling:free",
+      "status": 403,
+      "toolCallOk": false,
+      "ms": 48,
+      "detail": "thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent or productivit"
+    },
+    {
+      "model": "thinkingmachines/inkling:free",
+      "status": 403,
+      "toolCallOk": false,
+      "ms": 31,
+      "detail": "thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent or productivit"
+    }
+  ],
+  "e2e": [
+    {
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "ok": true,
+      "ms": 8616,
+      "guardCalls": 2,
+      "note": "status completed; tool called true; names in answer true; office rows reached 1"
+    },
+    {
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "ok": true,
+      "ms": 8308,
+      "guardCalls": 3,
+      "note": "status completed; tool called true; names in answer true; office rows reached 1"
+    },
+    {
+      "model": "poolside/laguna-s-2.1:free",
+      "ok": true,
+      "ms": 13773,
+      "guardCalls": 4,
+      "note": "status completed; tool called true; names in answer true; office rows reached 1"
+    },
+    {
+      "model": "poolside/laguna-s-2.1:free",
+      "ok": true,
+      "ms": 11920,
+      "guardCalls": 3,
+      "note": "status completed; tool called true; names in answer true; office rows reached 1"
+    }
+  ],
+  "guardCalls": 45
+}

@@ -168,7 +168,8 @@ Grounding from Hermes's own transcript would let a fabricated tool result launde
 
 **Decision.** Each run gets a fresh `session_id` = the engine run id, no `X-Hermes-Session-Key`, memory and user profile disabled, the
 conversation the office already threads (`conversationBefore`) passed as `conversation_history`. Hermes's local SQLite still records
-the transcript **[SRC hermes_state*.py]**; the host runbook prunes it (**[ASSUMPTION V13]** for the prune command).
+the transcript **[SRC hermes_state*.py]**. **M0 amendment (V13, D-4):** `hermes sessions prune` refuses while Hermes runs and skips open
+API sessions even offline, so retention is an offline `hermes sessions delete <id>` in a maintenance window, never a live prune.
 
 **Why.** Two memories is where defects breed; `public.lessons` and `public.skills` stay the only durable learning, and the only route
 into them is a person's press (HD-10).
@@ -225,7 +226,7 @@ value and a module, not a migration of the model.
 | Duplicate state? | No. Job, obligation, output, delivery, tasks, skills, lessons stay single-owner. New rows record only what nothing else holds: the outside run's lifecycle and the office-served calls. Hermes's own SQLite is disposable and never read back. | HD-9, HD-11 |
 | Could Hermes bypass an approval? | v1 has no write tool and SQL refuses writes for the `engine` kind. In M10 every write goes through `app.authorize_effect`; level 3 can never resolve to `proceed` (CHECK). Hermes's own approval prompts are denied, never relayed as a second approval. | HD-5, HD-7, `SECURITY-AND-PERMISSIONS.md` |
 | Overpowered credentials? | Three credentials, each hashed, office-bound and revocable: the bridge credential (engine gateway only), the engine MCP credential (read tools, bound to the running run), the Hermes-only OpenRouter key (credit limit zero). No service key, no office key, no database URL leaves Supabase. | `SECURITY-AND-PERMISSIONS.md` §2 |
-| Retries cause duplicate actions? | No action exists in v1. A re-claimed run sends the same `Idempotency-Key` and byte-identical body, so a live Hermes replays rather than reruns. M10 keys every write by (run, call). | HD-7, `INTERFACE-CONTRACTS.md` §4 |
+| Retries cause duplicate actions? | No action exists in v1. A re-claimed run against a LIVE Hermes re-attaches by `hermes_run_id`; after a Hermes crash the key replays the dead run (M0 D-2), so the next attempt uses a per-attempt key or the run finishes `failed`. M10 keys every write by (run, call). | HD-7, `INTERFACE-CONTRACTS.md` §4 |
 | Silent external contact? | Hermes's web, browser, terminal, code, messaging, cron and delegation toolsets are disabled; the only MCP server is the office's; the bridge rejects a run whose events show a non-office tool (containment stop). Model calls go to OpenRouter only. | HD-5, `SECURITY-AND-PERMISSIONS.md` §5 |
 | Untrusted skills? | Proposals only; ADR-0017 refuses addresses at insert; tools by foreign key; scripts never transfer; a person's press is the only adoption path; rate-limited. | HD-10 |
 | Actually free? | Software and models: yes under HD-12. Hosting: free only on the operator's own machine (verified) or an always-free cloud tier (requires an account; Grant decides, G1). | `FREE-RUNTIME-FEASIBILITY.md` |
@@ -236,3 +237,11 @@ value and a module, not a migration of the model.
 | Accounts for the ledger branch? | Yes: no parallel ledger, the gateway is the boundary the contract asks for, events are skipped until the door exists. | HD-11 |
 
 Items that remain open are in `ARCHITECTURE-HANDOFF.md` §5 (decisions for Grant) and `IMPLEMENTATION-TASKS.md` M0 (experiments).
+
+## M0 amendments (11 October 2026)
+
+M0 ran against Hermes `d4d2ab7b`; results are in `VALIDATION-RESULTS.md`. HD-1 to HD-14 stand. Six findings refine them, none reverses one:
+D-1 the MCP tool prefix is `mcp__office__` (HD-5); D-2 idempotency is per attempt after a crash (HD-7); D-3 the bridge enforces a deadline and a
+no-progress limit because Hermes retries a 500 for ever (HD-6); D-4 retention is an offline delete (HD-9); D-5 the free primary is
+`nemotron-3-super-120b-a12b:free`, second `laguna-s-2.1:free`, and the allowlist comes from the live catalogue by price, never by the `:free` name
+(HD-12); D-6 multiplex profiles read their own `.env` (HD-13). V6 (a zero-credit key) is BLOCKED on Grant and gates M7 only.

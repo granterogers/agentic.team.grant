@@ -1,0 +1,6 @@
+| Id | Check | Verdict | Environment | Evidence |
+|---|---|---|---|---|
+| V2-1 | same Idempotency-Key and byte-identical body returns the SAME run (replayed:true); the same key with a different body is refused (409); a malformed key is refused (400) | **PASS** | mock | first 202 replayed=false; repeat 202 same run=true replayed=true; different body 409; bad key 400 |
+| V2-2 | control: requests without a key are independent runs, and session_id is honoured | **PASS** | mock | two keyless runs differ: true (statuses 202/202); session_id on status: engine-run-session-1 |
+| V2-7 | `instructions` reaches the model inside the system message, and `conversation_history` arrives as earlier user/assistant turns before the new input, in order | **PASS** | mock | roles in order: system,user,assistant,user; marker in system message: true; earlier turns: user:what did we decide about the venue? | assistant:We kept the original date. |
+| V2-6 | with max_concurrent_runs 1, a second run started while one is active is refused (429) and the active run is unharmed | **PASS** | mock | first 202, second 429 {"error":{"message":"Too many concurrent runs (max 1)","type":"rate_limit_error","param":null,"code":"rate_limit_exceeded"}}; first's status meanwhile: running |

@@ -1,0 +1,1 @@
+{"now": "2026-10-11T09:06:42.298341+00:00", "usage_now": 2.781556615, "usage_at_start_of_M0": 2.781219799, "delta_since_start": 0.000336816, "free_requests_today": {"used": 81, "limit": 1000, "remaining": 919}}

@@ -1,4 +1,4 @@
-# ADR-0072: Hermes is a manually chosen engine for one turn; the office keeps everything else
+# ADR-0073: Hermes is a manually chosen engine for one turn; the office keeps everything else
 
 **Status:** accepted for implementation (architecture phase, 11 October 2026). **Branch:** `feature/hermes-agent-integration`.
 **Detail:** `docs/hermes/ARCHITECTURE-DECISIONS.md` (HD-1 to HD-14) and the rest of `docs/hermes/`.

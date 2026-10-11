@@ -1,0 +1,29 @@
+LIST (stopped)
+Title                            Preview                                  Last Active   ID
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+auxiliary reply #3               a plain question                         just now      run_0f1535a6cc9f4331b3737405c1350458
+auxiliary reply #2               a plain question                         just now      run_15202e3163f54e14bb07a383a8ce35b5
+auxiliary reply                  a plain question                         just now      run_354f2aa2f2484d9ca1e717938f28405c
+
+PRUNE while running
+EXIT 1: Refusing `hermes sessions prune`: another process is using /tmp/hm/lc-s7/state.db.
+  PID 15134 (python /tmp/claude-0/-home-user-agentic-team-grant/60206746-157a-56d9-93d1-15fce): state.db, state.db-shm, state.db-wal
+Rewriting the database under a live writer is how every agent ends up refusing turns with the retired state.db-wal error. Nothing is lost.
+Stop them first (`hermes gateway stop`, quit the Desktop app, pause cron), then re-run.
+Override with --force if you accept the risk.
+Recovery guide: https://hermes-agent.nousresearch.com/docs/user-guide/session-storage-recovery
+
+PRUNE offline
+Note: 3 open sessions also match these filters but will be skipped because prune only deletes ended sessions. Use `hermes sessions delete <id>` to remove one explicitly.
+No sessions match (last active before 2026-10-11 08:58).
+
+DELETE
+Deleted session 'run_0f1535a6cc9f4331b3737405c1350458'.
+
+Deleted session 'run_15202e3163f54e14bb07a383a8ce35b5'.
+
+Deleted session 'run_354f2aa2f2484d9ca1e717938f28405c'.
+
+AFTER
+No sessions found.
+
