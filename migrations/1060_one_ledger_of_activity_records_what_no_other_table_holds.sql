@@ -321,6 +321,9 @@ comment on table public.activity_write_failures is
 alter table public.activity_write_failures enable row level security;
 alter table public.activity_write_failures force row level security;
 revoke all on public.activity_write_failures from anon, authenticated;
+-- The service key reads and writes only through the definer functions. Stock Supabase default privileges can grant it DML on a new
+-- table, which would let it insert past every writer rule and flip an external-writable flag; take all three tables away from it.
+revoke all on public.activity_events, public.activity_event_types, public.activity_write_failures from service_role;
 drop policy if exists activity_write_failures_app on public.activity_write_failures;
 create policy activity_write_failures_app on public.activity_write_failures for all to ai_team_app using (true) with check (true);
 create index if not exists activity_write_failures_office_time_idx on public.activity_write_failures (office_id, occurred_at desc);
@@ -349,7 +352,7 @@ begin
   -- returned is the normalised text. This is the twin of redactStrict in src/text/secrets.ts; the limits of both are in SECURITY.md.
   t := left(p_text, 4000);
   t := left(normalize(t, NFKC), 4000);
-  t := regexp_replace(t, '[\xAD\x34F\x61C\x115F\x1160\x17B4\x17B5\x180B-\x180E\x200B-\x200F\x202A-\x202E\x2060-\x206F\x3164\xFE00-\xFE0F\xFEFF\xFFA0]', '', 'g');
+  t := regexp_replace(t, '[\xAD\x34F\x61C\x115F\x1160\x17B4\x17B5\x180B-\x180E\x200B-\x200F\x202A-\x202E\x2060-\x206F\x3164\xFE00-\xFE0F\xFEFF\xFFA0\x600-\x605\x6DD\x70F\x8E2\x110BD\x110CD\x1D173-\x1D17A\xE0000-\xE007F\xE0100-\xE01EF]', '', 'g');
   t := regexp_replace(t, 'xox[abeprs]-[A-Za-z0-9-]{6,}', '[redacted:slack]', 'g');
   t := regexp_replace(t, 'sk-(?:proj-|or-|ant-|live-)?[A-Za-z0-9_-]{12,}', '[redacted:openai]', 'g');
   t := regexp_replace(t, 'sbp_[A-Za-z0-9]{16,}', '[redacted:supabase]', 'g');
@@ -363,7 +366,8 @@ begin
   t := regexp_replace(t, '\m(?:(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{10,}|whsec_[A-Za-z0-9]{16,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{30,}|hf_[A-Za-z0-9]{30,}|glpat-[A-Za-z0-9_-]{20,}|ya29\.[A-Za-z0-9_-]{20,}|(?:AC|SK)[0-9a-f]{32})\M|hooks\.slack\.com/services/[A-Za-z0-9/]{20,}', '[redacted:vendor-key]', 'g');
   t := regexp_replace(t, '([a-z][a-z0-9+.-]{1,20}://)(?:[^[:space:]/@:]{1,100}:[^[:space:]/@]{1,200}|[A-Za-z0-9._~%-]{20,200})@', '\1[redacted:url-credentials]@', 'gi');
   t := regexp_replace(t, '\m(Bearer|Basic|Token)([[:space:]]+|[[:space:]]*[:=][[:space:]]*)[A-Za-z0-9._~+/=-]{8,}', '\1\2[redacted:authorization]', 'gi');
-  t := regexp_replace(t, '\m((?:pass(?:word|wd|phrase)|pwd|secret|client[_-]?secret|api[_-]?key|apikey|access[_-]?key|private[_-]?key|(?:auth|access|refresh|id|session|bearer)[_-]?token|token|credentials?|authorization|cookie|session[_-]?id|signature))(["'']?[[:space:]]*[:=][[:space:]]*)("[^"]*"|''[^'']*''|[^[:space:],;&"'']+)', '\1\2[redacted:assignment]', 'gi');
+  -- A credential name may carry a prefix (DB_PASSWORD, GITHUB_TOKEN, adminPassword): the word-start anchor cannot match inside an identifier.
+  t := regexp_replace(t, '([A-Za-z0-9_-]{0,40}(?:pass(?:word|wd|phrase)|pwd|secret|client[_-]?secret|api[_-]?key|apikey|access[_-]?key|private[_-]?key|(?:auth|access|refresh|id|session|bearer)[_-]?token|token|credentials?|authorization|cookie|session[_-]?id|signature))(["'']?[[:space:]]*[:=][[:space:]]*)("[^"]*"|''[^'']*''|[^[:space:],;&"'']+)', '\1\2[redacted:assignment]', 'gi');
   t := regexp_replace(t, '-----BEGIN [A-Z ]*PRIVATE KEY-----[^-]*(?:-----END [A-Z ]*PRIVATE KEY-----)?', '[redacted:private-key]', 'g');
   -- a run of credential-shaped characters: long (40) with a digit, or shorter (24) mixing upper case, lower case and a digit
   for r in select (regexp_matches(t, '[A-Za-z0-9_+/=-]{24,}', 'g'))[1] as run loop
@@ -495,6 +499,11 @@ begin
   end if;
   -- Authority is not a parameter. A native caller cannot write as an outside worker, cannot write an outside worker's type (a person's
   -- review decision has no native writer yet, so none may forge one), and only the outside-worker door passes provenance 'external'.
+  -- Provenance is not honoured as a plain argument: a non-native value is accepted only inside the external door's own call, which sets
+  -- a transaction-local marker first. Anything else passing it is refused, so the guard below cannot be skipped by naming provenance.
+  if p_provenance is distinct from 'native' and coalesce(current_setting('activity.external_door', true), '') <> 'on' then
+    raise exception 'provenance is set by the external door, not by the caller' using errcode = '42501';
+  end if;
   if p_provenance = 'native' and (p_actor_kind = 'external' or p_event_type like 'external.%') then
     raise exception 'a native writer cannot record an external worker or an external activity type' using errcode = '42501';
   end if;
@@ -521,10 +530,10 @@ begin
     metadata, evidence_ref, idempotency_key, supersedes_activity_id, provenance
   ) values (
     p_office, p_event_type, coalesce(p_occurred_at, app.now_utc()), p_actor_kind, left(app.activity_redact(p_actor), 120),
-    left(app.activity_redact(p_agent_slug), 80), p_project_id, p_job_id,
+    left(app.activity_redact(p_agent_slug), 60), p_project_id, p_job_id,
     p_parent_job_id, p_correlation_id, p_causation_id, p_source_interface, p_status,
     coalesce(p_severity, v_type.default_severity), coalesce(p_visibility, v_type.default_visibility),
-    left(app.activity_redact(p_tool), 120), left(app.activity_redact(p_model), 120),
+    left(app.activity_redact(p_tool), 80), left(app.activity_redact(p_model), 120),
     left(app.activity_redact(p_summary), 300), v_meta, v_evidence, p_idempotency_key, p_supersedes, p_provenance
   )
   on conflict (office_id, idempotency_key) do nothing
@@ -674,6 +683,7 @@ declare
   v_key text;
   v_corr uuid;
   v_evidence jsonb;
+  v_ret uuid;
 begin
   perform app.require_office(p_office);
   -- Off means off: no validation, no lock, no quota arithmetic, and no error an outsider could read as an answer.
@@ -690,7 +700,8 @@ begin
   if p_severity = 'critical' then
     raise exception 'an external worker may not report critical severity' using errcode = '42501';
   end if;
-  if p_status in ('confirmed', 'authorised') then
+  -- A person's answer (yes, no, or a question that lapsed) is the office's own record; an outside worker cannot report one.
+  if p_status in ('confirmed', 'authorised', 'declined', 'expired') then
     raise exception 'an external worker may not claim % ', p_status using errcode = '42501';
   end if;
   if p_idempotency_key is null or length(p_idempotency_key) not between 1 and 150 or p_idempotency_key ~ '[[:cntrl:]]' then
@@ -752,7 +763,8 @@ begin
     end if;
   end if;
 
-  return app.record_activity(
+  perform set_config('activity.external_door', 'on', true);
+  v_ret := app.record_activity(
     p_office => p_office, p_event_type => p_event_type, p_idempotency_key => v_key,
     p_actor_kind => 'external', p_actor => 'external:' || p_worker,
     -- Marked in the text itself so a report can never read as the office's own words ("You said yes: ...") on a page that shows the summary alone.
@@ -760,6 +772,8 @@ begin
     p_severity => p_severity, p_visibility => v_type.default_visibility, p_project_id => p_project_id, p_job_id => p_job_id,
     p_correlation_id => v_corr, p_source_interface => 'external', p_metadata => app.activity_external_metadata(p_metadata),
     p_evidence_ref => v_evidence, p_provenance => 'external');
+  perform set_config('activity.external_door', 'off', true);
+  return v_ret;
 end
 $$;
 

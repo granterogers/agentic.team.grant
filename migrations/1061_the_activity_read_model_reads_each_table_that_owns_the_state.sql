@@ -426,8 +426,9 @@ begin
              'provider_confirmed', d.message_ref is not null and d.message_ref not like 'confirmed-by-person:%',
              'confirmed_by_person', case when d.message_ref like 'confirmed-by-person:%' then true end,
              'indeterminate', case when d.error_code like 'indeterminate:%' then true end,
-             'error_code', case when d.state <> 'sent' then left(app.activity_redact(d.error_code), 80) end,
-             'suppressed_reason', left(app.activity_redact(d.suppressed_reason), 80))),
+             -- provider and handler text can name a chat or a destination: only a reader of diagnostic detail is given it
+             'error_code', case when $10 >= 1 and d.state <> 'sent' then left(app.activity_redact(d.error_code), 80) end,
+             'suppressed_reason', case when $10 >= 1 then left(app.activity_redact(d.suppressed_reason), 80) end)),
            jsonb_build_object('kind', 'delivery', 'id', d.delivery_id), 'projected', 'deliveries', null::int,
            d.delivery_id, j.job_id
       from {z} d
@@ -934,7 +935,7 @@ begin
                'project', e ->> 'project',
                'when', to_char((e ->> 'at')::timestamptz, 'FMDD Mon HH24:MI'),
                'at', e ->> 'at',
-               'reversible', coalesce((e -> 'metadata' ->> 'reversible')::boolean, false),
+               'reversible', coalesce(case when jsonb_typeof(e -> 'metadata' -> 'reversible') = 'boolean' then (e -> 'metadata' ->> 'reversible')::boolean end, false),
                'undo_with', e -> 'metadata' ->> 'undo_with',
                'via', e ->> 'source_interface',
                'category', e ->> 'category',

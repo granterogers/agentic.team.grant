@@ -101,7 +101,7 @@ const VIEWPORTS = [
 export type Mode = { as?: 'A' | 'B'; ledger?: 'normal' | 'slow' | 'fail' | 'hang'; delayMs?: number; delay?: (query: string) => number; reducedMotion?: boolean; scheme?: 'light' | 'dark' }
 const open = async (vp: (typeof VIEWPORTS)[number], m: Mode = {}) => {
   const ctx = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, hasTouch: vp.touch, isMobile: vp.touch, reducedMotion: m.reducedMotion ? 'reduce' : 'no-preference', colorScheme: m.scheme ?? 'light' })
-  const seen = { pageErrors: [] as string[], consoleErrors: [] as string[], calls: [] as { section: string; query: string; ms: number; status: number; body: any }[], refused: [] as string[] }
+  const seen = { pageErrors: [] as string[], consoleErrors: [] as string[], calls: [] as { section: string; query: string; ms: number; status: number; body: any }[], refused: [] as string[], avatars: [] as string[] }
   await ctx.route(`${GW}/**`, async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
@@ -126,6 +126,15 @@ const open = async (vp: (typeof VIEWPORTS)[number], m: Mode = {}) => {
     return route.fulfill({ status: res.status, headers: { ...CORS, 'content-type': res.headers.get('content-type') ?? 'application/json' }, body: text })
   })
   await ctx.route(/^https?:\/\/(?!127\.0\.0\.1|gw\.invalid)/, (route) => { seen.refused.push(route.request().url()); return route.abort() })
+  // The specialists' photographs live in storage, a different service from the gateway. A stand-in picture per file (a square with the file's
+  // initial) proves the avatar URL the page forms resolves and is drawn in the right place; it does not show the real photographs.
+  await ctx.route('https://gw.invalid/storage/v1/object/public/avatars/**', (route) => {
+    const file = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '?')
+    seen.avatars.push(file)
+    const hue = [...file].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7)
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="hsl(${hue} 45% 45%)"/><text x="48" y="64" font-size="48" text-anchor="middle" fill="#fff" font-family="sans-serif">${file.charAt(0).toUpperCase()}</text></svg>`
+    return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'image/svg+xml' }, body: svg })
+  })
   // The scheme is asked for the way a person does, through the stored preference (the media query alone decides nothing in the studio).
   // SABOTAGE (proves the checks can go red): --sabotage-replace=<served file>::<old>::<new> rewrites a served file in flight.
   const sab = arg('sabotage-replace')

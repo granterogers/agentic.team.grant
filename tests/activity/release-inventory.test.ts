@@ -55,6 +55,14 @@ describe('the ledger is all there', () => {
     expect(has(m60, /create or replace function app\.activity_external_metadata\(/)).toBe(true)
     expect(has(m60, /external_writable/)).toBe(true)
   })
+  it('the second review\'s fixes are in: provenance is the door\'s, no service-role table privilege, a person\'s answer is not an outside worker\'s to report', () => {
+    expect(has(m60, /current_setting\('activity\.external_door', true\)/)).toBe(true)
+    expect(has(m60, /set_config\('activity\.external_door', 'off', true\)/)).toBe(true)
+    expect(has(m60, /revoke all on public\.activity_events, public\.activity_event_types, public\.activity_write_failures from service_role/)).toBe(true)
+    expect(has(m60, /p_status in \('confirmed', 'authorised', 'declined', 'expired'\)/)).toBe(true)
+    expect(has(m61, /case when \$10 >= 1 and d\.state <> 'sent' then left\(app\.activity_redact\(d\.error_code\)/)).toBe(true)
+    expect(has(m61, /jsonb_typeof\(e -> 'metadata' -> 'reversible'\) = 'boolean'/)).toBe(true)
+  })
   it('credential text is redacted in SQL and in TypeScript, and the strict writer redacts the summary', () => {
     expect(has(m60, /create or replace function app\.activity_redact\(/)).toBe(true)
     expect(has(m60, /left\(app\.activity_redact\(p_summary\), 300\)/)).toBe(true)

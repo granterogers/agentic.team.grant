@@ -192,7 +192,7 @@ export const STRICT_MAX_CHARS = 4000
 
 const INVISIBLE =
   // biome-ignore lint/suspicious/noMisleadingCharacterClass: the combining and joiner characters are exactly what is being stripped
-  /[\u{AD}\u{34F}\u{61C}\u{115F}\u{1160}\u{17B4}\u{17B5}\u{180B}-\u{180E}\u{200B}-\u{200F}\u{202A}-\u{202E}\u{2060}-\u{206F}\u{3164}\u{FE00}-\u{FE0F}\u{FEFF}\u{FFA0}]/gu
+  /[\u{AD}\u{34F}\u{61C}\u{115F}\u{1160}\u{17B4}\u{17B5}\u{180B}-\u{180E}\u{200B}-\u{200F}\u{202A}-\u{202E}\u{2060}-\u{206F}\u{3164}\u{FE00}-\u{FE0F}\u{FEFF}\u{FFA0}\u{600}-\u{605}\u{6DD}\u{70F}\u{8E2}\u{110BD}\u{110CD}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu
 
 const CREDENTIAL_KEY =
   '(?:pass(?:word|wd|phrase)|pwd|secret|client[_-]?secret|api[_-]?key|apikey|access[_-]?key|private[_-]?key|(?:auth|access|refresh|id|session|bearer)[_-]?token|token|credentials?|authorization|cookie|session[_-]?id|signature)'
@@ -225,7 +225,12 @@ const STRICT_FAMILIES: readonly (readonly [string, RegExp, string])[] = [
   ],
   [
     'assignment',
-    new RegExp(`\\b(${CREDENTIAL_KEY})(["']?\\s*[:=]\\s*)("[^"]*"|'[^']*'|[^\\s,;&"']+)`, 'gi'),
+    // A credential name may carry a prefix (DB_PASSWORD, GITHUB_TOKEN, adminPassword): \b does not match inside an identifier, so the
+    // prefix is a bounded run of identifier characters instead of a word boundary.
+    new RegExp(
+      `([A-Za-z0-9_-]{0,40}${CREDENTIAL_KEY})(["']?\\s*[:=]\\s*)("[^"]*"|'[^']*'|[^\\s,;&"']+)`,
+      'gi',
+    ),
     '$1$2[redacted:assignment]',
   ],
   [
