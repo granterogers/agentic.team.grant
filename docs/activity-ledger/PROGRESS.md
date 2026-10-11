@@ -16,7 +16,7 @@ Two phases: **phase 1** built the ledger (migrations 1060, 1061, the gateway sec
    drop the `activity_*` and `record_*activity*` objects and the three tables, apply `1060`, `1061`, `1062`, then `npx tsx scripts/isolated/<proof>.ts <db>`. The proofs assume an empty ledger.
 4. The registered gates: `npm run verify:critical` (68 proofs, about 75 s) and `npx tsx scripts/gate/run.ts --tier extended --only activity-ledger,activity-gateway,activity-ledger-review,activity-ledger-equivalence,activity-indexes,activity-ledger-durability,activity-native-writers,activity-worker,activity-redaction`
    (about 45 s). The ledger proofs are in the **extended** tier because the critical tier is at its cap of 70 on `main`.
-5. Sabotage: `bash scripts/isolated/activity-ledger-sabotage.sh [ids]` (26 sabotages, about two minutes in three batches). Gateway sabotages need a committed `HEAD` (they run in a worktree).
+5. Sabotage: `bash scripts/isolated/activity-ledger-sabotage.sh [ids]` (50 sabotages, in five batches of ten so each call fits ten minutes). Gateway sabotages need a committed `HEAD` (they run in a worktree).
 6. Measurements: `npx tsx scripts/isolated/activity-ledger-perf.ts <db> 3000` (about 100 s); it builds the eleven indexes first (they are not in a migration). `PERF_SEED_ONLY=1` seeds and stops so a plan can be read.
 7. The catalogue checks on the replica: `npx tsx scripts/<check>.ts --replica` (`P3_DB=post npx tsx scripts/check-office-callers.ts` for that one).
 
@@ -98,6 +98,13 @@ Trial merges and comparisons used throwaway worktrees under the scratchpad, neve
 
 Branch `feature/unified-activity-ledger`; `git log origin/main..HEAD` lists the commits. `main` and production are untouched: the branch is based on, and never merged into, `origin/main`; no migration was applied to any database
 but local replica clones; no deploy command was run; no production flag was set.
+
+## Phase 5 (fail-closed activation, final verification, merge preparation)
+
+Done: `app.activity_ledger_covers` fails closed (an array of office UUIDs, exactly `{"version":1,"mode":"all"}`, anything else covers nobody; the master always wins) and the health `scope` says `none | allowlist | all_offices | invalid`; the operator tool is rewritten around a pure planner with compare-and-swap statements and a pure command-line parser (`src/activity/switch.ts`, `switch-cli.ts`, `scripts/ops/activity-switch.ts`); `activity-office-scope` is a 16-check state machine over 150 combinations; the gateway proof and the browser harness gained activation matrices; the other ledger proofs name their offices explicitly; the rehearsal proves the migrations enable nobody; sabotage is 50 rows (all caught); the trial merge of main and every merged-tree gate are green; `MIGRATION-PLAN.md` stage D, `RELEASE-READINESS.md` (Phase 5 addendum, truth table, three-stage checklist, current hashes), `SECURITY.md`, `ARCHITECTURE.md` and `EVENT-CONTRACT.md` describe the fail-closed model.
+**To resume:** `bash scripts/isolated/replica.sh`; then `npx tsx scripts/gate/run.ts --tier critical --rebuild` (68) and `--tier extended --rebuild` (84, of which 11 are ledger proofs); `bash scripts/isolated/activity-ui-browser.sh` (174); sabotage in batches of ten (`bash scripts/isolated/activity-ledger-sabotage.sh S1 ... S10`, 50 rows); `npx vitest run tests/activity`.
+Nothing is pending on the branch. What is left needs a person or production access: `RELEASE-READINESS.md`, Phase 5 checklist (MERGE human review and decision; DEPLOYMENT with the master disabled; ACTIVATION by an approved single-office canary after real-host verification). Do not merge, apply, deploy or set a flag from a session.
+Process slips this phase, disclosed: `biome check --write` was run on seven files this phase created or touched (the repository rule says to format by printing and rewriting with Write); reflex `sed -i ... /dev/null` no-ops typed (nothing changed); one `git stash` was run by reflex on a clean tree (nothing stashed, `git stash list` is empty). Every other repository edit used Edit or Write. Production was not contacted and no production flag was set; the one test that spawns the operator script runs it with the flags unset and requires it to refuse.
 
 ## Phase 4 (integration with real rows, controlled release preparation)
 

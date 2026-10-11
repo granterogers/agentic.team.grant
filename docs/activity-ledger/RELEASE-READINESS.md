@@ -256,7 +256,7 @@ This section is the **current** record; where it restates a figure above it supe
 
 ### Per-office activation (decision)
 
-Implemented, small and additive: `activity.ledger_offices` narrows the master switch; absent = every office, an array = those offices, anything else = none; the master switch always wins; nothing is cached; `npm run activity:switch` plans and applies a canary/add/all/off in the safe order. Proof `activity-office-scope` (26 checks, S41-S44) and 8 planner tests. **Known property:** deleting the allowlist row while the master is on activates every office (fail-open by absence, documented in stage D). Existing convention surveyed: the only office-level mechanism is a global `system_config` flag; no office-scoped configuration exists to reuse.
+**SUPERSEDED BY PHASE 5 (below).** Phase 4 implemented `activity.ledger_offices` so that an absent row meant every office. That fail-open default was found unacceptable and is gone: absent, null, empty or malformed now covers nobody. Existing convention surveyed: the only office-level mechanism is a global `system_config` flag; no office-scoped configuration exists to reuse.
 
 ### Mixed-version matrix (local replicas, NOT deployed versions)
 
@@ -277,7 +277,7 @@ Eight concurrent readers: newest p95 375 ms (x2.9 one reader), diagnostic 491 (x
 
 ### Security re-review (a second model reviewer, read-only, on a throwaway clone; not human review)
 
-No confirmed defect. Noted and dispositioned: fail-open by absence of the allowlist (documented; mitigated by the operator tool); unknown-specialist misattribution in the byline (fixed); repeated worker markers in a summary (fixed, the page escapes everything regardless); `activity_health` tells an unlisted office the scope (accepted: scope only, not membership); the deployment-wide external cap can be exhausted by five offices cooperating (accepted, documented). All 45 sabotage rows were caught in a full run, and the eight that touch `1061` (S1, S9, S11, S38-S40, S44, S45) were re-run after the last SQL edit and caught.
+No confirmed defect. Noted and dispositioned: fail-open by absence of the allowlist (documented; mitigated by the operator tool; **removed in phase 5**: absent now covers nobody); unknown-specialist misattribution in the byline (fixed); repeated worker markers in a summary (fixed, the page escapes everything regardless); `activity_health` tells an unlisted office the scope (accepted: scope only, not membership); the deployment-wide external cap can be exhausted by five offices cooperating (accepted, documented). All 45 sabotage rows were caught in a full run, and the eight that touch `1061` (S1, S9, S11, S38-S40, S44, S45) were re-run after the last SQL edit and caught.
 
 ### Counts (current)
 
@@ -325,8 +325,68 @@ PASS means shown, on the stated target. **No production-only requirement is mark
 | Approval and delivery provenance correct | PASS on the replica (proofs and the screen), NOT RUN on real records | `activity-ledger`, `activity-ledger-review`, UI harness | Grant | compare three real events with their source rows |
 | Acceptable security findings | PASS for model review, NOT RUN for human review | section above | Grant | human review |
 | Working global kill switch | PASS on the replica (master precedence proved, `--off` plans the master only), NOT RUN in production | `activity-office-scope`, planner tests | Grant | rehearse `--off` plan before activation |
-| Office-scoped canary | IMPLEMENTED and proved on the replica; not used | `activity:switch -- --canary` | Grant | choose the canary office, or accept deployment-wide activation explicitly |
+| Office-scoped canary | IMPLEMENTED (fail closed, phase 5) and proved on the replica; not used | `activity:switch -- --canary`; Phase 5 addendum | Grant | choose the canary office; global activation is a separate, explicitly confirmed decision |
 
-**Migration hashes (sha256, as committed at the head named in the final report):** `1060` `877756ad32784973313fc0278e653074e20c388f2b5ad93e6b703db73faeb8ae`, `1061` `e63654273171dd222c85b1d616dc9cad2b58478fe8e7fb0abcef597c2a358a9c`, `1062` `07c26ad8eb700e0fc79f8504ea60faccd90db0a97a3d59bb66b66ab90fd40534`. These supersede every earlier hash in this file. Verify with `sha256sum migrations/106[012]_*.sql` before applying; the runner records name and checksum and refuses a changed applied file.
+**Migration hashes (sha256):** superseded by phase 5 (`1060` and `1061` changed); see the Phase 5 addendum for the current values. Any earlier hash in this file is stale. Verify with `sha256sum migrations/106[012]_*.sql` before applying; the runner records name and checksum and refuses a changed applied file.
 
 **Phase 4 verdicts.** MERGE READINESS **READY**. DEPLOYMENT READINESS **CONDITIONAL**: every locally verifiable prerequisite is done; the rest needs production access or a person (the NOT RUN rows above). ACTIVATION READINESS **CONDITIONAL**: it needs the deployment steps first, then a canary and the production measurements above.
+
+## Phase 5 addendum - fail-closed activation, final verification, merge preparation (11 October 2026)
+
+**The requirement.** No missing, malformed, interrupted or partially applied configuration may accidentally activate the ledger for additional offices. Phase 4 failed that: an absent allowlist covered every office, so deleting one row during a canary activated everyone. It is fixed in the database function every reader, writer, gateway section and Team HQ already asked (`app.activity_ledger_covers`), so there is one decision and no second feature-flag system.
+
+**Switch-state truth table** (master = `activity.ledger_enabled`; list = `activity.ledger_offices`; proved for 150 master-and-list combinations (6 x 25) x 2 offices x 8 surfaces by `activity-office-scope`):
+
+| Master | List | Covered |
+|---|---|---|
+| not JSON `true` (off, absent, `"true"`, `1`, `null`) | any | nobody (the master always wins) |
+| `true` | absent, `null`, `[]` | nobody |
+| `true` | array of office UUID strings | exactly the listed offices (junk elements, upper-case ids, nested arrays and duplicates never widen) |
+| `true` | exactly `{"version":1,"mode":"all"}` | every office (the one explicit global representation) |
+| `true` | anything else: bare string (including `"all"` or an office id), number, boolean, other version or mode, extra key, no version | nobody; health reports `scope: invalid` |
+
+The migrations write neither the list nor the master on (the rehearsal proves that applying 1060 to 1062 covers no office even with the master turned on, and that re-applying leaves a list untouched). **No new migration was needed**: 1060 to 1062 are unapplied, so the fail-closed semantics ship in their first application and no intermediate schema can fail open; nothing deployed knows the ledger.
+
+**Operator tool** (`npm run activity:switch`, `src/activity/switch.ts` and `switch-cli.ts`): status, `--canary`, `--add`, `--remove`, `--off`, `--all-offices --confirm="ALL OFFICES"`, `--dry-run`, `--apply`. Nothing is written without `--apply`; production flags are required for every run (the script refuses to start without them: tested by spawning it with the flags unset); unknown, repeated or conflicting options and invalid ids are refused with exit 2 or 1 and no write; the printed CURRENT and PROPOSED states and the exact statements come first; the list is written before the master; narrowing is one statement; each statement is a compare-and-swap on the value read, so a concurrent change or an interrupted run stops the apply and can never broaden access (proved on a real database for a race and for a change made after the plan). Repeated operations are idempotent (empty plan). Procedure, stop conditions and rollback: `MIGRATION-PLAN.md`, stage D.
+
+**Evidence (replica and browser only; nothing here touched production).**
+
+| Check | Result |
+|---|---|
+| Planner and command-line unit tests (`tests/activity`) | 75 passed |
+| `activity-office-scope` state-machine proof | 16/16 (150 combinations x 2 offices x 8 surfaces, one check each for: function, three writers, read, chain, adapter, health; no-broadening; operator transitions; race; interruption; audit; isolation) |
+| Gateway matrix, two signed-in offices through the real `hq-api` (`activity-gateway`) | 35/35 (16 activation states x four sections x two people; health scope; no cross-office rows) |
+| Browser harness, 1440, 390 and 320 | 174/174 (adds eight activation states: canary on this office, on another, no list, empty, invalid, unknown version, explicit all, master off with a valid list; each draws the ledger or the older list, agreeing with the gateway, no page error, no overflow); mixed-version cell (new page and gateway over the old schema) 13/13 |
+| External ingestion, native writers, worker, equivalence, durability, review, ledger | all green after naming their offices explicitly (they are about other properties; the explicit all-offices setting stands in for the old default) |
+| Migration rehearsal | 19/19 (adds: no list written and nobody covered after applying 1060 to 1062; a re-apply does not touch the list) |
+| `verify:critical` | 68/68, 3 682 assertions (branch and merged tree) |
+| Extended tier | 84 proofs, 2 091 assertions, 0 red (branch and merged tree) |
+| Sabotage | 50 of 50 caught (S46 to S50 new: row deleted, `else` widened, object equality, array match, health scope; S41 to S44 re-anchored to the fail-closed function; the first run found the matrix lacked a bare string naming the office, added) |
+| `npm test` | 6 887 passed, 21 skipped (branch); 6 989 passed (merged tree) |
+| Static | typecheck, `biome ci`, migrations (817 files, 814 recorded), secrets, templates, pressable, deployment-state, proof registry all clean; branding clean on the merged tree (on the branch alone it names one line from main's older `app.js`, resolved by the merge) |
+| Catalogue checks on the replica (`--replica`) | callers, consumed, gateway-wrappers, anon-exposure, machine-key, ownership, office-edges clean; carrier-writers keeps its 2 known pre-existing failures |
+
+**Trial merge of latest main** (disposable worktree, never committed; `origin/main` is `5fa1fbdc`, 80 commits ahead of the branch point): 2 conflicts, as expected: `docs/adr/README.md` (kept ADR 0071, 0072 and 0073) and `scripts/verify/serve-studio.ts` (identical `STUDIO_ROOT` line; main's comment kept). Migration numbers: main ends at 1053; this branch 1060 to 1062; the only other branch with numbers above 1053 is `feature/hermes-agent-integration` (1070 to 1072); no collision. On the merged tree: typecheck, lint, branding, secrets, templates, migrations, deployment-state, 6 989 unit tests, 68 critical, 84 extended, and the browser harness 174/174 are all green. The worktree was removed afterwards.
+
+**Mixed-version safety.** The four-cell matrix of phase 4 was not rebuilt: nothing in the old checkout, the schema through 1053 or the application code changed in phase 5, and the only changed schema logic is inside unapplied functions that nothing old calls. What phase 5 re-ran is the new-code cells that exercise it (critical gate, browser compat cell over the old schema, the worker's writers over a schema without the ledger). Restrictions: deploy the schema, then worker, `hq-api` and page with the master OFF; activate only when every running version includes this change; roll back by `--off` first, then application, never the reverse.
+
+**Migration hashes (sha256) at the final head:** `1060` `6c9c2511c372b160b09e518dde052ddff9f99ad77e6b341feaf892b91170a6c6`, `1061` `88e742634d612cbc9777b2e3a4624d96a658625d282758c822b56e33ab199d64`, `1062` `07c26ad8eb700e0fc79f8504ea60faccd90db0a97a3d59bb66b66ab90fd40534`. Verify with `sha256sum migrations/106[012]_*.sql` before applying.
+
+**Checklist, in three separate stages.** PASS means shown on the stated target. No production-only requirement is marked PASS from replica evidence.
+
+| Stage | Requirement | Status | Authority |
+|---|---|---|---|
+| **MERGE** | Remote branch exists and is current | PASS | agent |
+| **MERGE** | Collision-free migration numbers; trial merge of latest main resolved in a throwaway worktree; merged-tree gates green | PASS | agent (re-run if main moves) |
+| **MERGE** | Fail-closed semantics proved at database, gateway, writer, operator and browser level; 50 of 50 sabotages caught | PASS | agent |
+| **MERGE** | Human review of the SQL and the redactor | NOT RUN | Grant |
+| **MERGE** | Decision to merge | NOT RUN | Grant |
+| **DEPLOYMENT** (schema and application rollout with the master DISABLED) | Re-read `app.schema_migrations`; hashes match; apply 1060 to 1062 with provenance (commit pushed, clean tree); `activity_health` reads master off, scope none | NOT RUN | Grant, production writes |
+| **DEPLOYMENT** | Deploy worker, `hq-api`, page one at a time, each probing itself; compare live bytes against `origin/main` first | NOT RUN | Grant, production writes |
+| **DEPLOYMENT** | Index build on the real host (`concurrently`, measured) and the platform health reading healthy | NOT RUN | Grant |
+| **DEPLOYMENT** | Mixed-version matrix on real deployed versions | NOT RUN | Grant |
+| **ACTIVATION** (approved office-scoped canary, after real-host verification) | Plan then apply `--canary <office-id>` for one `person` office; read `activity_health` (no write failures, no missing indexes) and compare three events to their source rows | NOT RUN | Grant |
+| **ACTIVATION** | Real-host read latency within bounds Grant sets; the Activity page opened signed in on desktop and phone | NOT RUN | Grant |
+| **ACTIVATION** | Rehearse the `--off` plan before activating; global activation (`--all-offices --confirm`) only as a later, separate decision | NOT RUN | Grant |
+
+**Phase 5 verdicts.** MERGE READINESS **READY** (the open item is a human decision and human SQL review; the branch is mergeable and nothing was merged). DEPLOYMENT READINESS **CONDITIONAL**: all locally verifiable work is done; every remaining row needs production access or a person. ACTIVATION READINESS **CONDITIONAL**: it follows deployment, then an approved single-office canary and the real-host measurements; it is not blocked by anything in the code.

@@ -208,7 +208,7 @@ and resumably, and `activity_ledger_health.indexes_missing` says which are absen
 
 **Phase 4 correction.** Until phase 4 the ledger hook fed only the classic studio (`/classic`, unlinked): Team HQ's Activity screen (`allActivity` in `web/studio/bc/shell.js`) draws each project's own `activity` list
 and never read the ledger, so activating the ledger would have changed nothing a person sees. This was found by drawing genuine ledger rows through the real gateway in a real browser
-(`scripts/isolated/activity-ui-browser.sh`, 126 checks at 1440, 390 and 320 px). Team HQ now asks `ctx.ledgerActivity()`, which is null unless the ledger answered enabled with a drawable row, and then uses those rows **instead of** the per-project lists (merging
+(`scripts/isolated/activity-ui-browser.sh`, 174 checks at 1440, 390 and 320 px, including eight activation states). Team HQ now asks `ctx.ledgerActivity()`, which is null unless the ledger answered enabled with a drawable row, and then uses those rows **instead of** the per-project lists (merging
 two accounts of one event is how it appears twice); null leaves exactly the old behaviour. A ledger summary is already a sentence ("You said yes: ...", "Sent to Telegram"), unlike the older feed's bare verbs, so the
 actor is named only where the sentence does not carry it (`ledgerLine`): a specialist by the crew's name, an outside worker as "Name (external worker)", and a person's own acts and the office's bookkeeping not at all. Without
 this a person's yes would read "Claire You said yes" and an outside worker would be shown under the first crew member. The adapter also drops the worker marker from the sentence (the name says it) and words a job as "a request"
