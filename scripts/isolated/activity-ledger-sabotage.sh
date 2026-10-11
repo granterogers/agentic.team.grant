@@ -38,7 +38,7 @@ SABOTAGES=(
   "S12|61|where \$10 >= 1 and u.office_id = \$1|where \$10 >= 1|activity-ledger|neither feed"
   "S13|gw|if (!/^\\d{1,3}\$/.test(text))|if (false)|activity-gateway|refused by name"
   "S14|gw|    requireOne: ['job', 'correlation'],||activity-gateway|a chain with neither"
-  "S15|gw|args = { ...args, [extra.arg]: text }|args = { ...args, [extra.arg]: new Date(Date.parse(text)).toISOString() }|activity-gateway|cursor the first page returns"
+  "S15|gw|args = { ...args, [extra.arg]: text }|args = { ...args, [extra.arg]: new Date(Date.parse(text)).toISOString() }|activity-gateway|microseconds apart"
 )
 
 want=("$@")

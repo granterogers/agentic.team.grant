@@ -99,7 +99,7 @@ try {
   check('adapter: the Team HQ shape (who, verb, what, project, when, at, via, category) over the gateway', adapter.status === 200 && payload(adapter).enabled === true && ['who', 'verb', 'what', 'at', 'category'].every((k) => k in row), `first: ${String(row.verb)} ${String(row.what)}`)
   const health = await get(S_A, 'activity_health')
   const hb = await get(S_B, 'activity_health')
-  check('health: native volume is each office\'s own', health.status === 200 && Number(payload(health).native_events_total) === 3 && Number(payload(hb).native_events_total) === 1, `A ${payload(health).native_events_total}, B ${payload(hb).native_events_total}`)
+  check('health: native volume is each office\'s own', health.status === 200 && Number(payload(health).native_events_total) === 6 && Number(payload(hb).native_events_total) === 1, `A ${payload(health).native_events_total}, B ${payload(hb).native_events_total}`)
   const noJob = await get(S_A, 'activity_chain')
   check('chain: a chain with neither a job nor a correlation is refused, and says so', noJob.status >= 400 && noJob.status < 500, `status ${noJob.status}`)
   const xChain = await get(S_B, 'activity_chain', `correlation=${crypto.randomUUID()}`)
