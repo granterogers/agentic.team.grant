@@ -34,6 +34,7 @@ let exit = 1
 try {
   const grant = String((await one(`select app.operator_office() as o`)).o)
   await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_enabled', 'true'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_offices', '{"version":1,"mode":"all"}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
   const mkProject = async (n: string) => String(json((await one(`select app.hq_create_project(${lit(grant)}::uuid, ${lit(`Equiv ${n} ${run}`)}, 'upload', ${lit(`eq-${n}-${run}`)}, ${lit(`Equiv ${n} ${run}`)}, true) as v`)).v).project_id)
   const projA = await mkProject('a')
   const projB = await mkProject('b')

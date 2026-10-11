@@ -61,6 +61,15 @@ try {
       ).r,
     ).office_id,
   )
+  // Fail closed: switching the master on covers nobody. The two people are named in the allowlist, as the operator tool would.
+  const setList = (v: string | null) =>
+    v === null
+      ? db.execute(`delete from public.system_config where key = 'activity.ledger_offices'`)
+      : db.execute(
+          `insert into public.system_config (key, value, description) values ('activity.ledger_offices', ${lit(v)}::jsonb, 'proof')
+           on conflict (key) do update set value = excluded.value`,
+        )
+  await setList(JSON.stringify([officeA, officeB]))
   const mk = async (o: string, n: string) =>
     String(
       json(
@@ -289,9 +298,71 @@ try {
     `${events(lim).length} events`,
   )
 
-  await db.execute(
-    `update public.system_config set value = 'false'::jsonb where key = 'activity.ledger_enabled'`,
+  // ---- activation through the gateway: the same decision for every section, for each of two signed-in offices -----------------------
+  const sections: [string, string][] = [
+    ['activity_feed', ''],
+    ['activity_ledger', ''],
+    ['activity_chain', `correlation=${crypto.randomUUID()}`],
+    ['activity_health', ''],
+  ]
+  const setMaster = (on: boolean) =>
+    db.execute(
+      `update public.system_config set value = '${on}'::jsonb where key = 'activity.ledger_enabled'`,
+    )
+  const answers = async (bearer: string) =>
+    Promise.all(sections.map(async ([s, q]) => payload(await get(bearer, s, q)).enabled === true))
+  const state = async (master: boolean, list: string | null, label: string, wantA: boolean, wantB: boolean) => {
+    await setMaster(master)
+    await setList(list)
+    const [ra, rb] = [await answers(S_A), await answers(S_B)]
+    check(
+      `activation: ${label}: A ${wantA ? 'on' : 'off'}, B ${wantB ? 'on' : 'off'} in all four sections`,
+      ra.every((x) => x === wantA) && rb.every((x) => x === wantB),
+      `A ${ra.map(Number).join('')} B ${rb.map(Number).join('')}`,
+    )
+  }
+  await state(true, JSON.stringify([officeA]), 'canary on A only', true, false)
+  await state(true, JSON.stringify([officeB]), 'canary on B only', false, true)
+  await state(true, JSON.stringify([officeA, officeB]), 'canary on both', true, true)
+  await state(true, null, 'master on, no allowlist', false, false)
+  await state(true, 'null', 'master on, allowlist null', false, false)
+  await state(true, '[]', 'master on, empty allowlist', false, false)
+  await state(true, '"all"', 'master on, bare string all', false, false)
+  await state(true, '"' + officeA + '"', 'master on, a scalar office id', false, false)
+  await state(true, '{"mode":"all"}', 'master on, object without a version', false, false)
+  await state(true, '{"version":2,"mode":"all"}', 'master on, unknown version', false, false)
+  await state(true, '{"version":1,"mode":"all","extra":1}', 'master on, explicit all with an extra key', false, false)
+  await state(true, JSON.stringify([officeA, 'not-an-id', 42]), 'master on, mixed list: valid id kept, junk ignored', true, false)
+  await state(true, JSON.stringify([officeA.toUpperCase()]), 'master on, upper-case id is not a match', false, false)
+  await state(true, '{"version":1,"mode":"all"}', 'master on, explicit all', true, true)
+  await state(false, '{"version":1,"mode":"all"}', 'master off beats explicit all', false, false)
+  await state(false, JSON.stringify([officeA, officeB]), 'master off beats the allowlist', false, false)
+  const scopeOf = async (bearer: string) => String(payload(await get(bearer, 'activity_health')).scope ?? '')
+  await setMaster(true)
+  await setList(JSON.stringify([officeA]))
+  const sa = await scopeOf(S_A)
+  await setList('{"version":9}')
+  const sinv = await scopeOf(S_A)
+  await setList(null)
+  const snone = await scopeOf(S_A)
+  check(
+    'activation: the health reading says allowlist, invalid and none where the decision does',
+    sa === 'allowlist' && sinv === 'invalid' && snone === 'none',
+    `${sa} / ${sinv} / ${snone}`,
   )
+  // nothing crosses offices when both are on, and A's rows never reach B
+  await setList(JSON.stringify([officeA, officeB]))
+  const fa = await get(S_A, 'activity_feed', 'visibility=diagnostic')
+  const fb = await get(S_B, 'activity_feed', 'visibility=diagnostic')
+  check(
+    'activation: with both on, neither office reads the other',
+    events(fa).length > 0 &&
+      events(fb).length > 0 &&
+      !events(fa).some((e) => e.summary.includes('Bravo')) &&
+      !events(fb).some((e) => e.summary.includes('Alpha')),
+    `A ${events(fa).length}, B ${events(fb).length}`,
+  )
+  await setMaster(false)
   const offFeed = await get(S_A, 'activity_feed')
   const offPage = await get(S_A, 'activity_ledger')
   const offChain = await get(S_A, 'activity_chain', `correlation=${crypto.randomUUID()}`)

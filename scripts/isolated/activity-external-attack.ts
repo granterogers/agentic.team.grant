@@ -53,6 +53,7 @@ const extra: PgExecutor[] = []
 try {
   await db.execute(`delete from public.system_config where key = 'activity.ledger_enabled'`)
   await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_enabled', 'true'::jsonb, 'proof')`)
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_offices', '{"version":1,"mode":"all"}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
   const mk = async (name: string, tag: string) => {
     const email = `ext-${tag}-${run}@example.invalid`
     await db.execute(`insert into auth.users (id, email) values (gen_random_uuid(), ${lit(email)})`)

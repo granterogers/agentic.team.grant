@@ -43,6 +43,16 @@ await db.execute(`insert into auth.users (id, email) select gen_random_uuid(), $
 const OLD_SCHEMA = process.env.OLD_SCHEMA === '1'
 if (!OLD_SCHEMA) await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
 const S =`aaa.bbb.${'o'.repeat(70)}`
+// Fail closed: the switch on covers nobody until an office is named, and a writer records nothing for an uncovered office. The normal
+// state of this harness is the operator tool's canary, set BEFORE anything is seeded.
+const setList = (v: string | null) =>
+  v === null
+    ? db.execute(`delete from public.system_config where key = 'activity.ledger_offices'`)
+    : db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_offices', ${lit(v)}::jsonb, 'harness') on conflict (key) do update set value = excluded.value`)
+const setMaster = (on: boolean) => db.execute(`update public.system_config set value = '${on}'::jsonb where key = 'activity.ledger_enabled'`)
+const operatorOffice = String((await one(`select app.operator_office() as o`)).o)
+const CANARY = JSON.stringify([operatorOffice])
+if (!OLD_SCHEMA) await setList(CANARY)
 const seeded = await seedLedger(db, run)
 check('seeded: genuine rows in the owning tables (jobs, blockers, outputs, deliveries, usage) and through the ledger writers', true, `${seeded.projects.length} projects, root ${seeded.root.slice(0, 8)}`)
 
@@ -267,6 +277,34 @@ try {
       await close()
       await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
     }
+    // ---------------------------------------------------------------------------------------- activation: who the page treats as covered
+    // The master is ON in every case below except the last; only the list differs. A covered office shows ledger rows; every other state
+    // shows exactly the older list (never a half-drawn ledger, never an error), because the gateway answers disabled for it.
+    const other = '99999999-9999-4999-8999-999999999999'
+    const cases: [string, string | null, boolean, boolean][] = [
+      ['canary names this office', CANARY, true, true],
+      ['canary names another office only', JSON.stringify([other]), true, false],
+      ['no allowlist at all', null, true, false],
+      ['empty allowlist', '[]', true, false],
+      ['invalid allowlist (a bare string)', '"all"', true, false],
+      ['unknown version of the all setting', '{"version":2,"mode":"all"}', true, false],
+      ['explicit all-offices (disposable environment only)', '{"version":1,"mode":"all"}', true, true],
+      ['master off with a valid allowlist', CANARY, false, false],
+    ]
+    for (const [label, list, master, wantLedger] of cases) {
+      await setList(list)
+      await setMaster(master)
+      const { page, seen, close } = await open(vp)
+      await gotoActivity(page)
+      const r = (await page.evaluate(READ)) as Read
+      const gotLedger = /said yes|Sent to Telegram/.test(r.body)
+      const gwOn = seen.ledgerAnswers.some((a) => a?.enabled === true)
+      check(`${tag}: activation (${label}): the page shows ${wantLedger ? 'the ledger' : 'the older list'} and the gateway agrees`, gotLedger === wantLedger && gwOn === wantLedger && (wantLedger || r.body.includes(fallbackMark)), `ledger rows ${gotLedger}, gateway enabled ${gwOn}, ${r.rows.length} rows`)
+      check(`${tag}: activation (${label}): no page error, no overflow`, seen.pageErrors.length === 0 && r.scroll <= r.vw, `${seen.pageErrors.join(' | ') || 'clean'}; ${r.scroll} of ${r.vw}`)
+      await close()
+    }
+    await setMaster(true)
+    await setList(CANARY)
   }
   // ---------------------------------------------------------------------------------------------- a mixed-version cell (--compat=<label>)
   // The page and the gateway are from different checkouts, over a schema that HAS the ledger switched on. Whatever is old cannot know the

@@ -54,6 +54,10 @@ try {
   await db.execute(
     `update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`,
   )
+  // Fail closed: the master alone covers nobody. This proof is about the worker, so it names every office (the explicit setting).
+  await db.execute(
+    `insert into public.system_config (key, value, description) values ('activity.ledger_offices', '{"version":1,"mode":"all"}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`,
+  )
   const j2 = await stall()
   const r2 = await recoverStalled(db)
   const ev =

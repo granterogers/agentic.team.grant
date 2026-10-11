@@ -59,6 +59,7 @@ try {
 
   // switch on, write a row, then re-apply everything: nothing is reset or lost
   await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_offices', '{"version":1,"mode":"all"}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
   const office = String((await one(`select app.operator_office() as o`)).o)
   await db.execute(`select app.record_activity(p_office => '${office}'::uuid, p_event_type => 'system.recovered', p_idempotency_key => 'rehearsal-row-1', p_actor_kind => 'system', p_actor => 'worker', p_summary => 'kept')`)
   const types0 = Number((await one(`select count(*) as c from public.activity_event_types`)).c)

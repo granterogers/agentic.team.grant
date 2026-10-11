@@ -41,6 +41,7 @@ let exit = 1
 try {
   const grant = String((await one(`select app.operator_office() as o`)).o)
   await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_enabled', 'true'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_offices', '{"version":1,"mode":"all"}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
   const project = String(json((await one(`select app.hq_create_project(${lit(grant)}::uuid, ${lit(`Review ${run}`)}, 'upload', ${lit(`rev-${run}`)}, ${lit(`Review ${run}`)}, true) as v`)).v).project_id)
   const root = await realParent(db)
   await db.execute(`update public.jobs set project_id = ${lit(project)}::uuid, recipient_agent = 'chief-of-staff' where job_id = ${lit(root)}::uuid`)

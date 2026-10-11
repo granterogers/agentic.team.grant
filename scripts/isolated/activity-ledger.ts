@@ -100,6 +100,8 @@ try {
   await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_enabled', '"true"'::jsonb, 'proof')`)
   const stringy = json((await one(`select to_jsonb(app.activity_ledger_on()) as v`)).v)
   await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
+  // the master alone covers nobody (activity-office-scope proves the whole matrix); this proof is about the ledger, so every office is named
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_offices', '{"version":1,"mode":"all"}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
   check('switch: fails closed - an absent setting, or the string "true", is off', absent === false && stringy === false, `absent -> ${String(absent)}, string -> ${String(stringy)}`)
   check('switch: on', json((await one(`select to_jsonb(app.activity_ledger_on()) as v`)).v) === true, 'activity.ledger_enabled = true')
 

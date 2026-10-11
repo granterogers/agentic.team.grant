@@ -37,6 +37,7 @@ let exit = 1
 try {
   const office = String((await one(`select app.operator_office() as o`)).o)
   await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_enabled', 'true'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_offices', '{"version":1,"mode":"all"}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
   const marker = `proof.durability.${run}`
   const markerRows = async () => Number((await one(`select count(*) as c from public.system_config where key like ${lit(`${marker}%`)}`)).c)
   const safe = (type: string, key: string) => `select app.record_activity_safely(p_office => ${lit(office)}::uuid, p_event_type => ${lit(type)}, p_idempotency_key => ${lit(`${key}-${run}`)}, p_actor_kind => 'system', p_actor => 'worker', p_summary => 's')`

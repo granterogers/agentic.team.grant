@@ -43,6 +43,7 @@ const report: string[] = []
 let exit = 1
 try {
   await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_offices', '{"version":1,"mode":"all"}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
   const grant = String((await one(`select app.operator_office() as o`)).o)
   const project = String(((await one(`select app.hq_create_project(${lit(grant)}::uuid, 'Perf ${Date.now().toString(36)}', 'upload', 'perf-${Date.now().toString(36)}', 'Perf', true) as v`)).v as { project_id: string }).project_id ?? '')
   const root = await realParent(db)

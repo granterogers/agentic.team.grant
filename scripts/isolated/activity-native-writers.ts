@@ -31,6 +31,7 @@ let exit = 1
 try {
   const grant = String((await one(`select app.operator_office() as o`)).o)
   const read = async (args: string): Promise<Ev[]> => (json((await one(`select app.activity_read(p_office => ${lit(grant)}::uuid, ${args}) as v`)).v).events as Ev[])
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_offices', '{"version":1,"mode":"all"}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
   const setSwitch = (on: boolean) => db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_enabled', '${on}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
   const root = await realParent(db)
   const projectId = String(json((await one(`select app.hq_create_project(${lit(grant)}::uuid, ${lit(`Native ${run}`)}, 'upload', ${lit(`nat-${run}`)}, ${lit(`Native ${run}`)}, true) as v`)).v).project_id)
