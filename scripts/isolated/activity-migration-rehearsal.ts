@@ -57,6 +57,15 @@ try {
   check('migration: the real 1061 then applies', (await have1061()) === fn1061.length, `${await have1061()} functions`)
   await db.execute(file('1062'))
 
+  // Fail closed: applying the migrations enabled NOBODY. No office list was written, and even the master turned on covers no office.
+  const listRows = Number((await one(`select count(*) as c from public.system_config where key = 'activity.ledger_offices'`)).c)
+  const anyOffice = String((await one(`select app.operator_office() as o`)).o)
+  await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
+  const coveredByMasterAlone = (await one(`select app.activity_ledger_covers('${anyOffice}'::uuid) as v`)).v
+  const coveredCount = Number((await one(`select count(*) as c from public.offices o where app.activity_ledger_covers(o.office_id)`)).c)
+  await db.execute(`update public.system_config set value = 'false'::jsonb where key = 'activity.ledger_enabled'`)
+  check('migration: applying 1060 to 1062 writes no office list and, with the master turned on, covers no office', listRows === 0 && coveredByMasterAlone === false && coveredCount === 0, `list rows ${listRows}, covered offices ${coveredCount}`)
+
   // switch on, write a row, then re-apply everything: nothing is reset or lost
   await db.execute(`update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled'`)
   await db.execute(`insert into public.system_config (key, value, description) values ('activity.ledger_offices', '{"version":1,"mode":"all"}'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
@@ -68,6 +77,8 @@ try {
   const types1 = Number((await one(`select count(*) as c from public.activity_event_types`)).c)
   check('migration: applying 1060, 1061 and 1062 again is accepted and changes nothing', rows === 1 && types1 === types0 && (await have1061()) === fn1061.length, `row kept ${rows}, taxonomy ${types0} -> ${types1}`)
   check('migration: re-applying does NOT reset a switch somebody turned on', (await flag()) === 'true', `switch ${await flag()}`)
+  const listAfter = (await one(`select value as v from public.system_config where key = 'activity.ledger_offices'`)).v as { version?: number; mode?: string }
+  check('migration: re-applying does NOT touch the office list either (neither widened nor deleted)', listAfter?.version === 1 && listAfter?.mode === 'all' && Object.keys(listAfter).length === 2, `list ${JSON.stringify(listAfter)}`)
   await db.execute(`update public.system_config set value = 'false'::jsonb where key = 'activity.ledger_enabled'`)
   const off = (await one(`select app.activity_for_the_page('${office}'::uuid, 10)::text as v`)).v
   check('default off: switched off, the adapter answers disabled', JSON.parse(String(off)).enabled === false, 'enabled=false')
