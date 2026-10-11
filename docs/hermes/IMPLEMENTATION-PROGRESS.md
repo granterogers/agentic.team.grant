@@ -8,7 +8,7 @@ The resume point for any session picking this up. Read `ARCHITECTURE-HANDOFF.md`
 
 | Milestone | State | Evidence |
 |---|---|---|
-| Architecture | done, commit `c3787c5a` | `docs/hermes/*`, ADR-0073 |
+| Architecture | done, commit `c3787c5a` | `docs/hermes/*`, ADR-0074 (was 0073; renumbered 11 Oct because the ledger branch holds 0073) |
 | **M0 validation** | **done: PASS, V6 BLOCKED** | `VALIDATION-RESULTS.md`, `m0-evidence/`, `scripts/hermes-m0/` |
 | **M1 schema and SQL functions (replica only)** | **done** | migration `1070_…`, `scripts/isolated/engine-runs.ts` 131/131 with 15 sabotages (in `verify:critical`, 69/69 green, 3,813 assertions), `tests/engines/types.test.ts`, contract deviations D-7 to D-13 in `INTERFACE-CONTRACTS.md` §3.1 |
 | **M2 engine gateway and bridge credentials** | **done (undeployed)** | `supabase/functions/engine`, `scripts/isolated/engine-gateway.ts` 33/33 with 6 sabotages (`verify:critical` 70/70, 3,846 assertions), `tests/engines/{gateway-routes,credentials}.test.ts`, `scripts/deploy/engine.ts`, `scripts/ops/engine-bridge-credential.ts` (never run against production); D-14, D-15 in `INTERFACE-CONTRACTS.md` §4 |
@@ -57,7 +57,7 @@ Grant's authorisation after M6.
 ## Numbering and collisions to resolve at merge
 
 * Migration **1070** is this work's; the ledger branch holds 1060 to 1062 and `main` ends at 1053. Re-check before applying anywhere.
-* ADR number: this branch uses **0073**; the ledger branch also has `0073-one-activity-ledger-…`. Whichever merges second takes the next free number.
+* ADR number: this branch now uses **0074**; the ledger branch holds `0073-one-activity-ledger-…` (its ADR index row and this one's will conflict in `docs/adr/README.md` at merge: keep both).
 
 ## M4 sabotage record (engine-turn, each run on a fresh clone, defect put into the live source, red, restored, green)
 

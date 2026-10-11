@@ -87,7 +87,7 @@ Everything else is routine and already decided; make the call yourself and state
 | Item | State |
 |---|---|
 | Architecture package (this directory) | complete, committed |
-| ADR | `docs/adr/0073-hermes-is-a-manually-chosen-engine-for-one-turn.md` (renumbered from 0072, which `main` took for the background-material ADR) |
+| ADR | `docs/adr/0074-hermes-is-a-manually-chosen-engine-for-one-turn.md` (renumbered from 0072 and then 0073: `main` took 0072 and the Activity Ledger branch holds 0073) |
 | M0 validation | **done, PASS** (V6 blocked on Grant): `VALIDATION-RESULTS.md` |
 | M1–M11 | see `IMPLEMENTATION-PROGRESS.md` |
 | Production | untouched |

@@ -156,6 +156,12 @@ export const EXTENDED: readonly Proof[] = [
     { timeoutS: 480 },
   ),
   p(
+    'engine-ledger',
+    28,
+    "what Hermes reports to the Unified Activity Ledger, against the ledger branch's REAL door (migrations 1060 to 1062 read from the pinned commit with git show, never merged): nothing when the ledger is off, fail-closed or on for another office; one started and one completed per run as external:hermes from the run's own office, job and project; once however often it is repeated; failed, stopped and retired runs each one worker_error; a ledger refusal written on the run and never swallowed; a proposed skill reported by name only; no second ledger table (5 sabotages). FAILS, never skips, if the ledger commit cannot be read",
+    { timeoutS: 300 },
+  ),
+  p(
     'engine-skill-card-browser',
     24,
     "the proposal card a person reads before keeping a procedure Hermes found or wrote, real Team HQ page and real gateway, signed in as a second person on a desktop and a phone: the card says it is not in use and grants no tool, names where it came from, opens the procedure from the keyboard, shows it as text (markup is not interpreted), Keep it and Decline ask in the procedure's own words and write one skill or none, a planted hostile procedure is refused on the press, 44px and no sideways overflow on the phone (3 page sabotages: --sabotage=procedure|dialog|escape)",

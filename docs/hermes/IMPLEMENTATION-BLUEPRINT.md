@@ -93,7 +93,7 @@ the SQL bounds (`lease`, `deadline_s`) are the authority.
 | `scripts/isolated/engine-runs.ts` | replica proof of §3 (registered in `scripts/gate/critical.ts`) | M1 |
 | `scripts/isolated/engine-turn.ts` | replica end-to-end with a fake bridge and a scripted Hermes | M4 |
 | `tests/engines/*.test.ts` | unit tests listed in §8 | M1–M6 |
-| `docs/adr/0073-hermes-is-a-manually-chosen-engine-for-one-turn.md` | the ADR (0072 was taken on `main`) | architecture commit |
+| `docs/adr/0074-hermes-is-a-manually-chosen-engine-for-one-turn.md` | the ADR (0072 is `main`'s, 0073 the ledger branch's) | architecture commit |
 
 ### Changed (each change is small; nothing else in these files moves)
 
