@@ -1,0 +1,229 @@
+/*
+  The Activity timeline (bc/activity.js). Everything is scoped to the Team HQ experience and built from its own tokens: no new colours,
+  radii or shadows are introduced, so the dark and light schemes and the density settings apply without a parallel rule.
+
+  Source order matters here (a media query adds no specificity): the phone rules are at the END of this file.
+*/
+
+[data-experience='basecamp'] .bcact { display: grid; gap: var(--bc-4); }
+[data-experience='basecamp'] .bcact-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+[data-experience='basecamp'] .bcact-filterbar { display: contents; }
+
+/* ----------------------------------------------------------------------------------------------- views and filters */
+[data-experience='basecamp'] .bcact-views .bcsrcchip { min-height: 36px; padding: 0 14px; font-size: 13px; }
+[data-experience='basecamp'] .bcact-count {
+  display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 4px; padding: 0 5px;
+  border-radius: 999px; background: color-mix(in srgb, var(--bc-section-accent) 22%, transparent);
+  color: var(--bc-text-strong); font: 600 12px/1 var(--bc-font); font-variant-numeric: tabular-nums;
+}
+[data-experience='basecamp'] .bcact-filterbtn {
+  appearance: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 40%, transparent); border-radius: 999px; background: transparent;
+  color: var(--bc-text); font: 500 13px/1 var(--bc-font);
+}
+[data-experience='basecamp'] .bcact-filterbtn:hover { background: var(--bc-hover); }
+[data-experience='basecamp'] .bcact-filterbtn[aria-expanded='true'] { background: var(--bc-surface-selected); }
+[data-experience='basecamp'] .bcact-active { display: contents; list-style: none; margin: 0; padding: 0; }
+[data-experience='basecamp'] .bcact-active li { display: inline-flex; }
+[data-experience='basecamp'] .bcact-x,
+[data-experience='basecamp'] .bcact-clearall {
+  appearance: none; min-height: 32px; padding: 0 10px; border-radius: 999px; cursor: pointer; font: 500 12.5px/1 var(--bc-font);
+  border: 1px solid color-mix(in srgb, var(--bc-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--bc-accent) 12%, transparent); color: var(--bc-text);
+}
+[data-experience='basecamp'] .bcact-clearall { border-color: transparent; background: transparent; color: var(--bc-text-muted); text-decoration: underline; text-underline-offset: 3px; }
+[data-experience='basecamp'] .bcact-x:hover,
+[data-experience='basecamp'] .bcact-clearall:hover { background: var(--bc-hover); }
+[data-experience='basecamp'] .bcact-panel {
+  flex: 1 1 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; padding: 14px;
+  border: 1px solid var(--bc-border-subtle); border-radius: var(--bc-r-control); background: color-mix(in srgb, var(--bc-surface) 70%, transparent);
+}
+[data-experience='basecamp'] .bcact-panel[hidden] { display: none; }
+[data-experience='basecamp'] .bcact-field { display: grid; gap: 4px; font: 500 12.5px/1.2 var(--bc-font); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-field select {
+  min-height: 44px; padding: 0 10px; border: 1px solid var(--bc-border-control, var(--bc-border-subtle)); border-radius: var(--bc-r-control);
+  background: var(--bc-surface); color: var(--bc-text); font: 400 16px/1.2 var(--bc-font);
+}
+
+/* ----------------------------------------------------------------------------------------------- needs-attention banner and panel */
+[data-experience='basecamp'] .bcact-banner {
+  appearance: none; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; width: 100%; min-height: 56px;
+  padding: 10px 14px; text-align: left; cursor: pointer; color: var(--bc-text);
+  border: 1px solid color-mix(in srgb, var(--bc-section-accent) 35%, transparent); border-left-width: 3px; border-radius: var(--bc-r-control);
+  background: color-mix(in srgb, var(--bc-section-accent) 8%, var(--bc-surface));
+  transition: background 140ms var(--bc-ease-out, ease), transform 140ms var(--bc-ease-out, ease);
+}
+[data-experience='basecamp'] .bcact-banner b { display: block; font: 600 15px/1.3 var(--bc-font); color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcact-banner span span { display: block; font: var(--bc-compact); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-banner:hover { background: color-mix(in srgb, var(--bc-section-accent) 14%, var(--bc-surface)); }
+[data-experience='basecamp'] .bcact-attn { display: grid; gap: 10px; }
+[data-experience='basecamp'] .bcact-subhead { margin: 10px 0 0; font: 600 13px/1.3 var(--bc-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-needs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+[data-experience='basecamp'] .bcact-need {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px 14px;
+  border: 1px solid var(--bc-border-subtle); border-radius: var(--bc-r-control); background: color-mix(in srgb, var(--bc-surface) 80%, transparent);
+  box-shadow: var(--bc-shadow-surface);
+}
+[data-experience='basecamp'] .bcact-need--past { box-shadow: none; }
+[data-experience='basecamp'] .bcact-needbody { display: grid; gap: 4px; min-width: 0; }
+[data-experience='basecamp'] .bcact-needtitle { font: 600 15px/22px var(--bc-font); color: var(--bc-text-strong); overflow-wrap: anywhere; }
+
+/* ----------------------------------------------------------------------------------------------- happening now */
+[data-experience='basecamp'] .bcact-now { display: grid; gap: 8px; }
+[data-experience='basecamp'] .bcact-now--none { margin: 0; font: var(--bc-compact); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-nowlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+[data-experience='basecamp'] .bcact-nowrow {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 10px 14px;
+  border: 1px solid var(--bc-border-subtle); border-radius: var(--bc-r-control); background: color-mix(in srgb, var(--bc-surface) 80%, transparent);
+}
+[data-experience='basecamp'] .bcact-nowbody { display: grid; gap: 3px; min-width: 0; }
+[data-experience='basecamp'] .bcact-nowtitle { font: 600 14.5px/21px var(--bc-font); color: var(--bc-text-strong); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcact-pulse { width: 10px; height: 10px; border-radius: 999px; background: var(--bc-success); box-shadow: 0 0 0 0 color-mix(in srgb, var(--bc-success) 50%, transparent); animation: bcact-ping 1.8s ease-out infinite; }
+@keyframes bcact-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bc-success) 50%, transparent); } 80%, 100% { box-shadow: 0 0 0 8px transparent; } }
+
+/* ----------------------------------------------------------------------------------------------- the timeline */
+[data-experience='basecamp'] .bcact-list { display: grid; gap: 4px; }
+[data-experience='basecamp'] .bcact-day { display: grid; }
+[data-experience='basecamp'] .bcact-dayhead {
+  margin: 18px 0 4px; padding: 0 0 6px; font: 600 12.5px/1.2 var(--bc-font); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--bc-text-muted); border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcact-day:first-child .bcact-dayhead { margin-top: 4px; }
+[data-experience='basecamp'] .bcact-item {
+  position: relative; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; column-gap: 12px; align-items: start;
+  padding: 12px 8px 12px 10px; border-bottom: 1px solid var(--bc-border-subtle); border-radius: var(--bc-r-row);
+  transition: background 120ms var(--bc-ease-out, ease);
+}
+[data-experience='basecamp'] .bcact-item:hover { background: var(--bc-hover); }
+[data-experience='basecamp'] .bcact-item.is-problem::before {
+  content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--bc-danger);
+}
+[data-experience='basecamp'] .bcact-item.is-open { background: color-mix(in srgb, var(--bc-surface-selected) 35%, transparent); }
+[data-experience='basecamp'] .bcact-mark {
+  display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 999px; flex: 0 0 auto;
+  background: var(--bc-hover); color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcact-mark--face { background: transparent; overflow: hidden; }
+[data-experience='basecamp'] .bcact-mark--face .bcface { width: 34px; height: 34px; }
+[data-experience='basecamp'] .bcact-mark--you { background: color-mix(in srgb, var(--bc-accent) 20%, transparent); color: var(--bc-accent); }
+[data-experience='basecamp'] .bcact-mark--external { background: color-mix(in srgb, var(--bc-section-accent) 18%, transparent); color: var(--bc-section-accent); }
+[data-experience='basecamp'] .bcact-mark--unknown { background: transparent; border: 1px dashed var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-mark--wait { background: color-mix(in srgb, var(--bc-section-accent) 18%, transparent); color: var(--bc-section-accent); }
+[data-experience='basecamp'] .bcact-mark--bad { background: color-mix(in srgb, var(--bc-danger) 16%, transparent); color: var(--bc-danger); }
+[data-experience='basecamp'] .bcact-main { display: grid; gap: 3px; min-width: 0; }
+[data-experience='basecamp'] .bcact-who { font: 600 12.5px/1.2 var(--bc-font); color: var(--bc-text-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+[data-experience='basecamp'] .bcact-tag {
+  white-space: nowrap; flex: 0 0 auto; padding: 2px 6px; border-radius: 999px; font: 600 12px/1 var(--bc-font); color: var(--bc-text-muted);
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 40%, transparent);
+}
+[data-experience='basecamp'] .bcact-sentence {
+  appearance: none; display: block; width: 100%; min-height: 24px; margin: 0; padding: 0; border: 0; background: none; text-align: left; cursor: pointer;
+  font: 600 15px/22px var(--bc-font); color: var(--bc-text-strong); overflow-wrap: anywhere;
+}
+[data-experience='basecamp'] .bcact-sentence:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 3px; border-radius: 3px; }
+[data-experience='basecamp'] .bcact-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font: var(--bc-compact); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-where { display: inline-flex; align-items: flex-start; gap: 6px; min-width: 0; max-width: 100%; }
+[data-experience='basecamp'] .bcact-cat { display: inline-flex; flex: 0 0 auto; margin-top: 3px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-short { display: none; }
+[data-experience='basecamp'] .bcact-proj { overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcact-time { font: 500 12.5px/22px var(--bc-font); color: var(--bc-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+[data-experience='basecamp'] .bcact-result {
+  display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 999px; font: 600 12px/1 var(--bc-font);
+  background: var(--bc-hover); color: var(--bc-text);
+}
+[data-experience='basecamp'] .bcact-result--ok { background: color-mix(in srgb, var(--bc-success) 16%, transparent); color: var(--bc-success); }
+[data-experience='basecamp'] .bcact-result--bad { background: color-mix(in srgb, var(--bc-danger) 16%, transparent); color: var(--bc-danger); }
+[data-experience='basecamp'] .bcact-result--warn,
+[data-experience='basecamp'] .bcact-result--wait { background: color-mix(in srgb, var(--bc-section-accent) 18%, transparent); color: var(--bc-text-strong); }
+
+/* ----------------------------------------------------------------------------------------------- details and related activity */
+[data-experience='basecamp'] .bcact-detail { grid-column: 2 / -1; margin-top: 10px; animation: bcact-in 160ms var(--bc-ease-out, ease) both; }
+[data-experience='basecamp'] .bcact-detail[hidden] { display: none; }
+[data-experience='basecamp'] .bcact-detail-in {
+  display: grid; gap: 12px; padding: 14px; max-width: 820px; border: 1px solid var(--bc-border-subtle); border-radius: var(--bc-r-control);
+  background: color-mix(in srgb, var(--bc-surface) 85%, transparent);
+}
+[data-experience='basecamp'] .bcact-full { margin: 0; font: var(--bc-body); color: var(--bc-text); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcact-facts { display: grid; gap: 8px; margin: 0; }
+[data-experience='basecamp'] .bcact-fact { display: grid; grid-template-columns: 150px 1fr; gap: 10px; font: var(--bc-compact); }
+[data-experience='basecamp'] .bcact-fact dt { color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-fact dd { margin: 0; color: var(--bc-text); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcact-fact code { font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+[data-experience='basecamp'] .bcact-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-experience='basecamp'] .bcact-link { appearance: none; padding: 0; border: 0; background: none; color: var(--bc-accent); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; min-height: 24px; text-align: left; }
+[data-experience='basecamp'] .bcact-tech summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; font: 500 12.5px/1.2 var(--bc-font); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-tech summary:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 2px; border-radius: 3px; }
+[data-experience='basecamp'] .bcact-steps { list-style: none; margin: 0; padding: 0 0 0 14px; display: grid; gap: 0; border-left: 2px solid var(--bc-border-subtle); }
+[data-experience='basecamp'] .bcact-step { position: relative; display: grid; gap: 4px; padding: 8px 0 8px 14px; }
+[data-experience='basecamp'] .bcact-step::before {
+  content: ''; position: absolute; left: -22px; top: 14px; width: 10px; height: 10px; border-radius: 999px; background: var(--bc-surface); border: 2px solid var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcact-step.is-self::before { border-color: var(--bc-accent); background: var(--bc-accent); }
+[data-experience='basecamp'] .bcact-step.is-problem::before { border-color: var(--bc-danger); }
+[data-experience='basecamp'] .bcact-stage { font: 600 12px/1.2 var(--bc-font); letter-spacing: 0.05em; text-transform: uppercase; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-stepbody { display: grid; gap: 2px; }
+[data-experience='basecamp'] .bcact-steptext { font: 500 14px/20px var(--bc-font); color: var(--bc-text-strong); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcact-stepmeta { font: var(--bc-compact); color: var(--bc-text-muted); }
+
+/* ----------------------------------------------------------------------------------------------- notes, paging, skeleton */
+[data-experience='basecamp'] .bcact-note { margin: 0; font: var(--bc-compact); color: var(--bc-text); }
+[data-experience='basecamp'] .bcact-note--quiet { color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-note--warn { padding: 8px 12px; border-radius: var(--bc-r-control); background: color-mix(in srgb, var(--bc-section-accent) 14%, transparent); }
+[data-experience='basecamp'] .bcact-note--bad { color: var(--bc-danger); }
+[data-experience='basecamp'] .bcact-more { display: grid; justify-items: start; gap: 8px; padding: 14px 0 4px; }
+[data-experience='basecamp'] .bcact-end { margin: 0; padding: 14px 0 4px; font: var(--bc-compact); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-sk { display: grid; gap: 4px; }
+[data-experience='basecamp'] .bcact-skrow { display: grid; grid-template-columns: 38px 1fr; gap: 12px; padding: 14px 8px 14px 10px; border-bottom: 1px solid var(--bc-border-subtle); }
+[data-experience='basecamp'] .bcact-skmark { width: 34px; height: 34px; border-radius: 999px; background: var(--bc-hover); }
+[data-experience='basecamp'] .bcact-skbody { display: grid; gap: 8px; align-content: center; }
+[data-experience='basecamp'] .bcact-skline { height: 12px; border-radius: 6px; width: 78%; background: var(--bc-hover); }
+[data-experience='basecamp'] .bcact-skline--short { width: 44%; }
+[data-experience='basecamp'] .bcact-skmark,
+[data-experience='basecamp'] .bcact-skline { animation: bcact-pulse 1.4s ease-in-out infinite; }
+@keyframes bcact-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes bcact-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+[data-experience='basecamp'] .bcact :is(.bcbtn, .bcsrcchip, .bcact-x, .bcact-clearall, .bcact-banner, .bcact-link, .bcact-field select):focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 2px; }
+/* The top bar is sticky: a control scrolled into view by the keyboard must stop below it, not under it. The page is the scroller, so the
+   room is reserved on it (scroll padding); a margin on the control alone is not honoured by every focus scroll. */
+html:has(.bcact) { scroll-padding-top: calc(var(--bc-nav-h, 64px) + 16px); scroll-padding-bottom: 16px; }
+[data-experience='basecamp'] .bcact :is(button, select, summary, a) { scroll-margin-top: 8px; scroll-margin-bottom: 8px; }
+
+/* ----------------------------------------------------------------------------------------------- reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcact-skmark,
+  [data-experience='basecamp'] .bcact-skline,
+  [data-experience='basecamp'] .bcact-pulse,
+  [data-experience='basecamp'] .bcact-detail { animation: none; }
+  [data-experience='basecamp'] .bcact-item,
+  [data-experience='basecamp'] .bcact-banner { transition: none; }
+}
+
+/* ----------------------------------------------------------------------------------------------- touch and phone (kept last) */
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcact-views .bcsrcchip,
+  [data-experience='basecamp'] .bcact-filterbtn,
+  [data-experience='basecamp'] .bcact-x,
+  [data-experience='basecamp'] .bcact-clearall { min-height: 44px; }
+  [data-experience='basecamp'] .bcact-sentence { min-height: 44px; display: flex; align-items: center; padding: 10px 0; margin: -10px 0; }
+  [data-experience='basecamp'] .bcact-link { min-height: 44px; display: inline-flex; align-items: center; }
+  [data-experience='basecamp'] .bcact-tech summary { min-height: 44px; }
+}
+@media (max-width: 640px) {
+  [data-experience='basecamp'] .bcact-long { display: none; }
+  [data-experience='basecamp'] .bcact-short { display: inline; }
+  [data-experience='basecamp'] .bcact-views { gap: 6px; }
+  [data-experience='basecamp'] .bcact-views .bcsrcchip { padding: 0 11px; white-space: nowrap; }
+  [data-experience='basecamp'] .bcact-item { grid-template-columns: 34px minmax(0, 1fr); column-gap: 10px; padding: 12px 4px 12px 8px; }
+  [data-experience='basecamp'] .bcact-time { position: absolute; right: 4px; top: 12px; font-size: 12px; line-height: 16px; }
+  [data-experience='basecamp'] .bcact-who { padding-right: 54px; min-height: 16px; }
+  [data-experience='basecamp'] .bcact-detail { grid-column: 1 / -1; }
+  [data-experience='basecamp'] .bcact-fact { grid-template-columns: 1fr; gap: 2px; }
+  [data-experience='basecamp'] .bcact-need,
+  [data-experience='basecamp'] .bcact-nowrow { grid-template-columns: auto 1fr; }
+  [data-experience='basecamp'] .bcact-nowrow .bcbtn { grid-column: 2; justify-self: start; }
+  [data-experience='basecamp'] .bcact-need .bcbtn { grid-column: 1 / -1; justify-self: stretch; }
+  [data-experience='basecamp'] .bcact-panel { grid-template-columns: 1fr; }
+  [data-experience='basecamp'] .bcact-mark { width: 32px; height: 32px; }
+  [data-experience='basecamp'] .bcact-mark--face .bcface { width: 32px; height: 32px; }
+}
