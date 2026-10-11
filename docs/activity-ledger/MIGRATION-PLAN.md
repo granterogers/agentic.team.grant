@@ -97,23 +97,50 @@ four-replica matrix on real deployed versions was not run (the repository's mixe
 
 ## Stage D - activation (a production write, with Grant's approval, after A to C are verified)
 
-`activity.ledger_enabled` is **deployment-wide**: it switches the ledger on for every office at once, the Sample and every future person included. Per-office rollout is not built; it would be a
-documented future architectural change (a per-office row consulted by `activity_ledger_on(office)`), not a flag toggle. Take that into account when choosing the moment.
+Two settings decide whether the ledger is on for an office (`app.activity_ledger_covers`): `activity.ledger_enabled`, the **master switch and kill switch**, and the optional `activity.ledger_offices`, an allowlist that can only **narrow** the master
+(no row = every office the master covers, the Sample and every future person included; a JSON array of office ids = those offices only; anything else = none). The allowlist can never turn the ledger on by itself, and turning the master off silences every office.
+**Fail-open by absence:** if the allowlist row is deleted while the master is on, the ledger is on for every office. During a canary, do not delete that row except through `--all` or `--off`.
 
-```sql
-update public.system_config set value = 'true'::jsonb where key = 'activity.ledger_enabled';   -- via the repository's audited config path, a production write
+Everything is done through one tool that plans first (a plan writes nothing) and, with `--apply`, writes in the safe order (the allowlist BEFORE the master is turned on; `--off` writes the master only):
+
+```bash
+# 1. read what is set now and nothing else (a person sets the two production flags for this one operation)
+ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 SUPABASE_DB_URL=<direct url, never printed> npm run activity:switch
+# 2. plan a canary for one office (office ids come from: npm run q -- "select office_id, name, kind from public.offices where state = 'active'")
+ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 SUPABASE_DB_URL=... npm run activity:switch -- --canary <office-id>
+# 3. read the two statements it printed, then run the same command with --apply
+ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 SUPABASE_DB_URL=... npm run activity:switch -- --canary <office-id> --apply
+# later: more offices (--add <ids> --apply), every office (--all --apply), or the kill switch (--off --apply)
 ```
+
+Expected for `--canary`: `now: master off; no allowlist`, then the two statements, then after `--apply` `after: master ON; allowlist of 1`. A refusal (`refused: ...`) writes nothing: an id that is not an active office, an id that is not a UUID, an empty list, `--add` with no allowlist.
+The planner is `src/activity/switch.ts` (unit tested); the statements it prints are the only SQL it will run. If the connection is the Management API and it errors, nothing was half-applied between the two statements except the allowlist, which is harmless alone (the master is still off); re-run the plan.
+**Recommended order:** one canary office (Grant's own, `kind = 'person'`) for a few days, read `activity_health` and the Activity screen, then `--all`.
 
 Preconditions: stage A to C verified; `activity_health` clean (below); the activation checklist in `RELEASE-READINESS.md` signed by a person; the Supabase health reading healthy.
 After the switch: (1) `activity_health` for the office: `write_failures_1h` is 0, `indexes_missing` is empty, `critical_via_best_effort_24h` is 0; `retry_backlog` is the number of jobs in `retrying` now.
 (2) Read `activity_feed` for a real project and compare three events to the source rows by `evidence`. (3) Watch `activity_feed` latency on the real host (replica figures are a different machine).
 (4) Open the Activity page signed in, desktop and phone. If any is wrong, switch off.
 
+## Mixed versions (what ran, and what did not)
+
+Run on isolated replicas, **not on deployed versions** (phase 4; "old" is `origin/main` at `5fa1fbdc`, "new" is this branch; the repository's method is `docs/audit/V1-FINAL-RELEASE-GATE-2026-10-08.md`):
+
+| | Old schema (through 1053) | New schema (1053 + 1060 to 1062) |
+|---|---|---|
+| **Old worker/edge/page** | A: 68 of 68 critical proofs green | C: 66 green, 2 red, both structural ("the schema equals this checkout's history/manifest"), neither behavioural |
+| **New worker/edge/page** | B: 66 green, the same 2 structural reds | D: 68 of 68 green |
+
+Per surface, all with the ledger switched ON where the schema has it: new page with the old gateway, old page with the new gateway, and new page and gateway over the old schema each draw the older Activity list with no error and no ledger row (`activity-ui-browser.sh --compat=...`);
+the new worker's ledger writers over a schema without the ledger resolve and never throw into the sweep or a plan step (`activity-mixed-version.ts`, 4 checks). The matrix found a real defect in the per-office work (an office-less overload beside an office-first one fails `p3-app-attack`); it is fixed.
+**Deploy order is still: migrate, then worker, then gateway, then page, then (separately) activate.** The worker before the migration degrades (writers fail inside a `.catch`); the gateway before the migration answers an error for the four new sections only.
+Not run: the matrix on real deployed versions, and old worker plus new schema with the switch ON under live traffic.
+
 ## Verification before each stage
 
 On the replica: `npm run verify:critical` (70 proofs, including `activity-ledger` and `activity-gateway`); `npx tsx scripts/gate/run.ts --tier extended --only
-activity-ledger-review,activity-ledger-equivalence,activity-indexes,activity-ledger-durability,activity-native-writers,activity-worker,activity-redaction,activity-external-attack`;
-`bash scripts/isolated/activity-ledger-sabotage.sh` (38 sabotages, in batches of a few so each call fits ten minutes); `bash scripts/isolated/activity-migration-rehearsal.sh`;
+activity-ledger-review,activity-ledger-equivalence,activity-indexes,activity-ledger-durability,activity-native-writers,activity-worker,activity-redaction,activity-external-attack,activity-office-scope --rebuild` (`--rebuild`: after rebuilding the replica the gate can otherwise reuse a stale candidate and report red for code that is fine); `npx tsx scripts/gate/run.ts --tier critical --rebuild`;
+`bash scripts/isolated/activity-ledger-sabotage.sh` (45 sabotages, in batches of ten so each call fits ten minutes); `bash scripts/isolated/activity-migration-rehearsal.sh`; `bash scripts/isolated/activity-ui-browser.sh` (the Activity screen from genuine ledger rows, 126 checks);
 `npx tsx scripts/isolated/activity-ledger-perf.ts <db> 3000` for the timings. The seven production-catalogue checks run against the replica with `--replica` (`scripts/lib/catalogue-db.ts`) and are listed with
 their status in `RELEASE-READINESS.md`; with production access a reviewer grants, run them again without the flag.
 
