@@ -36,5 +36,9 @@
 ## Rollback
 Promote `dpl_E1J5U7iX4SDAH9Jo4hW8g9W5DQ2W` in the `ai-team-hq` Vercel project (then confirm the alias serves it and rerun the byte comparison against `3caaebfe`). No data, function or migration is involved. For the code, `git revert -m 1 f2044df6` through a reviewed PR; main itself was not changed by the deploy.
 
-## Remaining limitations
+## Closeout
+Re-read on the closeout date from the Vercel API (read-only): the `ai-team-hq` production deployment is still `dpl_3otBfKtZsGatfqgu1SgeJjVPb7Ld` (READY, both aliases, source commit `f2044df6`), the previous deployment `dpl_E1J5U7iX4SDAH9Jo4hW8g9W5DQ2W` is still READY, and the site answers 200. The byte comparison, the 100 Sample smoke checks and the production icon check above are the historical results of the release run and were not repeated for the closeout. The release is complete for the Dashboard Polish scope only; the accepted limitations below are carried forward, not resolved.
+
+## Remaining limitations (accepted, with follow-up)
+No authenticated personal-account smoke test was part of the deployment report; production write-path tests were deliberately excluded.
 No real iOS Safari or physical-device run; the Problems filter and Google source shapes appear only when records carry severity or Google is connected; Jump is keyboard-only (ADR-0068).
