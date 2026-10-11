@@ -42,6 +42,22 @@ const SIZES = [
 const only = process.env.SIZE ?? ''
 const sizes = only === '' ? SIZES : SIZES.filter((s) => s.id === only)
 
+/*
+  BATCHES. The whole sweep takes longer than a shell's ten-minute ceiling, so it can be run in independent parts:
+    SIZE=phone ROUTE=home,tasks npx tsx scripts/verify/basecamp-controls.ts
+  ROUTE is a comma list of: home, tasks, activity, search, p-home, p-tasks, p-team, p-documents, p-contacts, p-sources, p-activity.
+  HOVER=1 runs the row-hover section on its own (it also runs when no ROUTE is given). A partial batch does not apply the
+  "pressed at least 40" floor, which exists to catch a broken collector in a full run.
+*/
+const routeOnly = (process.env.ROUTE ?? '').split(',').filter((x) => x !== '')
+const hoverRun = routeOnly.length === 0 || process.env.HOVER === '1'
+const routeLabel = (route: string, slug: string): string => {
+  if (route === '/basecamp') return 'home'
+  if (route.startsWith('/basecamp/')) return route.slice('/basecamp/'.length)
+  if (route === slug) return 'p-home'
+  return `p-${route.slice(slug.length + 1)}`
+}
+
 const findings: string[] = []
 const notes: string[] = []
 let pressed = 0
@@ -102,6 +118,8 @@ for (const size of sizes) {
            (m === null ? '' : (m.innerText ?? '')).replace(/\\s+/g, ' ').slice(0, 4000),
            document.getElementById('bcjump') === null ? 'nosheet' : 'sheet',
            document.getElementById('dock')?.hidden === false ? 'dock' : 'nodock',
+           /* The board zoom is part of what a press can change: its label and the board scale. */
+           (document.querySelector('.bczoomval')?.textContent ?? '') + (document.querySelector('[data-bc-board]')?.style.getPropertyValue('--bc-zoom') ?? ''),
            flags,
          ].join('|')`),
     )) as string
@@ -158,6 +176,7 @@ for (const size of sizes) {
   ]
 
   for (const route of routes) {
+    if (routeOnly.length > 0 && !routeOnly.some((r) => routeLabel(route, slug) === r)) continue
     await open(route)
 
     /*
@@ -228,7 +247,13 @@ for (const size of sizes) {
         an allow-list of document titles would have silenced the shape a
         genuinely dead tile has.
       */
-      let openedTab = false
+      /*
+        A MAILTO OR TEL LINK HANDS OFF TO THE OPERATING SYSTEM (the mail app, the dialler), so nothing on this page changes and
+        that is the correct behaviour. The property is that the link is one of those schemes with a non-empty target; the
+        populated-states suite checks each one is well formed.
+      */
+      const handoff = /^(mailto|tel):.+/i.test((await el.getAttribute('href')) ?? '')
+      let openedTab = handoff
       const onPopup = (): void => {
         openedTab = true
       }
@@ -297,6 +322,7 @@ for (const size of sizes) {
   */
   for (const tool of ['contacts', 'documents', 'sources', 'activity', 'tasks']) {
     if (slug === '') break
+    if (!hoverRun) break
     await open(`${slug}/${tool}`)
     const rows = page.locator('.bcitem')
     if ((await rows.count()) === 0) continue
@@ -358,7 +384,7 @@ console.log(
   `\npressed ${String(pressed)} control(s) · ${String(unpressable)} unpressable · ${String(inert)} inert by design · ${String(findings.length)} finding(s)`,
 )
 if (findings.length === 0) {
-  if (pressed < 40) {
+  if (pressed < 40 && routeOnly.length === 0) {
     /*
       A press-everything audit that pressed almost nothing reports a perfect
       score. The floor is deliberately well under the real count so a genuine

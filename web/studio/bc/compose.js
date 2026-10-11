@@ -556,16 +556,16 @@ const dock = (p) => {
     `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor"
       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
   return `<div class="bcdock" role="toolbar" aria-label="Workspace">
-    <button type="button" class="bcdockbtn" data-bc-tidy title="Lightly tidy the arrangement">
+    <button type="button" class="bcdockbtn" data-bc-tidy aria-label="Tidy" title="Lightly tidy the arrangement">
       ${ic('<path d="M4 6h7M4 12h16M13 18h7"/>')}<span>Tidy</span>
     </button>
-    <button type="button" class="bcdockbtn" data-bc-layouts aria-haspopup="true" aria-expanded="false" title="Layouts and presets">
+    <button type="button" class="bcdockbtn" data-bc-layouts aria-haspopup="true" aria-expanded="false" aria-label="Layouts and presets" title="Layouts and presets">
       ${ic('<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="4" rx="1"/><rect x="13" y="10" width="7" height="10" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/>')}<span>Layouts</span>
     </button>
-    <button type="button" class="bcdockbtn" data-bc-viewreset title="Reset the view. Notes and everything in the modules are kept"${grid.customised(p.slug) ? '' : ' data-quiet="1"'}>
+    <button type="button" class="bcdockbtn" data-bc-viewreset aria-label="Reset view" title="Reset the view. Notes and everything in the modules are kept"${grid.customised(p.slug) ? '' : ' data-quiet="1"'}>
       ${ic('<path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/>')}<span>Reset view</span>
     </button>
-    <button type="button" class="bcdockbtn" data-bc-fit title="Bring everything into view">
+    <button type="button" class="bcdockbtn" data-bc-fit aria-label="Fit" title="Bring everything into view">
       ${ic('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}<span>Fit</span>
     </button>
     <span class="bczoom" role="group" aria-label="Zoom">

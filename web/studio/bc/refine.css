@@ -760,7 +760,7 @@
   color: var(--bc-text);
 }
 [data-experience='basecamp'] .bcctrows { display: grid; gap: 4px; margin: 0; }
-[data-experience='basecamp'] .bcctrow { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+[data-experience='basecamp'] .bcctrow { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; align-items: start; }
 [data-experience='basecamp'] .bcctrow dt { font: 600 12px/20px var(--bc-font); letter-spacing: 0.04em; text-transform: uppercase; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcctrow dd { margin: 0; font: 400 14px/20px var(--bc-font); overflow-wrap: anywhere; }
 [data-experience='basecamp'] .bcctrow a { color: color-mix(in srgb, var(--bc-accent) 84%, var(--bc-text-strong)); text-decoration: none; }
@@ -933,3 +933,6 @@
 html[data-experience='basecamp'] { scroll-padding-top: 96px; }
 
 .bctchip--done { color: var(--bc-text-muted); }
+
+/* A to-do card answers the pointer like every other pressable row (the card rule above set its own background over the row hover). */
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem:has(button, a[href], input):hover { background: var(--bc-hover); }

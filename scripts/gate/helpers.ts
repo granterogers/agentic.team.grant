@@ -19,6 +19,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: 'realistic synthetic data volumes in a real browser through the real gateway code on the replica (needs chromium and takes minutes; run by hand with a replica database name, see its header)',
   },
   {
+    stem: 'populated-acceptance',
+    role: 'populated-state acceptance for the dashboard polish (to-do chips, contact cards, activity filters, calendar shapes, document thumbnails) in a real browser through the real gateway code on the replica; needs chromium and a few minutes; run by hand with a replica database name',
+  },
+  {
     stem: 'icons-on-replica',
     role: 'check:icons asked of the isolated replica (production-free): every icon_defaults row names a drawable mark; run by hand with a replica database name',
   },

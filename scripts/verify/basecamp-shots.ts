@@ -225,12 +225,12 @@ for (const size of sizes) {
   }
   await shot('my-tasks', '/basecamp/tasks')
   await shot('jump-open', '/basecamp', async () => {
-    await page.locator('[data-bc-jump]').first().click()
+    await page.keyboard.press('Control+k') // the Jump button was removed (ADR-0068); the palette opens from the keyboard
     await page.waitForTimeout(250)
   })
   await shot('search-empty', '/basecamp/search')
   await shot('search-results', '/basecamp', async () => {
-    await page.locator('[data-bc-jump]').first().click()
+    await page.keyboard.press('Control+k') // the Jump button was removed (ADR-0068); the palette opens from the keyboard
     await page.waitForTimeout(200)
     await page.locator('#bcjumpq').fill('interview')
     await page.waitForTimeout(200)
@@ -239,7 +239,7 @@ for (const size of sizes) {
     await page.waitForTimeout(350)
   })
   await shot('jump-typed', '/basecamp', async () => {
-    await page.locator('[data-bc-jump]').first().click()
+    await page.keyboard.press('Control+k') // the Jump button was removed (ADR-0068); the palette opens from the keyboard
     await page.waitForTimeout(200)
     await page.locator('#bcjumpq').fill('ta')
     await page.waitForTimeout(250)
