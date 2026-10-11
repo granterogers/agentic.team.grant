@@ -12,8 +12,9 @@ The resume point for any session picking this up. Read `ARCHITECTURE-HANDOFF.md`
 | **M0 validation** | **done: PASS, V6 BLOCKED** | `VALIDATION-RESULTS.md`, `m0-evidence/`, `scripts/hermes-m0/` |
 | **M1 schema and SQL functions (replica only)** | **done** | migration `1070_…`, `scripts/isolated/engine-runs.ts` 131/131 with 15 sabotages (in `verify:critical`, 69/69 green, 3,813 assertions), `tests/engines/types.test.ts`, contract deviations D-7 to D-13 in `INTERFACE-CONTRACTS.md` §3.1 |
 | **M2 engine gateway and bridge credentials** | **done (undeployed)** | `supabase/functions/engine`, `scripts/isolated/engine-gateway.ts` 33/33 with 6 sabotages (`verify:critical` 70/70, 3,846 assertions), `tests/engines/{gateway-routes,credentials}.test.ts`, `scripts/deploy/engine.ts`, `scripts/ops/engine-bridge-credential.ts` (never run against production); D-14, D-15 in `INTERFACE-CONTRACTS.md` §4 |
-| M3 MCP server: the engine client kind | **next** | |
-| M4 to M6 | not started | |
+| **M3 MCP server: the engine client kind** | **done (undeployed)** | migration `1071_…` (the gate names the project and the run), `supabase/functions/mcp/{index,tools}.ts`, `scripts/isolated/engine-mcp.ts` 27/27 with 5 sabotages (`verify:critical` 71/71, 3,873 assertions), `tests/engines/mcp-engine-tools.test.ts` (13, one sabotage), V4a golden unchanged and V4b 11/11 re-run through the changed function. Notes: D-16 below |
+| **M4 handler seam** | **next** | `INTERFACE-CONTRACTS.md` §6, `IMPLEMENTATION-TASKS.md` M4 |
+| M5 to M6 | not started | |
 | M7 live free run | gated on V6 (Grant's zero-credit key) and on the Activity Ledger branch | |
 | M8 to M11 | not started | |
 
@@ -58,6 +59,21 @@ Grant's authorisation after M6.
 4. Prove claim, heartbeat and finish through the real function under Deno against the replica, with a fake bridge (reuse `scripts/hermes-m0/mcp-rig.ts`
    for the Deno launcher), registered as ONE `p(...)` line in `scripts/gate/critical.ts`. Each proof needs its sabotage.
 5. Run lint, typecheck, `npm test`, `check:migrations`, `check:secrets` (read `$?`), `verify:critical`. Commit with the footer, push, update this file.
+
+## M3 notes (D-16 and gate findings)
+
+* **D-16, project scope.** The engine client holds no project argument it chooses: for every tool whose own schema declares `project`, the
+  function SETS the run's project (an omitted project would otherwise read every project in the office) and overwrites a named one. The gate
+  returns `project_slug` and, when exactly one run is running, `run_id` in a refusal, so the refusal is recorded against the run. Reason order
+  of the gate is unchanged (1071 is `create or replace` only). A tool that takes no project (`list_projects`, `read_document`) is unchanged.
+* **Fail closed.** A gate that cannot answer refuses a client it cannot classify; a database that predates the engine (404 for the function)
+  leaves ordinary clients alone and is remembered for 60 s. Both are proved, the second as SIMULATED (the emulator cannot produce a missing function).
+* **Existing test updated, not weakened:** `tests/mcp/tools.test.ts` asserted the literal `badValue(input)`; the call is now on `callInput` (the
+  arguments as sent, after the run's project is forced in), still before the database call, still returned as an error. The tier cap in
+  `tests/gate/registry.test.ts` moved 70 to 80 for the engine proofs.
+* **Gate tooling finding.** `verify:critical`'s candidate is stamped with the replica's build time, the object counts and the pending file hashes, so
+  after a replica rebuild whose migration list already holds a changed-but-unapplied file the candidate can be REUSED with the earlier definition
+  (two reds: `replay-parity` and `engine-mcp`, both correct). `drop database gate_cand` (or `--rebuild`) forces it. Not changed here.
 
 ## Process notes
 

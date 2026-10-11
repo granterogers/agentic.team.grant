@@ -81,7 +81,8 @@ try {
     .sort()
 
   rig.clearWire()
-  await withHermes('main', rig.tokens.ro, async (host) => {
+  // From M3 on, Hermes holds an ENGINE client: the server lists it only the v1 read tools and gates every call.
+  await withHermes('main', rig.tokens.eng, async (host) => {
     // B1 discovery and exposure
     const offered = (await offeredNames(host)).sort()
     check(
@@ -105,7 +106,7 @@ try {
       started?.tool === `${PREFIX}list_projects` &&
         done?.error === false &&
         sentProjects?.args.p_office === rig.officeA &&
-        recorded?.args.p_client_id === 'hermes-ro' &&
+        recorded?.args.p_client_id === 'hermes-eng' &&
         recorded.args.p_outcome === 'ok' &&
         resultSeen(call).includes('harvest-lane') &&
         !resultSeen(call).includes('other-office-secret'),

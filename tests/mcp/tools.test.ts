@@ -248,10 +248,12 @@ describe('a date that was sent and cannot be read is refused, not dropped', () =
 })
 
 describe('the edge consults the check before it calls the database', () => {
-  it('badValue(input) is called and its answer returned before spec.fn is invoked', async () => {
+  it('badValue(callInput) is called and its answer returned before spec.fn is invoked', async () => {
     const { readFileSync } = await import('node:fs')
     const src = readFileSync('supabase/functions/mcp/index.ts', 'utf8')
-    const at = src.indexOf('const unreadable = badValue(input)')
+    // callInput is the arguments as they will be sent (the run's project already forced in for an engine client), so the
+    // check reads exactly what the database would receive.
+    const at = src.indexOf('const unreadable = badValue(callInput)')
     expect(at).toBeGreaterThan(0)
     expect(src.slice(at, at + 160)).toMatch(/if \(unreadable !== null\) return rpcError\(/)
     expect(at).toBeLessThan(src.indexOf('await rpc(spec.fn, rpcArgs('))

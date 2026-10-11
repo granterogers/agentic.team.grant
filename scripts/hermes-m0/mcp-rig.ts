@@ -41,8 +41,16 @@ export interface Rig {
   readonly wire: WireRecord[]
   clearWire: () => void
   readonly pg: FakePostgrest
-  /** Throwaway bearer tokens: read-only in office A, read+write in office A, read-only in office B. */
-  readonly tokens: { readonly ro: string; readonly rw: string; readonly other: string }
+  /**
+   * Throwaway bearer tokens: read-only in office A, read+write in office A, read-only in office B, and an ENGINE client in office A
+   * (read-only, gated; what Hermes holds from M3 on). `ro`, `rw` and `other` are ordinary clients, as Claude and ChatGPT are.
+   */
+  readonly tokens: {
+    readonly ro: string
+    readonly rw: string
+    readonly other: string
+    readonly eng: string
+  }
   readonly officeA: string
   readonly officeB: string
   stop: () => Promise<void>
@@ -56,9 +64,18 @@ export interface RigOptions {
 }
 
 export const startRig = async (o: RigOptions): Promise<Rig> => {
-  const tokens = { ro: throwaway('mcp'), rw: throwaway('mcp'), other: throwaway('mcp') }
+  const tokens = {
+    ro: throwaway('mcp'),
+    rw: throwaway('mcp'),
+    other: throwaway('mcp'),
+    eng: throwaway('mcp'),
+  }
   const clients = new Map<string, TestClient>([
     [sha256(tokens.ro), { client_id: 'hermes-ro', scopes: ['read'], office_id: OFFICE_A }],
+    [
+      sha256(tokens.eng),
+      { client_id: 'hermes-eng', scopes: ['read'], office_id: OFFICE_A, kind: 'engine' },
+    ],
     [
       sha256(tokens.rw),
       { client_id: 'chatgpt-rw', scopes: ['read', 'write'], office_id: OFFICE_A },

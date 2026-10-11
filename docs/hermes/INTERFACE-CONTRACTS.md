@@ -499,6 +499,12 @@ Inference usage is written by `engine_run_finish`, not here, so `howComposed` is
 4. `tools/list` for an engine client returns only the v1 allowlist (the same constant `ENGINE_READ_TOOLS` in `tools.ts`), so Hermes is
    never told about a tool it may not call.
 5. `app.mcp_write_client` refuses a client of kind `engine` (defence in depth; HD-7) until M10.
+   **As built (M3, D-16):** a tool takes a project iff its own schema declares a `project` property (`takesProject`, derived, not listed);
+   for those the function SETS the run's project slug (`bindProject`) whether the model omitted, named or nulled it, and a refusal inside a
+   run carries `run_id`, so it is recorded against the run. `list_events` is in the engine list only where the database serves the calendar.
+   A gate that cannot answer refuses a client it cannot classify (fail closed); an ordinary client's "not an engine" answer is remembered for
+   60 s, an engine client is asked on every call. Proof: `scripts/isolated/engine-mcp.ts` (real function, replica, 5 sabotages) and
+   `tests/engines/mcp-engine-tools.test.ts`.
 6. Compatibility with Hermes's MCP client is **[ASSUMPTION V4]**: the office server speaks protocol `2024-11-05`, JSON-RPC over POST,
    no SSE stream, no session id **[REPO supabase/functions/mcp/index.ts:11-16, 46]**; Hermes uses the `mcp` Python SDK 2.x streamable HTTP
    client **[SRC mcp_serve.py:24-28; tools/mcp_tool_transport.py:605-608]**, which may require a session header or a `GET` stream. M0

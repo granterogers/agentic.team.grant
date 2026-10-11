@@ -37,7 +37,8 @@ describe('the registries are sound', () => {
 
   it('the critical tier is deliberately small and every entry says what it guards', () => {
     expect(CRITICAL.length).toBeGreaterThanOrEqual(30)
-    expect(CRITICAL.length).toBeLessThanOrEqual(70)
+    // 70 -> 80 for the Hermes engine proofs (each guards a security boundary and says so in its `why`); still a small tier.
+    expect(CRITICAL.length).toBeLessThanOrEqual(80)
     for (const p of CRITICAL) {
       expect(p.why.length, p.name).toBeGreaterThanOrEqual(20)
       expect(p.min, `${p.name} needs an assertion floor`).toBeGreaterThanOrEqual(1)

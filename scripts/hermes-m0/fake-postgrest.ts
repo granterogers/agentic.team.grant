@@ -6,12 +6,18 @@
  * and how it behaves on each answer. What it is NOT evidence of: anything the SQL does (`app.mcp_write_client`,
  * `app.engine_tool_gate`, row security). Those need the replica, and every check that rests on this file says MOCK.
  */
+import { ENGINE_READ_TOOLS } from '../../src/engines/hermes/timing.ts'
 import { close, listen, newServer, readBody, sendJson, sleep } from './lib.ts'
+
+/** A run id the fake hands every engine call, so the function has something to record against. */
+const OFFICE_RUN = '33333333-3333-4333-8333-333333333333'
 
 export interface TestClient {
   readonly client_id: string
   readonly scopes: readonly string[]
   readonly office_id: string
+  /** Only an engine client is gated; everything else is an ordinary client (ChatGPT, Claude). */
+  readonly kind?: 'engine'
 }
 
 export interface RpcCall {
@@ -78,8 +84,27 @@ export const startFakePostgrest = async (
       sendJson(res, 200, [])
       return
     }
-    if (fn === 'mcp_record_call') {
+    if (fn === 'mcp_record_call' || fn === 'engine_record_call') {
       sendJson(res, 200, null)
+      return
+    }
+    if (fn === 'engine_tool_gate') {
+      // What app.engine_tool_gate answers (M1/M3), at the level this file models: an ordinary client passes untouched; an engine
+      // client may call a v1 read tool, and anything else is refused. The SQL itself is proved on the replica, not here.
+      const client = [...clientsBySha.values()].find((c) => c.client_id === args.p_mcp_client)
+      if (client?.kind !== 'engine') {
+        sendJson(res, 200, { allow: true, is_engine: false })
+        return
+      }
+      const tool = typeof args.p_tool === 'string' ? args.p_tool : ''
+      const ok = ENGINE_READ_TOOLS.includes(tool)
+      sendJson(
+        res,
+        200,
+        ok
+          ? { allow: true, is_engine: true, run_id: OFFICE_RUN, project_slug: null }
+          : { allow: false, is_engine: true, because: 'that tool is not one Hermes may use here' },
+      )
       return
     }
     if (fn === 'mcp_projects') {

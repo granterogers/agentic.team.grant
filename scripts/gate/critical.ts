@@ -346,6 +346,12 @@ export const CRITICAL: readonly Proof[] = [
     'the REAL engine gateway, driven as a bridge: only a live bridge token gets in (its office comes from the credential, never the body), a lost claim is a 409, a retired bridge is dead at the door, an oversized or malformed body is refused, the database being down is a 503 and never an answer, no credential appears in any response, and the function calls only its five functions (6 sabotages)',
   ),
 
+  p(
+    'engine-mcp',
+    22,
+    "the REAL office MCP function, called as the Hermes engine client: the gate runs before every engine call and a refusal is recorded, a tool outside the read list is refused, the run's project is forced into every project argument, the tool list is the narrowed one, every served read is recorded as grounding, and a gate that cannot answer refuses (5 sabotages)",
+  ),
+
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p(
     'replay-parity',

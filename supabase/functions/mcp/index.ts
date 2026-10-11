@@ -39,7 +39,17 @@
  */
 
 import { resolveSpeaker } from '../../../src/auth/speaker.ts'
-import { badValue, rpcArgs, scopeRefusal, toolNamed, visibleTools } from './tools.ts'
+import {
+  badValue,
+  bindProject,
+  canonicalJson,
+  engineDomain,
+  engineVisibleTools,
+  rpcArgs,
+  scopeRefusal,
+  toolNamed,
+  visibleTools,
+} from './tools.ts'
 
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -80,6 +90,94 @@ const json = (body: unknown, status = 200): Response =>
 
 const rpcError = (id: unknown, code: number, message: string): Response =>
   json({ jsonrpc: '2.0', id: id ?? null, error: { code, message } })
+
+/** A refusal the model should READ: an MCP tool result flagged as an error, carrying the reason, rather than a transport error. */
+const toolError = (id: unknown, text: string): Response =>
+  json({
+    jsonrpc: '2.0',
+    id: id ?? null,
+    result: { content: [{ type: 'text', text }], isError: true },
+  })
+
+// ---------------------------------------------------------------------------
+// The engine client kind (Hermes, M3)
+//
+// A client of kind `engine` is the credential an outside agent holds: read-only, the v1 read tools only, and usable only while its
+// bridge holds a live run. EVERY call goes through public.engine_tool_gate, which answers for every client (an ordinary client gets
+// {allow: true, is_engine: false} and is untouched), because the client lookup does not return a kind and a kind inferred from a name
+// is a guess. An answer of "not an engine client" is remembered for a minute so ChatGPT and Claude do not pay an extra round trip on
+// every call; an ENGINE answer is never remembered, because it depends on the run.
+// ---------------------------------------------------------------------------
+
+interface Gate {
+  readonly allow: boolean
+  readonly is_engine: boolean
+  readonly because?: string
+  readonly run_id?: string
+  readonly project_slug?: string | null
+}
+
+const notEngine = new Map<string, number>()
+const NOT_ENGINE_TTL_MS = 60_000
+
+const engineGate = async (office: string, clientId: string, tool: string | null): Promise<Gate> => {
+  const until = notEngine.get(clientId)
+  if (until !== undefined && until > Date.now()) return { allow: true, is_engine: false }
+  let answer: Gate
+  try {
+    answer = (await rpc('engine_tool_gate', {
+      p_office: office,
+      p_mcp_client: clientId,
+      p_tool: tool,
+    })) as Gate
+  } catch (error) {
+    // A database that predates the engine has no such function (404), and then no engine client can exist: nothing is gated. Every
+    // other failure is NOT "not an engine client": it fails closed, because a client that cannot be classified is not let through.
+    if (String((error as Error).message) === 'upstream 404') {
+      notEngine.set(clientId, Date.now() + NOT_ENGINE_TTL_MS)
+      return { allow: true, is_engine: false }
+    }
+    throw error
+  }
+  if (answer.is_engine === false && answer.allow === true)
+    notEngine.set(clientId, Date.now() + NOT_ENGINE_TTL_MS)
+  return answer
+}
+
+/** Write one row of what the office served (or refused) to an engine run. Best effort by design: see the comment at the call site. */
+const recordEngineCall = async (
+  office: string,
+  runId: string,
+  tool: string,
+  verdict: 'served' | 'refused' | 'failed',
+  args: Record<string, unknown>,
+  detail: {
+    domain?: string | null
+    complete?: boolean
+    chars?: number
+    excerpt?: string | null
+    because?: string | null
+  },
+): Promise<void> => {
+  try {
+    await rpc('engine_record_call', {
+      p_office: office,
+      p_run: runId,
+      p_tool: tool,
+      p_verdict: verdict,
+      p_args_sha256: await sha256(canonicalJson(args)),
+      p_domain: detail.domain ?? null,
+      p_complete: detail.complete ?? false,
+      p_result_chars: detail.chars ?? 0,
+      p_result_excerpt: detail.excerpt ?? null,
+      p_because: detail.because ?? null,
+    })
+  } catch (error) {
+    // A record that could not be written leaves the answer UNGROUNDED, which the coherence gates refuse: the safe direction. It is
+    // not allowed to fail a read the model already holds, and it must not echo the error (it could carry a request detail).
+    console.error(`mcp engine record ${tool}: ${(error as Error).message}`)
+  }
+}
 
 // ---------------------------------------------------------------------------
 // OAuth 2.1, because ChatGPT cannot be handed a static bearer
@@ -481,11 +579,24 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const optional = (await rpc('mcp_optional_tools', { p_office: clientOffice }).catch(
       () => [],
     )) as string[]
+    const available = Array.isArray(optional) ? optional : []
+    // An engine client is shown only the engine list, and may be shown it BEFORE any run exists (Hermes connects at start-up and
+    // lists its tools then); the gate answers for the client, not for a call. A client that cannot be classified sees nothing.
+    let shown: ReturnType<typeof visibleTools>
+    try {
+      const gate = await engineGate(clientOffice, client.client_id, null)
+      if (!gate.allow && !gate.is_engine)
+        return rpcError(id, -32_603, 'the tool list is unavailable')
+      shown = gate.is_engine ? engineVisibleTools(available) : visibleTools(available)
+    } catch (error) {
+      console.error(`mcp tools/list gate: ${(error as Error).message}`)
+      return rpcError(id, -32_603, 'the tool list is unavailable')
+    }
     return json({
       jsonrpc: '2.0',
       id: id ?? null,
       result: {
-        tools: visibleTools(Array.isArray(optional) ? optional : []).map(([name, spec]) => ({
+        tools: shown.map(([name, spec]) => ({
           name,
           description: spec.description,
           inputSchema: spec.schema,
@@ -513,6 +624,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return rpcError(id, -32_601, `no such tool: ${name}`)
     }
 
+    // Set once the gate has said this is an engine client's call that it will allow: what the run's project forces, and what is
+    // recorded against the run afterwards.
+    let engineRun: { runId: string; args: Record<string, unknown> } | null = null
     try {
       // The scope check, before the call rather than inside the projection: a
       // read-only client must not be able to make the attempt, not merely fail
@@ -528,11 +642,33 @@ Deno.serve(async (request: Request): Promise<Response> => {
         return rpcError(id, -32_602, `${name} needs the write scope; this client is read-only`)
       }
 
-      const unreadable = badValue(input)
+      // The engine gate, for EVERY client (an ordinary client passes untouched). Before the call, and before anything is read.
+      const gate = await engineGate(clientOffice, client.client_id, name)
+      if (!gate.allow) {
+        await rpc('mcp_record_call', {
+          p_office: clientOffice,
+          p_client_id: client.client_id,
+          p_tool: name,
+          p_arguments: input,
+          p_outcome: 'refused',
+        }).catch(() => undefined)
+        if (!gate.is_engine) return rpcError(id, -32_603, 'the tool failed')
+        if (typeof gate.run_id === 'string')
+          await recordEngineCall(clientOffice, gate.run_id, name, 'refused', input, {
+            because: gate.because ?? null,
+          })
+        return toolError(id, gate.because ?? 'that call is not allowed')
+      }
+      // The run's project is FORCED into every tool that takes one (an omitted argument means "every project"), never trusted.
+      const callInput = gate.is_engine ? bindProject(spec, input, gate.project_slug ?? null) : input
+      if (gate.is_engine && typeof gate.run_id === 'string')
+        engineRun = { runId: gate.run_id, args: callInput }
+
+      const unreadable = badValue(callInput)
       if (unreadable !== null) return rpcError(id, -32_602, unreadable)
 
       // The OFFICE is the client's own - resolved from the token, never from anything the model sent.
-      const result = await rpc(spec.fn, rpcArgs(spec, clientOffice, client.client_id, input))
+      const result = await rpc(spec.fn, rpcArgs(spec, clientOffice, client.client_id, callInput))
       const rows = Array.isArray(result) ? result.length : 1
       await rpc('mcp_record_call', {
         p_office: clientOffice,
@@ -544,11 +680,22 @@ Deno.serve(async (request: Request): Promise<Response> => {
         p_duration_ms: Date.now() - started,
       }).catch(() => undefined)
 
+      const text = JSON.stringify(result, null, 1)
+      if (engineRun !== null) {
+        const d = engineDomain(name, callInput, rows)
+        await recordEngineCall(clientOffice, engineRun.runId, name, 'served', engineRun.args, {
+          domain: d.domain,
+          complete: d.complete,
+          chars: text.length,
+          excerpt: text.slice(0, 4000),
+        })
+      }
+
       return json({
         jsonrpc: '2.0',
         id: id ?? null,
         result: {
-          content: [{ type: 'text', text: JSON.stringify(result, null, 1) }],
+          content: [{ type: 'text', text }],
         },
       })
     } catch (error) {
@@ -560,6 +707,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
         p_outcome: 'error',
         p_duration_ms: Date.now() - started,
       }).catch(() => undefined)
+      if (engineRun !== null)
+        await recordEngineCall(clientOffice, engineRun.runId, name, 'failed', engineRun.args, {
+          because: 'the tool failed',
+        })
       // The upstream detail stays here: a database error in a model's context
       // is schema disclosure, and the model will faithfully repeat it.
       console.error(`mcp ${name}: ${(error as Error).message}`)

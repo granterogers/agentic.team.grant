@@ -6,6 +6,7 @@
  * tool is adding an entry below; which scope it needs, whether it is optional and how the model's arguments become an
  * RPC's are all declared here and checked there.
  */
+import { ENGINE_READ_TOOLS } from '../../../src/engines/hermes/timing.ts'
 
 export const clampInt = (v: unknown, dflt: number, lo: number, hi: number): number => {
   if (v === undefined || v === null || v === '') return dflt
@@ -625,3 +626,94 @@ export const rpcArgs = (
   clientId: string,
   input: Record<string, unknown>,
 ): Record<string, unknown> => ({ ...spec.args(input, clientId), p_office: office })
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The engine client kind (Hermes, M3). Pure, and shared with the unit tests.
+//
+// An MCP client of kind `engine` is the credential an outside agent (Hermes) holds. It is read-only, it sees only the v1 read
+// tools, and the database (app.engine_tool_gate) lets it call one only while its bridge holds a live run, which also names the
+// run's project. Nothing below decides anything the database has not already decided; it shapes what the model is shown and
+// what is recorded.
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/**
+ * The v1 read tools an engine client may see and call: ONE list, `src/engines/hermes/timing.ts`, which `app.engine_read_tools()`
+ * in the database is compared with by the replica proof. A tool on this list that is not in TOOLS is simply not offered.
+ */
+export { ENGINE_READ_TOOLS }
+
+/** What an engine client is shown: the visible tools that are also on the engine list. Never a tool the list does not name. */
+export const engineVisibleTools = (
+  optionalAvailable: readonly string[],
+): readonly (readonly [string, ToolSpec])[] =>
+  visibleTools(optionalAvailable).filter(([name]) => ENGINE_READ_TOOLS.includes(name))
+
+/** Whether a tool takes a `project` argument. Derived from the tool's own schema, so a new tool cannot be missed by a list. */
+export const takesProject = (spec: ToolSpec): boolean => {
+  const props = spec.schema.properties as Record<string, unknown> | undefined
+  return props !== undefined && Object.hasOwn(props, 'project')
+}
+
+/**
+ * The model's arguments with the run's project forced in. A tool that takes a project reads "every project" when the argument is
+ * omitted, so the argument is SET, not merely overwritten when present: a call that names nothing, or names another project, reads
+ * the run's project and no other. A run with no project (slug null) changes nothing. Tools that take no project (list_projects,
+ * read_document by id, list_staff, recent_work, check_job) are office-scoped, as the team's own retrieval is.
+ */
+export const bindProject = (
+  spec: ToolSpec,
+  input: Record<string, unknown>,
+  slug: string | null,
+): Record<string, unknown> =>
+  slug === null || !takesProject(spec) ? input : { ...input, project: slug }
+
+export interface EngineDomain {
+  readonly domain: 'documents' | 'projects' | 'tasks' | 'calendar' | null
+  /** The read returned a whole list (a census), not a search: only then may an answer say "that is all of them". */
+  readonly complete: boolean
+}
+
+/**
+ * What kind of thing a served read was about, and whether it was a whole list. The coherence gates ground an answer in the domains
+ * actually read, and a claim of exhaustiveness needs a census. A list is complete only when nothing narrowed it and the page was
+ * not full: list_projects returns every active project; list_tasks is complete when no state filter was given and fewer rows came
+ * back than the limit asked for.
+ */
+export const engineDomain = (
+  tool: string,
+  input: Record<string, unknown>,
+  rows: number,
+): EngineDomain => {
+  switch (tool) {
+    case 'search_documents':
+    case 'read_document':
+    case 'search_project':
+      return { domain: 'documents', complete: false }
+    case 'list_projects':
+      return { domain: 'projects', complete: true }
+    case 'list_tasks':
+      return {
+        domain: 'tasks',
+        complete:
+          (input.state === undefined || input.state === null || input.state === '') &&
+          rows < clampInt(input.limit, 25, 1, 100),
+      }
+    case 'list_events':
+      return { domain: 'calendar', complete: false }
+    default:
+      return { domain: null, complete: false }
+  }
+}
+
+/** JSON with every object's keys sorted, so the same arguments always hash the same however the model ordered them. */
+export const canonicalJson = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map((v) => canonicalJson(v)).join(',')}]`
+  if (typeof value === 'object' && value !== null) {
+    const o = value as Record<string, unknown>
+    return `{${Object.keys(o)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonicalJson(o[k])}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
