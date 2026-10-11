@@ -1,4 +1,4 @@
-# ADR-0071: one activity ledger reads the tables that already own each fact
+# ADR-0073: one activity ledger reads the tables that already own each fact
 
 Status: proposed (built on `feature/unified-activity-ledger`, default off, not merged). Date: 11 October 2026.
 

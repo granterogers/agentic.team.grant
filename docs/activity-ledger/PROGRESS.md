@@ -69,7 +69,7 @@ person or service. Read `ARCHITECTURE.md` first; the other documents are linked 
 
 ## Decisions
 
-- **Reuse, do not copy** (ADR-0071). The existing rows are the events.
+- **Reuse, do not copy** (ADR-0073). The existing rows are the events.
 - **Migration numbers 1060 and 1061**; `main` and every other branch end at or below 1053. Re-check before applying.
 - **System config key `activity.ledger_enabled`** (the key format forbids an underscore in the first segment).
 - **`public.events` and `app.hq_studio_lately` are unchanged.**
