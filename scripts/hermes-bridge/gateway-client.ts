@@ -27,6 +27,13 @@ export type Result<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: GatewayFailure }
 
+export interface SkillRow {
+  readonly slug: string
+  readonly name: string
+  readonly when_to_use: string
+  readonly procedure: string
+}
+
 export interface ClaimAnswerBody {
   readonly run: ClaimedRun | null
   readonly poll_after_s: number
@@ -44,13 +51,24 @@ export class GatewayClient {
     private readonly fetcher: Fetch = (i, init) => fetch(i, init),
   ) {}
 
-  private async post<T>(path: string, body: unknown): Promise<Result<T>> {
+  private post<T>(path: string, body: unknown): Promise<Result<T>> {
+    return this.request('POST', path, body)
+  }
+
+  private async request<T>(
+    method: 'GET' | 'POST',
+    path: string,
+    body?: unknown,
+  ): Promise<Result<T>> {
     let response: Response
     try {
       response = await this.fetcher(`${this.base}${path}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${this.token}`, 'content-type': 'application/json' },
-        body: JSON.stringify(body),
+        method,
+        headers: {
+          authorization: `Bearer ${this.token}`,
+          ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
+        },
+        ...(method === 'POST' ? { body: JSON.stringify(body) } : {}),
         signal: AbortSignal.timeout(REQUEST_MS),
       })
     } catch {
@@ -108,5 +126,29 @@ export class GatewayClient {
     result: EngineRunResult
   }): Promise<Result<FinishAnswer>> {
     return this.post('/finish', body)
+  }
+
+  /** A skill Hermes wrote, as a proposal (M8b). A refusal is an answer (`ok: false`), not a failure of the call. */
+  proposeSkill(body: {
+    run_id: string
+    skill: {
+      name: string
+      when: string
+      procedure: string
+      tools: readonly string[]
+      dropped: readonly string[]
+    }
+  }): Promise<Result<{ ok: boolean; suggestion_id?: string; refused?: string }>> {
+    return this.post('/proposal', body)
+  }
+
+  /** The office's live skills for one claimed run (M8b). Read-only reference material for Hermes. */
+  skills(
+    runId: string | null,
+  ): Promise<Result<{ skills: SkillRow[]; generated_at: string | null }>> {
+    return this.request(
+      'GET',
+      `/skills${runId === null ? '' : `?run_id=${encodeURIComponent(runId)}`}`,
+    )
   }
 }

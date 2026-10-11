@@ -12,6 +12,8 @@
  *     (Hermes retries a provider 500 for ever), as is one past its deadline;
  *   - the answer, the failure sentence and every size it sends are bounded, and nothing it logs holds a body or a credential.
  */
+import { rm } from 'node:fs/promises'
+import { convertSkill } from '../../src/engines/hermes/skills.ts'
 import {
   ENGINE_READ_TOOLS,
   HEARTBEAT_S,
@@ -31,6 +33,7 @@ import {
 } from '../../src/engines/hermes/types.ts'
 import type { GatewayClient } from './gateway-client.ts'
 import type { HermesClient, RunStatus } from './hermes-client.ts'
+import { clearExport, emptyDir, harvestDrafts, writeExport } from './skills-sync.ts'
 import type { SseEvent } from './sse.ts'
 
 export const BRIDGE_VERSION = '0.1.0'
@@ -80,6 +83,11 @@ export interface BridgeDeps {
   readonly hermes: HermesClient
   readonly gateway: GatewayClient
   readonly config: BridgeConfig
+  /**
+   * Skill learning (M8b), absent unless the host configured it. `hermes` is the client for the learning profile; a learning run is run on
+   * it. Without it a run the office marked as a learning run is run on the ordinary profile and nothing is harvested.
+   */
+  readonly learning?: { readonly hermes: HermesClient; readonly settleMs?: number }
   readonly timing?: Partial<Timing>
   /** One line, never a body or a credential. */
   readonly log?: (line: string) => void
@@ -138,6 +146,12 @@ const safeName = (value: unknown): string =>
     .replace(/[^A-Za-z0-9_.:-]/g, '?')
     .slice(0, 60)
 
+/** A sentence the office wrote, made safe for a log line: printable ASCII only (a refusal can echo a field name a model chose), bounded. */
+const plainLine = (value: unknown): string =>
+  String(value ?? '')
+    .replace(/[^\x20-\x7E]/g, '?')
+    .slice(0, 160)
+
 const HERMES_ID = /^run_[0-9a-f]{32}$/
 
 export class Bridge {
@@ -145,6 +159,7 @@ export class Bridge {
   private readonly hermes: HermesClient
   private readonly gateway: GatewayClient
   private readonly config: BridgeConfig
+  private readonly learning: BridgeDeps['learning']
   private readonly log: (line: string) => void
   private readonly now: () => number
   private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>
@@ -156,6 +171,7 @@ export class Bridge {
     this.hermes = deps.hermes
     this.gateway = deps.gateway
     this.config = deps.config
+    this.learning = deps.learning
     this.log = deps.log ?? (() => undefined)
     this.now = deps.now ?? (() => Date.now())
     this.sleep = deps.sleep ?? realSleep
@@ -224,16 +240,101 @@ export class Bridge {
 
   /** Run one claimed run to its end and report it. Never throws: a failure of the bridge itself is a failed run, said plainly. */
   async runClaimed(run: ClaimedRun): Promise<Ended> {
+    let ended: Ended
     try {
-      return await this.drive(run)
+      // Skills are prepared before Hermes starts and, if they cannot be made safe, the run does not start: a stale reference skill
+      // (one withdrawn since) is never the fallback.
+      await this.prepareSkills(run)
+      ended = await this.drive(run)
     } catch (error) {
       this.log(`run ${run.run_id}: the bridge failed: ${safeName((error as Error)?.message)}`)
-      return this.finish(
+      ended = await this.finish(
         run,
         'failed',
         { failure: 'the bridge hit an error', tools_started: 0, approvals_denied: 0 },
         'bridge_error',
       )
+    }
+    await this.afterRun(run, ended)
+    return ended
+  }
+
+  /** Whether the office opened this run to learn from. Only the office says so (the claim carries it); nothing here can switch it on. */
+  private learns(run: ClaimedRun): boolean {
+    return run.profile === 'hermes-learn' && this.learning !== undefined
+  }
+
+  /** The Hermes client for a run: the learning profile's for a learning run, else the ordinary one. */
+  private hermesFor(run: ClaimedRun): HermesClient {
+    return this.learns(run) && this.learning !== undefined ? this.learning.hermes : this.hermes
+  }
+
+  /**
+   * Before Hermes starts: empty the learning run's own directory, and replace the read-only reference directory with the office's live
+   * skills for this run (a learning run) or with nothing (any other run). A re-attach to a Hermes run already started is left alone: the
+   * run's own directory is its work in progress.
+   */
+  private async prepareSkills(run: ClaimedRun): Promise<void> {
+    const { learnDir, skillsExportDir } = this.config
+    if (run.hermes_run_id !== null) return
+    if (learnDir !== undefined && this.learns(run)) await emptyDir(learnDir)
+    if (skillsExportDir === undefined) return
+    if (!this.learns(run)) {
+      await clearExport(skillsExportDir)
+      return
+    }
+    const got = await this.gateway.skills(run.run_id)
+    if (!got.ok) {
+      await clearExport(skillsExportDir)
+      this.log(
+        `run ${run.run_id}: the office's skills could not be read (${got.error.kind}); the reference directory was emptied`,
+      )
+      return
+    }
+    const n = await writeExport(skillsExportDir, got.value.skills)
+    this.log(
+      `run ${run.run_id}: ${String(n)} approved skill(s) offered to Hermes as read-only reference`,
+    )
+  }
+
+  /**
+   * After a learning run: give the office whatever skills Hermes wrote, as PROPOSALS (at most three), and delete the directory whatever
+   * happened. The run's answer was reported before this starts, so nothing here can delay or change it. A proposal the office refuses is
+   * logged with the office's own sentence and is not retried.
+   */
+  private async afterRun(run: ClaimedRun, ended: Ended): Promise<void> {
+    const { learnDir } = this.config
+    if (learnDir === undefined || !this.learns(run)) return
+    try {
+      if (ended.outcome === 'completed' && ended.sent) {
+        await this.sleep(this.learning?.settleMs ?? 5_000)
+        for (const draft of await harvestDrafts(learnDir)) {
+          const converted = convertSkill(draft)
+          if (!converted.ok) {
+            this.log(
+              `run ${run.run_id}: a skill Hermes wrote was not proposed (${plainLine(converted.reason)})`,
+            )
+            continue
+          }
+          const sent = await this.gateway.proposeSkill({
+            run_id: run.run_id,
+            skill: converted.offer,
+          })
+          this.log(
+            sent.ok
+              ? sent.value.ok
+                ? `run ${run.run_id}: proposed a skill for a person to read`
+                : `run ${run.run_id}: the office did not take a skill (${plainLine(sent.value.refused ?? 'refused')})`
+              : `run ${run.run_id}: a skill could not be proposed (${sent.error.kind})`,
+          )
+        }
+      }
+    } catch (error) {
+      this.log(
+        `run ${run.run_id}: harvesting skills failed: ${safeName((error as Error)?.message)}`,
+      )
+    } finally {
+      await rm(learnDir, { recursive: true, force: true }).catch(() => undefined)
     }
   }
 
@@ -258,14 +359,15 @@ export class Bridge {
       abandoned: false,
     }
     const ac = new AbortController()
+    const hermes = this.hermesFor(run)
 
     // An earlier attempt's Hermes run is stopped before this attempt starts (its key would replay a dead run).
-    if (run.previous_hermes_run_id !== null) await this.hermes.stop(run.previous_hermes_run_id)
+    if (run.previous_hermes_run_id !== null) await hermes.stop(run.previous_hermes_run_id)
 
     if (state.hermesRunId === null) {
       let started: Awaited<ReturnType<HermesClient['startRun']>>
       try {
-        started = await this.hermes.startRun(canonicalBody(run.request, run.run_id), key)
+        started = await hermes.startRun(canonicalBody(run.request, run.run_id), key)
       } catch {
         return this.finish(
           run,
@@ -307,7 +409,7 @@ export class Bridge {
     const stopHermes = async (): Promise<void> => {
       if (state.stopSent) return
       state.stopSent = true
-      await this.hermes.stop(hermesRunId)
+      await hermes.stop(hermesRunId)
     }
     const decide = (v: Verdict): void => {
       if (state.verdict === null) {
@@ -332,10 +434,7 @@ export class Bridge {
         if (!ok) decide({ outcome: 'failed', failure: `containment: ${safeName(tool)}` })
       } else if (name === 'approval.request') {
         state.denied += 1
-        void this.hermes.deny(
-          hermesRunId,
-          typeof data.request_id === 'string' ? data.request_id : null,
-        )
+        void hermes.deny(hermesRunId, typeof data.request_id === 'string' ? data.request_id : null)
         if (state.notes.length < LIMITS.notes) state.notes.push('a request for approval was denied')
       } else if (
         name === 'run.completed' ||
@@ -351,7 +450,7 @@ export class Bridge {
       let reconnects = 0
       while (!ac.signal.aborted && state.terminal === null) {
         try {
-          for await (const ev of this.hermes.events(hermesRunId, {
+          for await (const ev of hermes.events(hermesRunId, {
             ...(state.lastSeq >= 0 ? { lastEventId: state.lastSeq } : {}),
             signal: ac.signal,
           })) {
@@ -368,7 +467,7 @@ export class Bridge {
           continue
         }
         // The stream cannot be kept: read the run's own status until it is over (the watchdog still bounds the wait).
-        const s = await this.hermes.run(hermesRunId).catch(() => null)
+        const s = await hermes.run(hermesRunId).catch(() => null)
         if (s !== null && ['completed', 'failed', 'cancelled', 'interrupted'].includes(s.status)) {
           state.terminal = { event: `run.${s.status}`, status: s, data: {} }
           return
@@ -461,11 +560,12 @@ export class Bridge {
     const term = state.terminal as Terminal | null
     if (term === null)
       return this.finish(run, 'failed', { ...base(), failure: 'no_result' }, 'no_result')
-    return this.finish(run, ...(await this.fromTerminal(term, hermesRunId, base())))
+    return this.finish(run, ...(await this.fromTerminal(hermes, term, hermesRunId, base())))
   }
 
   /** Map Hermes's own end of a run onto the office's outcomes. */
   private async fromTerminal(
+    hermes: HermesClient,
     term: Terminal,
     hermesRunId: string,
     base: EngineRunResult,
@@ -475,8 +575,7 @@ export class Bridge {
     const needsStatus =
       (term.event === 'run.completed' && typeof d.output !== 'string') ||
       (term.event === 'run.failed' && typeof d.error !== 'string')
-    const s =
-      term.status ?? (needsStatus ? await this.hermes.run(hermesRunId).catch(() => null) : null)
+    const s = term.status ?? (needsStatus ? await hermes.run(hermesRunId).catch(() => null) : null)
     if (term.event === 'run.completed') {
       const output = (typeof d.output === 'string' ? d.output : (s?.output ?? '')).trim()
       if (output === '') return ['failed', { ...base, failure: 'empty answer' }, 'empty_answer']

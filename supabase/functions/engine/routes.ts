@@ -14,14 +14,17 @@ export const MIN_CLAIM_GAP_MS = 5_000
 export const POLL_IDLE_S = 15
 export const POLL_UNHEALTHY_S = 60
 
-export type RouteName = 'health' | 'claim' | 'heartbeat' | 'finish'
+export type RouteName = 'health' | 'claim' | 'heartbeat' | 'finish' | 'proposal' | 'skills'
 
 /**
  * Which route a request path names. Supabase strips `/functions/v1` before the function sees a path and the emulators keep it, so
  * both are accepted; anything that is not exactly `/engine/<route>` is no route (404), never a near miss.
  */
 export const routeOf = (pathname: string): RouteName | null => {
-  const m = /^(?:\/functions\/v1)?\/engine\/(health|claim|heartbeat|finish)\/?$/.exec(pathname)
+  const m =
+    /^(?:\/functions\/v1)?\/engine\/(health|claim|heartbeat|finish|proposal|skills)\/?$/.exec(
+      pathname,
+    )
   return (m?.[1] as RouteName | undefined) ?? null
 }
 
@@ -119,6 +122,89 @@ export const parseFinish = (b: unknown): Parsed<FinishBody> => {
   return {
     ok: true,
     value: { run_id: b.run_id, claim_gen: b.claim_gen, outcome: b.outcome, result: b.result },
+  }
+}
+
+/**
+ * A skill Hermes wrote (M8b). Exactly five fields and nothing else: where it applies, which run it came from and what it is are the
+ * office's to say, never the bridge's, so a body that names any of them is refused by name here and again in the database. The sizes are
+ * a ceiling for the transport; the database's validator is the authority on what is acceptable.
+ */
+export interface ProposalBody {
+  readonly run_id: string
+  readonly skill: {
+    readonly name: string
+    readonly when: string
+    readonly procedure: string
+    readonly tools: readonly string[]
+    readonly dropped: readonly string[]
+  }
+}
+export const parseProposal = (b: unknown): Parsed<ProposalBody> => {
+  if (!isObject(b)) return bad('body')
+  for (const k of Object.keys(b)) if (!['run_id', 'skill'].includes(k)) return bad(k)
+  if (typeof b.run_id !== 'string' || !UUID.test(b.run_id)) return bad('run_id')
+  const s = b.skill
+  if (!isObject(s)) return bad('skill')
+  for (const k of Object.keys(s))
+    if (!['name', 'when', 'procedure', 'tools', 'dropped'].includes(k)) return bad(`skill.${k}`)
+  if (typeof s.name !== 'string' || s.name.length > 200) return bad('skill.name')
+  if (typeof s.when !== 'string' || s.when.length > 1000) return bad('skill.when')
+  if (typeof s.procedure !== 'string' || s.procedure.length > 8000) return bad('skill.procedure')
+  const list = (v: unknown, max: number, each: number): v is string[] =>
+    Array.isArray(v) && v.length <= max && v.every((x) => typeof x === 'string' && x.length <= each)
+  if (s.tools === undefined) return bad('skill.tools')
+  if (!list(s.tools, 5, 80)) return bad('skill.tools')
+  if (s.dropped === undefined) return bad('skill.dropped')
+  if (!list(s.dropped, 10, 200)) return bad('skill.dropped')
+  return {
+    ok: true,
+    value: {
+      run_id: b.run_id,
+      skill: {
+        name: s.name,
+        when: s.when,
+        procedure: s.procedure,
+        tools: s.tools,
+        dropped: s.dropped,
+      },
+    },
+  }
+}
+
+/** The run a skills read is for, from the query string: absent means no run, so only global skills; present must be a uuid. */
+export const parseSkillsQuery = (search: string): Parsed<{ readonly run_id: string | null }> => {
+  const params = new URLSearchParams(search)
+  for (const k of params.keys()) if (k !== 'run_id') return bad(k)
+  const run = params.get('run_id')
+  if (run === null) return { ok: true, value: { run_id: null } }
+  return UUID.test(run) ? { ok: true, value: { run_id: run } } : bad('run_id')
+}
+
+/** A refusal of a proposal is an answer, not a fault: 200 with the reason, so the bridge records it and moves on. */
+export const proposalAnswer = (sql: unknown): Answer => {
+  const r = (isObject(sql) ? sql : {}) as { suggestion_id?: unknown; refused?: unknown }
+  if (typeof r.suggestion_id === 'string')
+    return { status: 200, body: { ok: true, suggestion_id: r.suggestion_id } }
+  if (typeof r.refused === 'string') return { status: 200, body: { ok: false, refused: r.refused } }
+  return { status: 503, body: { error: 'unavailable' }, retryAfterS: 30 }
+}
+
+export const skillsAnswer = (sql: unknown): Answer => {
+  const r = (isObject(sql) ? sql : {}) as { skills?: unknown; generated_at?: unknown }
+  if (!Array.isArray(r.skills))
+    return { status: 503, body: { error: 'unavailable' }, retryAfterS: 30 }
+  return {
+    status: 200,
+    body: {
+      skills: r.skills.filter(isObject).map((s) => ({
+        slug: String(s.slug ?? ''),
+        name: String(s.name ?? ''),
+        when_to_use: String(s.when_to_use ?? ''),
+        procedure: String(s.procedure ?? ''),
+      })),
+      generated_at: typeof r.generated_at === 'string' ? r.generated_at : null,
+    },
   }
 }
 

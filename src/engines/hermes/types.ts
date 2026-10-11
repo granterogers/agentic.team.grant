@@ -31,6 +31,11 @@ export interface ClaimedRun {
   readonly hermes_run_id: string | null
   /** An earlier attempt's Hermes run, to be stopped before this attempt starts (M0 D-2). */
   readonly previous_hermes_run_id: string | null
+  /**
+   * Which Hermes profile runs it (M8b), decided by the OFFICE when the run opened and never by the bridge: 'hermes-learn' only for an
+   * office that switched learning on. Absent on a claim from an office that predates it, which is the default profile.
+   */
+  readonly profile?: 'default' | 'hermes-learn'
 }
 
 export interface EngineRunResult {
@@ -82,6 +87,13 @@ export interface BridgeConfig {
   readonly hermesUrl: string
   readonly hermesKey: string
   readonly officeToolPrefix: string
+  /**
+   * Learning (M8b), both absent unless the host sets them. `learnDir`: where a learning run's Hermes profile writes skills, emptied before
+   * and deleted after every run. `skillsExportDir`: the read-only reference directory Hermes lists in `skills.external_dirs`, replaced
+   * on every run. With neither set the bridge does nothing about skills at all.
+   */
+  readonly learnDir?: string
+  readonly skillsExportDir?: string
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> =>

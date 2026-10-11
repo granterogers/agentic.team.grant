@@ -28,6 +28,20 @@ const bridge = new Bridge({
   hermes: new HermesClient(config.hermesUrl, config.hermesKey),
   gateway: new GatewayClient(config.gatewayUrl, config.bridgeToken),
   config,
+  // Skill learning (M8b) exists only where the host named a directory for it. The learning profile is Hermes's own multiplexed profile
+  // (docs/hermes/host/RUNBOOK.md); the office alone decides which runs use it.
+  ...(config.learnDir === undefined
+    ? {}
+    : {
+        learning: {
+          hermes: new HermesClient(
+            config.hermesUrl,
+            config.hermesKey,
+            undefined,
+            '/p/hermes-learn',
+          ),
+        },
+      }),
   log,
 })
 const stop = new AbortController()

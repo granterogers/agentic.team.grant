@@ -5905,21 +5905,45 @@ function requestsTab() {
             : '',
     })
 
-  const offer = (s) =>
-    ui.caseCard({
+  /*
+    A procedure Hermes found or wrote (M8): the person READS it here before they are asked to keep it. Everything in it is untrusted text,
+    so it is escaped and shown in a plain block, never as markup. Plain words in this comment, because it is inside a template literal.
+  */
+  const skillBlock = (k) => {
+    const tools = Array.isArray(k.tools) ? k.tools : []
+    const dropped = Array.isArray(k.dropped) ? k.dropped : []
+    return ui.html(`<details class="st-skill"><summary>Read the procedure</summary>
+      <p class="st-skillwhen"><strong>When it applies</strong> ${esc(k.when ?? '')}</p>
+      <pre class="st-skillproc" tabindex="0">${esc(k.procedure ?? '')}</pre>
+      <p class="st-skillnote">${tools.length === 0
+        ? 'It names no tool.'
+        : `It names ${tools.map((x) => esc(copy.toolName(x))).join(', ')}. Naming a tool gives nobody access to it.`}</p>
+      ${dropped.length === 0 ? '' : `<p class="st-skillnote">Left out: ${dropped.map((x) => esc(x)).join(' ')}</p>`}
+    </details>`)
+  }
+
+  const offer = (s) => {
+    const skill = s.kind === 'engine.skill' && s.skill ? s.skill : null
+    return ui.caseCard({
       title: s.body,
       body: '',
-      note: OFFER_WORD[s.offer] ?? 'The team can act on this.',
+      detail: skill === null ? '' : skillBlock(skill),
+      note: skill === null
+        ? OFFER_WORD[s.offer] ?? 'The team can act on this.'
+        : 'It is not in use. Accepting makes it a procedure the team follows on this project, and nothing else changes: no tool and no permission is granted.',
       meta: ui.facts([
         s.project,
         KIND_WORD[s.kind] ?? String(s.kind).replace(/_/g, ' '),
+        skill === null ? '' : skill.source === 'observed' ? 'From the record of how Hermes answered' : 'Written by Hermes, not checked by anyone',
         ...becauseFacts(s.because),
         s.dismissed > 0 ? `Dismissed ${s.dismissed} time${s.dismissed === 1 ? '' : 's'}` : '',
         ui.html(when.stamp(s.at)),
       ]),
       actions:
-        btn('Decline', 'quiet', { 'data-suggest': `${s.id}:no` }) + btn('Accept', 'primary', { 'data-suggest': `${s.id}:yes` }),
+        btn('Decline', 'quiet', { 'data-suggest': `${s.id}:no`, ...(skill === null ? {} : { 'data-suggest-skill': '1' }) }) +
+        btn('Accept', 'primary', { 'data-suggest': `${s.id}:yes`, ...(skill === null ? {} : { 'data-suggest-skill': '1' }) }),
     })
+  }
 
   const refusal = (r) =>
     ui.caseCard({
@@ -6274,6 +6298,7 @@ const OFFER_WORD = {
   all.
 */
 const KIND_WORD = {
+  'engine.skill': 'a procedure from Hermes',
   standing_rule: 'a rule it drafted',
   standing_procedure: 'a procedure it drafted',
   attach: 'attach',
@@ -7723,34 +7748,55 @@ function settingsSheet() {
     b.addEventListener('click', async () => {
       const [id, verdict] = String(b.dataset.suggest).split(':')
       const yes = verdict === 'yes'
+      // A procedure from Hermes is not a rule, and the sentences below must say what the press does to THIS thing (M8).
+      const skill = b.dataset.suggestSkill === '1'
       if (
         yes &&
-        !(await settingsUi.confirmDialog({
-          title: 'Make this a standing rule?',
-          body:
-            'The team is shown it on every job from now on. You can stop it at any time under ' +
-            'What it has learned.',
-          confirmLabel: 'Make it a rule',
-        }))
+        !(await settingsUi.confirmDialog(
+          skill
+            ? {
+                title: 'Keep this procedure?',
+                body:
+                  'The team is shown it on this project from now on. It grants no tool and no permission. You can withdraw it at any ' +
+                  'time under What it has learned.',
+                confirmLabel: 'Keep it',
+              }
+            : {
+                title: 'Make this a standing rule?',
+                body:
+                  'The team is shown it on every job from now on. You can stop it at any time under ' +
+                  'What it has learned.',
+                confirmLabel: 'Make it a rule',
+              },
+        ))
       ) {
         return
       }
       if (
         !yes &&
-        !(await settingsUi.confirmDialog({
-          title: 'Decline this rule?',
-          body:
-            'It is not stored, and the team will not offer this one again. Correct it differently ' +
-            'and it can propose a new one.',
-          confirmLabel: 'Decline',
-          danger: true,
-        }))
+        !(await settingsUi.confirmDialog(
+          skill
+            ? {
+                title: 'Decline this procedure?',
+                body: 'It is not kept, and the same procedure will not be proposed again.',
+                confirmLabel: 'Decline',
+                danger: true,
+              }
+            : {
+                title: 'Decline this rule?',
+                body:
+                  'It is not stored, and the team will not offer this one again. Correct it differently ' +
+                  'and it can propose a new one.',
+                confirmLabel: 'Decline',
+                danger: true,
+              },
+        ))
       ) {
         return
       }
       const done = await attempt(b, yes ? 'Saving…' : 'Declining…', () =>
         act('suggestion_decide', { p_suggestion_id: id, p_accept: yes }),
-        yes ? 'The team will be shown this.' : 'Declined.')
+        yes ? (skill ? 'Kept. The team will use it on this project.' : 'The team will be shown this.') : 'Declined.')
       if (done) await afterGovernance()
     })
   }

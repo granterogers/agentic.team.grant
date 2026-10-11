@@ -9,7 +9,11 @@ import {
   parseClaim,
   parseFinish,
   parseHeartbeat,
+  parseProposal,
+  parseSkillsQuery,
+  proposalAnswer,
   routeOf,
+  skillsAnswer,
   Throttle,
   unhealthyAnswer,
   upstreamAnswer,
@@ -24,6 +28,8 @@ describe('routeOf: exactly /engine/<route>, nothing near it', () => {
     expect(routeOf('/functions/v1/engine/heartbeat')).toBe('heartbeat')
     expect(routeOf('/engine/finish/')).toBe('finish')
     expect(routeOf('/engine/health')).toBe('health')
+    expect(routeOf('/engine/proposal')).toBe('proposal')
+    expect(routeOf('/functions/v1/engine/skills')).toBe('skills')
   })
   it('refuses everything else', () => {
     for (const p of [
@@ -35,8 +41,9 @@ describe('routeOf: exactly /engine/<route>, nothing near it', () => {
       '/mcp/claim',
       '/engine/../claim',
       '/ENGINE/claim',
-      '/engine/proposal',
-      '/engine/skills',
+      '/engine/proposals',
+      '/engine/skills/extra',
+      '/engine/Skills',
     ])
       expect(routeOf(p), p).toBeNull()
   })
@@ -262,5 +269,94 @@ describe('Throttle', () => {
   it('uses the contract gap by default', () => {
     expect(MIN_CLAIM_GAP_MS).toBe(5000)
     expect(MAX_BODY_BYTES).toBe(65_536)
+  })
+})
+
+describe('parseProposal (M8b): five fields and nothing about where a skill applies', () => {
+  const skill = {
+    name: 'A name',
+    when: 'When it comes up',
+    procedure: 'Do the steps in order.',
+    tools: ['db.read'],
+    dropped: [] as string[],
+  }
+  const ok = { run_id: RUN, skill }
+  it('accepts exactly a run and a skill of five fields', () => {
+    expect(parseProposal(ok)).toEqual({ ok: true, value: ok })
+  })
+  it('refuses a key it does not know, at either level, naming it', () => {
+    for (const k of ['office_id', 'project_id', 'scope', 'source', 'claim_gen'])
+      expect(parseProposal({ ...ok, [k]: 'x' }), k).toEqual({ ok: false, field: k })
+    for (const k of ['scope', 'project_id', 'run_id', 'from_job', 'source', 'staff'])
+      expect(parseProposal({ ...ok, skill: { ...skill, [k]: 'x' } }), k).toEqual({
+        ok: false,
+        field: `skill.${k}`,
+      })
+  })
+  it('refuses each malformed field by name', () => {
+    expect(parseProposal(null)).toEqual({ ok: false, field: 'body' })
+    expect(parseProposal({ ...ok, run_id: 'nope' })).toEqual({ ok: false, field: 'run_id' })
+    expect(parseProposal({ run_id: RUN })).toEqual({ ok: false, field: 'skill' })
+    expect(parseProposal({ ...ok, skill: { ...skill, name: 3 } })).toEqual({
+      ok: false,
+      field: 'skill.name',
+    })
+    expect(parseProposal({ ...ok, skill: { ...skill, procedure: 'x'.repeat(8001) } })).toEqual({
+      ok: false,
+      field: 'skill.procedure',
+    })
+    expect(parseProposal({ ...ok, skill: { ...skill, tools: 'db.read' } })).toEqual({
+      ok: false,
+      field: 'skill.tools',
+    })
+    expect(parseProposal({ ...ok, skill: { ...skill, tools: Array(6).fill('a') } })).toEqual({
+      ok: false,
+      field: 'skill.tools',
+    })
+    expect(parseProposal({ ...ok, skill: { ...skill, dropped: [1] } })).toEqual({
+      ok: false,
+      field: 'skill.dropped',
+    })
+    const { tools: _t, ...noTools } = skill
+    expect(parseProposal({ ...ok, skill: noTools })).toEqual({ ok: false, field: 'skill.tools' })
+  })
+})
+
+describe('parseSkillsQuery, proposalAnswer, skillsAnswer', () => {
+  it('reads an optional run id and nothing else from the query', () => {
+    expect(parseSkillsQuery('')).toEqual({ ok: true, value: { run_id: null } })
+    expect(parseSkillsQuery(`?run_id=${RUN}`)).toEqual({ ok: true, value: { run_id: RUN } })
+    expect(parseSkillsQuery('?run_id=x')).toEqual({ ok: false, field: 'run_id' })
+    expect(parseSkillsQuery(`?run_id=${RUN}&office_id=1`)).toEqual({
+      ok: false,
+      field: 'office_id',
+    })
+  })
+  it('a refusal of a proposal is an answer (200, ok false), a stored one carries its id, anything else is a back-off', () => {
+    expect(proposalAnswer({ suggestion_id: RUN })).toEqual({
+      status: 200,
+      body: { ok: true, suggestion_id: RUN },
+    })
+    expect(proposalAnswer({ refused: 'already waiting' })).toEqual({
+      status: 200,
+      body: { ok: false, refused: 'already waiting' },
+    })
+    expect(proposalAnswer(null).status).toBe(503)
+    expect(proposalAnswer({ error: 'x' }).status).toBe(503)
+  })
+  it('the skills answer keeps four text fields of each skill and drops everything else', () => {
+    const a = skillsAnswer({
+      skills: [
+        { slug: 's', name: 'n', when_to_use: 'w', procedure: 'p', office_id: 'LEAK' },
+        'junk',
+      ],
+      generated_at: 't',
+    })
+    expect(a.status).toBe(200)
+    expect(a.body).toEqual({
+      skills: [{ slug: 's', name: 'n', when_to_use: 'w', procedure: 'p' }],
+      generated_at: 't',
+    })
+    expect(skillsAnswer({}).status).toBe(503)
   })
 })

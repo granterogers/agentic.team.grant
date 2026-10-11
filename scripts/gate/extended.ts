@@ -156,6 +156,12 @@ export const EXTENDED: readonly Proof[] = [
     { timeoutS: 480 },
   ),
   p(
+    'engine-skill-card-browser',
+    24,
+    "the proposal card a person reads before keeping a procedure Hermes found or wrote, real Team HQ page and real gateway, signed in as a second person on a desktop and a phone: the card says it is not in use and grants no tool, names where it came from, opens the procedure from the keyboard, shows it as text (markup is not interpreted), Keep it and Decline ask in the procedure's own words and write one skill or none, a planted hostile procedure is refused on the press, 44px and no sideways overflow on the phone (3 page sabotages: --sabotage=procedure|dialog|escape)",
+    { timeoutS: 480 },
+  ),
+  p(
     'series-ui-browser',
     46,
     'Team HQ My Tasks, real page and real gateway: ticking a recurring reminder completes that time only, Stop repeating is its own press that asks twice and cancels exactly that series (also from the Repeating reminders section when it is not due: #450), stopping again is a no-op, another office cannot stop it, and the proof reads the database (a refused stop turns it red)',

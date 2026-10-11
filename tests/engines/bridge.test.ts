@@ -141,7 +141,8 @@ describe('configuration', () => {
 })
 
 describe('what the bridge is allowed to import', () => {
-  const ALLOWED = [/^\.\/[a-z-]+\.ts$/, /^\.\.\/\.\.\/src\/engines\/hermes\/(types|timing)\.ts$/, /^\.\.\/\.\.\/src\/safety\/require-production-writes\.ts$/]
+  // M8b: the pure skill converter (src/engines/hermes/skills.ts, no I/O) and, for the two skill directories only, the file-system modules.
+  const ALLOWED = [/^\.\/[a-z-]+\.ts$/, /^\.\.\/\.\.\/src\/engines\/hermes\/(types|timing|skills)\.ts$/, /^\.\.\/\.\.\/src\/safety\/require-production-writes\.ts$/, /^node:(fs\/promises|path)$/]
   const importsOf = (source: string): string[] =>
     [...source.matchAll(/(?:^|\n)\s*(?:import|export)\s[^'";]*?\sfrom\s+['"]([^'"]+)['"]|(?:^|\n)\s*import\s+['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)|require\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => String(m[1] ?? m[2] ?? m[3] ?? m[4]))
   const forbidden = (specs: string[]): string[] => specs.filter((s) => !ALLOWED.some((re) => re.test(s)))
@@ -156,7 +157,7 @@ describe('what the bridge is allowed to import', () => {
   it('every file of the bridge imports only its own files, the two shared type and timing files, and the production-write gate', async () => {
     const { readdirSync, readFileSync } = await import('node:fs')
     const files = readdirSync('scripts/hermes-bridge').filter((f) => f.endsWith('.ts'))
-    expect(files.sort()).toEqual(['bridge.ts', 'config.ts', 'gateway-client.ts', 'hermes-client.ts', 'main.ts', 'sse.ts'])
+    expect(files.sort()).toEqual(['bridge.ts', 'config.ts', 'gateway-client.ts', 'hermes-client.ts', 'main.ts', 'skills-sync.ts', 'sse.ts'])
     for (const f of files) {
       const specs = importsOf(readFileSync(`scripts/hermes-bridge/${f}`, 'utf8'))
       expect(forbidden(specs), f).toEqual([])
@@ -169,7 +170,7 @@ describe('what the bridge is allowed to import', () => {
     const { readFileSync } = await import('node:fs')
     const main = readFileSync('scripts/hermes-bridge/main.ts', 'utf8')
     expect(importsOf(main)[0]).toBe('../../src/safety/require-production-writes.ts')
-    for (const f of ['bridge.ts', 'config.ts', 'gateway-client.ts', 'hermes-client.ts', 'sse.ts'])
+    for (const f of ['bridge.ts', 'config.ts', 'gateway-client.ts', 'hermes-client.ts', 'skills-sync.ts', 'sse.ts'])
       expect(readFileSync(`scripts/hermes-bridge/${f}`, 'utf8')).not.toContain('require-production-writes')
   })
 })

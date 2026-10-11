@@ -70,6 +70,34 @@ export const parseBridgeConfig = (
   const key = env.HERMES_API_KEY ?? ''
   if (key.length < 32) problems.push('HERMES_API_KEY is missing or shorter than 32 characters')
 
+  // Learning is off unless the host names a directory for it. Each must be absolute, a real place (never the root or a home directory),
+  // and the two must not contain one another: a learning run's own folder is deleted, and the export is replaced, so neither may be
+  // somebody's working directory.
+  const dirOf = (name: string): string | undefined => {
+    const v = (env[name] ?? '').trim()
+    if (v === '') return undefined
+    if (
+      !v.startsWith('/') ||
+      v.split('/').filter(Boolean).length < 2 ||
+      v.includes('..') ||
+      /[\0\r\n]/.test(v)
+    )
+      problems.push(`${name} must be an absolute path at least two levels deep, with no '..'`)
+    return v.replace(/\/+$/, '')
+  }
+  const learnDir = dirOf('HERMES_LEARN_DIR')
+  const skillsExportDir = dirOf('HERMES_SKILLS_EXPORT_DIR')
+  if (learnDir !== undefined && skillsExportDir !== undefined) {
+    if (
+      learnDir === skillsExportDir ||
+      learnDir.startsWith(`${skillsExportDir}/`) ||
+      skillsExportDir.startsWith(`${learnDir}/`)
+    )
+      problems.push(
+        'HERMES_LEARN_DIR and HERMES_SKILLS_EXPORT_DIR must be two separate directories, neither inside the other',
+      )
+  }
+
   if (problems.length > 0) return { ok: false, problems }
   return {
     ok: true,
@@ -79,6 +107,8 @@ export const parseBridgeConfig = (
       hermesUrl: (hermes as URL).toString().replace(/\/+$/, ''),
       hermesKey: key,
       officeToolPrefix: OFFICE_TOOL_PREFIX,
+      ...(learnDir === undefined ? {} : { learnDir }),
+      ...(skillsExportDir === undefined ? {} : { skillsExportDir }),
     },
   }
 }

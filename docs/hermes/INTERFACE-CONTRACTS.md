@@ -593,6 +593,24 @@ sent (the parked pass is silent); recorded as a limitation for M6.
 | D-38 | (not specified) which messages can select | Only a **typed, non-forwarded** message that BEGINS with the prefix and has something after it. A bare `/hermes`, a prefix in the middle, the other channel's prefix, a forwarded or shared message, a voice note and a button press are the team's and are stored untouched. On Slack the leading `<@bot>` mention is addressing and is removed first. | A prefix is a power: forwarded text is somebody else's words, and a recording has no words yet. |
 | D-39 | (not specified) a database that predates 1070 | A Hermes-prefixed message whose insert fails (no `engine` column) takes the doors' existing failure path (Telegram retries, Slack is told to retry); it is never stored as a team message. Ship order: migrations, then the worker, then the two doors. | Same rule as D-35: no automatic switch. |
 
+### 10.3 M8 deviations and decisions (reviewed skill transfer)
+
+| ID | Table / task text said | Built | Why |
+|---|---|---|---|
+| D-40 | migration "1071" | `1073`, `1074`, `1075` | 1071 is the MCP gate and 1072 is M6; the task text was stale. |
+| D-41 | refusals in several layers | **Every refusal lives in ONE SQL validator**, `app.engine_skill_offer_problem(jsonb)`, run when a proposal is raised AND again on the press (`decide_suggestion`) | A rule written twice drifts; the press re-reads the stored offer, recomputes the key and checks the run (office, project, job, completed), so a forged or edited row cannot be accepted. |
+| D-42 | `/engine/proposal` carries `claim_gen` | It does not; the fence is `engine_runs.bridge_id` (the bridge that holds the run) | The credential already proves the bridge; a counter the bridge must echo adds a way to be wrong and no protection. |
+| D-43 | export of "approved skills" | Export is **per claimed run**: global skills plus that run's project's skills, live only, empty when learning is off or the bridge is disabled; `GET /engine/skills` is read-only | Another project's skills never reach a run; a rejected, withdrawn or replaced skill is never in the export, so no cache can reintroduce it. |
+| D-44 | scope of a candidate | **Project scope only**, tool `db.read` only (level 0, enabled), at most five tools | A learned procedure must not widen who is told it; naming a tool grants nothing (`skill_tools` is not read by `staff_may_use`). |
+| D-45 | Hermes-authored fields | A **closed key set** `{name, when, procedure, tools, dropped}`; scope, project, job, run and source are filled by the office, never taken from Hermes | Hermes cannot name where its text lands or who it is for. |
+| D-46 | proposals per run | One per run, at most three a day per office (`engine.hermes.skill_proposals_per_day`, clamped), key = sha256(normalised procedure \| project); a declined or accepted key is permanently suppressed unless the suggestion went `stale` | No duplicates, no re-promotion after a rejection, no self-reinforcing loop. |
+| D-47 | the profile | `engine_runs.profile` (`default` or `hermes-learn`) is fixed when the run opens (guarded) and returned on claim | The learning profile is a property of a run the office recorded, not something the bridge chooses. |
+| D-48 | what is observed | Composed by SQL from `engine_run_calls`: **order and counts only**, never arguments, results or the question text | The observed procedure cannot carry content the person or a document wrote. |
+| D-49 | Governance | `app.hq_governance` returns `skill` (name, when, procedure, tools, dropped, source) for `engine.skill` rows only; the page renders it as **escaped text** behind a control, with its own confirmation wording | Review means reading; the procedure is untrusted text. |
+| D-50 | Hermes's built-in tools | `terminal`, `execute_code`, `skill_manage`, `memory`, web and file tools named in a procedure are dropped and listed under "Left out", never mapped to an office tool | The team cannot run code, and a procedure must not claim a capability it does not have. |
+
+Left out on purpose: no write to Hermes's executable skill directory (the export is a separate, read-only reference directory the bridge replaces atomically and empties on any doubt); no automatic change to prompts, policies, permissions or models; no ledger event (`external.skill_proposed` waits for M7).
+
 ---
 
 ## 11. Error and cancellation matrix

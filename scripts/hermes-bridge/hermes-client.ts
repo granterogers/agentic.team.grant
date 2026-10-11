@@ -42,6 +42,8 @@ export class HermesClient {
     private readonly base: string,
     private readonly key: string,
     private readonly fetcher: Fetch = (i, init) => fetch(i, init),
+    /** A Hermes profile's own path prefix (`/p/<profile>`), or empty for the default profile. */
+    private readonly prefix: string = '',
   ) {}
 
   private async call(
@@ -50,7 +52,7 @@ export class HermesClient {
     body?: unknown,
     headers: Record<string, string> = {},
   ): Promise<{ status: number; body: unknown }> {
-    const response = await this.fetcher(`${this.base}${path}`, {
+    const response = await this.fetcher(`${this.base}${this.prefix}${path}`, {
       method,
       headers: {
         authorization: `Bearer ${this.key}`,
@@ -169,7 +171,7 @@ export class HermesClient {
     options: { lastEventId?: number; signal: AbortSignal },
   ): AsyncGenerator<SseEvent> {
     const response = await this.fetcher(
-      `${this.base}/v1/runs/${encodeURIComponent(runId)}/events`,
+      `${this.base}${this.prefix}/v1/runs/${encodeURIComponent(runId)}/events`,
       {
         headers: {
           authorization: `Bearer ${this.key}`,

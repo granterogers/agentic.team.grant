@@ -217,6 +217,8 @@ export class FakeHermes {
 
 export interface Recorded {
   readonly path: string
+  /** The query string with its `?`, or empty. */
+  readonly query?: string
   readonly auth: string | null
   readonly body: Record<string, unknown>
 }
@@ -231,6 +233,12 @@ export class FakeGateway {
   heartbeat: (n: number, body: Record<string, unknown>) => { status: number; body: Record<string, unknown> } = () => ({ status: 200, body: { stop: false, because: null, lease_until: null } })
   /** What a finish answers (n counts finishes). */
   finish: (n: number) => { status: number; body: Record<string, unknown>; headers?: Record<string, string> } = () => ({ status: 200, body: { ok: true, resumed: true, state: 'completed' } })
+  /** What the skills read answers (M8b). */
+  skills: (query: string) => { status: number; body: Record<string, unknown> } = () => ({ status: 200, body: { skills: [], generated_at: null } })
+  /** What a skill proposal answers (M8b). */
+  proposal: (body: Record<string, unknown>) => { status: number; body: Record<string, unknown> } = () => ({ status: 200, body: { ok: true, suggestion_id: '55555555-5555-4555-8555-555555555555' } })
+  /** The method each call used, in order, beside `calls`. */
+  readonly methods: string[] = []
   private claimN = 0
   private beatN = 0
   private finishN = 0
@@ -253,7 +261,9 @@ export class FakeGateway {
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const path = (req.url ?? '').replace('/functions/v1/engine', '')
+    const full = (req.url ?? '').replace('/functions/v1/engine', '')
+    const path = full.split('?')[0] ?? full
+    this.methods.push(req.method ?? '')
     const raw = await readBody(req)
     let body: Record<string, unknown> = {}
     try {
@@ -261,7 +271,15 @@ export class FakeGateway {
     } catch {
       /* recorded empty */
     }
-    this.calls.push({ path, auth: (req.headers.authorization as string | undefined) ?? null, body })
+    this.calls.push({ path, query: full.slice(path.length), auth: (req.headers.authorization as string | undefined) ?? null, body })
+    if (path === '/skills') {
+      const a = this.skills(full.slice(path.length))
+      return json(res, a.status, a.body)
+    }
+    if (path === '/proposal') {
+      const a = this.proposal(body)
+      return json(res, a.status, a.body)
+    }
     if (path === '/claim') {
       const a = this.claims[Math.min(this.claimN++, this.claims.length - 1)] ?? { body: {} }
       return json(res, a.status ?? 200, a.body)

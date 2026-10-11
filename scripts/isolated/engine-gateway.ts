@@ -124,8 +124,8 @@ try {
   const health = await gw('/health', { method: 'GET' })
   check('G1 liveness answers 200 {ok: true}, with no authentication, and names nothing else', health.status === 200 && JSON.stringify(health.body) === '{"ok":true}', health.raw)
   check('G2 every response is no-store and carries no CORS header (nothing in a browser may call this)', health.headers.get('cache-control') === 'no-store' && health.headers.get('access-control-allow-origin') === null)
-  const notFound = await Promise.all(['/', '/engine', '/claims', '/claim/extra', '/proposal', '/skills'].map((p) => gw(p, { token: hA.token })))
-  check('G3 an unknown path is 404 for everyone, with a valid credential or without', notFound.every((r) => r.status === 404) && (await gw('/proposal', {})).status === 404, notFound.map((r) => r.status).join(','))
+  const notFound = await Promise.all(['/', '/engine', '/claims', '/claim/extra', '/proposals', '/skill'].map((p) => gw(p, { token: hA.token })))
+  check('G3 an unknown path is 404 for everyone, with a valid credential or without', notFound.every((r) => r.status === 404) && (await gw('/proposals', {})).status === 404, notFound.map((r) => r.status).join(','))
   check('G4 the health route answers only GET', (await gw('/health', { method: 'POST' })).status === 405)
 
   // ---- authentication -------------------------------------------------------------------------------------------------

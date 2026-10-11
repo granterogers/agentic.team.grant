@@ -4,6 +4,10 @@ Fixed decisions this implements: **reviewed learning only** (Hermes may produce 
 **the existing team should be able to learn from observable Hermes behaviour and validated skills**. Milestone M8 builds it; nothing here
 runs before M0–M6 are done.
 
+> **Status (11 October 2026): M8a and M8b are built and proved locally, undeployed, learning disabled for every office.** Decisions that
+> differ from the plan below are D-40 to D-50 in `INTERFACE-CONTRACTS.md` §10.3; the state, the proofs and what is UNPROVEN are in
+> `IMPLEMENTATION-PROGRESS.md`. Where this document and §10.3 disagree, §10.3 is what was built.
+
 ## 1. What already exists, and is reused unchanged
 
 | Mechanism | Where | Property this design relies on |

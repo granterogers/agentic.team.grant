@@ -80,6 +80,19 @@ Grant's). Until then the selector is disabled and every message goes to the team
 available and why not (M6). Outbound traffic from this host should be exactly: the office gateway and MCP host, and OpenRouter. If it is anything
 else, stop both services and tell the office's operator.
 
+## 9a. Learning (optional, off by default; M8)
+
+Skip this unless the operator has put the office in `engine.hermes.learning_offices` (an empty list by default; never in production without Grant).
+It is experimental: the `hermes-learn` profile has not been validated on a real host.
+
+* Set two DIFFERENT directories in `/etc/hermes-bridge/bridge.env`, neither inside the other, both absolute: `HERMES_LEARN_DIR` (where the learning
+  profile may write; emptied and deleted after every run) and `HERMES_SKILLS_EXPORT_DIR` (the office's approved skills, written by the bridge
+  as read-only reference; replaced atomically before each run and emptied if anything is in doubt). Without them the bridge learns nothing.
+* Point Hermes's `skills.external_dirs` at the export directory for the learning profile only. Never at a directory Hermes can write to as its own skill folder.
+* What happens: after a finished run the bridge reads at most three `SKILL.md` files (20 KB each, no symlinks), converts them, and PROPOSES them to the office. Nothing is used until a person
+  reads the procedure under Settings, Requests and presses Keep it. Nothing is ever written into Hermes's own skill folder by the office.
+* To stop learning: remove the office from `engine.hermes.learning_offices` (export empties at the next run) or retire the bridge.
+
 ## 10. What this runbook does not promise
 
 * That the free model answers well, or at all within its rate limit. A provider 429 fails the run and the person is told plainly. The free

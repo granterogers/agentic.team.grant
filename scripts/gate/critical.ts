@@ -370,6 +370,18 @@ export const CRITICAL: readonly Proof[] = [
     "choosing Hermes from Telegram (/hermes) and Slack (hermes:) through the REAL webhook and events doors: the person's typed prefix records engine hermes and is removed from the stored instruction, everything else (no prefix, a prefix in the middle, the other channel's prefix, a bare prefix) is the team and untouched, forwarded and shared text never selects, the job's own command says hermes, and a stranger is refused before any engine is read (3 sabotages run by hand)",
   ),
 
+  p(
+    'engine-skills',
+    67,
+    'a technique Hermes used becomes a skill only when a person keeps it: the observed procedure is composed by SQL from the recorded calls (order and counts, never arguments or results), shown as a proposal through the existing suggestion system, refused when it carries a secret, an address, an authority claim or a shape the office did not compose, never re-proposed after a decline, written once through the existing skill writer with its tool linked and nothing granted, and a forged, replayed, cross-office, cross-project or concurrent decision cannot make a second or a different skill (15 sabotages)',
+  ),
+
+  p(
+    'engine-learning',
+    88,
+    'Hermes may only propose: behind engine.hermes.learning_offices (off by default), a closed draft shape through the REAL engine gateway, one proposal per run fenced by the bridge that holds it, untrusted text refused before it is stored, nothing written to the executable skill directory, an export that is read-only, per claimed run, live skills only and empty when learning is off or the bridge is disabled, and a rejected, withdrawn or replaced skill never returns by a cache (14 sabotages)',
+  ),
+
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p(
     'replay-parity',

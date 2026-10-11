@@ -182,11 +182,12 @@ export const advanced = ({ title, hint, body, open = false }) =>
  * A thing to decide or to read about: a title, a state, an argument, who and why, and what you can do.
  * `meta` is already-escaped inline HTML (a few spans); everything else is plain text.
  */
-export const caseCard = ({ title, chips = '', body = '', note = '', meta = '', actions = '', quote = false }) =>
+export const caseCard = ({ title, chips = '', body = '', note = '', detail = '', meta = '', actions = '', quote = false }) =>
   `<article class="st-case${quote ? ' quote' : ''}" data-saidwrap>
     <div class="st-casehead"><h4 class="st-casetitle">${esc(title)}</h4>${chips}</div>
     ${body ? `<p class="st-casebody">${t(body)}</p>` : ''}
     ${note ? `<p class="st-casenote">${t(note)}</p>` : ''}
+    ${detail === '' ? '' : t(detail)}
     <div class="st-casefoot">
       <div class="st-casemeta">${meta}</div>
       <span class="st-said" data-said role="status" aria-live="polite"></span>

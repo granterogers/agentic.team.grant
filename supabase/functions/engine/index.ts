@@ -29,7 +29,11 @@ import {
   parseClaim,
   parseFinish,
   parseHeartbeat,
+  parseProposal,
+  parseSkillsQuery,
+  proposalAnswer,
   routeOf,
+  skillsAnswer,
   Throttle,
   unhealthyAnswer,
   upstreamAnswer,
@@ -140,6 +144,20 @@ const handle = async (request: Request): Promise<Response> => {
   const office = bridge.office_id
   const bridgeId = bridge.bridge_id
 
+  // The read of the office's live skills is a GET (the one read the bridge makes); everything else is a POST.
+  if (route === 'skills') {
+    if (request.method !== 'GET')
+      return reply({ status: 405, body: { error: 'method_not_allowed' } })
+    const q = parseSkillsQuery(new URL(request.url).search)
+    if (!q.ok) return reply(badRequest(q.field))
+    const read = await rpc('engine_skills_for_export', {
+      p_office: office,
+      p_bridge: bridgeId,
+      p_run: q.value.run_id,
+    })
+    if (read.status !== 200) return reply(upstreamAnswer(read.status))
+    return reply(skillsAnswer(read.body))
+  }
   if (request.method !== 'POST')
     return reply({ status: 405, body: { error: 'method_not_allowed' } })
   const text = await readCapped(request)
@@ -187,6 +205,19 @@ const handle = async (request: Request): Promise<Response> => {
     })
     if (beat.status !== 200) return reply(upstreamAnswer(beat.status))
     return reply(heartbeatAnswer(beat.body))
+  }
+
+  if (route === 'proposal') {
+    const proposed = parseProposal(body)
+    if (!proposed.ok) return reply(badRequest(proposed.field))
+    const made = await rpc('engine_propose_skill', {
+      p_office: office,
+      p_bridge: bridgeId,
+      p_run: proposed.value.run_id,
+      p_draft: proposed.value.skill,
+    })
+    if (made.status !== 200) return reply(upstreamAnswer(made.status))
+    return reply(proposalAnswer(made.body))
   }
 
   // finish
