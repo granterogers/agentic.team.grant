@@ -125,9 +125,7 @@ set search_path = 'pg_catalog', 'public'
 -- and the compile step then took about 650 ms of a 70 ms query (measured on the replica, 24 000 transitions). A page of fifty rows
 -- gains nothing from compiled expressions. Harmless where the host already has JIT off.
 set jit = off
--- A bound on the work one read can do however its filters are chosen: a filter that matches nothing widens the candidate pool in every
--- source, and measured on 20 000 transitions that was 0.7 s without the supporting indexes. An abusive or unlucky read is stopped, not queued.
-set statement_timeout = '8s'
+-- (No function-level statement_timeout: it bounds nothing here, see "THE TIME BUDGET" below. The bound is cooperative, between passes.)
 as $$
 declare
   v_limit   integer := least(greatest(coalesce(p_limit, 50), 1), 200);
@@ -150,6 +148,12 @@ declare
   v_map     jsonb;
   v_pr      text;
   v_ag      text[];
+  v_sf      text[];
+  v_budget  integer;
+  v_t0      timestamptz;
+  v_spent   numeric;
+  v_pass    numeric;
+  v_t1      timestamptz;
   v_result  jsonb;
 begin
   perform app.require_office(p_office);
@@ -758,6 +762,19 @@ begin
     v_sel[i] := v_sel[i] || ' and ($3::text is null or ' || v_ag[i] || ')';
   end loop;
 
+  -- THE INTERFACE FILTER IS PUSHED TO EACH SOURCE TOO. A source's "interface" is a column of its own row (a request's channel, a delivery's
+  -- channel, a native event's source interface, the job's origin for everything else), so the test is exact, not merely wider. Without it a
+  -- value nothing carries (or a rare one) made every source read its newest 16 384 rows to find nothing, then answer partial with no events:
+  -- 2.5 s on an office of 7 000 jobs, for a filter that should cost what an empty page costs (measured on the replica, phase 8).
+  v_sf := array[
+    'c0.origin_channel = $9', null, null, null, null, null, null, null,
+    'd0.channel = $9', 'd0.channel = $9', 'd0.channel = $9', 'd0.channel = $9',
+    null, 'e0.origin_channel = $9', 'a0.source_interface = $9', null];
+  for i in 1 .. array_length(v_sf, 1) loop
+    v_sel[i] := v_sel[i] || ' and ($9::text is null or ' || coalesce(v_sf[i],
+      format('exists (select 1 from public.jobs jf where jf.job_id = %1$s.%2$s and jf.origin_channel = $9)', v_sa[i], v_sj[i])) || ')';
+  end loop;
+
   v_sql := 'with jset as materialized (with recursive t(job_id) as (select j.job_id from public.jobs j where j.job_id = $4::uuid and j.office_id = $1 '
     || 'union select c.job_id from public.jobs c join t on c.parent_job_id = t.job_id where c.office_id = $1) select job_id from t), '
     || 'cset as materialized (select j.job_id from public.jobs j where $5::uuid is not null and j.correlation_id = $5::uuid and j.office_id = $1), ';
@@ -802,13 +819,33 @@ begin
     ||     'from (select at, id from page order by at desc, id desc limit $15) l order by l.at asc, l.id asc limit 1) end from page), '
     ||   '''generated_at'', app.now_utc())';
 
+  -- THE TIME BUDGET. A function-level `set statement_timeout` does nothing here (measured, phase 8): PostgreSQL arms the statement timer when
+  -- the top-level statement STARTS, with the value then in force, and a SET made inside a running function (the function's own SET clause
+  -- or set_config) changes the value for the next statement and re-arms nothing. So the bound this function can honestly give is
+  -- cooperative: it measures each pass and refuses to start a wider one that cannot finish in what is left. A pass is eight times the work
+  -- of the one before it, so a pass that took t milliseconds predicts the next at 8 t. It raises PT504 (which the REST layer answers as
+  -- HTTP 504) rather than returning a page it could not validate, so a read that ran out of time is an ERROR and never an empty or
+  -- partial-looking answer. A single pass is not interruptible from inside: the bound on THAT is the caller's own statement timeout
+  -- (docs/activity-ledger/ARCHITECTURE.md, "Read time bound"). The budget is the setting activity.read_budget_ms (50 to 60 000, default 8 000).
+  v_budget := coalesce((select case when jsonb_typeof(c.value) = 'number' then least(greatest((c.value #>> '{}')::numeric, 50), 60000)::int end
+                          from public.system_config c where c.key = 'activity.read_budget_ms'), 8000);
+  v_t0 := clock_timestamp();
+  v_t1 := v_t0;
   v_pool := (v_limit + 1) * 2;
   loop
     execute v_sql into v_result
       using p_office, p_project, p_agent, p_job, p_correlation, p_category, v_sevrank, p_status, p_source, v_maxvis,
             p_since, p_until, p_before_at, p_before_id, v_limit, p_type, p_visibility, v_pool, v_pool, v_ok;
     exit when (v_result ->> '_valid')::boolean or v_pool >= 16384;
+    v_pass := extract(epoch from clock_timestamp() - v_t1) * 1000;
+    v_spent := extract(epoch from clock_timestamp() - v_t0) * 1000;
+    -- the next pass reads (next pool / this pool) times as many rows as the one that just ran, and its cost follows the rows
+    if v_spent + v_pass * (least(v_pool * 8, 16384)::numeric / v_pool) > v_budget then
+      raise exception 'the activity read ran out of time (% ms used of %, the next pass would not fit)', round(v_spent), v_budget
+        using errcode = 'PT504', hint = 'retry, or narrow the filters';
+    end if;
     v_pool := least(v_pool * 8, 16384);
+    v_t1 := clock_timestamp();
   end loop;
   return (v_result - '_valid') || jsonb_build_object('partial', not (v_result ->> '_valid')::boolean);
 end

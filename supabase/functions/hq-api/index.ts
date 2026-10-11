@@ -61,6 +61,11 @@ import {
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+/** How long an Activity read may wait on the database before the gateway answers for it. The database's own budget is 8 s and arrives first. */
+const ACTIVITY_READ_DEADLINE_MS = ((): number => {
+  const asked = Number(Deno.env.get('HQ_ACTIVITY_DEADLINE_MS') ?? '')
+  return Number.isFinite(asked) && asked >= 100 && asked <= 60_000 ? asked : 12_000
+})()
 
 /**
  * Where to kick the worker, and why the dashboard needs to.
@@ -3862,15 +3867,52 @@ Deno.serve(async (request: Request): Promise<Response> => {
     args = { ...args, p_office: office }
   }
 
-  const response = await fetch(`${DB_URL}/rest/v1/rpc/${section.fn}`, {
-    method: 'POST',
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(args),
-  })
+  /*
+    THE ACTIVITY READS HAVE A TIME BOUND OF THEIR OWN (phase 8). The database refuses to start a pass it cannot finish inside its
+    budget (activity.read_budget_ms, default 8 s) and answers PT504 (HTTP 504); this deadline is the backstop for a pass that is
+    itself stuck, and is longer than that budget so the database's own, more specific refusal arrives first when there is one.
+    Either way the page gets ONE controlled answer, never an empty list: a read that ran out of time is an error with a sentence a
+    person can act on, and the page shows it with a Try again button.
+  */
+  const isActivity = name.startsWith('activity_')
+  const timedOut = () =>
+    json(
+      {
+        error: 'The activity took too long to load. Try again, or narrow the filters.',
+        code: 'activity_timeout',
+        retryable: true,
+        section: name,
+      },
+      504,
+    )
+  let response: Response
+  try {
+    response = await fetch(`${DB_URL}/rest/v1/rpc/${section.fn}`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(args),
+      ...(isActivity ? { signal: AbortSignal.timeout(ACTIVITY_READ_DEADLINE_MS) } : {}),
+    })
+  } catch (error) {
+    if (
+      isActivity &&
+      error instanceof Error &&
+      (error.name === 'TimeoutError' || error.name === 'AbortError')
+    ) {
+      console.error(`hq-api ${name}: deadline ${String(ACTIVITY_READ_DEADLINE_MS)} ms`)
+      return timedOut()
+    }
+    throw error
+  }
+
+  if (isActivity && response.status === 504) {
+    console.error(`hq-api ${name}: upstream time budget`)
+    return timedOut()
+  }
 
   if (!response.ok) {
     // The upstream detail stays here. A database error message in a browser is

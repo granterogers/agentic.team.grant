@@ -98,7 +98,7 @@ const VIEWPORTS = [
   { name: '320', w: 320, h: 640, touch: true },
 ].filter((v) => ONLY === undefined || ONLY.split(',').includes(v.name))
 
-export type Mode = { as?: 'A' | 'B'; ledger?: 'normal' | 'slow' | 'fail' | 'hang'; delayMs?: number; delay?: (query: string) => number; reducedMotion?: boolean; scheme?: 'light' | 'dark' }
+export type Mode = { as?: 'A' | 'B'; ledger?: 'normal' | 'slow' | 'fail' | 'hang'; delayMs?: number; delay?: (query: string) => number; timeout?: (query: string) => boolean; reducedMotion?: boolean; scheme?: 'light' | 'dark' }
 const open = async (vp: (typeof VIEWPORTS)[number], m: Mode = {}) => {
   const ctx = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, hasTouch: vp.touch, isMobile: vp.touch, reducedMotion: m.reducedMotion ? 'reduce' : 'no-preference', colorScheme: m.scheme ?? 'light' })
   const seen = { pageErrors: [] as string[], consoleErrors: [] as string[], calls: [] as { section: string; query: string; ms: number; status: number; body: any }[], refused: [] as string[], avatars: [] as string[] }
@@ -113,6 +113,8 @@ const open = async (vp: (typeof VIEWPORTS)[number], m: Mode = {}) => {
     const isLedger = /^activity_/.test(section)
     if (isLedger && m.ledger === 'hang') return new Promise(() => undefined)
     if (isLedger && m.ledger === 'fail') return route.fulfill({ status: 500, headers: CORS, body: '{"error":"ledger unavailable"}' })
+    // what the gateway answers when the database runs out of its time budget (a 504 with a sentence and a retryable flag, no list)
+    if (isLedger && m.timeout?.(url.search) === true) return route.fulfill({ status: 504, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ error: 'The activity took too long to load. Try again, or narrow the filters.', code: 'activity_timeout', retryable: true, section }) })
     if (isLedger && m.ledger === 'slow') await new Promise((r) => setTimeout(r, m.delayMs ?? 2500))
     if (isLedger && m.delay !== undefined) {
       const wait = m.delay(url.search)

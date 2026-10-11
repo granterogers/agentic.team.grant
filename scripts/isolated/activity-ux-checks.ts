@@ -359,6 +359,24 @@ export async function runAll(H: any): Promise<void> {
       check(`${tag}: a late answer to an older filter never overwrites the newer one`, (await page.getAttribute('[data-act-view="problems"]', 'aria-pressed')) === 'true' && rows.length === want.rows.length && rows.every((r, i) => r.id === (want.rows[i] as any).id), `${rows.length} rows`)
       await close()
     }
+    {
+      // a read that ran out of its time budget is an error with a Try again button, never an empty or finished-looking list (phase 8, F2)
+      let failed = 0
+      const { page, seen, close } = await open(vp, { timeout: (qs: string) => /status=completed/.test(qs) && failed++ < 1 })
+      await ready(page)
+      await press(page, '[data-act-view="completed"]')
+      await page.waitForSelector('[data-act-retry], .bcact-note--warn[role="alert"]', { timeout: 15000 })
+      const shown = await page.locator('.bcact').innerText()
+      check(`${tag}: a timed-out read: says it took too long, offers Try again, and does not say "That is everything" or "Nothing"`, /took too long/i.test(shown) && !/That is everything/.test(shown) && !/Nothing (yet|here|to show)/i.test(shown) && (await page.$('[data-act-retry]')) !== null, shown.replace(/\s+/g, ' ').slice(0, 140))
+      const ot = await overflowOf(page)
+      check(`${tag}: a timed-out read: no overflow and no page error`, ot.scroll <= ot.vw && seen.pageErrors.length === 0, `${ot.scroll} of ${ot.vw}; ${seen.pageErrors.length} errors`)
+      await shot(page, `after-timeout-${vp.name}`)
+      await press(page, '[data-act-retry]')
+      await page.waitForFunction(() => document.querySelector('.bcact-item') !== null, { timeout: 15000 })
+      const rowsAfter = await rowsOf(page)
+      check(`${tag}: a timed-out read: Try again (the database answering) shows the real rows and the error is gone`, rowsAfter.length > 0 && !/took too long/i.test(await page.locator('.bcact').innerText()), `${rowsAfter.length} rows after ${failed} refused reads`)
+      await close()
+    }
     // ---------------------------------------------------------------------------------------------- keyboard, focus, motion
     {
       const { page, close } = await open(vp)

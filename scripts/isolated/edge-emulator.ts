@@ -256,11 +256,20 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
       const m = String((e as Error).message)
       if (process.env.DOOR_DEBUG) console.error(`emulator: ${path} -> ${m.slice(0, 300)}`)
       const code = /^(\d{5}|[0-9A-Z]{5}):/.exec(m)?.[1] ?? 'XX000'
-      return reply(code === '23503' || code === '23505' ? 409 : 400, {
-        code,
-        message: m.replace(/^[0-9A-Z]{5}:\s*/, ''),
-        details: null,
-      })
+      // PostgREST answers a SQLSTATE of the form PTnnn with HTTP nnn (documented behaviour); the stand-in does the same.
+      const ptStatus = /^PT(\d{3})$/.exec(code)?.[1]
+      return reply(
+        ptStatus !== undefined
+          ? Number(ptStatus)
+          : code === '23503' || code === '23505'
+            ? 409
+            : 400,
+        {
+          code,
+          message: m.replace(/^[0-9A-Z]{5}:\s*/, ''),
+          details: null,
+        },
+      )
     }
   }) as typeof fetch
 

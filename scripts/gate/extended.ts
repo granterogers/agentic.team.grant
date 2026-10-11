@@ -68,6 +68,11 @@ export const EXTENDED: readonly Proof[] = [
     47,
     'the external-worker door under concurrent writers holds its 300 per worker and 1000 per office, cannot be varied past by name or key, cannot claim a review, confirmation or approval, and the ledger tables are closed to browser roles and to edits',
   ),
+  p(
+    'activity-scaling',
+    14,
+    "a small office's Activity read does not grow with other offices' volume (one to eight copies of a busy history in unrelated offices, same events in the same order, none foreign), a read that cannot finish in its time budget is refused with PT504 between passes and never answered short, and a caller-armed statement timeout cancels a running read cleanly",
+  ),
 
   // ---- answers, acknowledgements, questions --------------------------------------------------------------------------
   p(
