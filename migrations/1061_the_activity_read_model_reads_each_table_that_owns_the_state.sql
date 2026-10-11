@@ -968,7 +968,12 @@ begin
     'enabled', app.activity_ledger_covers(p_office),
     -- where the switch stands: the master switch, and whether an allowlist narrows it (one row, activity.ledger_offices)
     'master_on', app.activity_ledger_on(),
-    'scope', case when exists (select 1 from public.system_config a where a.key = 'activity.ledger_offices') then 'allowlist' else 'all_offices' end,
+    'scope', coalesce((select case jsonb_typeof(a.value)
+                                 when 'array' then case when jsonb_array_length(a.value) = 0 then 'none' else 'allowlist' end
+                                 when 'object' then case when a.value = '{"version": 1, "mode": "all"}'::jsonb then 'all_offices' else 'invalid' end
+                                 when 'null' then 'none'
+                                 else 'invalid' end
+                         from public.system_config a where a.key = 'activity.ledger_offices'), 'none'),
     'native_events_24h', (select count(*) from public.activity_events a where a.office_id = p_office and a.occurred_at > app.now_utc() - interval '24 hours'),
     'native_events_total', (select count(*) from public.activity_events a where a.office_id = p_office),
     'last_native_event_at', (select max(a.occurred_at) from public.activity_events a where a.office_id = p_office),

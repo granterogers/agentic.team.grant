@@ -68,9 +68,13 @@ comment on function app.activity_ledger_on() is
 
 -- Per-office activation (a canary). The master switch above stays the kill switch: this can only NARROW it, never widen it, because it
 -- is the master AND an office test. The office test reads one optional setting, system_config activity.ledger_offices:
---   no such row                    the ledger is on for every office the master switch covers (the deployment-wide behaviour)
---   a JSON array of office ids     on only for the offices listed
---   anything else (null, a string, an object, a number)   on for NO office (a malformed allowlist fails closed)
+-- FAIL CLOSED. Nothing but an explicit, valid statement turns an office on; a missing, null, empty, malformed or unrecognised setting turns on NO office:
+--   no such row, or null, or []                 NO office
+--   a JSON array of office ids (lower-case uuid strings)   on only for the offices listed (other entries are ignored, duplicates harmless)
+--   exactly {"version": 1, "mode": "all"}       EVERY office (the explicit global mode; any other object, another version or an extra key is none)
+--   anything else (a string such as "all", a number, a boolean)   NO office
+-- So deleting the row, or a half-applied change, can only narrow: there is no path from a restricted canary to every office that does not
+-- write the global value on purpose.
 -- Both settings are read on every call (a primary-key lookup each), so there is nothing to invalidate: a change is in force for the next call.
 -- Named apart from the master switch ON PURPOSE: the repository forbids an office-less overload beside an office-first one (check in
 -- p3-app-attack: the office-less form is a door that answers without an office), and the two answer different questions.
@@ -82,15 +86,15 @@ security definer
 set search_path = ''
 as $$
   select app.activity_ledger_on()
-     and case
-           when not exists (select 1 from public.system_config a where a.key = 'activity.ledger_offices') then true
-           else coalesce((select jsonb_typeof(a.value) = 'array' and a.value @> to_jsonb(p_office::text)
-                            from public.system_config a where a.key = 'activity.ledger_offices'), false)
-         end
+     and coalesce((select case jsonb_typeof(a.value)
+                             when 'array' then a.value @> to_jsonb(p_office::text)
+                             when 'object' then a.value = '{"version": 1, "mode": "all"}'::jsonb
+                             else false end
+                     from public.system_config a where a.key = 'activity.ledger_offices'), false)
 $$;
 
 comment on function app.activity_ledger_covers(uuid) is
-  'Master switch AND the office test: true when activity.ledger_enabled is true and the office is covered (no activity.ledger_offices row = every office; an array = the offices in it; anything else = none). Never wider than the master switch.';
+  'Master switch AND the office test: true when activity.ledger_enabled is true and the office is covered (an array of office ids = the offices in it; exactly {"version":1,"mode":"all"} = every office; a missing row, null, [] or anything else = none: fail closed). Never wider than the master switch.';
 
 -- ------------------------------------------------------------------------------------------------ the taxonomy
 

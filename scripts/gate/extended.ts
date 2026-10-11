@@ -60,8 +60,8 @@ export const EXTENDED: readonly Proof[] = [
   ),
   p(
     'activity-office-scope',
-    26,
-    'the ledger can be activated for chosen offices only: the master switch stays the kill switch and an allowlist can only narrow it, a malformed list turns it on for nobody, every writer and reader obeys it at once, and switching off deletes nothing',
+    16,
+    'the ledger fails closed: only an explicit master plus a valid office list or the explicit all-offices setting turns an office on; absent, null, empty, malformed, unknown-version and mixed settings turn it on for nobody; every writer and reader obeys one decision; the operator statements cannot broaden under a race or an interruption; and switching off deletes nothing',
   ),
   p(
     'activity-external-attack',
