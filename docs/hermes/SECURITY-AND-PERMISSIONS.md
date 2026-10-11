@@ -84,6 +84,23 @@ Every new table carries `office_id` with same-office composite foreign keys; eve
 the office; the office comes from the credential; a bridge serves exactly one office. The Sample office is the first place Hermes is
 switched on (D6), as every person-facing feature is tested there first (`docs/multi-user/SAMPLE-PERSON.md`).
 
+## 6a. Final cross-system review (11 October 2026)
+
+Reviewed: the claim path, the learning profile and its host, the bridge's containment, provisioning, and the three-branch merge. Findings and what holds each:
+
+| # | Finding | Status | Regression and sabotage |
+|---|---|---|---|
+| S1 | A worker built before Hermes could claim a message sent to Hermes and answer it as the team (silent engine switch) | **Fixed in the database** (1078, D-57) | `engine-gate` 20/20 incl. a real pre-Hermes worker build; removing the predicate turns it red |
+| S2 | Unix permissions cannot keep Hermes out of the approved-skills directory when both units run as one user: `skill_manage` edited and deleted a reference skill | **Fixed by the kernel** (read-only mount of the parent, D-59); the control host shows the attack working without it | `engine-learning-host` C0 to C6, D1, D2 |
+| S3 | Hermes's home is writable and holds both profiles' `config.yaml`: a run able to write a file could change the NEXT run's toolsets | **Fixed**: both files read-only to the unit, Hermes serves normally with them so | `engine-learning-host` G1 to G3; `host-kit.test.ts` asserts both `ReadOnlyPaths` |
+| S4 | The learning bridge killed every learning run that used the skill tools ("containment"), which fakes never showed | **Fixed**: the three skill tools are allowed on a learning run only | `bridge-learning.test.ts`, two sabotages red and restored |
+| S5 | A learning profile with a toolset other than `skills` (a hand edit, a bad template) would run | **Fixed**: preflight reads the learning profile's own toolsets before every run and fails closed | `bridge-learning.test.ts` preflight tests |
+| S6 | A profile directory or `.env` created earlier with a wider mode kept it on re-provisioning | **Fixed**: the directory is tightened, the `.env` is replaced and 0600 | `provision-learn-profile.test.ts`; removing the directory chmod turns it red. (Removing the file `rm` does not: the following `chmod` also tightens it, so the `rm` only narrows the window and is not claimed as tested.) |
+| S7 | Hostile skill text (an address, terminal use, a hidden scope) | Unchanged and re-proved: a draft can only ever be a PROPOSAL of the closed shape; refusal lives in the SQL validator | `engine-learning-host` F5, `engine-learning` 88 |
+
+Not a finding but recorded: the three production-read structural checks that have a replica mode (`check:ownership --replica`, `check:office-edges --replica`) pass with every control firing;
+the other five (`check:callers`, `check:consumed`, `check:machine-key`, `check:anon-exposure`, `check:gateway-wrappers`) refuse without `ALLOW_PRODUCTION_CHECKS=1` and were not run.
+
 ## 7. What is NOT protected, stated plainly
 
 - A compromised Hermes host can return a wrong answer that passes the gates. The answer is labelled Hermes and can do nothing; the person

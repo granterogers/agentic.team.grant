@@ -142,6 +142,9 @@ suggestion round, migration **1071** (`decide_suggestion` passes `p_tools`; `eng
 `LEARNING-AND-SKILL-TRANSFER.md` §4 with a negative control; accept → `public.skills` + `skill_tools` rows; dismiss → suppressed; daily cap.
 **M8b (source A, Hermes-authored):** the `hermes-learn` profile, `POST /engine/proposal`, harvesting and wiping (V10, V11). Only with
 `engine.hermes.learning_offices`. **Risk.** Medium (untrusted text into a review surface).
+**Status 11 Oct (host completion):** built and proved. The profile is rendered by `src/engines/hermes/learn-profile.ts`, provisioned by `npm run hermes:learn-profile`, preflighted by the bridge,
+and isolated by kernel read-only mounts (export parent and both `config.yaml`); proved on the pinned Hermes in `scripts/isolated/engine-learning-host.ts` (26 checks, scripted model, control host).
+Stale-worker prevention is migration **1078** (`engine-gate`). Remaining: build the host on a machine Grant owns (RUNBOOK 9a) and run one learning pass with a verified zero-spend model.
 
 ## M9 · Telegram and Slack selection
 
