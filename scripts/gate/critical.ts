@@ -347,6 +347,12 @@ export const CRITICAL: readonly Proof[] = [
   ),
 
   p(
+    'engine-turn',
+    25,
+    'the REAL office.instruction handler, worker, gateway and MCP function driving a Hermes-chosen turn end to end: one run is opened and the job parked, the bridge reads the office and finishes, the answer is an inferred, relayed, delivered reply grounded only on what was served, and an unavailable, expired, stopped or failed Hermes is one honest sentence with no team model call, no routing decision and no child job; the engine drain refuses while Hermes is on and stops every live run once it is off (7 sabotages, run by hand)',
+  ),
+
+  p(
     'engine-mcp',
     22,
     "the REAL office MCP function, called as the Hermes engine client: the gate runs before every engine call and a refusal is recorded, a tool outside the read list is refused, the run's project is forced into every project argument, the tool list is the narrowed one, every served read is recorded as grounding, and a gate that cannot answer refuses (5 sabotages)",

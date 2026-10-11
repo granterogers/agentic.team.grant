@@ -198,6 +198,12 @@ import { oneReading, type ReadingKind, understand } from '../agents/understand.t
 import { asksWhatTheyFound, asksWhoIsOnIt } from '../agents/whoison.ts'
 import { DeliveryService } from '../channels/delivery.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import {
+  commandEngine,
+  engineRunFor,
+  openHermesTurn,
+  resumeHermesTurn,
+} from '../engines/hermes/turn.ts'
 import { callerArgs } from '../jobs/fence.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
@@ -2430,6 +2436,14 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       )
       const payload = ((rows[0] as { pinned_config?: Payload } | undefined)?.pinned_config ??
         {}) as Payload
+      // A job that already holds a Hermes run is a RESUME of it, before anything else reads the message (Hermes engine, M4).
+      const hermesDeps = {
+        db: deps.db,
+        turnsBefore: (commandId: string, jobId: string) =>
+          conversationBefore(deps.db, commandId, jobId),
+      }
+      const hermesRun = await engineRunFor(deps.db, job)
+      if (hermesRun !== null) return resumeHermesTurn(hermesDeps, job, hermesRun)
       let instruction = String(payload.instruction ?? '').trim()
       /*
         The transcript, quoted, when this arrived as a voice note.
@@ -2458,6 +2472,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // and wrong apart. See `src/agents/pairing.ts`.
       const paired = await pairWithNearby(deps.db, job, payload, instruction)
       if (paired !== null) instruction = paired
+
+      // The person chose Hermes for THIS message: open a run and park. Nothing below runs, so no team model is called (Hermes engine, M4).
+      if ((await commandEngine(deps.db, job, String(payload.command_id ?? ''))) === 'hermes')
+        return openHermesTurn(hermesDeps, job, {
+          instruction,
+          commandId: String(payload.command_id ?? ''),
+        })
 
       /*
         WHAT HE SAID, FIXED HERE AND NEVER REBOUND (run 1, `src/agents/turn.ts`).

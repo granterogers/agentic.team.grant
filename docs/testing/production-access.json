@@ -30,6 +30,7 @@
     "deploy:worker",
     "e2e",
     "engine:bridge-credential",
+    "engine:drain",
     "forensics:temp-logging",
     "gate",
     "gate:safe",

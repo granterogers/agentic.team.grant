@@ -203,6 +203,7 @@
     "deploy:mcp": "tsx scripts/deploy/mcp.ts",
     "deploy:engine": "tsx scripts/deploy/engine.ts",
     "engine:bridge-credential": "tsx scripts/ops/engine-bridge-credential.ts",
+    "engine:drain": "tsx scripts/ops/engine-drain.ts",
     "capture:functions": "tsx scripts/forensics/capture-functions.ts",
     "restore:function": "tsx scripts/deploy/restore-function.ts",
     "mcp:revoke": "tsx scripts/mcp/revoke.ts",

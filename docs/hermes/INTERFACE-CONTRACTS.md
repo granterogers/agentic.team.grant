@@ -483,6 +483,33 @@ export function hermesOutput(run: EngineRunRow, ctx: {
 
 Inference usage is written by `engine_run_finish`, not here, so `howComposed` is already `inference` on the resume pass.
 
+### 8.6 M4 as built: where the code differs from 8.1 to 8.5
+
+Canonical: `src/engines/hermes/{turn,brief,result,drain}.ts` and the two calls in `src/handlers/instruction.ts`. Proved by
+`scripts/isolated/engine-turn.ts` (29 checks on a replica, real worker, handler, gateway and MCP function; 7 sabotages run by hand and recorded
+in `IMPLEMENTATION-PROGRESS.md`) and `tests/engines/{brief,result,turn,drain}.test.ts`.
+
+| Id | Contract said | Built | Why |
+|---|---|---|---|
+| D-17 | `engineOf` / `engineRunFor` fail toward the team on any error (8.1) | They fail toward the team ONLY for a job with no command or a database that predates the engine (`42883`, `42703`, "does not exist"). Any other failure is RETHROWN, so the worker retries the job. | Failing toward the team on a transient read error is an automatic engine switch: a message the person sent to Hermes would be answered by the team's paid model because a query timed out. The first draft of 8.1 contradicted the rule it was written to protect. Both doors have a negative control. |
+| D-18 | A code-composed sentence is `evidence 'verified'` with no source (8.2, 8.3) | It cites `job:<id>`, like every other code-composed sentence in the handler. | The output-metadata gate refuses `verified` with no source (`incoherent output metadata: sources`); the first end-to-end run refused the unavailable sentence and the job was cancelled with nothing said. Found by driving the handler, not by reading it. |
+| D-19 | `announce` left undefined on the final output (8.5) | `announce: true` on the answer and on a failed, expired or empty ending; `false` for a cancelled run only when the person pressed Stop. | The waiting pass returns `announce: false`, and the worker writes that onto the job. Left undefined, the final answer inherited it: the run completed, the job completed ("nothing worth announcing") and the person received nothing. The sabotage that removes `announce: true` turns `E11` red. |
+| D-20 | `resumeHermesTurn(deps, job, run)` reads the conversation again | It reads the stored request (`engine_runs.request`) for `asked`, the earlier conversation and the expiry window, and never calls the conversation reader a second time. | The request is the evidence of what Hermes was given; re-reading the conversation could differ. `conversationBefore` is passed in as a closure (`HermesTurnDeps.turnsBefore`) instead of exported, so `turn.ts` has no import from `instruction.ts` and the diff there stays at two calls and one import. |
+| D-21 | The answer's staff attribution is unspecified | `recipient_agent = 'chief-of-staff'` is set (keyed by the claimed job and its office) on the first pass and on every ending, as the team path does. | Without it the output had no staff and the reply went out unattributed. Hermes wrote the words; the Chief of Staff relays them, so the person still hears only from her. The label "Hermes" is read from the engine run, never from this column. |
+| D-22 | The waiting pass pauses with `until = now + 20 s` | `until = now + 60 s`, `expiresAt = deadline_at + 60 s`. | Every pass that writes a parked output row costs one row; a finished run wakes the job at once, so the look is only the safety net that settles an expired deadline or a silent bridge. About fifteen parked "working on it" rows per run at most. They are reviewed, never delivered. M6 must not render them as messages. |
+
+Also built here, not in the contract: `src/engines/hermes/drain.ts` and `npm run engine:drain` (production-write gated, never run). It refuses and
+stops nothing while Hermes is still switched on for an office that holds a live run, then stops each live run's job with the office's own stop
+(`app.request_stop`, no named actor); runs themselves are left to expire or be told to stop at the next heartbeat. It is the first half of the
+worker rollback (blueprint D4).
+
+The brief carries no tool names (the reply style says so) and only standing rules the PERSON gave (`stated`): a specialist's inferred belief is not
+an order. The project census (`holds.projects`) is declared only when the run was actually served the project list.
+
+**Not covered by M4, so do not claim it:** the answer has passed the unit and replica gates with a scripted Hermes only; what a real Hermes answers,
+and whether the coherence gates then refuse it, is M5/M7. A voice note chosen for Hermes is opened from the transcript but the "Heard:" quote is not
+sent (the parked pass is silent); recorded as a limitation for M6.
+
 ---
 
 ## 9. MCP server changes (`supabase/functions/mcp/index.ts`, `tools.ts`)

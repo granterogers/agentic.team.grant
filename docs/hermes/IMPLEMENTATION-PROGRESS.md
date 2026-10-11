@@ -13,8 +13,9 @@ The resume point for any session picking this up. Read `ARCHITECTURE-HANDOFF.md`
 | **M1 schema and SQL functions (replica only)** | **done** | migration `1070_…`, `scripts/isolated/engine-runs.ts` 131/131 with 15 sabotages (in `verify:critical`, 69/69 green, 3,813 assertions), `tests/engines/types.test.ts`, contract deviations D-7 to D-13 in `INTERFACE-CONTRACTS.md` §3.1 |
 | **M2 engine gateway and bridge credentials** | **done (undeployed)** | `supabase/functions/engine`, `scripts/isolated/engine-gateway.ts` 33/33 with 6 sabotages (`verify:critical` 70/70, 3,846 assertions), `tests/engines/{gateway-routes,credentials}.test.ts`, `scripts/deploy/engine.ts`, `scripts/ops/engine-bridge-credential.ts` (never run against production); D-14, D-15 in `INTERFACE-CONTRACTS.md` §4 |
 | **M3 MCP server: the engine client kind** | **done (undeployed)** | migration `1071_…` (the gate names the project and the run), `supabase/functions/mcp/{index,tools}.ts`, `scripts/isolated/engine-mcp.ts` 27/27 with 5 sabotages (`verify:critical` 71/71, 3,873 assertions), `tests/engines/mcp-engine-tools.test.ts` (13, one sabotage), V4a golden unchanged and V4b 11/11 re-run through the changed function. Notes: D-16 below |
-| **M4 handler seam** | **next** | `INTERFACE-CONTRACTS.md` §6, `IMPLEMENTATION-TASKS.md` M4 |
-| M5 to M6 | not started | |
+| **M4 handler seam** | **done (undeployed)** | `src/engines/hermes/{turn,brief,result,drain}.ts`, two calls in `src/handlers/instruction.ts`, `scripts/isolated/engine-turn.ts` 29/29 (`verify:critical` 72/72, 3,902 assertions), `tests/engines/{brief,result,turn,drain}.test.ts`, `npm run engine:drain` (never run); D-17 to D-22 in `INTERFACE-CONTRACTS.md` §8.6 |
+| **M5 bridge and host kit** | **next** | `IMPLEMENTATION-TASKS.md` M5, `INTERFACE-CONTRACTS.md` §5 and §6 |
+| M6 | not started | |
 | M7 live free run | gated on V6 (Grant's zero-credit key) and on the Activity Ledger branch | |
 | M8 to M11 | not started | |
 
@@ -49,7 +50,32 @@ Grant's authorisation after M6.
 * Migration **1070** is this work's; the ledger branch holds 1060 to 1062 and `main` ends at 1053. Re-check before applying anywhere.
 * ADR number: this branch uses **0073**; the ledger branch also has `0073-one-activity-ledger-…`. Whichever merges second takes the next free number.
 
-## M2 start recipe
+## M4 sabotage record (engine-turn, each run on a fresh clone, defect put into the live source, red, restored, green)
+
+| # | Defect | Red | Who caught it |
+|---|---|---|---|
+| S1 | the open seam never fires (`=== 'never'`) | E1, E2 (the Hermes message reached the team and called the model 3 times) | the proof |
+| S2 | the resume seam never fires | E9, E9b, E11, E12, E16, E20 | the proof |
+| S3 | no pause on the parked pass | E1 (the job completed with the working note) | the proof |
+| S4 | `announce: true` removed from the answer | E11 (answer written, nothing delivered) | the proof; this was a real defect found by the first run |
+| S5 | the Chief-of-Staff relay removed | E9b | the proof |
+| S6 | the drain's order guard removed | E25 | the proof |
+| S7 | `engineRunFor` and `commandEngine` swallow errors | the two "THROWS" unit tests | `tests/engines/turn.test.ts` |
+
+## M5 start recipe
+
+1. `bash scripts/isolated/replica.sh`; if `verify:critical` reports `replay-parity` or a stale proof, `drop database gate_cand` (the candidate is reused
+   when the pending file list is unchanged; see the M3 notes).
+2. Build the bridge (`src/engines/hermes/bridge/`, Node, outbound only) per `INTERFACE-CONTRACTS.md` §5: claim over the gateway, start Hermes
+   `/v1/runs` with the per-attempt idempotency key (M0 D-2), follow SSE, no-progress limit 90 s (D-3), stop-and-report, containment on any
+   tool that is not `mcp__office__*` (D-1). Reuse `scripts/hermes-m0/` for the Hermes launcher and the live-run recipe.
+3. The host kit under `docs/hermes/host/` (config template per §6, `tools.tool_search.enabled: "off"` quoted, per-profile `.env`, `hermes sessions delete`
+   retention, systemd unit); never write a credential into a file in the repository.
+4. Acceptance on the replica with a REAL Hermes pointed at a scripted OpenAI-compatible model (as M0 V1) and a fake gateway-free path first, then the
+   real gateway and MCP function. Whatever cannot be proven without the free key (V6) is marked UNPROVEN and gates M7 only.
+5. Lint, typecheck, `npm test`, `check:secrets` (read `$?`), `verify:critical`; commit with the footer; push; update this file.
+
+## M2 start recipe (kept for history)
 
 1. `bash scripts/isolated/replica.sh` rebuilds the replica (about 40 s). Proofs run on a clone of `post`: `create database x template post`.
 2. Build `supabase/functions/engine` (`index.ts`, `routes.ts`) per `INTERFACE-CONTRACTS.md` §4 over the public wrappers listed in §3.1 D-12.
