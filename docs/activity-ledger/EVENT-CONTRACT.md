@@ -67,6 +67,27 @@ what `public.activity_events` stores for the native subset. Nullability is expli
 - Actor: a job a person stopped is theirs (`actor_kind: user`, `you`); a worker's bookkeeping (queued, parked, waiting, retry, an internal step) is `system`/`office`; a hand-off is the parent's agent
   and only a job whose origin is a child is `job.delegated` (an approval's or a duty's job is `job.created`). A failure reason (`metadata.reason`) is returned only to a diagnostic reader.
 
+### Human review provenance (phase 3)
+
+The ledger distinguishes six states and never infers a positive from ambiguous data:
+
+| State | Where it comes from | What the event says |
+|---|---|---|
+| requested / pending | `blockers` open, `outputs.reviewer_status = pending` | `approval.requested` (`requested`); an output with no review has no `output.reviewed` row |
+| answered by a person | `blockers.answered_by` is recorded | `approval.granted`/`denied`/`answered`, `actor_kind: user`, `you`; yes/no only by the rules above |
+| closed by the office | a settled question with no answerer | `approval.answered` "Closed" or `approval.withdrawn`; never a yes |
+| declined | the writer's named decline option, or `reviewer_status = rejected` | `approval.denied` / `output.reviewed` `declined` |
+| expired / withdrawn | state `expired`, `cancelled` | `approval.expired`, `approval.withdrawn` |
+| claimed by an external worker | a report through the external door | `external.*`, `actor_kind: external`; **never** a person's decision |
+
+`output.reviewed` is derived from `outputs.reviewer_status`, which is written by four different things: the worker's quality gate (a staff reviewer is recorded in `reviewed_by`), supersession (the
+system), a person pressing Import (`reviewed_by` is null) and a person pressing Decline (`reviewed_by` is null). Because a null `reviewed_by` cannot tell a person from the system, the event is
+attributed to `system`/`office` and its summary says "(reviewer not recorded)", with `metadata.reviewer_recorded = false`; with a recorded staff reviewer it is `agent` and that slug,
+`reviewer_recorded = true`. **It is never attributed to a person.** The hq actions that a person presses (`app.decide_output`, import) take no office or actor argument, so there is no verified
+identity to record in the same transaction; instrumenting them would be a claim the database cannot back, so no native `external.review_decided` or person-attributed `output.reviewed` writer exists.
+The day a person-verified decision path exists (a gateway action that passes the verified person), it should call `app.record_activity` (strict, in the same transaction) with `actor_kind: user`; until then
+`external.review_decided` has no writer and the external door refuses it. Proved by `activity-ledger` (review provenance checks, sabotage S33) and `activity-external-attack` (a worker cannot record a review).
+
 ## Visibility
 
 | Level | Who | What |

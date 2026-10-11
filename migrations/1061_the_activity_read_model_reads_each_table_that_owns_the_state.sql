@@ -369,10 +369,10 @@ begin
   v_branches := v_branches || $b$
     select app.activity_pid('outputs', o.output_id::text, 'output.reviewed'), o.reviewed_at, 'output.reviewed',
            case when o.reviewer_status = 'rejected' then 'declined' else 'completed' end, 'info',
-           'agent', coalesce(rs.slug, 'office'), rs.slug, j.project_id, j.job_id, coalesce(j.root_job_id, j.job_id), j.parent_job_id,
+           case when rs.slug is null then 'system' else 'agent' end, coalesce(rs.slug, 'office'), rs.slug, j.project_id, j.job_id, coalesce(j.root_job_id, j.job_id), j.parent_job_id,
            j.correlation_id, app.activity_pid('outputs', o.output_id::text, 'output.created'), j.origin_channel, null, null,
-           'Output ' || replace(o.reviewer_status::text, '_', ' '),
-           jsonb_build_object('reviewer_status', o.reviewer_status::text),
+           'Output ' || replace(o.reviewer_status::text, '_', ' ') || case when rs.slug is null then ' (reviewer not recorded)' else '' end,
+           jsonb_build_object('reviewer_status', o.reviewer_status::text, 'reviewer_recorded', rs.slug is not null),
            jsonb_build_object('kind', 'output', 'id', o.output_id), 'projected', 'outputs', null::int,
            o.output_id, j.job_id
       from {z} o

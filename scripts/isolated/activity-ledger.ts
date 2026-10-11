@@ -163,6 +163,16 @@ try {
   const received = byType('request.received')
   const rootCreated = evs.find((e) => e.type === 'job.created' && e.job_id === root) as Ev
   check('chain: the root job names the request that caused it', rootCreated?.causation_id === received?.id, `${String(rootCreated?.causation_id).slice(0, 8)} = ${String(received?.id).slice(0, 8)}`)
+  const reviewedNoOne = byType('output.reviewed')
+  check('review provenance: an output marked approved with no recorded reviewer is attributed to the office, never to a person or an agent, and says so',
+    reviewedNoOne?.actor_kind === 'system' && reviewedNoOne?.actor === 'office' && /reviewer not recorded/.test(String(reviewedNoOne?.summary)) && reviewedNoOne?.metadata?.reviewer_recorded === false,
+    `${reviewedNoOne?.actor_kind}/${reviewedNoOne?.actor}: ${reviewedNoOne?.summary}`)
+  await db.execute(`update public.outputs set reviewed_by = ${lit(staff)}::uuid where job_id = ${lit(child)}::uuid`)
+  const evsRev = await pages({ p_visibility: 'diagnostic', p_job: root }, grant, 200)
+  const reviewedByAgent = evsRev.find((e) => e.type === 'output.reviewed') as Ev
+  check('review provenance: with a recorded reviewer (a staff agent) it is attributed to that agent, and is still not a person', reviewedByAgent?.actor_kind === 'agent' && reviewedByAgent?.actor === 'research-director' && reviewedByAgent?.actor_kind !== 'user' && reviewedByAgent?.metadata?.reviewer_recorded === true, `${reviewedByAgent?.actor_kind}/${reviewedByAgent?.actor}`)
+  check('review provenance: no output.reviewed or approval event is ever attributed to a person (actor you) unless a blocker row records who answered',
+    !evsRev.some((e) => e.type === 'output.reviewed' && (e.actor === 'you' || e.actor_kind === 'user')), 'none')
   const delegated = byType('job.delegated')
   check('chain: a delegated job names its parent job creation as cause', delegated?.causation_id === rootCreated?.id && delegated?.parent_job_id === root, `parent ${String(delegated?.parent_job_id).slice(0, 8)}`)
   check('chain: an approval decision names the question it answers', byType('approval.granted')?.causation_id === byType('approval.requested')?.id, 'granted -> requested')
