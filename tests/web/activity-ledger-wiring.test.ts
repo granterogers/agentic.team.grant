@@ -184,7 +184,8 @@ describe('needLately, by wiring (each detector can fail)', () => {
     startsBeforeTheExistingReadFinishes: (t: string) =>
       t.indexOf("read('activity_ledger')") > -1 && t.indexOf("read('activity_ledger')") < t.indexOf("await settles(read('lately'))"),
     replacesOnlyTheListAndOnlyForTheCopyItHolds: (t: string) =>
-      /if \(rows !== null && latest\.lately === mine\) \{\s*latest\.lately = \{ \.\.\.mine, office: rows \}/.test(t),
+      // the copy is spread (every other key survives), the list is replaced, and one marker says where the list came from
+      /if \(rows !== null && latest\.lately === mine\) \{\s*latest\.lately = \{ \.\.\.mine, office: rows(, fromLedger: true)? \}/.test(t),
     validatesThroughLedgerRows: (t: string) => /const rows = ledgerRows\(await ledgerAsked\)/.test(t),
     drawsBeforeTheLedgerAnswers: (t: string) => t.indexOf('render()') > -1 && t.indexOf('render()') < t.indexOf('await ledgerAsked'),
   }
@@ -203,6 +204,67 @@ describe('needLately, by wiring (each detector can fail)', () => {
       const [from, to] = mutants[name as keyof typeof properties]
       const mutated = needLatelySource.replace(from, to)
       expect(mutated, 'the mutation landed').not.toBe(needLatelySource)
+      expect(holds(mutated), name).toBe(false)
+    })
+  }
+})
+
+/*
+  PHASE 4: Team HQ's Activity screen draws ledger rows. It used to read each project's own `activity` list and never the ledger, so
+  switching the ledger on changed nothing a person saw in Team HQ (found by drawing genuine ledger rows, scripts/isolated/activity-ui-browser.ts).
+  A ledger sentence already names its actor, so the byline goes in front only for a specialist or an outside worker.
+*/
+const ledgerLineSource = between(source, 'function ledgerLine(row)', '\nasync function needLately()')
+const ledgerLine = new Function('crewBy', `${ledgerLineSource}\nreturn ledgerLine`)((slug: string) => ({ name: slug === 'research-director' ? 'Emma' : undefined })) as (row: Row) => {
+  sentence: string
+  byline: string
+  kind: string
+}
+describe('how a ledger row is worded (ledgerLine)', () => {
+  it('a person\'s own act is the sentence alone, never "Claire You said yes"', () => {
+    expect(ledgerLine({ who: 'you', kind: 'user', verb: 'You', what: 'said yes: Add the notes' })).toEqual({ sentence: 'You said yes: Add the notes', byline: '', kind: 'user' })
+  })
+  it('the office\'s bookkeeping is the sentence alone', () => {
+    expect(ledgerLine({ who: 'office', kind: 'system', verb: 'Sent', what: 'to Telegram' }).byline).toBe('')
+  })
+  it('a specialist is named by the crew\'s name for them', () => {
+    expect(ledgerLine({ who: 'research-director', kind: 'agent', verb: 'Finished', what: 'a request' }).byline).toBe('Emma')
+  })
+  it('an outside worker is named as one, from the name the ledger gave, never from the crew', () => {
+    expect(ledgerLine({ who: 'external:hermes', who_name: 'Hermes (external worker)', kind: 'external', verb: 'Proposed', what: 'a skill' }).byline).toBe('Hermes (external worker)')
+  })
+  it('a row with no wording says nothing rather than guess, and never throws', () => {
+    expect(ledgerLine({ kind: 'user' }).sentence).toBe('')
+    expect(() => ledgerLine({})).not.toThrow()
+  })
+})
+
+const shellSource = readFileSync('web/studio/bc/shell.js', 'utf8')
+const allActivitySource = between(shellSource, 'const allActivity = () => {', '\n/* ====')
+const ctxSource = between(source, '  ledgerActivity: () =>', '\n  /* After a tick or a stop')
+describe('Team HQ draws the ledger when it is on (by wiring; each detector can fail)', () => {
+  const properties: Record<string, (t: string) => boolean> = {
+    asksTheContextForLedgerRows: (t) => /const fromLedger = ctx\?\.ledgerActivity\?\.\(\) \?\? null/.test(t),
+    fallsBackToTheProjectListsWhenNull: (t) => /fromLedger !== null\s*\?\s*fromLedger\.slice\(0, 80\)\s*:\s*PROJECTS\.flatMap/.test(t),
+    namesTheActorOnlyWhenTheLineHasAByline: (t) => /a\.line\.byline === '' \? '' : `\$\{a\.line\.byline\}: `/.test(t),
+    contextAnswersNullUnlessTheListCameFromTheLedger: (t) => /latest\.lately\?\.fromLedger === true && Array\.isArray\(latest\.lately\.office\)/.test(t) && /: null/.test(t),
+  }
+  const target = (name: string) => (name === 'contextAnswersNullUnlessTheListCameFromTheLedger' ? ctxSource : allActivitySource)
+  const mutants: Record<string, [string, string]> = {
+    asksTheContextForLedgerRows: ['ctx?.ledgerActivity?.() ?? null', 'null'],
+    fallsBackToTheProjectListsWhenNull: ['fromLedger !== null', 'true'],
+    namesTheActorOnlyWhenTheLineHasAByline: ["a.line.byline === '' ? '' :", "false ? '' :"],
+    contextAnswersNullUnlessTheListCameFromTheLedger: ['latest.lately?.fromLedger === true &&', 'true &&'],
+  }
+  for (const [name, holds] of Object.entries(properties)) {
+    it(`holds: ${name}`, () => {
+      expect(target(name).length, 'the source was found').toBeGreaterThan(50)
+      expect(holds(target(name)), name).toBe(true)
+    })
+    it(`${name} goes red when the code is changed to defeat it`, () => {
+      const [from, to] = mutants[name] as [string, string]
+      const mutated = target(name).replace(from, to)
+      expect(mutated, 'the mutation landed').not.toBe(target(name))
       expect(holds(mutated), name).toBe(false)
     })
   }

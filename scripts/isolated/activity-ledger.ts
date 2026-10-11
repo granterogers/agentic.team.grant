@@ -441,7 +441,12 @@ try {
   // ---------------------------------------------------------------------------------------------- adapter
   const page = json((await one(`select app.activity_for_the_page(${lit(grant)}::uuid, 40) as v`)).v)
   const first1: Ev = (page.office as Ev[])[0] ?? {}
-  const keys = ['id', 'who', 'kind', 'verb', 'what', 'project', 'when', 'at', 'via', 'category']
+  const pageRows = page.office as Ev[]
+  const pageExt = pageRows.find((r) => r.kind === 'external')
+  check('adapter: an outside worker is named as one and its marker is not repeated in the sentence', !!pageExt && /\(external worker\)$/.test(String(pageExt.who_name)) && !/^\[external:/.test(String(pageExt.summary)) && !/^\[external:/.test(String(pageExt.verb)), `${pageExt?.who_name} / ${String(pageExt?.summary).slice(0, 40)}`)
+  check('adapter: a job is worded as "a request", never as its internal kind', pageRows.some((r) => /a request/.test(String(r.summary))) && !pageRows.some((r) => /office\.instruction/.test(String(r.summary))), `${pageRows.filter((r) => /a request/.test(String(r.summary))).length} rows say "a request"`)
+  check('adapter: every row carries its whole sentence beside the verb and object split', pageRows.every((r) => typeof r.summary === 'string' && `${r.verb} ${r.what}`.trim() === String(r.summary).trim()), `${pageRows.length} rows`)
+  const keys =['id', 'who', 'kind', 'verb', 'what', 'project', 'when', 'at', 'via', 'category']
   check('adapter: rows have the keys the existing Activity module reads', page.enabled === true && (page.office as Ev[]).length > 0 && keys.every((k) => k in first1), `keys ${Object.keys(first1).length}, first "${first1.verb} ${first1.what}"`)
   const hq = json((await one(`select app.hq_studio_lately(${lit(grant)}::uuid, 40) as v`)).v)
   check('compat: the existing Activity reader still answers and is unchanged in shape', Array.isArray(hq.office) && typeof hq.today === 'object', `office ${(hq.office as unknown[]).length} rows`)

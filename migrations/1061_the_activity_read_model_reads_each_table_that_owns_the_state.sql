@@ -35,6 +35,16 @@ immutable
 set search_path = 'pg_catalog'
 as $$ select case when p_slug is null or p_slug = '' then null else initcap(replace(p_slug, '-', ' ')) end $$;
 
+-- A job's kind is an internal name ("office.instruction"); a person reads "a request". Everything else reads as its dotted name in words.
+create or replace function app.activity_kind_words(p_kind text)
+returns text
+language sql
+immutable
+set search_path = 'pg_catalog'
+as $$ select case when p_kind is null or p_kind = '' then 'work'
+                  when p_kind = 'office.instruction' then 'a request'
+                  else replace(replace(p_kind, '.', ' '), '_', ' ') end $$;
+
 create or replace function app.activity_sev_rank(p_sev text)
 returns integer
 language sql
@@ -247,16 +257,16 @@ begin
                 when ty.ty = 'job.created' and j.origin_command_id is not null then
                   app.activity_pid('inbound_commands', j.origin_command_id::text, 'request.received') end,
            j.origin_channel, null, null,
-           case ty.ty when 'job.created' then 'Queued ' || j.kind
-                      when 'job.delegated' then 'Handed ' || j.kind || ' to ' || coalesce(app.activity_name(j.recipient_agent), 'a specialist')
-                      when 'job.started' then 'Started ' || j.kind
-                      when 'job.completed' then 'Finished ' || j.kind
-                      when 'job.failed' then 'Failed: ' || j.kind
-                      when 'job.cancelled' then 'Called off ' || j.kind
-                      when 'retry.scheduled' then 'Will try again: ' || j.kind
-                      when 'job.paused' then 'Parked ' || j.kind
-                      when 'job.waiting' then 'Waiting: ' || j.kind
-                      else 'Moved ' || j.kind || ' to ' || t.to_state::text end,
+           case ty.ty when 'job.created' then 'Queued ' || app.activity_kind_words(j.kind)
+                      when 'job.delegated' then 'Handed ' || app.activity_kind_words(j.kind) || ' to ' || coalesce(app.activity_name(j.recipient_agent), 'a specialist')
+                      when 'job.started' then 'Started ' || app.activity_kind_words(j.kind)
+                      when 'job.completed' then 'Finished ' || app.activity_kind_words(j.kind)
+                      when 'job.failed' then 'Failed: ' || app.activity_kind_words(j.kind)
+                      when 'job.cancelled' then 'Called off ' || app.activity_kind_words(j.kind)
+                      when 'retry.scheduled' then 'Will try again: ' || app.activity_kind_words(j.kind)
+                      when 'job.paused' then 'Parked ' || app.activity_kind_words(j.kind)
+                      when 'job.waiting' then 'Waiting: ' || app.activity_kind_words(j.kind)
+                      else 'Moved ' || app.activity_kind_words(j.kind) || ' to ' || replace(t.to_state::text, '_', ' ') end,
            jsonb_strip_nulls(jsonb_build_object('kind', j.kind, 'attempt', t.attempt, 'from_state', t.from_state::text,
              'to_state', t.to_state::text,
              -- state_reason is copied onto every later transition of the job, so it is the reason only where the state is one a reason explains
@@ -496,7 +506,7 @@ begin
     select app.activity_pid('job_pauses', p.pause_id::text, 'integration.rate_limited'), p.at, 'integration.rate_limited', 'recorded',
            app.activity_type_severity('integration.rate_limited'), 'system', 'office', j.recipient_agent, j.project_id, j.job_id,
            coalesce(j.root_job_id, j.job_id), j.parent_job_id, j.correlation_id, null::uuid, j.origin_channel, null, null,
-           'Waiting out a rate limit: ' || j.kind,
+           'Waiting out a rate limit: ' || app.activity_kind_words(j.kind),
            jsonb_strip_nulls(jsonb_build_object('resumed', p.resumed_at is not null, 'resumable', p.resumable)),
            jsonb_build_object('kind', 'job_pause', 'id', p.pause_id), 'projected', 'job_pauses', null::int,
            p.pause_id, j.job_id
@@ -906,10 +916,14 @@ begin
                -- the raw actor, as hq_studio_lately sends it: the page looks a face up by slug, and a display name matches nobody and
                -- falls back to the first crew member. The name a person reads is a separate key.
                'who', e ->> 'actor',
-               'who_name', case when e ->> 'actor' = 'you' then 'You' else coalesce(app.activity_name(e ->> 'actor'), e ->> 'actor') end,
+               -- an outside worker is named as one ("Hermes (external worker)"); its marker in the summary is dropped here because the name says it
+               'who_name', case when e ->> 'actor' = 'you' then 'You'
+                                when e ->> 'actor_kind' = 'external' then initcap(replace(substr(e ->> 'actor', 10), '-', ' ')) || ' (external worker)'
+                                else coalesce(app.activity_name(e ->> 'actor'), e ->> 'actor') end,
                'kind', e ->> 'actor_kind',
-               'verb', split_part(e ->> 'summary', ' ', 1),
-               'what', substr(e ->> 'summary', length(split_part(e ->> 'summary', ' ', 1)) + 2),
+               'summary', x.s,
+               'verb', split_part(x.s, ' ', 1),
+               'what', substr(x.s, length(split_part(x.s, ' ', 1)) + 2),
                'why', null,
                'project', e ->> 'project',
                'when', to_char((e ->> 'at')::timestamptz, 'FMDD Mon HH24:MI'),
@@ -922,7 +936,8 @@ begin
                'status', e ->> 'status',
                'evidence', e -> 'evidence',
                'provenance', e ->> 'provenance') order by (e ->> 'at') desc)
-        from jsonb_array_elements(v_page -> 'events') e), '[]'::jsonb),
+        from jsonb_array_elements(v_page -> 'events') e
+        cross join lateral (select regexp_replace(e ->> 'summary', '^\[external:[^]]*\] ', '') as s) x), '[]'::jsonb),
     'next', v_page -> 'next',
     'generated_at', app.now_utc());
 end

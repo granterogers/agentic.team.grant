@@ -50,6 +50,8 @@ SABOTAGES=(
   "S36|60|p_summary => '[external:'|p_summary => '[exter-nal:'|activity-external-attack|external: a look-alike summary"
   "S37|60|>= 4000 then|>= 4000000 then|activity-external-attack|quota: a daily cap"
   "S38|61|if p_status is not null and p_status not in ('recorded'|if false and p_status not in ('recorded'|activity-external-attack|read: a status outside the vocabulary"
+  "S39|61|' (external worker)'|''|activity-ledger|adapter: an outside worker is named"
+  "S40|61|when p_kind = 'office.instruction' then 'a request'|when p_kind = 'office.instruction' then p_kind|activity-ledger|adapter: a job is worded"
   "S13|gw|if (!/^\\d{1,3}\$/.test(text))|if (false)|activity-gateway|refused by name"
   "S14|gw|    requireOne: ['job', 'correlation'],||activity-gateway|a chain with neither"
   "S17|60|    if exists (select 1 from public.activity_event_types t where t.event_type = p_event_type and t.durability = 'critical') then|    if false then|activity-ledger-durability|the best-effort writer refuses a critical type"

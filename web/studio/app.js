@@ -2563,10 +2563,14 @@ function lately() {
             : `<div class="tasks">${office
                 .map(
                   (e) => `<div class="task" style="cursor:default">
-              ${face(crewBy(e.who), 22)}
+              ${d?.fromLedger === true && ledgerLine(e).kind !== 'agent' ? '' : face(crewBy(e.who), 22)}
               <span class="label t-meta" style="color:var(--ink)">
-                <b style="font-weight:600">${esc(crewBy(e.who).name ?? e.who)}</b>
-                ${esc(e.verb)} ${esc(e.what)}${e.project ? ` on ${esc(e.project)}` : ''}
+                ${
+                  d?.fromLedger === true
+                    ? `${ledgerLine(e).byline === '' ? '' : `<b style="font-weight:600">${esc(ledgerLine(e).byline)}</b> `}${esc(ledgerLine(e).sentence)}`
+                    : `<b style="font-weight:600">${esc(crewBy(e.who).name ?? e.who)}</b>
+                ${esc(e.verb)} ${esc(e.what)}`
+                }${e.project ? ` on ${esc(e.project)}` : ''}
                 <!--
                   A folded row (#14). The two newest of any repeated thing are
                   shown as themselves and the rest arrive as one line saying how
@@ -14017,6 +14021,12 @@ const bcContext = {
   },
   /* The open repeating reminders, or null while they are still coming; a failed read draws nothing (see needRepeating). */
   myRepeating: () => (Array.isArray(mine.repeating) ? mine.repeating : null),
+  /*
+    The unified activity ledger's rows, worded (see ledgerLine), or null: switched off, not answered, or nothing it could draw. Team HQ's
+    Activity screen uses these in place of the per-project lists only when this is an array, so with the ledger off nothing changes.
+  */
+  ledgerActivity: () =>
+    latest.lately?.fromLedger === true && Array.isArray(latest.lately.office) ? latest.lately.office.map((e) => ({ ...e, line: ledgerLine(e) })) : null,
   /* After a tick or a stop on My Tasks: the kept lists are behind, so forget them and read again. */
   refreshMyTasks: async () => {
     await Promise.all([reloadMine(), refresh()])
@@ -15333,6 +15343,19 @@ function ledgerRows(ledger) {
   return rows.length > 0 ? rows : null
 }
 
+/*
+  How a ledger row is worded. A ledger summary is already a whole sentence ("You said yes: ...", "Sent to Telegram"), unlike the older
+  feed's bare verbs ("added"), so putting the actor's name in front would make the office say "Claire You said yes". The actor is
+  named only where the sentence does not already carry it: a specialist (agent) or an outside worker (external). A person's own acts
+  and the office's bookkeeping read as the sentence alone. Never throws; a row with no wording says nothing rather than guess.
+*/
+function ledgerLine(row) {
+  const sentence = [row.verb, row.what].filter((x) => typeof x === 'string' && x !== '').join(' ').trim()
+  const kind = typeof row.kind === 'string' ? row.kind : ''
+  const byline = kind === 'external' ? String(row.who_name ?? row.who ?? '') : kind === 'agent' ? String(crewBy(row.who).name ?? row.who ?? '') : ''
+  return { sentence, byline, kind }
+}
+
 async function needLately() {
   if (latest.lately !== null) return
   // Both reads start together and the page draws from the existing one the moment it arrives. The ledger can only improve what is
@@ -15351,7 +15374,7 @@ async function needLately() {
   // and older rows must not overwrite newer ones.
   const rows = ledgerRows(await ledgerAsked)
   if (rows !== null && latest.lately === mine) {
-    latest.lately = { ...mine, office: rows }
+    latest.lately = { ...mine, office: rows, fromLedger: true }
     render()
   }
 }
