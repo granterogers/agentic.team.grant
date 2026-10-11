@@ -23,19 +23,20 @@ GW=supabase/functions/hq-api/index.ts
 
 # id | target (60, 61 or gw) | old text | new text | proof | the check that must fail (a substring of its name)
 SABOTAGES=(
-  "S1|61|join public.jobs j on j.job_id = t.job_id and j.office_id = \$1|join public.jobs j on j.job_id = t.job_id|activity-ledger|isolation"
+  "S1|61|join public.jobs j on j.job_id = t.job_id and j.office_id = \$1~~where j0.job_id = t0.job_id and j0.office_id = \$1|join public.jobs j on j.job_id = t.job_id~~where j0.job_id = t0.job_id|activity-ledger|isolation"
   "S2|60|create trigger activity_events_reject_update before update on public.activity_events\n  for each row execute function app.reject_ledger_mutation();|create trigger activity_events_reject_update before update on public.activity_events\n  for each row when (false) execute function app.reject_ledger_mutation();|activity-ledger|append-only"
   "S3|60|  if t is null or t = '' then return t; end if;|  return t;|activity-ledger|redaction: no credential family"
   "S4|60|  on conflict (office_id, idempotency_key) do nothing\n  returning activity_id into v_id;|  returning activity_id into v_id;|activity-ledger|the same key twice"
   "S5|60|select coalesce((select c.value = 'true'::jsonb from public.system_config c where c.key = 'activity.ledger_enabled'), false)|select coalesce((select c.value = 'true'::jsonb from public.system_config c where c.key = 'activity.ledger_enabled'), true)|activity-ledger|fails closed"
   "S5b|60|values ('activity.ledger_enabled', 'false'::jsonb,|values ('activity.ledger_enabled', 'true'::jsonb,|activity-ledger|off by default"
   "S6|60|select * into v_type from public.activity_event_types where event_type = p_event_type and external_writable;|select * into v_type from public.activity_event_types where event_type = p_event_type;|activity-ledger|it cannot forge"
-  "S7|61|where c.office_id = \$1 and c.callback_action is null and not c.synthetic|where c.office_id = \$1 and c.callback_action is null|activity-ledger|a suite's message is not shown"
+  "S7|61|c.callback_action is null and not c.synthetic~~c0.callback_action is null and not c0.synthetic|c.callback_action is null~~c0.callback_action is null|activity-ledger|a suite's message is not shown"
   "S8|60|create trigger activity_events_visibility before insert on public.activity_events\n  for each row execute function|create trigger activity_events_visibility before insert on public.activity_events\n  for each row when (false) execute function|activity-ledger|diagnostic type cannot be written as ordinary"
-  "S9|61|order by q.at desc, q.id desc limit \$15 + 1)|order by q.at desc, q.id desc limit \$15)|activity-ledger|single source"
+  "S9|61|and not exists (select 1 from lastat l where (stats.minat, stats.minid) <= (l.at, l.id))) '|and false) '|activity-ledger|single source"
   "S10|60|  exception when others then|  exception when no_data_found then|activity-ledger|the safe writer never raises"
   "S11|61|    and ((q.vis_override is null and app.activity_type_visrank(q.type) <= \$10) or q.vis_override <= \$10)|    and (true)|activity-ledger|native diagnostic events"
-  "S12|61|where \$10 >= 1 and u.office_id = \$1|where \$10 >= 1|activity-ledger|neither feed"
+  "S12|61|where \$10 >= 1 and u.office_id = \$1~~where \$10 >= 1 and u0.office_id = \$1|where \$10 >= 1~~where \$10 >= 1|activity-ledger|neither feed"
+  "S16|61|where hj.hjob is null or not hj.h|where true|activity-ledger|only the canonical predicate"
   "S13|gw|if (!/^\\d{1,3}\$/.test(text))|if (false)|activity-gateway|refused by name"
   "S14|gw|    requireOne: ['job', 'correlation'],||activity-gateway|a chain with neither"
   "S15|gw|args = { ...args, [extra.arg]: text }|args = { ...args, [extra.arg]: new Date(Date.parse(text)).toISOString() }|activity-gateway|microseconds apart"
@@ -51,10 +52,16 @@ mutate() { # file old new out  -> exit 0 only if the old text was present and th
 import sys
 src, old, new, out = sys.argv[1:5]
 s = open(src).read()
-old = old.replace("\\n", "\n"); new = new.replace("\\n", "\n")
-if old not in s:
-    print("  SABOTAGE DID NOT APPLY: the old text is not in the file"); sys.exit(2)
-t = s.replace(old, new, 1)
+# several replacements in one sabotage: old1~~old2 and new1~~new2, applied in order, each of which must land
+olds = [x.replace("\\n", "\n") for x in old.split("~~")]
+news = [x.replace("\\n", "\n") for x in new.split("~~")]
+if len(olds) != len(news):
+    print("  SABOTAGE TABLE ERROR: unequal number of old and new texts"); sys.exit(2)
+t = s
+for o, n in zip(olds, news):
+    if o not in t:
+        print("  SABOTAGE DID NOT APPLY: the old text is not in the file: " + o[:60]); sys.exit(2)
+    t = t.replace(o, n, 1)
 if t == s:
     print("  SABOTAGE DID NOT APPLY: the file is unchanged"); sys.exit(2)
 open(out, "w").write(t)

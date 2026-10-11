@@ -252,6 +252,14 @@ try {
   const fxEvents = (await f({ p_job: fx })).filter((e) => e.job_id === fx)
   check('harness: a control - the same shape of job is shown when the product says it is real', isFix.h === true ? fxEvents.length === 0 : fxEvents.length > 0, `harness=${String(isFix.h)}, events=${fxEvents.length}`)
 
+  // A job that only app.harness_job can recognise (neither flag set): it is a suite's by its origin namespace. This is the path the
+  // expensive predicate exists for, and the one the cheap flags cannot stand in for.
+  const deep = String((await one(`select app.enqueue_child(app.job_office(${lit(root)}::uuid), ${lit(root)}::uuid, 'office.instruction', '{}'::jsonb, interval '0', true, ${lit(project)}::uuid)::text as id`)).id)
+  await db.execute(`update public.jobs set pinned_config = pinned_config || '{"origin_namespace": "verify"}'::jsonb where job_id = ${lit(deep)}::uuid`)
+  const deepFlags = await one(`select synthetic, is_fixture, app.harness_job(job_id) as h from public.jobs where job_id = ${lit(deep)}::uuid`)
+  const deepEvents = (await f({ p_job: deep })).filter((e) => e.job_id === deep)
+  check('harness: a job only the canonical predicate recognises is not shown either (neither cheap flag is set)', deepFlags.synthetic === false && deepFlags.is_fixture === false && deepFlags.h === true && deepEvents.length === 0, `synthetic=${String(deepFlags.synthetic)}, fixture=${String(deepFlags.is_fixture)}, harness_job=${String(deepFlags.h)}, events=${deepEvents.length}`)
+
   // ---------------------------------------------------------------------------------------------- isolation
   const A_EMAIL = `ledger-a-${run}@example.invalid`
   const B_EMAIL = `ledger-b-${run}@example.invalid`
