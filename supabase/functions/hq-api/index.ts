@@ -3913,6 +3913,21 @@ Deno.serve(async (request: Request): Promise<Response> => {
     console.error(`hq-api ${name}: upstream time budget`)
     return timedOut()
   }
+  /*
+    The platform's own statement timeout (the recorded authenticator role carries 8 s, docs/ops/evidence/2026-10-05) cancels a running
+    statement with SQLSTATE 57014 and PostgREST reports it as an error body carrying that code, not as a 504. The page must be told the
+    same thing in the same words whichever bound fired.
+  */
+  if (isActivity && !response.ok) {
+    const detail = (await response
+      .clone()
+      .json()
+      .catch(() => null)) as { code?: unknown } | null
+    if (detail !== null && (detail.code === '57014' || detail.code === 'PT504')) {
+      console.error(`hq-api ${name}: statement cancelled (${String(detail.code)})`)
+      return timedOut()
+    }
+  }
 
   if (!response.ok) {
     // The upstream detail stays here. A database error message in a browser is

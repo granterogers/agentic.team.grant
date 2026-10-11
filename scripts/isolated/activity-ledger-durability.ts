@@ -118,6 +118,8 @@ try {
   const failuresBefore = Number((await one(`select count(*) as c from public.activity_write_failures where office_id = ${lit(office)}::uuid and sqlstate = '53400'`)).c)
   check('cap: past the office\'s daily diagnostic limit the best-effort writer stores nothing more and returns null (3 of 5 stored, the 4th and 5th refused)', written.slice(0, 3).every((w) => w !== 'null') && written.slice(3).every((w) => w === 'null'), written.map((w) => (w === 'null' ? 'null' : 'id')).join(','))
   check('cap: a refusal is COUNTED in the failure counter (never silent), with the cap in the reason', failuresBefore >= 2, `${failuresBefore} counted`)
+  const hs = json((await one(`select app.activity_ledger_health(${lit(office)}::uuid) as v`)).v)
+  check('cap: the health reading shows the diagnostic volume, the cap in force and the table size (the deployment office only), so storage is read without a query', Number(hs.native_diagnostic_24h) >= 3 && Number(hs.diagnostic_cap_per_day) === capNow && Number(hs.native_table_bytes) > 0, `${hs.native_diagnostic_24h} diagnostic in 24 h, cap ${hs.diagnostic_cap_per_day}, ${hs.native_table_bytes} bytes`)
   const replay = await one(`${safe('tool.call_completed', 'cap-0')} as id`)
   check('cap: a replay of a key already stored at the cap returns the stored id and is not counted as a loss', String(replay.id) === written[0], String(replay.id))
   const userType = await one(`${safe('budget.threshold_reached', 'cap-user')} as id`)

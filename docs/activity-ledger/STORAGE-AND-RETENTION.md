@@ -9,7 +9,9 @@ with a real reading. The arithmetic is reproducible: `npm run activity:storage [
 1. **The database is the constraint, and it was tight before the ledger.** `docs/ops/capacity-scenarios-2026-10-06.md` records 371.8 MB (74 percent of the 500 MB line) on 5 October,
    growing 9 to 26 MB a day, with 100 percent projected between 10 and 19 October. Today is 11 October. Whether that projection held is **UNKNOWN until the baseline read**
    (`select jsonb_pretty(app.free_tier_headroom())`, a production read that needs Grant's authorisation). **Activation must not proceed on this evidence alone**; see the storage gate below.
-2. **The ledger's cost is two things.** (a) The eleven read indexes on the existing tables: about **21 MB once** on the recorded row counts (INFERRED), then about 0.5 KB per job. They are optional for
+> **Superseded figures (11 October capacity audit):** the 21 MB for the indexes and the 65 MB gate below were inferred from table bytes and are wrong. Measured on the final schema and the recorded row counts: about **6.4 MB once**, gate about **30 MB**; the database also did not grow at the 9 to 26 MB a day projected. `STORAGE-CAPACITY-DECISION.md` is authoritative.
+
+2. **The ledger's cost is two things.** (a) The eleven read indexes on the existing tables: about **21 MB once** on the recorded row counts (INFERRED; superseded, see the note above), then about 0.5 KB per job. They are optional for
    correctness and required by the activation check for speed. (b) The native events: **750 bytes each with its indexes, measured; 850 planned** once a project and a job are attached.
 3. **A thousand native events a day in one office is about 310 MB a year.** That is not affordable on this tier for more than one canary office, which is why the default now caps diagnostic writes
    (below) and why the retention choice is Grant's.

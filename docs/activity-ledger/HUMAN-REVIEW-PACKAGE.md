@@ -14,11 +14,11 @@ Review record (to be completed by a person, never by an agent):
 | File | sha256 |
 |---|---|
 | `migrations/1060_one_ledger_of_activity_records_what_no_other_table_holds.sql` | `6a680002590130cd771acd29042a59a407bdfad0a4885d10019823ba4f6ecf28` |
-| `migrations/1061_the_activity_read_model_reads_each_table_that_owns_the_state.sql` | `92634497be4f7e7ae84ad20e022cff0b8e61069e27603cb439c8d3c97aa39b9b` |
+| `migrations/1061_the_activity_read_model_reads_each_table_that_owns_the_state.sql` | `8b535909ae8b036c96c23b2b56242086b3047b6bb72baa245d002865b6eca9e4` |
 | `migrations/1062_a_held_back_over_budget_agent_is_recorded_in_the_activity_ledger.sql` | `07c26ad8eb700e0fc79f8504ea60faccd90db0a97a3d59bb66b66ab90fd40534` |
 
 Recompute with `sha256sum migrations/106[012]_*.sql` on the commit under review; if a hash differs, the review is of something else. The three files are **unapplied**, so the edits made after review rounds are legitimate; once applied they are immutable (`check:migrations`).
-The TypeScript and gateway sources the review also needs: `src/text/secrets.ts` (the redactor's twin), `src/activity/record.ts` and `src/activity/switch.ts`, `supabase/functions/hq-api/index.ts` (the four `activity_*` sections and the time-bound handling only). Hash them with `sha256sum` at the same commit.
+The TypeScript and gateway sources the review also needs: `src/text/secrets.ts` (the redactor's twin), `src/activity/record.ts` and `src/activity/switch.ts`, `supabase/functions/hq-api/index.ts` (the four `activity_*` sections and the time-bound handling only). Hash them with `sha256sum` at the same commit. At the capacity-audit commit `supabase/functions/hq-api/index.ts` is `7e2a7688aa087434da33b47b9fc6dcf8e3fac902a746274b5fde7e192d3a0c41` (it now also maps a platform `57014` cancellation of an Activity read to the same controlled 504). Migration 1061 gained three read-only health keys (`native_diagnostic_24h`, `diagnostic_cap_per_day`, and `native_table_bytes` for the deployment's own office only); see `STORAGE-CAPACITY-DECISION.md` section 8.
 
 ## 2. The SQL to read, in this order
 

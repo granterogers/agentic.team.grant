@@ -9,7 +9,7 @@
 clause nor `set_config('statement_timeout', ...)` inside the function re-arms it. Measured on the replica: a function declared `set statement_timeout = '100ms'` that sleeps one second returned after
 1 005 ms with no error; the same sleep with `set_config` inside took 1 002 ms; and `set local statement_timeout = '100ms'` issued as a **separate statement before the call** cancelled it after 152 ms with
 `57014`. So a bound has to be armed by whoever issues the statement, or be cooperative. The gateway reaches the database through PostgREST (`/rest/v1/rpc/...`), which gives a caller no way to issue a
-statement first, so for the gateway the bound is cooperative plus a deadline of its own. The function-level setting was removed from `activity_read` (it bounded nothing, and the claim is withdrawn).
+statement first, so for the gateway the bound is cooperative plus a deadline of its own. (The 5 October capture records `authenticator` and `authenticated` at an 8 s `statement_timeout`, a global 120 s and no `service_role` override, so an 8 s platform bound probably already applies through PostgREST: INFERRED, to be confirmed by baseline query Q13. When the platform cancels a read, the gateway maps the `57014` body to the same controlled 504 rather than a 500.) The function-level setting was removed from `activity_read` (it bounded nothing, and the claim is withdrawn).
 
 **What bounds a read now, in layers (each proved):**
 

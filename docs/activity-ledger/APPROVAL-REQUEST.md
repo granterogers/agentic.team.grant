@@ -12,7 +12,7 @@ F2 closed (cooperative budget, gateway 504, page error state; the hard bound nee
 
 ## 3. The things you should know before deciding
 
-1. **Capacity may block deployment.** The 6 October capacity note projected the 500 MB database to be full between 10 and 19 October. Nobody has read the real number since. The ledger needs about 21 MB for its indexes and 0.35 MB a day in one canary office (measured 850 B an event). If there is not about 65 MB free, the release stops after the schema step.
+1. **Capacity may block deployment.** The 6 October capacity note projected the 500 MB database to be full between 10 and 19 October. Nobody has read the real number since. The capacity audit (`STORAGE-CAPACITY-DECISION.md`, 11 October) corrected the cost: about **6.4 MB once** (the eleven read indexes on the recorded row counts, plus the migrations) and 0.2 MB a day at 250 events a day (measured 742 to 800 B an event), so the gate is about **30 MB free, not 65**. The last recorded reading (9 October) had 125 MB free, and the database grew only about 0.75 MB a day after 5 October, so the 6 October projection did not materialise. A fresh read-only baseline (`scripts/ops/capacity-baseline.sql`, approval A3) is still required before deployment. The nearer limit is the 1 GB file allowance (backups), which `backup:prune` addresses separately.
 2. **A human must read the SQL and the redactor** (`HUMAN-REVIEW-PACKAGE.md`). Three model-assisted reviews are not that.
 3. **The hard read bound is a production setting** nobody has chosen. Without it, one slow database pass is not interruptible (the rest is bounded).
 4. Nothing destructive is proposed or done. Retention of old diagnostic events is your decision (`STORAGE-AND-RETENTION.md`).

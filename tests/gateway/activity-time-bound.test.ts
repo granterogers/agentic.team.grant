@@ -15,7 +15,7 @@ const TOKEN = 'machine-key-for-tests'
 
 type Handler = (r: Request) => Promise<Response>
 let handler: Handler
-let mode: 'ok' | 'budget' | 'hang' | 'error' = 'ok'
+let mode: 'ok' | 'budget' | 'hang' | 'error' | 'cancelled' = 'ok'
 const rpcCalls: { fn: string; signal: boolean }[] = []
 
 const fake = vi.fn(async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -33,6 +33,11 @@ const fake = vi.fn(async (url: string | URL | Request, init?: RequestInit): Prom
         hint: 'retry',
       }),
       { status: 504 },
+    )
+  if (mode === 'cancelled')
+    return new Response(
+      JSON.stringify({ code: '57014', message: 'canceling statement due to statement timeout' }),
+      { status: 500 },
     )
   if (mode === 'error')
     return new Response(JSON.stringify({ code: '42P01', message: 'relation "x" does not exist' }), {
@@ -99,6 +104,23 @@ describe('an Activity read that cannot finish', () => {
     expect(body.code).toBe('activity_timeout')
     expect(Date.now() - t).toBeLessThan(2000)
     expect(Date.now() - t).toBeGreaterThanOrEqual(100)
+  })
+
+  it("is the same controlled 504 when the platform's own statement timeout cancels the read (57014 in a 500 body)", async () => {
+    mode = 'cancelled'
+    const r = await ask('activity_feed')
+    const body = (await r.json()) as Record<string, unknown>
+    expect(r.status).toBe(504)
+    expect(body.code).toBe('activity_timeout')
+    expect(JSON.stringify(body)).not.toMatch(/57014|statement timeout|canceling/)
+  })
+
+  it('leaves an ordinary database failure of an Activity section a 502 with no detail (a control: not everything is a timeout)', async () => {
+    mode = 'error'
+    const r = await ask('activity_feed')
+    const text = await r.text()
+    expect(r.status).toBe(502)
+    expect(text).not.toMatch(/relation|42P01/)
   })
 
   it('carries an abort signal on every Activity section (the chain and health too)', async () => {

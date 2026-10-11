@@ -1014,6 +1014,13 @@ begin
                          from public.system_config a where a.key = 'activity.ledger_offices'), 'none'),
     'native_events_24h', (select count(*) from public.activity_events a where a.office_id = p_office and a.occurred_at > app.now_utc() - interval '24 hours'),
     'native_events_total', (select count(*) from public.activity_events a where a.office_id = p_office),
+    -- STORAGE, so a canary's growth can be read against the forecast without a separate query: the office's diagnostic events in the last day,
+    -- the daily cap in force, and the table's size on disk (heap, indexes and TOAST). The size is the whole table's, which says something about every
+    -- office's volume, so only the deployment's own office is shown it.
+    'native_diagnostic_24h', (select count(*) from public.activity_events a where a.office_id = p_office and a.visibility = 'diagnostic' and a.actor_kind <> 'external' and a.occurred_at > app.now_utc() - interval '24 hours'),
+    'diagnostic_cap_per_day', coalesce((select case when jsonb_typeof(c.value) = 'number' then least(greatest((c.value #>> '{}')::numeric, 0), 100000)::int end
+                                          from public.system_config c where c.key = 'activity.diag_native_per_day'), 500),
+    'native_table_bytes', case when app.office_sees_the_deployment(p_office) then pg_total_relation_size('public.activity_events') end,
     'last_native_event_at', (select max(a.occurred_at) from public.activity_events a where a.office_id = p_office),
     'write_failures_1h', (select count(*) from public.activity_write_failures f where f.office_id = p_office and f.occurred_at > app.now_utc() - interval '1 hour'),
     'write_failures_24h', (select count(*) from public.activity_write_failures f where f.office_id = p_office and f.occurred_at > app.now_utc() - interval '24 hours'),

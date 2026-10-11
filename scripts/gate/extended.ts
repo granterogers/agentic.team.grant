@@ -69,6 +69,16 @@ export const EXTENDED: readonly Proof[] = [
     'the external-worker door under concurrent writers holds its 300 per worker and 1000 per office, cannot be varied past by name or key, cannot claim a review, confirmation or approval, and the ledger tables are closed to browser roles and to edits',
   ),
   p(
+    'activity-storage',
+    9,
+    'what the ledger costs in storage on the final schema: the three migrations add under 2 MB, the eleven read indexes cost a bounded number of bytes per row of the tables they index, a typical native event is under 1 KB with its indexes and the largest payload the table accepts under 6 KB, every kind is stored once and a replay adds nothing',
+  ),
+  p(
+    'activity-archive-rehearsal',
+    10,
+    'old diagnostic events can be exported with a checksum, removed from the live table (on a disposable replica only) and restored byte for byte, the Activity read answers over what is left and again over the restored window, and no consequential event is ever in the slice',
+  ),
+  p(
     'activity-scaling',
     14,
     "a small office's Activity read does not grow with other offices' volume (one to eight copies of a busy history in unrelated offices, same events in the same order, none foreign), a read that cannot finish in its time budget is refused with PT504 between passes and never answered short, and a caller-armed statement timeout cancels a running read cleanly",

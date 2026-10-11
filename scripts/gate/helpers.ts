@@ -43,6 +43,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: 'the assertions activity-ux-browser runs (compared with the gateway answer and the database); not a proof on its own',
   },
   {
+    stem: 'capacity-bloat-model',
+    role: 'NOT a gate: applies the recorded production update churn to a copy of the real jobs table on a replica and reports how large it gets and what a rewrite (VACUUM FULL) returns, so the size of the optimisation is a measured shape and not a guess; run by hand',
+  },
+  {
     stem: 'activity-scale-seed',
     role: 'the busy history copied set-based into unrelated offices for the cross-office read-cost proof (disposable replica only, triggers and keys bypassed); not a proof',
   },
