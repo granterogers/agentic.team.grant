@@ -25,7 +25,7 @@ GW=supabase/functions/hq-api/index.ts
 SABOTAGES=(
   "S1|61|join public.jobs j on j.job_id = t.job_id and j.office_id = \$1~~where j0.job_id = t0.job_id and j0.office_id = \$1|join public.jobs j on j.job_id = t.job_id~~where j0.job_id = t0.job_id|activity-ledger|isolation"
   "S2|60|create trigger activity_events_reject_update before update on public.activity_events\n  for each row execute function app.reject_ledger_mutation();|create trigger activity_events_reject_update before update on public.activity_events\n  for each row when (false) execute function app.reject_ledger_mutation();|activity-ledger|append-only"
-  "S3|60|  if t is null or t = '' then return t; end if;|  return t;|activity-ledger|redaction: no credential family"
+  "S3|60|  if p_text is null or p_text = '' then return p_text; end if;|  return p_text;|activity-ledger|redaction: no credential family"
   "S4|60|  on conflict (office_id, idempotency_key) do nothing\n  returning activity_id into v_id;|  returning activity_id into v_id;|activity-ledger|the same key twice"
   "S5|60|select coalesce((select c.value = 'true'::jsonb from public.system_config c where c.key = 'activity.ledger_enabled'), false)|select coalesce((select c.value = 'true'::jsonb from public.system_config c where c.key = 'activity.ledger_enabled'), true)|activity-ledger|fails closed"
   "S5b|60|values ('activity.ledger_enabled', 'false'::jsonb,|values ('activity.ledger_enabled', 'true'::jsonb,|activity-ledger|off by default"
@@ -39,6 +39,15 @@ SABOTAGES=(
   "S16|61|where hj.hjob is null or not hj.h|where true|activity-ledger|only the canonical predicate"
   "S13|gw|if (!/^\\d{1,3}\$/.test(text))|if (false)|activity-gateway|refused by name"
   "S14|gw|    requireOne: ['job', 'correlation'],||activity-gateway|a chain with neither"
+  "S17|60|    if exists (select 1 from public.activity_event_types t where t.event_type = p_event_type and t.durability = 'critical') then|    if false then|activity-ledger-durability|the best-effort writer refuses a critical type"
+  "S18|61|and (b.on_answer is not null or b.standing_option is not null) then 'approval.granted'|then 'approval.granted'|activity-ledger-review|is NOT recorded as a yes"
+  "S19|60|    if p_correlation_id is not null and p_correlation_id is distinct from v_corr then|    if false then|activity-ledger-review|a correlation that is not the job"
+  "S20|61|[\"job.failed\", \"t0.to_state = 'failed'\"]|[\"job.failed\", \"t0.to_state = 'cancelled'\"]|activity-ledger-equivalence|every filter returns exactly"
+  "S21|61|and (\$4::uuid is null or q.job_id in (select js.job_id from jset js))|and (\$4::uuid is null or q.job_id = \$4)|activity-ledger-review|includes its grandchildren"
+  "S22|61|d.message_ref is not null and d.message_ref not like 'confirmed-by-person:%'|d.message_ref is not null|activity-ledger-review|marked as arrived is not provider-confirmed"
+  "S23|60|  t := left(p_text, 4000);|  t := p_text;|activity-ledger-review|redacting an 80 000 character"
+  "S24|60|a.occurred_at > app.now_utc() - interval '1 hour') >= 300 then|a.occurred_at > app.now_utc() - interval '1 hour') >= 300000000 then|activity-ledger-review|limited per hour"
+  "S25|61|and not exists (select 1 from public.projects fp where fp.project_id = b.project_id and fp.is_fixture)||activity-ledger-review|fixture project, with no job"
   "S15|gw|args = { ...args, [extra.arg]: text }|args = { ...args, [extra.arg]: new Date(Date.parse(text)).toISOString() }|activity-gateway|microseconds apart"
 )
 

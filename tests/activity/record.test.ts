@@ -123,7 +123,7 @@ describe('the recovery sweep calls it', () => {
     )
     const out = await recoverStalled(db)
     expect(out.map((r) => r.jobId)).toEqual(['5b6f0c1e-1234-4abc-9def-0123456789ab'])
-    expect(statements.filter((s) => s.includes('app.record_activity_safely('))).toHaveLength(1)
+    expect(statements.filter((s) => s.includes('app.record_activity_safely'))).toHaveLength(1)
   })
 
   it('is not stopped by a ledger that refuses every write', async () => {

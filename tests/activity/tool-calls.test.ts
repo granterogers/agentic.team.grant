@@ -38,7 +38,7 @@ describe('recordToolCall', () => {
     })
     expect(statements).toHaveLength(1)
     const sql = statements[0] as string
-    expect(sql).toContain('app.record_activity_safely(')
+    expect(sql).toContain('app.record_activity_safely')
     expect(sql).toContain(`p_event_type => 'tool.call_completed'`)
     expect(sql).toContain(`'11111111-1111-1111-1111-111111111111'::uuid`)
     expect(sql).toContain(`'duration_ms', 124`)
