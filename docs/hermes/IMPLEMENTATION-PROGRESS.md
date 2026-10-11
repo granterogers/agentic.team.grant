@@ -79,6 +79,17 @@ Eleven tests went red together and all seven restored green (55 of 55, then 58 o
 throttle is measured from when the previous claim REACHED the gateway; Hermes repairs unknown tool names; and a harness whose global fetch is wrapped by the edge
 emulator must give Hermes's health probe and the bridge's clients the real fetch (captured before the emulator exists).
 
+## Next: where to resume
+
+* **M7** is gated on Grant's V6 key and on `feature/unified-activity-ledger` merging; nothing to do until then (HD-11 calls are `to_regprocedure`-guarded).
+* **M10** needs Grant's separate go-ahead (writes through policy). Do not start it without that.
+* **M8 (reviewed skill transfer) is the next buildable milestone.** Read `LEARNING-AND-SKILL-TRANSFER.md` first. Migration numbers: take `1073`
+  upward (1071 is the MCP gate, 1072 is M6; the task text's "1071" is stale). Build M8a (source B, converted observed technique, a proposal through
+  the existing suggestion round and Governance) before M8b (Hermes-authored, behind `engine.hermes.learning_offices`). Every conversion rule needs a
+  negative control; accept writes `public.skills` + `skill_tools`; nothing is adopted automatically.
+* **M11** is deferred and needs a decision.
+* Before any of it ships: the deploy order in the M6 notes, plus Grant's decisions G1 to G4 above and a run of the production-read checks he authorises.
+
 ## M6 notes
 
 * **UX QA, Level 1B** (a new control on the composer: interactive, desktop and phone, keyboard, the unavailable and the answered states). Driven by
