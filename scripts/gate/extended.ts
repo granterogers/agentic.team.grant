@@ -24,6 +24,11 @@ export const EXTENDED: readonly Proof[] = [
     'the read model access paths are built one at a time with CREATE INDEX CONCURRENTLY while the worker keeps writing: no write refused or stalled, a plain build of the same index shown to stall (the control), a second run changes nothing, an invalid leftover is dropped and rebuilt, and the health reading names what is missing',
   ),
   p(
+    'activity-ledger-durability',
+    11,
+    'audit durability by class: a critical type is refused by the best-effort writer and a failed strict record fails the change in its own transaction; with the ledger table (and then its failure counter) deliberately broken the best-effort writer returns null, never raises and writes nothing about itself; the failure counter is bounded',
+  ),
+  p(
     'activity-redaction',
     30,
     'the SQL redactor the ledger stores through and the TypeScript one the office already uses agree on every credential family, and neither touches ordinary text',

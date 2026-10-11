@@ -836,6 +836,7 @@ begin
     'last_native_event_at', (select max(a.occurred_at) from public.activity_events a where a.office_id = p_office),
     'write_failures_1h', (select count(*) from public.activity_write_failures f where f.office_id = p_office and f.occurred_at > app.now_utc() - interval '1 hour'),
     'write_failures_24h', (select count(*) from public.activity_write_failures f where f.office_id = p_office and f.occurred_at > app.now_utc() - interval '24 hours'),
+    'critical_via_best_effort_24h', (select count(*) from public.activity_write_failures f where f.office_id = p_office and f.occurred_at > app.now_utc() - interval '24 hours' and f.reason like 'a critical activity type%'),
     'last_write_failure', (select jsonb_build_object('at', f.occurred_at, 'event_type', f.event_type, 'sqlstate', f.sqlstate)
                              from public.activity_write_failures f where f.office_id = p_office order by f.occurred_at desc limit 1),
     'indexes_missing', to_jsonb(app.activity_index_gaps()),

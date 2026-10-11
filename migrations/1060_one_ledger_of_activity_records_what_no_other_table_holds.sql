@@ -78,6 +78,11 @@ create table if not exists public.activity_event_types (
   default_severity    text not null check (default_severity in ('debug','info','notice','warning','error','critical')),
   external_writable   boolean not null default false,
   description         text not null check (length(description) between 10 and 300),
+  -- What losing a row of this type would mean. critical: the audit trail would misrepresent a decision or an authority, so it is
+  -- written in the SAME transaction as the change (the strict writer) and a failure fails the change. operational: a recorded
+  -- fact the office wants but can live without once, written best effort with the failure counted. diagnostic: debugging detail.
+  -- derived: projected from the table that owns the state, so there is no write to lose (the owning table is the record).
+  durability          text not null default 'operational' check (durability in ('critical','operational','diagnostic','derived')),
   check (not (external_writable and source <> 'native'))
 );
 
@@ -138,6 +143,13 @@ insert into public.activity_event_types (event_type, category, source, default_v
   -- Not external_writable: a worker cannot assert that a person decided something. The office records it when a person does.
   ('external.review_decided',     'external', 'native',   'user',       'info',    false, 'A person reviewed an external worker''s output.')
 on conflict (event_type) do nothing;
+
+-- Durability classes (docs/activity-ledger/ARCHITECTURE.md, "Audit durability"). Projected types are derived from authoritative
+-- tables. Of the native ones: a correction supersedes an earlier record, so losing it would leave the wrong record standing (critical);
+-- tool-call detail is debugging (diagnostic); everything else is operational.
+update public.activity_event_types set durability = 'derived' where source = 'projected';
+update public.activity_event_types set durability = 'critical' where event_type = 'activity.corrected';
+update public.activity_event_types set durability = 'diagnostic' where event_type in ('tool.call_requested', 'tool.call_completed', 'tool.call_failed');
 
 -- ------------------------------------------------------------------------------------------------ the native ledger
 
@@ -494,6 +506,11 @@ set search_path = 'pg_catalog', 'public'
 as $$
 begin
   begin
+    -- A best-effort writer must not be the way a critical fact is recorded: it would turn "the audit trail says so" into "the audit
+    -- trail says so unless the write was lost". Refused and counted, so the misuse shows in the health reading.
+    if exists (select 1 from public.activity_event_types t where t.event_type = p_event_type and t.durability = 'critical') then
+      raise exception 'a critical activity type must be written with the strict writer, in the transaction it describes' using errcode = '42501';
+    end if;
     return app.record_activity(
       p_office => p_office, p_event_type => p_event_type, p_idempotency_key => p_idempotency_key,
       p_actor_kind => p_actor_kind, p_actor => p_actor, p_summary => p_summary, p_status => p_status,
