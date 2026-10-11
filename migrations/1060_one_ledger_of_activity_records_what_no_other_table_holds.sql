@@ -579,6 +579,8 @@ language plpgsql
 security definer
 set search_path = 'pg_catalog', 'public'
 as $$
+declare
+  v_cap integer;
 begin
   -- Off means off: nothing is written, not even the failure counter.
   if not app.activity_ledger_covers(p_office) then
@@ -589,6 +591,23 @@ begin
     -- trail says so unless the write was lost". Refused and counted, so the misuse shows in the health reading.
     if exists (select 1 from public.activity_event_types t where t.event_type = p_event_type and t.durability = 'critical') then
       raise exception 'a critical activity type must be written with the strict writer, in the transaction it describes' using errcode = '42501';
+    end if;
+    -- THE DIAGNOSTIC VOLUME CAP (phase 8, storage). A diagnostic native event (a tool call asked, finished or failed) is the commonest
+    -- and the least valuable row the ledger can hold, and the table is append-only on a database with a 500 MB allowance: at about 750
+    -- bytes with its indexes (measured), one office writing a thousand a day is a third of a gigabyte a year. So a day's diagnostic
+    -- events are bounded per office, by the setting activity.diag_native_per_day (0 to 100 000, default 500). Past it the write is
+    -- refused and COUNTED (the same bounded counter a lost write uses), never silent. Only this best-effort path is capped: the strict
+    -- writer, every consequential type and an outside worker's reports (which have their own caps) are not. The count stops at the cap,
+    -- so it never reads more than the cap's worth of index entries.
+    v_cap := coalesce((select case when jsonb_typeof(c.value) = 'number' then least(greatest((c.value #>> '{}')::numeric, 0), 100000)::int end
+                         from public.system_config c where c.key = 'activity.diag_native_per_day'), 500);
+    -- (a replay of a key that is already stored is not a new row, so it is never refused by the cap)
+    if exists (select 1 from public.activity_event_types t where t.event_type = p_event_type and t.default_visibility = 'diagnostic')
+       and not exists (select 1 from public.activity_events x where x.office_id = p_office and x.idempotency_key = p_idempotency_key)
+       and (select count(*) from (select 1 from public.activity_events a
+                                   where a.office_id = p_office and a.visibility = 'diagnostic' and a.actor_kind <> 'external'
+                                     and a.occurred_at > app.now_utc() - interval '1 day' limit v_cap) d) >= v_cap then
+      raise exception 'the office''s daily limit on diagnostic activity (%) is reached', v_cap using errcode = '53400';
     end if;
     return app.record_activity(
       p_office => p_office, p_event_type => p_event_type, p_idempotency_key => p_idempotency_key,

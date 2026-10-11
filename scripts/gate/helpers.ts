@@ -43,6 +43,10 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
     role: 'the assertions activity-ux-browser runs (compared with the gateway answer and the database); not a proof on its own',
   },
   {
+    stem: 'activity-scale-seed',
+    role: 'the busy history copied set-based into unrelated offices for the cross-office read-cost proof (disposable replica only, triggers and keys bypassed); not a proof',
+  },
+  {
     stem: 'activity-ux-seed',
     role: 'the genuine multi-day, mixed-actor records activity-ux-browser draws (jobs, approvals, deliveries, native and external events; backdated in a disposable replica only); not a proof',
   },

@@ -106,6 +106,29 @@ try {
   const hourly = Number((await one(`select count(*) as c from public.activity_write_failures where office_id = ${lit(office)}::uuid and occurred_at > now() - interval '1 hour'`)).c)
   check('bounded: a flood of failures is counted up to 200 an hour and no further, and never raises', flood === '' && hourly <= 201, `${hourly} counted, ${flood || 'no error'}`)
 
+  // ---------------------------------------------------------------------------------------------- the diagnostic volume cap (phase 8)
+  // the section above saturated the failure counter (200 an hour); a disposable replica may clear it so the cap's own count is visible
+  await db.execute(`delete from public.activity_write_failures where office_id = ${lit(office)}::uuid`)
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.diag_native_per_day', '3'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
+  const base = Number((await one(`select count(*) as c from public.activity_events where office_id = ${lit(office)}::uuid and visibility = 'diagnostic' and actor_kind <> 'external' and occurred_at > now() - interval '1 day'`)).c)
+  const capNow = base + 3
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.diag_native_per_day', ${lit(String(capNow))}::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
+  const written: (string | null)[] = []
+  for (let i = 0; i < 5; i++) written.push(String((await one(`${safe('tool.call_completed', `cap-${i}`)} as id`)).id ?? 'null'))
+  const failuresBefore = Number((await one(`select count(*) as c from public.activity_write_failures where office_id = ${lit(office)}::uuid and sqlstate = '53400'`)).c)
+  check('cap: past the office\'s daily diagnostic limit the best-effort writer stores nothing more and returns null (3 of 5 stored, the 4th and 5th refused)', written.slice(0, 3).every((w) => w !== 'null') && written.slice(3).every((w) => w === 'null'), written.map((w) => (w === 'null' ? 'null' : 'id')).join(','))
+  check('cap: a refusal is COUNTED in the failure counter (never silent), with the cap in the reason', failuresBefore >= 2, `${failuresBefore} counted`)
+  const replay = await one(`${safe('tool.call_completed', 'cap-0')} as id`)
+  check('cap: a replay of a key already stored at the cap returns the stored id and is not counted as a loss', String(replay.id) === written[0], String(replay.id))
+  const userType = await one(`${safe('budget.threshold_reached', 'cap-user')} as id`)
+  check('cap: a user-visible type is not capped (positive control: the cap is about diagnostic rows, not about the office going quiet)', userType.id !== null, String(userType.id))
+  const strictDiag = await refused(strict('tool.call_completed', 'cap-strict'))
+  check('cap: the strict writer is not capped (a caller that needs the row in its own transaction gets it)', strictDiag === '', strictDiag || 'written')
+  await db.execute(`insert into public.system_config (key, value, description) values ('activity.diag_native_per_day', '100000'::jsonb, 'proof') on conflict (key) do update set value = excluded.value`)
+  const raised = await one(`${safe('tool.call_completed', 'cap-raised')} as id`)
+  check('cap: raising the setting restores writing at once', raised.id !== null, String(raised.id))
+  await db.execute(`delete from public.system_config where key = 'activity.diag_native_per_day'`)
+
   const failed = results.filter((r) => !r.ok).length
   console.log(`\n${results.length - failed}/${results.length} passed`)
   exit = failed === 0 ? 0 : 1

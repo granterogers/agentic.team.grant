@@ -78,6 +78,7 @@ SABOTAGES=(
   "S52|60|  if p_status in ('confirmed', 'authorised', 'declined', 'expired') then|  if p_status in ('confirmed', 'authorised') then|activity-external-attack|a worker cannot report a person's refusal"
   "S53|60|revoke all on public.activity_events, public.activity_event_types, public.activity_write_failures from service_role;|grant all on public.activity_events, public.activity_event_types, public.activity_write_failures to service_role;|activity-external-attack|holds no insert or update on the ledger tables"
   "S54|61|    if v_spent + v_pass * (least(v_pool * 8, 16384)::numeric / v_pool) > v_budget then|    if false then|activity-scaling|with a 60 ms budget a read that would need wider passes is REFUSED"
+  "S57|60|limit v_cap) d) >= v_cap then|limit v_cap) d) >= v_cap and false then|activity-ledger-durability|cap: past the office's daily diagnostic limit"
   "S55|61|    'd0.channel = \$9', 'd0.channel = \$9', 'd0.channel = \$9', 'd0.channel = \$9',|    'false', 'false', 'false', 'false',|activity-scaling|the pushed-down interface filter returns exactly"
 )
 
