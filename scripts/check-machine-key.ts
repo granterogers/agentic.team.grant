@@ -20,9 +20,9 @@
  * Its own controls: an injected unpinned reach is refused, an injected stale pin is refused, and the scan finds
  * the pinned ones - so "clean" cannot mean "found nothing".
  */
-import '../src/safety/require-production-checks.ts'
+import '../src/safety/require-production-unless-replica.ts'
 import { readFileSync } from 'node:fs'
-import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { needsToken, openCatalogue } from './lib/catalogue-db.ts'
 
 export type Reach = { action: string; fn: string; param: string; default: string }
 
@@ -129,14 +129,11 @@ export const controls = (): { name: string; ok: boolean; detail: string }[] => {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const token = process.env.SUPABASE_ACCESS_TOKEN ?? ''
-  if (token === '') {
+  if (needsToken() && token === '') {
     console.error('SUPABASE_ACCESS_TOKEN is required')
     process.exit(2)
   }
-  const db = new ManagementApiExecutor(
-    process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
-    token,
-  )
+  const db = await openCatalogue(process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg', token)
   const actions = serviceActions(readFileSync('supabase/functions/hq-api/index.ts', 'utf8'))
   const fns = [...new Set(actions.values())]
   const defaults = (await db.execute(DEFAULTS_SQL(fns))).rows as {

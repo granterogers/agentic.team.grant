@@ -307,7 +307,7 @@ try {
   const w3 = await refused(`select app.record_external_activity(${lit(officeA)}::uuid, 'hermes', 'external.output_produced', 'x3-${run}', 'borrowed project', 'recorded', null, ${lit(projB)}::uuid)`)
   check('isolation: an external report cannot attach another office\'s project', w3.includes('activity_events_project_same_office'), w3.slice(0, 60))
   const noOffice = await refused(`select app.activity_read(p_office => '00000000-0000-0000-0000-000000000000'::uuid)`)
-  const noOffice2 = await refused(`select app.record_activity('00000000-0000-0000-0000-000000000000'::uuid, 'tool.completed', 'k-${run}-abcdef', 'agent', 'a', 's')`)
+  const noOffice2 = await refused(`select app.record_activity(p_office => '00000000-0000-0000-0000-000000000000'::uuid, p_event_type => 'tool.completed', p_idempotency_key =>'k-${run}-abcdef', p_actor_kind => 'agent', p_actor => 'a', p_summary => 's')`)
   check('isolation: no office, or a disabled one, is refused rather than defaulted', noOffice.includes('no_office') && noOffice2.includes('no_office'), 'read and write both refuse')
   const roles = await one(`select has_function_privilege('anon', 'public.activity_read(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz,text,text,text,text,text,text,timestamptz,uuid,integer)', 'execute') as a,
     has_function_privilege('authenticated', 'public.activity_read(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz,text,text,text,text,text,text,timestamptz,uuid,integer)', 'execute') as u,

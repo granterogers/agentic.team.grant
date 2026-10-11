@@ -407,7 +407,7 @@ begin
   -- 9. the action ledger (public.events): what the office DID, in its own vocabulary, with the reversal if there is one
   v_branches := v_branches || $b$
     select e.event_id, e.occurred_at, e.action_type, 'completed', 'info', e.actor_kind,
-           case when e.actor_kind = 'user' and e.actor is not distinct from app.office_actor($1) then 'you' else e.actor end,
+           case when e.actor_kind = 'user' and e.actor is not distinct from app.office_actor(p_office => $1) then 'you' else e.actor end,
            case when e.actor_kind = 'agent' then e.actor end, e.project_id, e.related_job_id, coalesce(j.root_job_id, j.job_id),
            j.parent_job_id, e.correlation_id, e.compensates_event_id, e.origin_channel, e.tool_used, e.provider_used,
            coalesce(nullif(left(app.activity_redact(e.rationale_summary), 300), ''),

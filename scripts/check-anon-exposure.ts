@@ -32,9 +32,7 @@
  * not simply revoke everything from everybody), and that a synthetic exposed
  * row is refused by the same predicate.
  */
-import '../src/safety/require-production-checks.ts'
-import { ManagementApiExecutor } from '../src/db/executor.ts'
-
+import '../src/safety/require-production-unless-replica.ts'
 import {
   EXPOSURE_SQL,
   type FnReach,
@@ -46,6 +44,7 @@ import {
   type ViewReach,
   viewReachableByAPublicKey,
 } from '../src/safety/anon-exposure.ts'
+import { needsToken, openCatalogue } from './lib/catalogue-db.ts'
 
 // The command re-exports the helpers so existing importers keep working; new ones import src/safety/anon-exposure.ts.
 export {
@@ -62,11 +61,11 @@ export {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const token = process.env.SUPABASE_ACCESS_TOKEN ?? ''
-  if (token === '') {
+  if (needsToken() && token === '') {
     console.error('SUPABASE_ACCESS_TOKEN is required')
     process.exit(2)
   }
-  const db = new ManagementApiExecutor('baujwlzcziasnfhhkchg', token)
+  const db = await openCatalogue('baujwlzcziasnfhhkchg', token)
   const fns = readReach((await db.execute(EXPOSURE_SQL)).rows)
   const open = fns.filter(reachableByAPublicKey)
   const noService = fns.filter((f) => !f.service)

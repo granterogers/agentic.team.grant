@@ -43,15 +43,12 @@
  * remove it — which are the only two honest answers.
  */
 
-import '../src/safety/require-production-checks.ts'
+import '../src/safety/require-production-unless-replica.ts'
 import { execSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { openCatalogue } from './lib/catalogue-db.ts'
 
-const db = new ManagementApiExecutor(
-  process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
-  process.env.SUPABASE_ACCESS_TOKEN ?? '',
-)
+const db = await openCatalogue()
 
 type Fn = { schema: string; name: string; body: string }
 
