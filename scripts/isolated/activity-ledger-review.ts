@@ -9,7 +9,6 @@
  * fails on the code the reviewer read. The unchanged behaviours the review found sound (isolation, keyset paging) are held by
  * activity-ledger.ts; this file holds only what was wrong.
  */
-import { PgExecutor } from '../../src/db/pg-executor.ts'
 import { isolated } from './guard.ts'
 import { realParent } from './real-telegram.ts'
 
@@ -46,7 +45,7 @@ try {
   const root = await realParent(db)
   await db.execute(`update public.jobs set project_id = ${lit(project)}::uuid, recipient_agent = 'chief-of-staff' where job_id = ${lit(root)}::uuid`)
   const corr = String((await one(`select correlation_id::text as c from public.jobs where job_id = ${lit(root)}::uuid`)).c)
-  const child = (kind: string, parent: string) => one(`select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'office.instruction', '{"x":1}'::jsonb, interval '0', true, ${lit(project)}::uuid)::text as id`).then((r) => String(r.id))
+  const child = (_label: string, parent: string) => one(`select app.enqueue_child(app.job_office(${lit(parent)}::uuid), ${lit(parent)}::uuid, 'office.instruction', '{"x":1}'::jsonb, interval '0', true, ${lit(project)}::uuid)::text as id`).then((r) => String(r.id))
   const kid = await child('c1', root)
   const grandkid = await child('c2', kid)
   await db.execute(`update public.jobs set recipient_agent = 'research-director' where job_id = ${lit(kid)}::uuid`)

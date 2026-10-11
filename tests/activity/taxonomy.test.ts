@@ -87,7 +87,7 @@ describe('both directions', () => {
   const emitted = new Set(
     [
       ...m1061.matchAll(
-        /'((?:request|job|retry|action|approval|output|delivery|inference)\.[a-z_]+)'/g,
+        /'((?:request|job|retry|action|approval|output|delivery|inference|integration)\.[a-z_]+)'/g,
       ),
     ].map((m) => m[1] as string),
   )
@@ -115,7 +115,6 @@ describe('both directions', () => {
         'activity.corrected',
         'budget.threshold_reached',
         'external.review_decided',
-        'integration.rate_limited',
         'tool.call_completed',
         'tool.call_failed',
         'tool.call_requested',

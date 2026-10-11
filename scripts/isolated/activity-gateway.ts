@@ -95,8 +95,8 @@ try {
   await rec(
     officeA,
     'a-limit',
-    'integration.rate_limited',
-    'Alpha was rate limited by a provider',
+    'budget.threshold_reached',
+    'Alpha reached a spending threshold',
     projA,
   )
   await rec(

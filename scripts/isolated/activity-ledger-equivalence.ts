@@ -90,6 +90,10 @@ try {
   for (const [i, kind] of ['ambiguous', 'missing_data', 'missing_skill', 'missing_tool', 'needs_permission', 'not_capable'].entries()) {
     await db.execute(`insert into public.job_impediments (job_id, kind, needed_raw, noticed_by, staff_slug, project_id) values (${lit(all[i + 2] as string)}::uuid, ${lit(kind)}, ${lit(`need ${kind}`)}, 'the handler', ${lit(agents[i % 4] as string)}, ${lit(i % 2 === 0 ? projA : projB)}::uuid)`)
   }
+  // throttles waited out (and a pause for another reason, which must not appear)
+  for (const [i, reason] of ['rate_limited', 'rate_limited', 'rate_limited', 'scheduled_wait'].entries()) {
+    await db.execute(`insert into public.job_pauses (job_id, reason, detail, resume_when, resumable) values (${lit(all[i + 1] as string)}::uuid, ${lit(reason)}, 'provider said slow down', 'the window ends', true)`)
+  }
   // outputs, some reviewed
   for (let i = 0; i < 8; i++) {
     const oid = String((await one(`insert into public.outputs (job_id, staff_id, body, confidence, evidence, sources, deterministic, reviewer_status, model)
@@ -102,7 +106,7 @@ try {
     await db.execute(`insert into public.events (correlation_id, actor_kind, actor, trigger, action_type, reversible, office_id, project_id, related_job_id, occurred_at)
       values (gen_random_uuid(), ${i % 2 === 0 ? `'agent'` : `'user'`}, ${lit(i % 2 === 0 ? (agents[i % 4] as string) : 'grant')}, 't', ${lit(['task.created', 'document.added', 'calendar.event_added', 'finding.write'][i % 4] as string)}, false, ${lit(grant)}::uuid, ${lit(i % 2 === 0 ? projA : projB)}::uuid, ${lit(all[i] as string)}::uuid, now() - interval '${i * 7} minutes')`)
   }
-  const natives: [string, string | null][] = [['system.recovered', 'warning'], ['budget.threshold_reached', 'error'], ['integration.rate_limited', 'warning'], ['tool.call_requested', null], ['tool.call_failed', 'error'], ['budget.threshold_reached', 'critical'], ['system.recovered', null]]
+  const natives: [string, string | null][] = [['system.recovered', 'warning'], ['budget.threshold_reached', 'error'], ['system.recovered', 'notice'], ['tool.call_requested', null], ['tool.call_failed', 'error'], ['budget.threshold_reached', 'critical'], ['system.recovered', null]]
   for (const [i, [type, sev]] of natives.entries()) {
     await db.execute(`select app.record_activity(p_office => ${lit(grant)}::uuid, p_event_type => ${lit(type)}, p_idempotency_key => ${lit(`eqn-${i}-${run}`)}, p_actor_kind => 'system', p_actor => 'worker', p_summary => 's',
       p_severity => ${sev === null ? 'null' : lit(sev)}, p_agent_slug => ${lit(agents[i % 4] as string)}, p_project_id => ${lit(i % 2 === 0 ? projA : projB)}::uuid, p_job_id => ${lit(all[i] as string)}::uuid)`)
@@ -134,14 +138,15 @@ try {
   const whole = await walk({ p_visibility: 'operator' }, 40)
   const types = new Set(whole.events.map((e) => e.type))
   check('fixtures: the history is varied enough for the comparison to mean something', whole.events.length > 150 && types.size >= 22 && !whole.partial, `${whole.events.length} events, ${types.size} types, partial=${whole.partial}`)
-  const wanted = ['job.failed', 'job.cancelled', 'job.completed', 'retry.scheduled', 'job.paused', 'job.waiting', 'delivery.failed', 'delivery.succeeded', 'delivery.suppressed', 'delivery.attempted', 'approval.granted', 'approval.denied', 'approval.answered', 'approval.expired', 'approval.withdrawn', 'inference.completed', 'output.reviewed', 'action.blocked', 'job.impeded', 'system.recovered', 'budget.threshold_reached', 'tool.call_failed']
+  check('fixtures: only the throttle pauses are events (a pause for another reason is not)', whole.events.filter((e) => e.type === 'integration.rate_limited').length === 3, `${whole.events.filter((e) => e.type === 'integration.rate_limited').length} rate-limited events of 4 pauses`)
+  const wanted = ['integration.rate_limited', 'job.failed', 'job.cancelled', 'job.completed', 'retry.scheduled', 'job.paused', 'job.waiting', 'delivery.failed', 'delivery.succeeded', 'delivery.suppressed', 'delivery.attempted', 'approval.granted', 'approval.denied', 'approval.answered', 'approval.expired', 'approval.withdrawn', 'inference.completed', 'output.reviewed', 'action.blocked', 'job.impeded', 'system.recovered', 'budget.threshold_reached', 'tool.call_failed']
   check('fixtures: it holds every job ending, delivery ending and approval ending', wanted.every((t) => types.has(t)), `missing: ${wanted.filter((t) => !types.has(t)).join() || 'none'}`)
   const ids = (l: Ev[]) => l.map((e) => String(e.id))
 
   const cases: { name: string; args: Record<string, string | number | null>; keep: (e: Ev) => boolean }[] = []
   for (const s of ['notice', 'warning', 'error', 'critical']) cases.push({ name: `severity >= ${s}`, args: { p_min_severity: s }, keep: (e) => (SEV[e.severity] ?? -1) >= (SEV[s] as number) })
   for (const c of ['request', 'job', 'approval', 'output', 'delivery', 'tool', 'reliability', 'usage', 'integration', 'external']) cases.push({ name: `category ${c}`, args: { p_category: c }, keep: (e) => e.category === c })
-  for (const t of ['job.failed', 'job.completed', 'job.cancelled', 'delivery.failed', 'delivery.succeeded', 'approval.answered', 'approval.denied', 'inference.completed', 'system.recovered', 'output.reviewed', 'task.created', 'budget.threshold_reached']) cases.push({ name: `type ${t}`, args: { p_type: t }, keep: (e) => e.type === t })
+  for (const t of ['integration.rate_limited', 'job.failed', 'job.completed', 'job.cancelled', 'delivery.failed', 'delivery.succeeded', 'approval.answered', 'approval.denied', 'inference.completed', 'system.recovered', 'output.reviewed', 'task.created', 'budget.threshold_reached']) cases.push({ name: `type ${t}`, args: { p_type: t }, keep: (e) => e.type === t })
   for (const a of agents) cases.push({ name: `agent ${a}`, args: { p_agent: a }, keep: (e) => e.agent === a })
   for (const s of ['failed', 'confirmed', 'completed', 'declined', 'attempted', 'requested']) cases.push({ name: `status ${s}`, args: { p_status: s }, keep: (e) => e.status === s })
   cases.push({ name: 'project A', args: { p_project: projA }, keep: (e) => e.project_id === projA })

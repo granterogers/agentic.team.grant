@@ -58,3 +58,75 @@ export const recordRecovered = async (
       .catch(() => undefined)
   }
 }
+
+export type ToolPhase = 'requested' | 'completed' | 'failed'
+
+export interface ToolCall {
+  readonly jobId: string
+  /** The registered capability the step performs (tool_permissions.tool), e.g. `drive.read`. */
+  readonly capability: string
+  /** The plan step's own id: a short word, never its inputs. */
+  readonly step: string
+  readonly specialist?: string
+  readonly phase: ToolPhase
+  /** completed only: whether the tool found something, found nothing, or asked the plan to wait. */
+  readonly outcome?: 'found' | 'nothing' | 'paused'
+  readonly durationMs?: number
+  /** failed only: the error's CLASS (its constructor name), never its message, which can hold what the tool was given. */
+  readonly errorClass?: string
+}
+
+const TOOL_SUMMARY: Readonly<Record<ToolPhase, string>> = {
+  requested: 'Started',
+  completed: 'Finished',
+  failed: 'Failed',
+}
+
+/**
+ * One tool-call event from the plan executor (`diagnostic`: debugging detail, hidden from the ordinary view).
+ *
+ * WHAT IT RECORDS: the capability, the step id, the specialist, the phase, how long it took and whether it found anything. WHAT IT
+ * NEVER RECORDS: the step's inputs, what the tool returned, or an error message - a tool is handed a person's data and may echo it,
+ * and the ledger holds references, not payloads. It is called AFTER the autonomy policy (`mayAct`) has answered `proceed`, so it
+ * observes what the office did and decides nothing; a refusal or a question is already a row in `blockers` or `job_impediments`.
+ *
+ * Best effort in both directions: the SQL writer never raises, and a transport failure is swallowed here, so a ledger that is down
+ * cannot fail a step. The idempotency key is job, step, phase and attempt, so a retried attempt is a new event and a redelivered
+ * one is not a second.
+ */
+export const recordToolCall = async (db: SqlExecutor, call: ToolCall): Promise<void> => {
+  const agent = call.specialist
+  const status = call.phase === 'requested' ? 'requested' : call.phase
+  const meta = [
+    `'tool', ${lit(call.capability.slice(0, 80))}`,
+    `'step', ${lit(call.step.slice(0, 40))}`,
+    `'phase', ${lit(call.phase)}`,
+    ...(call.outcome === undefined ? [] : [`'outcome', ${lit(call.outcome)}`]),
+    ...(call.durationMs === undefined
+      ? []
+      : [`'duration_ms', ${String(Math.max(0, Math.round(call.durationMs)))}`]),
+    ...(call.errorClass === undefined
+      ? []
+      : [`'error_class', ${lit(call.errorClass.slice(0, 60))}`]),
+  ].join(', ')
+  await db
+    .execute(
+      `select app.record_activity_safely(
+         p_office => j.office_id,
+         p_event_type => ${lit(`tool.call_${call.phase}`)},
+         p_idempotency_key => left('tool:' || j.job_id::text || ':' || ${lit(call.step.slice(0, 60))} || ':' || ${lit(call.phase)} || ':' || j.attempt::text, 200),
+         p_actor_kind => ${agent === undefined ? `'system'` : `'agent'`},
+         p_actor => ${lit(agent ?? 'office')},
+         p_summary => ${lit(TOOL_SUMMARY[call.phase])} || ' ' || ${lit(call.capability.slice(0, 80))},
+         p_status => ${lit(status)},
+         ${agent === undefined ? '' : `p_agent_slug => ${lit(agent)},`}
+         p_project_id => j.project_id,
+         p_job_id => j.job_id,
+         p_correlation_id => j.correlation_id,
+         p_source_interface => 'worker',
+         p_metadata => jsonb_build_object(${meta}),
+         p_evidence_ref => jsonb_build_object('kind', 'job', 'id', j.job_id))
+         from public.jobs j where j.job_id = ${lit(call.jobId)}::uuid`,
+    )
+    .catch(() => undefined)
+}

@@ -483,6 +483,22 @@ begin
        and (j.job_id is null or not (j.synthetic or j.is_fixture))
   $b$::text;
 
+  -- 11. a throttle the office waited out: job_pauses already records, per job, that the work was parked for a rate limit
+  v_branches := v_branches || $b$
+    select app.activity_pid('job_pauses', p.pause_id::text, 'integration.rate_limited'), p.at, 'integration.rate_limited', 'recorded',
+           app.activity_type_severity('integration.rate_limited'), 'system', 'office', j.recipient_agent, j.project_id, j.job_id,
+           coalesce(j.root_job_id, j.job_id), j.parent_job_id, j.correlation_id, null::uuid, j.origin_channel, null, null,
+           'Waiting out a rate limit: ' || j.kind,
+           jsonb_strip_nulls(jsonb_build_object('resumed', p.resumed_at is not null, 'resumable', p.resumable)),
+           jsonb_build_object('kind', 'job_pause', 'id', p.pause_id), 'projected', 'job_pauses', null::int,
+           p.pause_id, j.job_id
+      from {z} p
+      join public.jobs j on j.job_id = p.job_id and j.office_id = $1
+     where $10 >= 1 and p.reason = 'rate_limited'
+       and p.at >= coalesce($11, '-infinity') and p.at <= least(coalesce($12, 'infinity'), coalesce($13, 'infinity'))
+       and not (j.synthetic or j.is_fixture)
+  $b$::text;
+
   -- Stage 0 of each branch above, in the SAME ORDER: the source's newest rows by its own time column, with only the certain exclusions.
   -- v_ts names the column whose oldest value says how far back the source has been read.
   v_z := array[
@@ -581,13 +597,20 @@ begin
         where a0.office_id = $1
           and a0.occurred_at >= coalesce($11, '-infinity') and a0.occurred_at <= least(coalesce($12, 'infinity'), coalesce($13, 'infinity'))
           and (a0.job_id is null or exists (select 1 from public.jobs j0 where j0.job_id = a0.job_id and not (j0.synthetic or j0.is_fixture)))
+        order by {ts} desc, {id} desc limit $18$z$,
+    -- 16 throttles waited out
+    $z$select p0.* from public.job_pauses p0
+        where $10 >= 1 and p0.reason = 'rate_limited'
+          and p0.at >= coalesce($11, '-infinity') and p0.at <= least(coalesce($12, 'infinity'), coalesce($13, 'infinity'))
+          and exists (select 1 from public.jobs j0 where j0.job_id = p0.job_id and j0.office_id = $1 and not (j0.synthetic or j0.is_fixture))
         order by {ts} desc, {id} desc limit $18$z$
   ];
-  v_ts := v_ts || array['occurred_at', 'occurred_at', 'occurred_at'];
+  v_ts := v_ts || array['occurred_at', 'occurred_at', 'occurred_at', 'at'];
   v_idx := v_idx || array[
     'app.activity_pid(''inference_usage'', usage_id::text, ''inference.completed'')',
     'event_id',
-    'activity_id'];
+    'activity_id',
+    'app.activity_pid(''job_pauses'', pause_id::text, ''integration.rate_limited'')'];
 
   -- Assemble: each branch reads its own stage 0 and applies the caller's filters to its computed columns.
   -- The limit is the page PLUS ONE: whether there is a next page is decided by seeing one row beyond it, and a source that holds
@@ -618,10 +641,10 @@ begin
   -- filter the outer stage applies, never narrower, so they can drop nothing the filter would have kept.
   --   jset  the job and every job under it, at any depth (the contract says a job filter includes its descendants)
   --   cset  the jobs of one correlation
-  v_sa := array['c0', 'r0', 't0', 'b0', 'b0', 'i0', 'o0', 'o0', 'd0', 'd0', 'd0', 'd0', 'u0', 'e0', 'a0'];
-  v_sj := array['job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'related_job_id', 'job_id'];
-  v_sp := array['project_id', '', '', 'project_id', 'project_id', 'project_id', '', '', '', '', '', '', '', 'project_id', 'project_id'];
-  v_sc := array['', '', '', '', '', '', '', '', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id'];
+  v_sa := array['c0', 'r0', 't0', 'b0', 'b0', 'i0', 'o0', 'o0', 'd0', 'd0', 'd0', 'd0', 'u0', 'e0', 'a0', 'p0'];
+  v_sj := array['job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'job_id', 'related_job_id', 'job_id', 'job_id'];
+  v_sp := array['project_id', '', '', 'project_id', 'project_id', 'project_id', '', '', '', '', '', '', '', 'project_id', 'project_id', ''];
+  v_sc := array['', '', '', '', '', '', '', '', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id', 'correlation_id', ''];
   for i in 1 .. array_length(v_sa, 1) loop
     v_sel := v_sel || format($s$ and ($4::uuid is null or %1$s.%2$s in (select js.job_id from jset js))
           and ($5::uuid is null or %1$s.%2$s in (select cs.job_id from cset cs)%3$s)
@@ -670,7 +693,10 @@ begin
     [["delivery.succeeded", "true"]],
     [["delivery.failed", "true"]],
     [["delivery.suppressed", "true"]],
-    [["inference.completed", "true"]]
+    [["inference.completed", "true"]],
+    [],
+    [],
+    [["integration.rate_limited", "true"]]
   ]$m$::jsonb;
   for i in 1 .. jsonb_array_length(v_map) loop
     -- a source every one of whose types is allowed needs no test (the common case: no kind-of-event filter at all)
@@ -701,7 +727,8 @@ begin
     'exists (select 1 from public.staff sa where sa.staff_id = d0.staff_id and sa.slug = $3)',
     'exists (select 1 from public.jobs ja where ja.job_id = u0.job_id and ja.recipient_agent = $3)',
     'e0.actor = $3',
-    'a0.agent_slug = $3'];
+    'a0.agent_slug = $3',
+    'exists (select 1 from public.jobs ja where ja.job_id = p0.job_id and ja.recipient_agent = $3)'];
   for i in 1 .. array_length(v_ag, 1) loop
     v_sel[i] := v_sel[i] || ' and ($3::text is null or ' || v_ag[i] || ')';
   end loop;

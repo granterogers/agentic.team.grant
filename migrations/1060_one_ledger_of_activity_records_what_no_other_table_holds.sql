@@ -128,7 +128,8 @@ insert into public.activity_event_types (event_type, category, source, default_v
   ('inference.completed',     'usage',       'projected', 'diagnostic', 'info',    false, 'A model call finished, with tokens, latency and cost where the provider gave it.'),
   ('system.recovered',        'reliability', 'native',    'operator',   'warning', false, 'A recovery sweep reclaimed work abandoned by a worker that stopped.'),
   ('budget.threshold_reached','usage',       'native',    'user',       'warning', false, 'A spending or capacity threshold was crossed.'),
-  ('integration.rate_limited','integration', 'native',    'diagnostic', 'warning', false, 'An external service refused calls for a while (a rate limit or a throttle).'),
+  -- projected from public.job_pauses (reason rate_limited): the office already records, per job, that it parked the work to wait out a throttle
+  ('integration.rate_limited','integration', 'projected', 'diagnostic', 'warning', false, 'Work was parked to wait out an external service''s rate limit (from the pause the office recorded).'),
   ('tool.call_requested',          'tool',        'native',    'diagnostic', 'info',    false, 'An agent asked to use a tool.'),
   ('tool.call_completed',          'tool',        'native',    'diagnostic', 'info',    false, 'A tool call finished and returned.'),
   ('tool.call_failed',             'tool',        'native',    'diagnostic', 'warning', false, 'A tool call failed.'),

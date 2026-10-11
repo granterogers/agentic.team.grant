@@ -24,6 +24,11 @@ export const EXTENDED: readonly Proof[] = [
     'the read model access paths are built one at a time with CREATE INDEX CONCURRENTLY while the worker keeps writing: no write refused or stalled, a plain build of the same index shown to stall (the control), a second run changes nothing, an invalid leftover is dropped and rebuilt, and the health reading names what is missing',
   ),
   p(
+    'activity-native-writers',
+    14,
+    'tool-call events are written through the real TypeScript writer and carry the capability, step and outcome but never an input, output or error message; holding an over-budget agent back records budget.threshold_reached once a day (and nothing while the switch is off, the held-back behaviour unchanged); a rate-limit pause is an integration.rate_limited event projected from job_pauses; a broken ledger cannot fail a step',
+  ),
+  p(
     'activity-ledger-durability',
     11,
     'audit durability by class: a critical type is refused by the best-effort writer and a failed strict record fails the change in its own transaction; with the ledger table (and then its failure counter) deliberately broken the best-effort writer returns null, never raises and writes nothing about itself; the failure counter is bounded',
