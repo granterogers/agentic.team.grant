@@ -15,7 +15,7 @@
  *
  * Isolation is not done here and cannot be: see docs/hermes/host/RUNBOOK.md 9a (the export directory's parent is read-only to Hermes's unit).
  */
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import '../../src/safety/arm.ts' // this command makes no request; armed so that none to a production host could be made by accident
 import { learnProfileConfig } from '../../src/engines/hermes/learn-profile.ts'
@@ -70,6 +70,7 @@ export async function provisionLearnProfile(o: ProvisionOptions): Promise<Provis
 
   const profileDir = join(o.hermesHome, 'profiles', 'hermes-learn')
   await mkdir(profileDir, { recursive: true, mode: 0o700 })
+  await chmod(profileDir, 0o700)
   await mkdir(o.learnDir, { recursive: true })
   const config = learnProfileConfig({
     modelBlock: `model:\n  provider: openrouter\n  default: "${o.model}"`,
@@ -80,6 +81,8 @@ export async function provisionLearnProfile(o: ProvisionOptions): Promise<Provis
   const wrote: string[] = []
   await writeFile(join(profileDir, 'config.yaml'), config, { mode: 0o644 })
   wrote.push('config.yaml')
+  // A file that already exists keeps its old mode when written, so it is removed first and the secrets are never on disk under a wider one.
+  await rm(join(profileDir, '.env'), { force: true })
   await writeFile(join(profileDir, '.env'), `API_SERVER_KEY=${needed.API_SERVER_KEY}\nOFFICE_ENGINE_MCP_TOKEN=${needed.OFFICE_ENGINE_MCP_TOKEN}\nOPENROUTER_API_KEY=${needed.OPENROUTER_API_KEY}\n`, { mode: 0o600 })
   await chmod(join(profileDir, '.env'), 0o600)
   wrote.push('.env')

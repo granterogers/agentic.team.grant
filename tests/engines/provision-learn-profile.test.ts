@@ -37,6 +37,15 @@ describe('creating the hermes-learn profile on a host', () => {
     expect(config).not.toContain(SECRET_C)
     expect(env).not.toContain('never-copied')
   })
+  it('tightens a profile directory and a .env that already exist with wider modes (a file keeps its old mode when rewritten)', async () => {
+    const pd = join(home, 'profiles', 'hermes-learn')
+    await mkdir(pd, { recursive: true, mode: 0o755 })
+    await writeFile(join(pd, '.env'), 'OLD=1\n', { mode: 0o644 })
+    const r = await provisionLearnProfile(opts())
+    expect(((await stat(join(r.profileDir, '.env'))).mode & 0o777).toString(8)).toBe('600')
+    expect(((await stat(r.profileDir)).mode & 0o777).toString(8)).toBe('700')
+    expect(await readFile(join(r.profileDir, '.env'), 'utf8')).not.toContain('OLD=1')
+  })
   it('refuses a model that is not a :free slug (the zero-spend rule is not ours to bend), and a malformed one', async () => {
     for (const model of ['nvidia/nemotron-3-super-120b-a12b', 'openai/gpt-5', 'free', ':free', 'a/b:free-not']) await expect(provisionLearnProfile(opts({ model })), model).rejects.toThrow(/:free/)
     await expect(provisionLearnProfile(opts({ model: 'vendor/name:free' }))).resolves.toBeDefined()

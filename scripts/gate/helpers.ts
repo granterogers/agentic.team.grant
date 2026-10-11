@@ -37,7 +37,7 @@ export const HELPERS: readonly { readonly stem: string; readonly role: string }[
   },
   {
     stem: 'engine-learning-host',
-    role: 'NOT a gate proof: the hermes-learn profile on a REAL Hermes (needs root, an unprivileged user, a Python 3.14 install readable by it, HERMES_HOST_DIR) run inside a private mount namespace with the skills export read-only, a scripted model and no spend; 23 checks incl. a control host without the mount; read by a person, evidence in docs/hermes/m8-evidence. Its parts are covered by hermetic tests in npm test',
+    role: 'NOT a gate proof: the hermes-learn profile on a REAL Hermes (needs root, an unprivileged user, a Python 3.14 install readable by it, HERMES_HOST_DIR) run inside a private mount namespace with the skills export read-only, a scripted model and no spend; 26 checks incl. a control host without the mount and read-only configuration files; read by a person, evidence in docs/hermes/m8-evidence. Its parts are covered by hermetic tests in npm test',
   },
   {
     stem: 'engine-oldworker-child',

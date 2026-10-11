@@ -83,7 +83,7 @@ else, stop both services and tell the office's operator.
 ## 9a. Learning (optional, off by default; M8)
 
 Skip this unless the operator has put the office in `engine.hermes.learning_offices` (an empty list by default; never in production without Grant). Everything below was
-run on the pinned Hermes with a scripted model and no spend (`docs/hermes/m8-evidence/engine-learning-host-2026-10-11.txt`, 23 checks). It has NOT been run with a real model.
+run on the pinned Hermes with a scripted model and no spend (`docs/hermes/m8-evidence/engine-learning-host-2026-10-11.txt`, 26 checks). It has NOT been run with a real model.
 
 **What a learning run is.** The office opens it on a second Hermes profile, `hermes-learn`, served by the same gateway under `/p/hermes-learn/`. A Hermes that does not serve that
 profile answers 404 and the run fails in plain words; it is never answered by the default profile. The learning profile differs from the default in three things only: the `skills`
@@ -103,6 +103,9 @@ run as one user here, so permissions cannot separate them; the kernel's read-onl
 bridge replaces its directory by rename and a mount of the directory itself would go stale), `RestrictNamespaces=true` and `CapabilityBoundingSet=`; `hermes-bridge.service` lists the export and learn
 directories in `ReadWritePaths`. The proof made every file world-writable and owned by Hermes's own user, so only the mount stood in the way: edit and delete answered
 `OSError: [Errno 30] Read-only file system`, a path traversal, an absolute path and a symlink changed nothing, and a skill written under an approved skill's name was refused.
+The same unit makes both profiles' `config.yaml` read-only to Hermes (`ReadOnlyPaths=-…/home/config.yaml` and `-…/profiles/hermes-learn/config.yaml`): Hermes's home is writable, so without this a run
+that could write a file could turn a toolset on for the next run. The real Hermes served all 26 checks with both files mounted read-only, so it does not need to write them. Change a config as the
+operator, outside the unit, then restart the gateway.
 
 **Steps (as the user Hermes runs as):**
 

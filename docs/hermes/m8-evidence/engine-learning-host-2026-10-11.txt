@@ -16,7 +16,9 @@ Findings made while building it (all fixed in this commit):
     (first symptoms: the API server never came up; the MCP server "is not set in this profile's .env"; HTTP 401 on the learning profile);
   * /v1/toolsets lists only Hermes's BUILT-IN toolsets (the office MCP server is not one), so a learning profile reports ["skills"] and the default reports [];
   * the bridge killed every learning run that called skill_manage ("containment: skill_manage"): fakes could not show it, the real Hermes did;
-  * a bind mount of the export directory itself goes stale when the bridge replaces it by rename, so the mount must cover its PARENT.
+  * a bind mount of the export directory itself goes stale when the bridge replaces it by rename, so the mount must cover its PARENT;
+  * review finding: Hermes's home is writable and holds both profiles' config.yaml, so a run able to write a file could change the NEXT run's toolsets;
+    both files are now mounted read-only too, and the real Hermes serves every check above with them so (G1 to G3).
 -------------------------------------------------------------------------------------------------------------------------------------------------------------
 ok   A1 the learning profile is served under /p/hermes-learn/ by the same Hermes, and is healthy
 ok   A2 the only built-in toolset the learning profile enables is skills (Hermes lists no other as on), the verdict function agrees, and the default profile enables none - learn ["skills"] default []
@@ -41,5 +43,8 @@ ok   F2 the draft is NOT installed anywhere Hermes loads from; the approved refe
 ok   F3 the bridge's only calls to the office are the run's own, reading the approved list, and the one proposal: /skills,/heartbeat,/finish,/proposal
 ok   F4 a FAILED learning run leaves nothing behind: nothing proposed, the learn directory deleted
 ok   F5 a hostile draft can only ever be a PROPOSAL of the closed shape (scope, project and source in its front matter are ignored; terminal and code-execution tools and the code block are not carried)
+ok   G1 with both configuration files mounted read-only, the profile still serves and still reports exactly the skills toolset (the guarded host ran every check above with both mounted)
+ok   G2 the same user CANNOT write either configuration file inside the sandbox (EROFS), and both are byte-identical - sh: 1: cannot create .../homes/guarded/config.yaml: Read-only file system | ... profiles/hermes-learn/config.yaml: Read-only file system
+ok   G3 CONTROL: without the mount the same user DOES rewrite the configuration (so the mount is what stops it) - WROTE
 
-23/23 checks passed
+26/26 checks passed

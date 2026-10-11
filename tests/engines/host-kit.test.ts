@@ -103,6 +103,9 @@ describe('the service units', () => {
     // mounted, because the bridge replaces its directory by rename.
     const ro = [...noComments(hermesUnit).matchAll(/^ReadOnlyPaths=(.*)$/gm)].flatMap((m) => (m[1] ?? '').trim().split(/\s+/)).map((p) => p.replace(/^-/, ''))
     expect(ro).toContain('/var/lib/hermes-skills-export')
+    // Hermes may not rewrite its own configuration either (a run that could would change the NEXT run's toolsets): both profiles' config.yaml.
+    expect(ro).toContain('/var/lib/hermes/home/config.yaml')
+    expect(ro).toContain('/var/lib/hermes/home/profiles/hermes-learn/config.yaml')
     expect(rw(bridgeUnit)).not.toContain('/var/lib/hermes')
     expect(noComments(hermesUnit)).toMatch(/^RestrictNamespaces=true$/m)
     expect(noComments(hermesUnit)).toMatch(/^CapabilityBoundingSet=$/m)

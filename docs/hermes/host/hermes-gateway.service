@@ -25,6 +25,11 @@ ReadWritePaths=/var/lib/hermes
 # refuses (measured on the pinned Hermes; scripts/isolated/engine-learning-host.ts). The leading minus keeps the unit starting while learning is not set up.
 # It names the PARENT of the bridge's directory: the bridge replaces its directory by rename, and a mount of the directory itself would go stale.
 ReadOnlyPaths=-/var/lib/hermes-skills-export
+# Hermes's own configuration is read-only to Hermes as well: its home is writable (it must write sessions and state), and a run that could rewrite a
+# profile's config.yaml could turn a toolset on for the NEXT run. Proved with the pinned Hermes serving normally with both files mounted read-only
+# (engine-learning-host G1 to G3). Both lines are optional by the same minus; the learning profile's exists only once RUNBOOK 9a step 2 has run.
+ReadOnlyPaths=-/var/lib/hermes/home/config.yaml
+ReadOnlyPaths=-/var/lib/hermes/home/profiles/hermes-learn/config.yaml
 # Without these a process that may create a user namespace could try to remount; with them it has no capability to do so and no namespace to try in.
 RestrictNamespaces=true
 CapabilityBoundingSet=
