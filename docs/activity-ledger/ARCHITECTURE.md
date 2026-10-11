@@ -249,7 +249,7 @@ of truth this design avoids. The one case that would want it (a faster read at m
 | Richer Activity UI | **Proposed** |
 | A materialised read model | **Not needed**; revisit only on measured need |
 | Retention policy | **Stated** in `SECURITY.md`; nothing deletes |
-| Per-office activation | **Implemented** (phase 4): `app.activity_ledger_covers(office)` = the master switch AND an optional allowlist `activity.ledger_offices` (no row = every office, an array = those listed, anything else = none); the master stays the kill switch and the allowlist can only narrow it; proof `activity-office-scope` (26) |
+| Per-office activation | **Implemented, fails closed** (phase 5): `app.activity_ledger_covers(office)` = the master switch AND an office list `activity.ledger_offices` (an array of office UUIDs = those only; exactly `{"version":1,"mode":"all"}` = every office; absent, null, empty or anything else = none); the master is always the kill switch; one decision for every reader, writer, gateway section and Team HQ; operator tool `activity:switch` plans with compare-and-swap statements; proofs `activity-office-scope` (16 checks over 150 settings combinations x 2 offices x 8 surfaces), the gateway matrix in `activity-gateway`, the browser harness's eight activation states |
 | Rolling-deploy matrix | **Run on local replicas** (phase 4), not on deployed versions: the four worker/schema cells, the page/gateway cells and the new worker over a schema without the ledger (`RELEASE-READINESS.md`, "Mixed-version matrix"). The production matrix has not been run |
 
 ## 9. The production-catalogue checks

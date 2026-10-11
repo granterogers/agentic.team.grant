@@ -85,7 +85,7 @@ try {
     ['explicit all', () => ({ version: 1, mode: 'all' })], ['explicit all, keys reordered', () => ({ mode: 'all', version: 1 })],
     ['all, version 2', () => ({ version: 2, mode: 'all' })], ['all, version "1"', () => ({ version: '1', mode: 'all' })], ['all, extra key', () => ({ version: 1, mode: 'all', also: true })],
     ['all, no version', () => ({ mode: 'all' })], ['mode "most"', () => ({ version: 1, mode: 'most' })], ['empty object', () => ({})], ['object naming A', (a) => ({ [a]: true })],
-    ['bare string "all"', () => 'all'], ['string holding an array', (a) => JSON.stringify([a])], ['number 1', () => 1], ['boolean true', () => true], ['[true]', () => [true]], ['nested [[A]]', (a) => [[a]]],
+    ['bare string "all"', () => 'all'], ['bare string naming the office', (a) => a], ['string holding an array', (a) => JSON.stringify([a])], ['number 1', () => 1], ['boolean true', () => true], ['[true]', () => [true]], ['nested [[A]]', (a) => [[a]]],
   ]
 
   // ---------------------------------------------------------------------------------------------- the matrix, at every surface

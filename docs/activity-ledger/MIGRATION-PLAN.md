@@ -97,25 +97,40 @@ four-replica matrix on real deployed versions was not run (the repository's mixe
 
 ## Stage D - activation (a production write, with Grant's approval, after A to C are verified)
 
-Two settings decide whether the ledger is on for an office (`app.activity_ledger_covers`): `activity.ledger_enabled`, the **master switch and kill switch**, and the optional `activity.ledger_offices`, an allowlist that can only **narrow** the master
-(no row = every office the master covers, the Sample and every future person included; a JSON array of office ids = those offices only; anything else = none). The allowlist can never turn the ledger on by itself, and turning the master off silences every office.
-**Fail-open by absence:** if the allowlist row is deleted while the master is on, the ledger is on for every office. During a canary, do not delete that row except through `--all` or `--off`.
+**The ledger FAILS CLOSED.** Two settings decide whether it is on for an office (`app.activity_ledger_covers(office)`, the one decision every reader, every writer, the gateway and Team HQ ask):
 
-Everything is done through one tool that plans first (a plan writes nothing) and, with `--apply`, writes in the safe order (the allowlist BEFORE the master is turned on; `--off` writes the master only):
+| `activity.ledger_enabled` (master) | `activity.ledger_offices` (list) | Offices covered |
+|---|---|---|
+| anything but JSON `true` (off, absent, `"true"`, `1`) | anything | **none** (the master always wins; it is the kill switch) |
+| `true` | absent, JSON `null`, `[]` | **none** |
+| `true` | an array of office UUID strings | **only the listed offices** (a non-string or junk element covers nobody; matching is exact, lower case) |
+| `true` | exactly `{"version":1,"mode":"all"}` | **every office** (the explicit global mode) |
+| `true` | anything else: a bare string such as `"all"`, an object with another version, mode or an extra key, a number, malformed data | **none** (health says `scope: invalid`) |
+
+There is no implicit step from a canary to every office: only the exact object above, written by `--all-offices --confirm="ALL OFFICES" --apply`, does that. No migration writes either setting, so applying 1060 to 1062 enables nobody (stage A proof: `activity-migration-rehearsal`).
+
+Everything is done through one tool that plans first (a plan, `--status` and `--dry-run` write nothing; nothing is written without `--apply`) and, with `--apply`, writes in the safe order (the list BEFORE the master is turned on; narrowing is one statement; `--off` writes the master only):
 
 ```bash
 # 1. read what is set now and nothing else (a person sets the two production flags for this one operation)
 ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 SUPABASE_DB_URL=<direct url, never printed> npm run activity:switch
 # 2. plan a canary for one office (office ids come from: npm run q -- "select office_id, name, kind from public.offices where state = 'active'")
 ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 SUPABASE_DB_URL=... npm run activity:switch -- --canary <office-id>
-# 3. read the two statements it printed, then run the same command with --apply
+# 3. read CURRENT, PROPOSED and the statements it printed, then run the same command with --apply
 ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 SUPABASE_DB_URL=... npm run activity:switch -- --canary <office-id> --apply
-# later: more offices (--add <ids> --apply), every office (--all --apply), or the kill switch (--off --apply)
+# later: --add <ids>, --remove <ids>, the kill switch --off, or global activation:
+#   npm run activity:switch -- --all-offices --confirm="ALL OFFICES" [--apply]
 ```
 
-Expected for `--canary`: `now: master off; no allowlist`, then the two statements, then after `--apply` `after: master ON; allowlist of 1`. A refusal (`refused: ...`) writes nothing: an id that is not an active office, an id that is not a UUID, an empty list, `--add` with no allowlist.
-The planner is `src/activity/switch.ts` (unit tested); the statements it prints are the only SQL it will run. If the connection is the Management API and it errors, nothing was half-applied between the two statements except the allowlist, which is harmless alone (the master is still off); re-run the plan.
-**Recommended order:** one canary office (Grant's own, `kind = 'person'`) for a few days, read `activity_health` and the Activity screen, then `--all`.
+Every statement is a compare-and-swap on the value that was read (`update ... where value = '<read>'` or `insert ... on conflict do nothing`), and the apply stops at the first statement that changes nothing. So **a settings change between the plan and the apply, a second operator running at once, or a connection that dies half way, can never broaden access**: the worst outcome is a stopped apply with a message, and the state is whatever the last completed statement left (a list written with the master still off is harmless alone). **Stop conditions: any `refused:` line, any `stopped at` line, any `scope: invalid` in `activity_health`, a plan whose CURRENT is not what you expected. Re-read `--status` and plan again; never edit the rows by hand.**
+The planner checks the SHAPE of an office id (a lower-case UUID), not that the office exists: take ids from the `npm run q` query above and read the printed CURRENT and PROPOSED lines. A well-formed id that names no office covers nobody.
+Refusals write nothing: an id that is not a UUID, an empty list, `--add` or `--remove` when the stored list is invalid or the global mode is on (use `--canary` to replace it, which is a narrowing), an unknown or repeated option, two operations at once, `--confirm` with anything but `--all-offices`, a missing or different confirmation phrase, `--apply` with no operation, `--apply` together with `--dry-run`. Removing the last office writes `[]` (nobody), never deletes the row.
+The planner is `src/activity/switch.ts`, the command line `src/activity/switch-cli.ts` (both unit tested, 75 tests with the script's own checks), and `activity-office-scope` applies the printed statements to a real database for ten transitions, a race and an interruption.
+
+**Rollback.** Kill switch: `--off --apply` (master only; the list is kept, so turning back on is a deliberate act). Narrow: `--canary <the one office> --apply`, or `--remove <id> --apply`. Nothing already recorded is deleted by any of them; reads answer `enabled: false` and the page keeps the older list.
+**Recommended order:** one canary office (Grant's own, `kind = 'person'`) for a few days, read `activity_health` and the Activity screen, then add offices deliberately; the global mode is a separate, later decision.
+
+**Rolling deployment restrictions.** No application version that is deployed knows the ledger today (`main` has none), and the fail-closed semantics ship in the first application of 1060, so no migration is needed to enforce them and no intermediate schema can fail open. Activation is allowed only when **every** running version of the worker, `hq-api` and the page includes this change (a worker without the writers would simply not record; a page without the hook would not draw); until then the master stays off. Nothing in the deploy order below changes either setting.
 
 Preconditions: stage A to C verified; `activity_health` clean (below); the activation checklist in `RELEASE-READINESS.md` signed by a person; the Supabase health reading healthy.
 After the switch: (1) `activity_health` for the office: `write_failures_1h` is 0, `indexes_missing` is empty, `critical_via_best_effort_24h` is 0; `retry_backlog` is the number of jobs in `retrying` now.
@@ -140,7 +155,7 @@ Not run: the matrix on real deployed versions, and old worker plus new schema wi
 
 On the replica: `npm run verify:critical` (70 proofs, including `activity-ledger` and `activity-gateway`); `npx tsx scripts/gate/run.ts --tier extended --only
 activity-ledger-review,activity-ledger-equivalence,activity-indexes,activity-ledger-durability,activity-native-writers,activity-worker,activity-redaction,activity-external-attack,activity-office-scope --rebuild` (`--rebuild`: after rebuilding the replica the gate can otherwise reuse a stale candidate and report red for code that is fine); `npx tsx scripts/gate/run.ts --tier critical --rebuild`;
-`bash scripts/isolated/activity-ledger-sabotage.sh` (45 sabotages, in batches of ten so each call fits ten minutes); `bash scripts/isolated/activity-migration-rehearsal.sh`; `bash scripts/isolated/activity-ui-browser.sh` (the Activity screen from genuine ledger rows, 126 checks);
+`bash scripts/isolated/activity-ledger-sabotage.sh` (50 sabotages, in batches of ten so each call fits ten minutes); `bash scripts/isolated/activity-migration-rehearsal.sh`; `bash scripts/isolated/activity-ui-browser.sh` (the Activity screen from genuine ledger rows plus eight activation states, 174 checks);
 `npx tsx scripts/isolated/activity-ledger-perf.ts <db> 3000` for the timings. The seven production-catalogue checks run against the replica with `--replica` (`scripts/lib/catalogue-db.ts`) and are listed with
 their status in `RELEASE-READINESS.md`; with production access a reviewer grants, run them again without the flag.
 

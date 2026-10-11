@@ -158,8 +158,8 @@ A page must place the actor before the sentence only when `kind` is `agent` or `
 
 ### Per-office activation
 
-`activity.ledger_enabled` is the master switch. `activity.ledger_offices` (optional) narrows it: absent = every office the master covers, a JSON array of office ids = those offices, anything else = none. Every writer and reader asks `app.activity_ledger_covers(office)`;
-the zero-argument `app.activity_ledger_on()` is the master alone. The allowlist can never turn the ledger on by itself. The health reading (`activity_health`) reports `master_on`, `scope` (`all_offices` or `allowlist`) and `enabled` for the office.
+The ledger **fails closed**. `activity.ledger_enabled` is the master switch (only JSON `true` is on) and always wins. With it on, `activity.ledger_offices` decides who is covered: a JSON array of office UUID strings = those offices only; exactly `{"version":1,"mode":"all"}` = every office; **absent, JSON `null`, `[]` or anything else (a bare string, another version or mode, an extra key, a number, malformed data) = no office**. Every writer (native, safe, external), every reader, the gateway sections and Team HQ ask the one decision, `app.activity_ledger_covers(office)`;
+the zero-argument `app.activity_ledger_on()` is the master alone. The list can never turn the ledger on by itself, and nothing is cached. The health reading (`activity_health`) reports `master_on`, `scope` (`none`, `allowlist`, `all_offices` or `invalid`) and `enabled` for the office. The operator procedure is stage D of `MIGRATION-PLAN.md`.
 
 ## Versioning
 
