@@ -2133,6 +2133,8 @@ const WARM_MAX = 16
 const warmThumb = (host, id) => {
   /* Only what has a first page to draw: a PDF or a picture. */
   if (!/pdf|image|png|jpe?g|webp|gif/i.test(host.dataset.bcThumbtype ?? '')) return
+  /* document_preview_file is for documents read on demand from a connected source; a file Team HQ holds is drawn from its own URL and the office refuses this call for it. */
+  if ((host.dataset.bcThumbext ?? '') !== '1') return
   if (WARM.tried.has(id) || WARM.tried.size >= WARM_MAX) return
   WARM.tried.add(id)
   WARM.queue.push({ host, id })

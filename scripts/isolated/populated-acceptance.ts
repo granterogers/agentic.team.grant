@@ -379,6 +379,7 @@ for (const vp of VIEWPORTS) {
     const shownCount = async (): Promise<number> => (await page.evaluate(`(() => { const m = document.querySelector('.bcmain'); return m.querySelectorAll('.bctl li, .bctimeline li, .bcitem').length })()`)) as number
     const c1 = await chips()
     check(`[${tag}] Activity: the Problems and time-range filters appear where records support them`, c1.some((c) => /^Problems/.test(c)) && c1.some((c) => /Last 24 hours/.test(c)), JSON.stringify(c1))
+    await shot('activity')
     const before = await shownCount()
     await page.locator('[data-bc-actf="problems"]').click()
     await page.waitForTimeout(500)
@@ -401,7 +402,7 @@ for (const vp of VIEWPORTS) {
     check(`[${tag}] Activity: Problems in the last 24 hours shows only the failed send`, /sponsor note/.test(await page.evaluate(`document.querySelector('.bcmain').innerText`) as string))
     await page.locator('[data-bc-actf="problems"]').click()
     await page.waitForTimeout(100)
-    await shot('activity')
+    await shot('activity-problems-24h')
     await audit('Activity')
     // A project with no severity and no instants offers neither filter.
     await go(page, `/p/${Q.slug}/activity`, '.bcmain')
@@ -461,6 +462,22 @@ for (const vp of VIEWPORTS) {
     check(`[${tag}] a 100-character project name does not overflow the board`, (await overflow(page)) <= 1)
     await shot('board-long-name')
 
+    /* ---- Appearance: the pane, then the edge colour mode on the populated board ---- */
+    await go(page, `/p/${P.slug}/settings`, '[data-setpane="appearance"]')
+    await page.locator('[data-setpane="appearance"]').click({ force: true })
+    await page.waitForSelector('[data-ap]')
+    await audit('Appearance pane')
+    await shot('appearance')
+    await page.locator('[data-ap-mode="edge"]').click({ force: true })
+    await page.waitForTimeout(500)
+    const stored = (await page.evaluate(`(() => { const k = Object.keys(localStorage).find((x) => x.startsWith('bc.stage.')); return k ? JSON.parse(localStorage.getItem(k)).bg?.modMode ?? '' : '' })()`)) as string
+    check(`[${tag}] the edge colour mode is stored for this project`, stored === 'edge', stored)
+    await go(page, `/p/${P.slug}`, '.bcstage [data-mod]')
+    const edge = (await page.evaluate(`document.querySelector('[data-bc-board]')?.getAttribute('data-modmode') ?? ''`)) as string
+    check(`[${tag}] the board wears the edge mode after a reload`, edge === 'edge', edge)
+    await shot('board-edge-mode')
+    await audit('Project board, edge mode')
+
     check(`[${tag}] no page error and no failed or off-machine request`, errors.length === 0 && bad.length === 0, JSON.stringify({ errors, bad: bad.slice(0, 4) }))
     await ctx.close()
   }
@@ -468,8 +485,6 @@ for (const vp of VIEWPORTS) {
 
 await browser.close()
 server.close()
-await gw.close?.()
-await signin.close?.()
 await db.end()
 console.log(`\n${String(passed)} passed, ${String(failed)} failed`)
 process.exit(failed === 0 ? 0 : 1)

@@ -63,16 +63,6 @@ const dismissAll = async (): Promise<void> => {
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
 const db = accessToken === '' ? null : new ManagementApiExecutor(ref, accessToken)
-const officeToken =
-  db === null
-    ? ''
-    : String(
-        (
-          await db.execute(
-            `select decrypted_secret as v from vault.decrypted_secrets where name = 'hq.api_token'`,
-          )
-        ).rows[0]?.v ?? '',
-      )
 
 const PORT = 4679
 const server = await serveStudio(PORT)

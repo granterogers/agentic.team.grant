@@ -79,7 +79,9 @@ const open = async (
             ? { panels: null, rev: 0, now: Date.now() }
             : {
                 generated_at: new Date().toISOString(),
-                crew: [{ slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' }],
+                crew: [
+                  { slug: 'chief-of-staff', name: 'Claire', role: 'Chief of Staff', state: 'idle' },
+                ],
                 projects: [
                   {
                     slug: slug.replace(/^\/p\//, ''),

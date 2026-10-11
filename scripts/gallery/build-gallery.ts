@@ -18,7 +18,7 @@ await rm(`${OUT}/thumbs`, { recursive: true, force: true })
 await mkdir(`${OUT}/screenshots`, { recursive: true })
 
 type Meta = { area: string; title: string; state: string }
-const AREAS = ['Dashboard and project workspace', 'Menus and navigation', 'Chat', 'My Tasks and Search', 'Schedule', 'Maximised modules', 'Records and editors', 'Settings', 'Looks and palettes', 'Dialogs and notifications', 'Sign-in and onboarding', 'Responsive extras', 'Empty and first-run']
+const AREAS = ['Dashboard and project workspace', 'Menus and navigation', 'Chat', 'My Tasks and Search', 'Schedule', 'Maximised modules', 'Records and editors', 'Settings', 'Looks and palettes', 'Dialogs and notifications', 'Sign-in and onboarding', 'Responsive extras', 'Empty and first-run', 'New in this release: populated states']
 const A = (i: number): string => AREAS[i] as string
 
 const POP: Record<string, Meta> = {
@@ -109,7 +109,7 @@ const SRC_LAB = 'Local stand-in: the real page served locally against the lab\'s
 type Entry = { id: string; file: string; area: string; surface: string; title: string; scheme: 'light' | 'dark'; look: string; palette: string; viewport: string; device: string; state: string; source: string; sourceKind: 'local-replica' | 'local-standin'; data: string; commit: string; pair: string; status: 'captured' }
 const entries: Entry[] = []
 const used = new Set<string>()
-const add = async (raw: string, surface: string, m: Meta, scheme: 'light' | 'dark', look: string, dev: string, kind: 'replica' | 'standin', generated = false, accent = 'blue'): Promise<void> => {
+const add = async (raw: string, surface: string, m: Meta, scheme: 'light' | 'dark', look: string, dev: string, kind: 'replica' | 'standin', generated = false, accent = 'blue', srcText = ''): Promise<void> => {
   const d = DEV[dev]
   if (d === undefined) throw new Error(`device ${dev}`)
   const name = `${m.area.toLowerCase().replace(/[^a-z]+/g, '-')}__${surface}__${kind === 'replica' ? 'replica' : 'standin'}__${d.vp}__${scheme}__${look === 'original' ? 'original' : look}-${accent === 'blue' ? 'slate' : accent}.png`
@@ -118,7 +118,7 @@ const add = async (raw: string, surface: string, m: Meta, scheme: 'light' | 'dar
   await copyFile(raw, `${OUT}/screenshots/${name}`)
   entries.push({
     id: name.replace(/\.png$/, ''), file: `screenshots/${name}`, area: m.area, surface, title: m.title, scheme, look: look === 'original' ? 'Original' : (LOOKS[look] as string), palette: accent === 'blue' ? 'slate (accent Blue)' : 'paper (accent Violet)', viewport: d.vp, device: d.note, state: m.state,
-    source: kind === 'replica' ? SRC_POP : SRC_LAB, sourceKind: kind === 'replica' ? 'local-replica' : 'local-standin', data: generated ? 'GENERATED conversation (not stored by the office)' : kind === 'replica' ? 'synthetic replica rows' : 'stand-in / prototype content', commit: SHA,
+    source: srcText !== '' ? srcText : kind === 'replica' ? SRC_POP : SRC_LAB, sourceKind: kind === 'replica' ? 'local-replica' : 'local-standin', data: generated ? 'GENERATED conversation (not stored by the office)' : kind === 'replica' ? 'synthetic replica rows' : 'stand-in / prototype content', commit: SHA,
     pair: `${m.area}|${surface}|${kind}|${d.vp}|${look}`, status: 'captured',
   })
 }
@@ -144,8 +144,31 @@ for (const f of (await readdir(`${RAW}/lab`)).sort()) {
   if (m !== undefined) await add(`${RAW}/lab/${f}`, x[1] as string, m, x[3] as 'dark', 'original', x[2] as string, 'standin')
 }
 void RESP
+/* The populated-state acceptance captures (scripts/isolated/populated-acceptance.ts): the features new in this release, drawn with realistic fixtures. */
+const SRC_ACC = 'Local replica, acceptance fixtures: the real page and hq-api code over an isolated Postgres replica holding synthetic rows (36 to-dos with priorities, stages and labels; six contacts of varying completeness; own events; six documents including a PDF, a picture, an unsupported spreadsheet and a missing file). Stand-ins, named: the activity feed carries added severity and instants, and two Google Calendar events are appended, at the browser boundary, because the office stores neither here'
+const ACC: Record<string, Meta> = {
+  todos: { area: A(13), title: 'To-dos, maximised: cards with priority, in-progress, done and label chips', state: 'maximised' },
+  contacts: { area: A(13), title: 'Contacts, maximised: cards with only the fields each contact has', state: 'maximised' },
+  activity: { area: A(13), title: 'Activity, all records, with the time-range and Problems filters', state: 'maximised' },
+  'activity-problems-24h': { area: A(13), title: 'Activity, Problems in the last 24 hours (the filters combined)', state: 'filtered' },
+  calendar: { area: A(13), title: 'Schedule: own events (circle), Google events (diamond), all-day weight, project hue; phone shows the dense month with the day agenda', state: 'maximised' },
+  documents: { area: A(13), title: 'Docs and Files: PDF first page, picture, spreadsheet glyph, missing-file fallback, long title', state: 'maximised' },
+  board: { area: A(13), title: 'Project board with the populated modules (card colour mode)', state: 'normal' },
+  'board-edge-mode': { area: A(13), title: 'Project board, Title and border coloured mode (per-project Appearance setting)', state: 'normal' },
+  'board-long-name': { area: A(13), title: 'Project board, 100-character project name', state: 'normal' },
+  appearance: { area: A(13), title: 'Project Settings, Appearance (module colour mode, module / grid-dot / texture opacity, live sample)', state: 'normal' },
+}
+const ACCDEV: Record<string, string> = { desktop: '1440', phone: '390' }
+for (const f of (await readdir(`${RAW}/acc`)).sort()) {
+  const x = /^(desktop|phone)-(light|dark)-(.+)\.png$/.exec(f)
+  if (x === null) continue
+  const m = ACC[x[3] as string]
+  if (m !== undefined) await add(`${RAW}/acc/${f}`, `acc-${x[3] as string}`, m, x[2] as 'light', 'original', ACCDEV[x[1] as string] as string, 'replica', false, 'blue', SRC_ACC)
+}
 
 const notCaptured = [
+  { item: 'Activity severity written by the office; real Google Calendar events', reason: 'The office stores no event severity today and no Google Calendar is connected in the replica. The "New in this release" Activity and Schedule images use fixture records with a severity and two appended Google events, added at the browser boundary, to show how the page draws them. They prove the page, not the office.' },
+  { item: 'Thumbnails of documents held in a connected source (Drive) and read on demand', reason: 'Covered by the document-preview browser suite with a stubbed gateway; not drawn here because the replica holds no connected source. Uploaded PDFs and pictures are shown.' },
   { item: 'Real iOS Safari (any screen)', reason: 'No WebKit or iOS device in the build environment. Every "390x844" image is Chromium with touch emulation, not iOS Safari.' },
   { item: 'Real microphone, dictation and live voice in use', reason: 'No audio hardware; only the buttons and idle states are shown. Voice is covered by simulated-audio suites, not by these images.' },
   { item: 'Hosted preview signed in / Sample Office on the hosted preview', reason: 'The hosted preview cannot sign in (its API base is a placeholder); that is why this gallery exists. Every image here is a local capture.' },
@@ -158,7 +181,7 @@ const notCaptured = [
   { item: 'Other looks and accent colours, other screen sizes', reason: 'This gallery is the Original look at two sizes only (1440x900 and 390x844), Light and Dark, as asked. The earlier gallery had the other looks and sizes.' },
 ]
 
-await writeFile(`${OUT}/manifest.json`, `${JSON.stringify({ generated: new Date().toISOString().slice(0, 10), branch: 'integration/aesthetic-release-candidate', commit: SHA, viewportNote: 'Chromium emulation only; iOS Safari was not tested', count: entries.length, notCaptured, entries }, null, 1)}\n`)
+await writeFile(`${OUT}/manifest.json`, `${JSON.stringify({ generated: new Date().toISOString().slice(0, 10), branch: 'integration/dashboard-polish-release-candidate', commit: SHA, viewportNote: 'Chromium emulation only; iOS Safari was not tested', count: entries.length, notCaptured, entries }, null, 1)}\n`)
 
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
 const keyOf = (e: Entry): string => `${e.area}|${e.surface}|${e.sourceKind}|${e.look}`
@@ -247,7 +270,7 @@ table{border-collapse:collapse;font-size:13px}td,th{border:1px solid var(--line)
 <span class="fl tog" role="group" aria-label="Theme"><b>Theme</b><button type="button" data-g="t" data-f="all" aria-pressed="true">Both</button><button type="button" data-g="t" data-f="s-light" aria-pressed="false">Light</button><button type="button" data-g="t" data-f="s-dark" aria-pressed="false">Dark</button></span><span class="count" id="count"></span></nav>
 <div id="lb" role="dialog" aria-modal="true" aria-label="Screenshot viewer"><div class="bar"><button type="button" id="lbx" aria-label="Close">&#10005;</button><span id="lbn"></span><button type="button" id="lbp" aria-label="Previous">&#8249;</button><button type="button" id="lbnx" aria-label="Next">&#8250;</button></div><div class="stage" id="lbs"><img id="lbi" alt=""></div><div class="cap" id="lbc"></div></div>
 <header><h1>Agentic Team HQ: visual review gallery</h1>
-<p class="meta">Branch <code>integration/aesthetic-release-candidate</code> at commit <code>${SHA}</code>. Genuine Chromium screenshots of the current page code, unedited. Every pair shows the same screen, data, size and state in Light and Dark. Phone-size images are Chromium touch emulation, <b>not iOS Safari</b>. Source is stated on every card: <i>local replica</i> (real page and gateway code over synthetic rows) or <i>local stand-in</i> (lab gateway, near-empty office). Click an image for the full-resolution PNG. ${entries.length} images; see <a href="README.md">README.md</a> and <a href="manifest.json">manifest.json</a>.</p></header>
+<p class="meta">Branch <code>integration/dashboard-polish-release-candidate</code>, page code as of commit <code>${SHA}</code> (later commits on the branch change only tests and documents). Genuine Chromium screenshots of the current page code, unedited. Every pair shows the same screen, data, size and state in Light and Dark. Phone-size images are Chromium touch emulation, <b>not iOS Safari</b>. Source is stated on every card: <i>local replica</i> (real page and gateway code over synthetic rows) or <i>local stand-in</i> (lab gateway, near-empty office). Click an image for the full-resolution PNG. ${entries.length} images; see <a href="README.md">README.md</a> and <a href="manifest.json">manifest.json</a>.</p></header>
 <main>${sections.join('\n')}
 <section id="not-captured"><h2>NOT CAPTURED</h2><table><tr><th>Item</th><th>Reason</th></tr>${notCaptured.map((n) => `<tr><td>${esc(n.item)}</td><td>${esc(n.reason)}</td></tr>`).join('')}</table></section></main>
 <script>
