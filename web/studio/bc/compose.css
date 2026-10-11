@@ -4411,3 +4411,14 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
 @media (pointer: coarse) {
   [data-experience='basecamp'] .dock .bcdictate { width: 44px; height: 44px; }
 }
+
+/* ---------------------------------------------------------------------- *
+ * THE ACTIVITY LIST'S TITLES MAY WRAP.
+ *
+ * On a touch device the shared .bcitemtitle rule above (inline-flex, 44px tall, margin -11px) builds a 44px hit area around a ONE-line title.
+ * An Activity row is not pressable, and its title is often a whole sentence ("Hermes (external worker): Proposed a skill for reading price
+ * lists; nothing is installed"), so on a 390px phone the second line sat under the meta line and the two overprinted. Found by drawing real
+ * ledger rows (scripts/isolated/activity-ui-browser.ts); scoped to the Activity rows only, so every other list keeps its hit area.
+ * Phone overrides go at the END of the stylesheet. No other component is touched.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcitem--log .bcitemtitle { display: block; min-height: 0; margin: 0; }

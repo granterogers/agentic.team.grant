@@ -7,6 +7,34 @@
  */
 export const HELPERS: readonly { readonly stem: string; readonly role: string }[] = [
   {
+    stem: 'activity-ledger-perf',
+    role: 'NOT a gate: measures what the unified activity ledger costs (read latency against history, write cost, concurrency, footprint) and reports; run by hand with a job count',
+  },
+  {
+    stem: 'activity-ledger-sabotage',
+    role: 'NOT a proof: breaks each protection of the unified activity ledger on a copy and requires the named proof to go red, then runs the unmodified control; run by hand (about 15 minutes)',
+  },
+  {
+    stem: 'activity-migration-rehearsal',
+    role: 'NOT a gate: rehearses the ledger deployment failure modes (a failing migration, an interrupted concurrent index build, a transaction-wrapped connection) on a clone with only 1060 applied; run by hand through its .sh wrapper',
+  },
+  {
+    stem: 'activity-read-concurrency',
+    role: 'NOT a gate: p50 and p95 of the newest page, a diagnostic page and a sparse filter for one reader and for several at once, on a database activity-ledger-perf has seeded; reports and asserts shape only',
+  },
+  {
+    stem: 'activity-mixed-version',
+    role: "NOT a gate: the new worker's ledger writers over a schema WITHOUT the ledger (a deploy ordering mistake); run by hand on a clone of a replica built from main",
+  },
+  {
+    stem: 'activity-ui-browser',
+    role: 'NOT a gate: draws the Activity screen from genuine ledger rows through the real gateway in a real browser at 1440, 390 and 320; run by hand through its .sh wrapper (about 4 minutes)',
+  },
+  {
+    stem: 'activity-ui-seed',
+    role: 'the genuine ledger records activity-ui-browser draws (written to the owning tables and through the ledger writers); not a proof',
+  },
+  {
     stem: 'guard',
     role: 'the connection every proof uses and the refusal that keeps it isolated (marker table, local socket)',
   },

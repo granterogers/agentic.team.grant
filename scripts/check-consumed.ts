@@ -35,10 +35,10 @@
  *      no writer in `src/` and holds no rows; a mechanism for a state that never
  *      occurs is `app.suppress_delivery`'s case, not a forgotten mouth.
  */
-import '../src/safety/require-production-checks.ts'
+import '../src/safety/require-production-unless-replica.ts'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { openCatalogue } from './lib/catalogue-db.ts'
 
 const BASELINE = 'docs/testing/consumed-baseline.json'
 
@@ -74,10 +74,7 @@ const read = (f: string): string => (existsSync(f) ? readFileSync(f, 'utf8') : '
 const appCode = [...walk('src'), ...walk('supabase/functions')].map(read).join('\n')
 const operatorCode = [...operatorFiles].map(read).join('\n')
 
-const db = new ManagementApiExecutor(
-  process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
-  process.env.SUPABASE_ACCESS_TOKEN ?? '',
-)
+const db = await openCatalogue()
 
 const one = async (sql: string): Promise<string> => {
   const { rows } = await db.execute(sql)

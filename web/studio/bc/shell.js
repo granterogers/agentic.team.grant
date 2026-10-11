@@ -3441,23 +3441,35 @@ const allActivity = () => {
     everything in the second" and a person could not tell what had just
     happened. Items with no instant keep their place after the dated ones.
   */
-  const rows = PROJECTS.flatMap((p) => (p.activity ?? []).map((a) => ({ ...a, project: p.name })))
-    .map((a, i) => ({ a, i, t: a.at ? Date.parse(a.at) : Number.NaN }))
-    .sort((x, y) => (Number.isNaN(y.t) ? -1 : 0) - (Number.isNaN(x.t) ? -1 : 0) || (y.t || 0) - (x.t || 0) || x.i - y.i)
-    .map((x) => x.a)
-    .slice(0, 80)
+  /*
+    THE LEDGER, WHEN IT IS ON AND ANSWERED (docs/activity-ledger/). Its rows already span the whole office, newest first, with the
+    project named in each, so they replace the per-project lists wholesale rather than being merged into them: merging two accounts
+    of the same events is how one fact appears twice. `ctx.ledgerActivity()` is null when it is switched off, unanswered or empty,
+    which leaves exactly the behaviour below. A ledger sentence already carries its actor ("You said yes: ..."), so the name goes in
+    front only for a specialist or an outside worker (`line.byline`).
+  */
+  const fromLedger = ctx?.ledgerActivity?.() ?? null
+  const rows = (fromLedger !== null
+    ? fromLedger.slice(0, 80)
+    : PROJECTS.flatMap((p) => (p.activity ?? []).map((a) => ({ ...a, project: p.name })))
+        .map((a, i) => ({ a, i, t: a.at ? Date.parse(a.at) : Number.NaN }))
+        .sort((x, y) => (Number.isNaN(y.t) ? -1 : 0) - (Number.isNaN(x.t) ? -1 : 0) || (y.t || 0) - (x.t || 0) || x.i - y.i)
+        .map((x) => x.a)
+        .slice(0, 80))
+  const titleOf = (a) =>
+    a.line !== undefined
+      ? `${a.line.byline === '' ? '' : `${a.line.byline}: `}${a.line.sentence}`.trim()
+      : `${whoName(a.who) || 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim()
   return `<h1 class="bcsectiontitle">Activity</h1>
     ${
       rows.length === 0
         ? empty({ title: 'Nothing yet', body: 'What happens across your projects is listed here.' })
         : `<div class="bclist">${rows
             .map(
-              (a) => `<div class="bcitem">
+              (a) => `<div class="bcitem bcitem--log">
                 <span></span>
                 <div class="bcitembody">
-                  <span class="bcitemtitle">${esc(
-                    `${whoName(a.who) || 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(),
-                  )}</span>
+                  <span class="bcitemtitle">${esc(titleOf(a))}</span>
                   <span class="bcitemmeta">${esc([a.project, a.when].filter(Boolean).join(' · '))}</span>
                 </div>
                 <span></span>

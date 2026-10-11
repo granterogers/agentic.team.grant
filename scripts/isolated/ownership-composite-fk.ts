@@ -64,9 +64,7 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')
 // ---------------------------------------------------------------------------------------------
 await db.execute(`
   do $r$ begin
-    if not exists (select 1 from pg_roles where rolname = 'ownership_spike_worker') then
-      create role ownership_spike_worker nologin bypassrls;
-    end if;
+    begin create role ownership_spike_worker nologin bypassrls; exception when duplicate_object or unique_violation then null; end;
   end $r$;
   grant all on all tables in schema public to ownership_spike_worker, service_role;
   grant usage on schema public, app to service_role;

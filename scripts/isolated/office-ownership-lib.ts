@@ -30,8 +30,11 @@ export async function prepare(
   db: Db,
 ): Promise<{ A: string; B: string; S: string; G: string; T: string; SYS: string }> {
   await db.execute(`
+    -- A role is cluster-wide, so two proofs preparing at once can both pass an "if not exists" and then both create it (measured on
+    -- a throwaway role: 15 failures in 40 concurrent pairs, 0 with this form). The loser of a concurrent create gets a unique
+    -- violation on pg_authid, not duplicate_object, so both are the same answer: it exists.
     do $r$ begin
-      if not exists (select 1 from pg_roles where rolname = 'p2_worker') then create role p2_worker nologin bypassrls; end if;
+      begin create role p2_worker nologin bypassrls; exception when duplicate_object or unique_violation then null; end;
     end $r$;
     -- service_role is given what Supabase gives it - the public tables - and NOTHING in schema app. An earlier version of
     -- this setup also granted it usage on app and execute on every app function; that hid, for a whole afternoon, the

@@ -333,6 +333,10 @@ export const CRITICAL: readonly Proof[] = [
     'a finished answer is redriven until it is sent or visibly given up, never left claimed, and a failed or uncertain one puts ONE question on the person list (never auto-resent, resolvable by his answer, none for harness traffic)',
   ),
 
+  // The unified activity ledger's proofs (activity-ledger, activity-gateway and the rest) are in the EXTENDED tier: this tier is at its
+  // cap of 70 on main (tests/gate/registry.test.ts), and the ledger is a default-off read model, not a boundary an existing write
+  // depends on. Moving one back here is a decision about the cap (docs/activity-ledger/RELEASE-READINESS.md).
+
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p(
     'replay-parity',

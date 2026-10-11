@@ -29,9 +29,9 @@
  * It reads the deployed function's SOURCE for the names and the DATABASE for
  * what exists, so it cannot pass by agreeing with itself.
  */
-import '../src/safety/require-production-checks.ts'
+import '../src/safety/require-production-unless-replica.ts'
 import { readFile } from 'node:fs/promises'
-import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { needsToken, openCatalogue } from './lib/catalogue-db.ts'
 
 const GATEWAY = 'supabase/functions/hq-api/index.ts'
 
@@ -52,13 +52,12 @@ if (wanted.length === 0) {
   process.exit(2)
 }
 
-const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
-if (accessToken === '') {
+if (needsToken() && accessToken === '') {
   console.error('SUPABASE_ACCESS_TOKEN is not set — this check asks the database what exists')
   process.exit(2)
 }
-const db = new ManagementApiExecutor(ref, accessToken)
+const db = await openCatalogue()
 
 const rows = (
   await db.execute(

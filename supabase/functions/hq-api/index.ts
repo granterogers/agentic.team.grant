@@ -243,7 +243,18 @@ const SECTIONS: Readonly<
        * default decides. That is the one place a default is right, because the
        * parameter being missing is not a typo — it is the ordinary request.
        */
-      also?: readonly { param: string; arg: string; values?: readonly string[] }[]
+      also?: readonly {
+        param: string
+        arg: string
+        values?: readonly string[]
+        /**
+         * What free text must look like before it reaches the RPC (activity ledger). An id, an instant or a small
+         * count is checked at the door and refused by name, so a malformed one is never answered with a database error.
+         */
+        shape?: 'uuid' | 'time' | 'int'
+      }[]
+      /** At least one of these query parameters must be present and non-empty, or the request is refused by name (400). */
+      requireOne?: readonly string[]
       /** Whether `?project=<uuid>` narrows this section. Search only. */
       scoped?: boolean
       /**
@@ -396,6 +407,113 @@ const SECTIONS: Readonly<
   mcp: { fn: 'hq_mcp', office: true },
   // What the office did and what is being built, as one page (#68).
   lately: { fn: 'hq_studio_lately', office: true, args: { p_limit: 40 } },
+  /*
+    The unified activity ledger (migrations 1060 and 1061, docs/activity-ledger/).
+
+    All four answer {enabled: false} while system_config activity.ledger_enabled is off, which is its default. They take the office
+    from the verified session like every other section; the ids, instants and words a caller may narrow by are checked here, at
+    the door, and reach the RPC only as parameters.
+      activity_ledger  the existing Activity module's row shape, so the page can consume it with no visual change
+      activity_feed    the full contract with filters and a keyset cursor
+      activity_chain   one piece of work from the request that began it to the delivery that ended it
+      activity_health  the ledger's own write failures, native volume and retry backlog
+  */
+  activity_ledger: {
+    fn: 'activity_for_the_page',
+    office: true,
+    args: { p_limit: 40 },
+    also: [{ param: 'limit', arg: 'p_limit', shape: 'int' }],
+  },
+  activity_feed: {
+    fn: 'activity_read',
+    office: true,
+    args: { p_limit: 50 },
+    also: [
+      { param: 'project', arg: 'p_project', shape: 'uuid' },
+      { param: 'agent', arg: 'p_agent' },
+      { param: 'job', arg: 'p_job', shape: 'uuid' },
+      { param: 'correlation', arg: 'p_correlation', shape: 'uuid' },
+      { param: 'since', arg: 'p_since', shape: 'time' },
+      { param: 'until', arg: 'p_until', shape: 'time' },
+      { param: 'type', arg: 'p_type' },
+      {
+        param: 'category',
+        arg: 'p_category',
+        values: [
+          'request',
+          'job',
+          'approval',
+          'output',
+          'delivery',
+          'tool',
+          'reliability',
+          'usage',
+          'integration',
+          'external',
+          'task',
+          'document',
+          'calendar',
+          'sync',
+          'research',
+          'other',
+        ],
+      },
+      {
+        param: 'severity',
+        arg: 'p_min_severity',
+        values: ['debug', 'info', 'notice', 'warning', 'error', 'critical'],
+      },
+      {
+        param: 'status',
+        arg: 'p_status',
+        values: [
+          'recorded',
+          'requested',
+          'authorised',
+          'declined',
+          'attempted',
+          'completed',
+          'confirmed',
+          'failed',
+          'blocked',
+          'cancelled',
+          'scheduled',
+          'expired',
+        ],
+      },
+      {
+        param: 'source',
+        arg: 'p_source',
+        values: [
+          'teamhq',
+          'chatgpt',
+          'claude',
+          'mcp',
+          'telegram',
+          'slack',
+          'voice',
+          'worker',
+          'system',
+          'external',
+        ],
+      },
+      { param: 'visibility', arg: 'p_visibility', values: ['user', 'diagnostic', 'operator'] },
+      { param: 'before_at', arg: 'p_before_at', shape: 'time' },
+      { param: 'before_id', arg: 'p_before_id', shape: 'uuid' },
+      { param: 'limit', arg: 'p_limit', shape: 'int' },
+    ],
+  },
+  activity_chain: {
+    fn: 'activity_chain',
+    office: true,
+    requireOne: ['job', 'correlation'],
+    also: [
+      { param: 'job', arg: 'p_job', shape: 'uuid' },
+      { param: 'correlation', arg: 'p_correlation', shape: 'uuid' },
+      { param: 'visibility', arg: 'p_visibility', values: ['user', 'diagnostic', 'operator'] },
+    ],
+  },
+  activity_health: { fn: 'activity_ledger_health', office: true },
   // The first-run checklist, for the Setting up pane (#68). `setup` already
   // exists above and serves the same function; named apart so the studio's
   // fetch is legible next to `studio` and `studio_settings`.
@@ -3548,6 +3666,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
     `?id=` to any other section changes nothing.
   */
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (
+    section.requireOne !== undefined &&
+    !section.requireOne.some((p) => (url.searchParams.get(p) ?? '').trim() !== '')
+  ) {
+    return json(
+      { error: `that section needs one of: ${section.requireOne.join(', ')}`, section: name },
+      400,
+    )
+  }
   let args: Record<string, unknown> = section.args ?? {}
   if (section.arg !== undefined) {
     const id = url.searchParams.get('id') ?? ''
@@ -3588,6 +3715,28 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const raw = url.searchParams.get(extra.param)
     if (raw === null || raw.trim() === '') continue
     if (extra.values === undefined) {
+      const text = raw.trim()
+      if (extra.shape === 'uuid' && !UUID.test(text))
+        return json({ error: `${extra.param} must be an id`, section: name }, 400)
+      if (extra.shape === 'int') {
+        if (!/^\d{1,3}$/.test(text))
+          return json({ error: `${extra.param} must be a small whole number`, section: name }, 400)
+        args = { ...args, [extra.arg]: Number(text) }
+        continue
+      }
+      if (extra.shape === 'time') {
+        // An ISO 8601 instant, kept AS WRITTEN. A cursor's instant has microseconds and a JavaScript Date has milliseconds, so
+        // normalising it through Date would quietly move the cursor and skip or repeat rows at a page boundary.
+        const ISO =
+          /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?$/
+        // Date.parse('2026-02-31') is a number (the extra days roll into March), so the day is checked by round trip.
+        const day = text.slice(0, 10)
+        const real = ISO.test(text) && new Date(`${day}T00:00:00Z`).toISOString().startsWith(day)
+        if (!real || Number.isNaN(Date.parse(text)))
+          return json({ error: `${extra.param} must be a date and time`, section: name }, 400)
+        args = { ...args, [extra.arg]: text }
+        continue
+      }
       // Free text. Capped for the same cost reason `textArg` is capped; it
       // reaches Postgres as an RPC parameter and is never interpolated.
       args = { ...args, [extra.arg]: raw.slice(0, 200) }
