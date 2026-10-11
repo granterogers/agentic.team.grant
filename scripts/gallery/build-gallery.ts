@@ -181,7 +181,7 @@ const notCaptured = [
   { item: 'Other looks and accent colours, other screen sizes', reason: 'This gallery is the Original look at two sizes only (1440x900 and 390x844), Light and Dark, as asked. The earlier gallery had the other looks and sizes.' },
 ]
 
-await writeFile(`${OUT}/manifest.json`, `${JSON.stringify({ generated: new Date().toISOString().slice(0, 10), branch: 'integration/dashboard-polish-release-candidate', commit: SHA, viewportNote: 'Chromium emulation only; iOS Safari was not tested', count: entries.length, notCaptured, entries }, null, 1)}\n`)
+await writeFile(`${OUT}/manifest.json`, `${JSON.stringify({ generated: new Date().toISOString().slice(0, 10), branch: 'integration/dashboard-polish-release-candidate', commit: SHA, viewportNote: 'Chromium emulation only; iOS Safari was not tested', count: entries.length, notCaptured, entries }, null, 2)}\n`)
 
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
 const keyOf = (e: Entry): string => `${e.area}|${e.surface}|${e.sourceKind}|${e.look}`
