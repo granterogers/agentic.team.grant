@@ -345,6 +345,11 @@ export const CRITICAL: readonly Proof[] = [
     "each defect the independent review demonstrated stays fixed: no yes or no is invented for an answer the data cannot classify, a person-marked delivery is not provider-confirmed, a stopped job is the person's, a job filter includes every descendant, a fixture project's job-less rows are hidden, a selective filter on a busy office is complete, the page gets slugs, and a chain says when it is not complete",
   ),
   p(
+    'activity-ledger-equivalence',
+    7,
+    'a filter on the activity read model (severity, category, type, agent, project, job, correlation, alone and combined) returns exactly what filtering the whole history afterwards returns, by id and in order, never partial; shown red by a pushdown predicate made too narrow',
+  ),
+  p(
     'activity-gateway',
     14,
     'the same ledger through the real hq-api gateway: each person reads only their own, a malformed id, instant, word or count is refused by name, a cursor never skips or repeats an event, and switched off it answers nothing',

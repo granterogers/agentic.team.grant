@@ -133,6 +133,10 @@ declare
   v_sj      text[];
   v_sp      text[];
   v_sc      text[];
+  v_ok      text[];
+  v_map     jsonb;
+  v_pr      text;
+  v_ag      text[];
   v_result  jsonb;
 begin
   perform app.require_office(p_office);
@@ -627,6 +631,81 @@ begin
       case when v_sp[i] <> '' then format('%s.%s = $2 or', v_sa[i], v_sp[i]) else '' end);
   end loop;
 
+  -- THE SAME FOR THE FILTERS THAT NAME A KIND OF EVENT OR A PERSON (severity, category, type, agent). Those are decided on columns the
+  -- read model computes, which used to mean reading each source's newest 16 384 rows to find the few that match. Two things make them
+  -- cheap without copying anything:
+  --   the types a source can emit are known, each with the state of the owning row that produces it, so a source that cannot emit
+  --   any type the filters allow is not read at all, and one that can is asked only for the rows in a state that produces them;
+  --   an agent is a column (or one indexed lookup away) in every source.
+  -- As above, every predicate here is only ever WIDER than the outer filter.
+  if p_type is not null or p_category is not null or v_sevrank is not null or v_maxvis < 2 then
+    select coalesce(array_agg(t.event_type), '{}') into v_ok
+      from public.activity_event_types t
+     where (p_type is null or t.event_type = p_type)
+       and (p_category is null or t.category = p_category)
+       and (t.source = 'native'
+            -- a model call that did not finish is a warning though its type's default is info, so it is judged at its worst
+            or ((v_sevrank is null
+                 or app.activity_sev_rank(case when t.event_type = 'inference.completed' then 'warning' else t.default_severity end) >= v_sevrank)
+                and app.activity_vis_rank(t.default_visibility) <= v_maxvis));
+  else
+    select coalesce(array_agg(t.event_type), '{}') into v_ok from public.activity_event_types t;
+  end if;
+  -- the types each source can emit (sources in the order of v_z), each with a test every row that can emit it passes
+  v_map := $m$[
+    [["request.received", "true"]],
+    [["request.routed", "true"]],
+    [["job.created", "t0.from_state is null"], ["job.delegated", "t0.from_state is null"], ["job.started", "t0.to_state = 'running'"],
+     ["job.completed", "t0.to_state = 'complete'"], ["job.failed", "t0.to_state = 'failed'"], ["job.cancelled", "t0.to_state = 'cancelled'"],
+     ["retry.scheduled", "t0.to_state = 'retrying'"], ["job.paused", "t0.to_state = 'paused'"],
+     ["job.waiting", "t0.to_state in ('waiting_external', 'waiting_user')"],
+     ["job.state_changed", "t0.to_state not in ('running', 'complete', 'failed', 'cancelled', 'retrying', 'paused', 'waiting_external', 'waiting_user')"]],
+    [["approval.requested", "true"]],
+    [["approval.granted", "b0.state = 'resolved'"], ["approval.denied", "b0.state = 'resolved'"], ["approval.answered", "b0.state = 'resolved'"],
+     ["approval.expired", "b0.state = 'expired'"], ["approval.withdrawn", "b0.state = 'withdrawn'"]],
+    [["action.blocked", "i0.kind = 'needs_permission'"], ["job.impeded", "i0.kind <> 'needs_permission'"]],
+    [["output.created", "true"]],
+    [["output.reviewed", "true"]],
+    [["delivery.attempted", "true"]],
+    [["delivery.succeeded", "true"]],
+    [["delivery.failed", "true"]],
+    [["delivery.suppressed", "true"]],
+    [["inference.completed", "true"]]
+  ]$m$::jsonb;
+  for i in 1 .. jsonb_array_length(v_map) loop
+    -- a source every one of whose types is allowed needs no test (the common case: no kind-of-event filter at all)
+    if (select count(*) from jsonb_array_elements(v_map -> (i - 1)) e where (e ->> 0) = any(v_ok)) < jsonb_array_length(v_map -> (i - 1)) then
+      select coalesce(string_agg('(' || (e ->> 1) || ')', ' or '), 'false') into v_pr
+        from jsonb_array_elements(v_map -> (i - 1)) e
+       where (e ->> 0) = any(v_ok);
+      v_sel[i] := v_sel[i] || ' and (' || v_pr || ')';
+    end if;
+  end loop;
+  -- the action ledger holds types nobody lists (and every one of them is "info"); native rows carry their own severity, so they are
+  -- narrowed by type and category only
+  v_sel[14] := v_sel[14] || case when v_sevrank is not null and v_sevrank > 1 then ' and false'
+                                 when p_type is not null then ' and e0.action_type = $16' else '' end;
+  v_sel[15] := v_sel[15] || case when p_type is not null or p_category is not null then ' and a0.event_type = any($20::text[])' else '' end;
+  v_ag := array[
+    'c0.addressed_to = $3',
+    'exists (select 1 from public.jobs ja where ja.job_id = r0.job_id and ja.recipient_agent = $3)',
+    'exists (select 1 from public.jobs ja where ja.job_id = t0.job_id and ja.recipient_agent = $3)',
+    'b0.originating_agent = $3',
+    'b0.originating_agent = $3',
+    'i0.staff_slug = $3',
+    'exists (select 1 from public.staff sa where sa.staff_id = o0.staff_id and sa.slug = $3)',
+    'exists (select 1 from public.staff sa where sa.staff_id = o0.reviewed_by and sa.slug = $3)',
+    'exists (select 1 from public.staff sa where sa.staff_id = d0.staff_id and sa.slug = $3)',
+    'exists (select 1 from public.staff sa where sa.staff_id = d0.staff_id and sa.slug = $3)',
+    'exists (select 1 from public.staff sa where sa.staff_id = d0.staff_id and sa.slug = $3)',
+    'exists (select 1 from public.staff sa where sa.staff_id = d0.staff_id and sa.slug = $3)',
+    'exists (select 1 from public.jobs ja where ja.job_id = u0.job_id and ja.recipient_agent = $3)',
+    'e0.actor = $3',
+    'a0.agent_slug = $3'];
+  for i in 1 .. array_length(v_ag, 1) loop
+    v_sel[i] := v_sel[i] || ' and ($3::text is null or ' || v_ag[i] || ')';
+  end loop;
+
   v_sql := 'with jset as materialized (with recursive t(job_id) as (select j.job_id from public.jobs j where j.job_id = $4::uuid and j.office_id = $1 '
     || 'union select c.job_id from public.jobs c join t on c.parent_job_id = t.job_id where c.office_id = $1) select job_id from t), '
     || 'cset as materialized (select j.job_id from public.jobs j where $5::uuid is not null and j.correlation_id = $5::uuid and j.office_id = $1), ';
@@ -675,7 +754,7 @@ begin
   loop
     execute v_sql into v_result
       using p_office, p_project, p_agent, p_job, p_correlation, p_category, v_sevrank, p_status, p_source, v_maxvis,
-            p_since, p_until, p_before_at, p_before_id, v_limit, p_type, p_visibility, v_pool, v_pool;
+            p_since, p_until, p_before_at, p_before_id, v_limit, p_type, p_visibility, v_pool, v_pool, v_ok;
     exit when (v_result ->> '_valid')::boolean or v_pool >= 16384;
     v_pool := least(v_pool * 8, 16384);
   end loop;
