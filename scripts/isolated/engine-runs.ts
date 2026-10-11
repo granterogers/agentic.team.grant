@@ -729,7 +729,13 @@ try {
   const l3row = await runRow(l3.runId)
   check('H4 when the ledger REFUSES a report, the run still finishes and the job still wakes, and the refusal is WRITTEN on the run, not swallowed', l3fin.ok === true && l3row.state === 'completed' && String(l3row.ledger_note).includes('54000') && (await jobState(l3.job)) === 'queued', String(l3row.ledger_note))
   const engineTables = (await q(`select relname from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and (relname like 'engine\\_%' or relname like '%activity%' or relname like '%ledger%') and relname <> 'proof_ledger_stub' order by 1`)).map((r) => String(r.relname))
-  check('H5 this migration created no ledger table and no event store of its own: the only tables with these names are the three engine tables', engineTables.join(',') === 'engine_bridges,engine_run_calls,engine_runs', engineTables.join(','))
+  // The unified activity ledger (a separate branch, migration 1060) owns three tables with these words in their names. Hermes may add none:
+  // the engine tables are exactly three, and any other table matching is one the ledger's migration creates, so the check holds on a tree
+  // with or without the ledger.
+  const ledgerOwned = new Set(['activity_event_types', 'activity_events', 'activity_write_failures'])
+  const mine = engineTables.filter((t) => t.startsWith('engine_'))
+  const others = engineTables.filter((t) => !t.startsWith('engine_'))
+  check('H5 this migration created no ledger table and no event store of its own: the only engine tables are the three, and every other table with these words in its name belongs to the activity ledger', mine.join(',') === 'engine_bridges,engine_run_calls,engine_runs' && others.every((t) => ledgerOwned.has(t)), engineTables.join(','))
   await db.execute('drop function app.record_external_activity(uuid,text,text,text,text,text,text,uuid,uuid,uuid,jsonb,jsonb)')
   await q('drop table public.proof_ledger_stub')
 
