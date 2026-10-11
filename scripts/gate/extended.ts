@@ -12,6 +12,18 @@ import { p, via } from './p.ts'
 import type { Proof } from './types.ts'
 
 export const EXTENDED: readonly Proof[] = [
+  // ---- the unified activity ledger -------------------------------------------------------------------------------------
+  p(
+    'activity-worker',
+    8,
+    "the worker's recovery sweep records one system.recovered event per reclaimed job, once, only when the ledger is on, and never fails the sweep when the ledger cannot be written",
+  ),
+  p(
+    'activity-redaction',
+    30,
+    'the SQL redactor the ledger stores through and the TypeScript one the office already uses agree on every credential family, and neither touches ordinary text',
+  ),
+
   // ---- answers, acknowledgements, questions --------------------------------------------------------------------------
   p(
     'acknowledgement',

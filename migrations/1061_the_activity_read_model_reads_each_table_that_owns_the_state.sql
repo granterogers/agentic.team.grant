@@ -267,7 +267,7 @@ begin
 
   -- 4b. ... and how it ended. A question closed with no option chosen is "withdrawn", never "granted": no yes was recorded.
   v_branches := v_branches || $b$
-    select app.activity_pid('blockers', b.blocker_id::text, 'approval.decided'), d.at, d.ty,
+    select app.activity_pid('blockers', b.blocker_id::text, 'decided'), d.at, d.ty,
            case d.ty when 'approval.granted' then 'authorised' when 'approval.denied' then 'declined' when 'approval.expired' then 'expired' else 'cancelled' end,
            app.activity_type_severity(d.ty),
            case when d.ty in ('approval.granted', 'approval.denied') then 'user' else 'system' end,
@@ -500,7 +500,7 @@ begin
     'app.activity_pid(''routing_decisions'', decision_id::text, ''request.routed'')',
     'app.activity_pid(''job_state_transitions'', transition_id::text, ''transition'')',
     'app.activity_pid(''blockers'', blocker_id::text, ''approval.requested'')',
-    'app.activity_pid(''blockers'', blocker_id::text, ''approval.decided'')',
+    'app.activity_pid(''blockers'', blocker_id::text, ''decided'')',
     'app.activity_pid(''job_impediments'', impediment_id::text, ''impediment'')',
     'app.activity_pid(''outputs'', output_id::text, ''output.created'')',
     'app.activity_pid(''outputs'', output_id::text, ''output.reviewed'')'];

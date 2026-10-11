@@ -7,6 +7,14 @@
  */
 export const HELPERS: readonly { readonly stem: string; readonly role: string }[] = [
   {
+    stem: 'activity-ledger-perf',
+    role: 'NOT a gate: measures what the unified activity ledger costs (read latency against history, write cost, concurrency, footprint) and reports; run by hand with a job count',
+  },
+  {
+    stem: 'activity-ledger-sabotage',
+    role: 'NOT a proof: breaks each protection of the unified activity ledger on a copy and requires the named proof to go red, then runs the unmodified control; run by hand (about 15 minutes)',
+  },
+  {
     stem: 'guard',
     role: 'the connection every proof uses and the refusal that keeps it isolated (marker table, local socket)',
   },

@@ -333,6 +333,18 @@ export const CRITICAL: readonly Proof[] = [
     'a finished answer is redriven until it is sent or visibly given up, never left claimed, and a failed or uncertain one puts ONE question on the person list (never auto-resent, resolvable by his answer, none for harness traffic)',
   ),
 
+  // ---- the unified activity ledger (1060, 1061; default off) ---------------------------------------------------------
+  p(
+    'activity-ledger',
+    62,
+    'the one activity history is read from the tables that own each fact, never invents or copies one, shows nothing of a suite, cannot cross an office, redacts what it stores, takes an idempotent and concurrent write, refuses an update or a forged external report, and fails closed',
+  ),
+  p(
+    'activity-gateway',
+    14,
+    'the same ledger through the real hq-api gateway: each person reads only their own, a malformed id, instant, word or count is refused by name, a cursor never skips or repeats an event, and switched off it answers nothing',
+  ),
+
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p(
     'replay-parity',
