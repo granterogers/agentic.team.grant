@@ -58,7 +58,14 @@ what `public.activity_events` stores for the native subset. Nullability is expli
   `failed` when it did not, `cancelled` when it was deliberately withheld.
 - A model call is `completed` or `failed`; cost is in the metadata with its provenance (`provider_reported`, `authoritative`, `calculated`,
   `estimated`). A cost is never invented: a row with no provider figure says `estimated` or `calculated` with the number the office computed.
-- A question closed with no option chosen is `approval.withdrawn`, never `approval.granted`: no yes was recorded.
+- A yes or a no is never inferred. `approval.granted` is claimed only for a question that is positively an approval (it names what answering performs or grants) answered with an option other than
+  the decline its writer named; `approval.denied` only for that named decline; any other answer is `approval.answered` with the option as text (`metadata.answer`), because several writers name no decline.
+  A question the office closed itself is `approval.withdrawn`; one nobody answered is `approval.expired`; a settled question with no answerer is "Closed", not a yes.
+- A delivery is `confirmed` only when the provider returned a message reference. One a person marked as arrived (`message_ref` beginning `confirmed-by-person:`) is `completed` with
+  `provider_confirmed: false` and `confirmed_by_person: true`. An `indeterminate:*` failure says it could not be confirmed (`indeterminate: true`), not that it failed to send.
+- The time of a settled `delivery.failed` or `delivery.suppressed` is the row's last change (`updated_at`), the only column that records when; a consumer needing the first time reads the delivery.
+- Actor: a job a person stopped is theirs (`actor_kind: user`, `you`); a worker's bookkeeping (queued, parked, waiting, retry, an internal step) is `system`/`office`; a hand-off is the parent's agent
+  and only a job whose origin is a child is `job.delegated` (an approval's or a duty's job is `job.created`). A failure reason (`metadata.reason`) is returned only to a diagnostic reader.
 
 ## Visibility
 
@@ -81,18 +88,21 @@ Projected (read from the table that owns the fact):
 | `job.created`, `job.started`, `job.paused`, `job.waiting`, `job.state_changed`, `job.impeded`, `retry.scheduled` | job / reliability | diagnostic | `job_state_transitions`, `job_impediments` |
 | `job.delegated`, `job.completed`, `job.failed`, `job.cancelled` | job | user | `job_state_transitions` |
 | `action.blocked` | approval | user | `job_impediments` (kind `needs_permission`) |
-| `approval.requested`, `.granted`, `.denied`, `.expired`, `.withdrawn` | approval | user | `blockers` |
+| `approval.requested`, `.granted`, `.denied`, `.expired`, `.withdrawn`, `.answered` | approval | user | `blockers` |
+| `integration.rate_limited` | integration | diagnostic | `job_pauses` (reason `rate_limited`; evidence kind `job_pause`) |
 | `output.created`, `output.reviewed` | output | user | `outputs` |
 | `delivery.succeeded`, `delivery.failed` | delivery | user | `deliveries` |
 | `delivery.attempted`, `delivery.suppressed` | delivery | diagnostic | `deliveries` |
 | `inference.completed` | usage | diagnostic | `inference_usage` |
 | any `public.events` action type | (action ledger) | user | `events` |
 
-Native (written to `public.activity_events`): `system.recovered` (operator), `budget.threshold_reached` (user), `integration.rate_limited`,
-`tool.call_requested`, `tool.call_completed`, `tool.call_failed` (diagnostic), `activity.corrected` (user).
+Native (written to `public.activity_events`), with their durability class (`ARCHITECTURE.md`, "Audit durability"): `system.recovered` (operator, operational), `budget.threshold_reached` (user, operational,
+written by `defer_over_budget`), `tool.call_requested`, `tool.call_completed`, `tool.call_failed` (diagnostic; the names are deliberately not `tool.requested`, which is a type of the action ledger),
+`activity.corrected` (user, **critical**: strict writer only), `external.review_decided` (user; not worker-writable: a person's decision).
 
 External (`external_writable`): `external.research_started`, `external.research_completed`, `external.output_produced`, `external.skill_proposed`,
-`external.evaluation_completed`, `external.usage_recorded`, `external.worker_error`, `external.review_decided`. See `EXTERNAL-AGENT-CONTRACT.md`.
+`external.evaluation_completed`, `external.usage_recorded`, `external.worker_error`. See `EXTERNAL-AGENT-CONTRACT.md`. A worker's evidence reference is cleaned, bounded to 1 KB and always `kind: external`;
+the correlation is taken from its job; at most 300 new reports an hour per worker and 1 000 per office.
 
 The candidate names in the brief that the office already represents differently are **not duplicated**: `request.transcribed` is `metadata.transcribed`
 on `request.received`; `job.timed_out` and `retry.executed` are the `retry.scheduled` and the next `job.started`; `tool.call_requested` and
@@ -107,9 +117,10 @@ GET  hq-api?section=activity_feed&visibility=diagnostic&project=<uuid>&agent=<sl
         &limit=<1..200>&before_at=<iso>&before_id=<uuid>
   ->  { enabled, visibility, events: [...], next: {at, id} | null, partial: bool, generated_at }
 GET  hq-api?section=activity_chain&job=<uuid> | &correlation=<uuid>      (needs one of them)
-  ->  { enabled, correlation_id, complete: bool, events: [...] }          oldest first, at most 500
-GET  hq-api?section=activity_ledger                                      the Team HQ row shape
-GET  hq-api?section=activity_health
+  ->  { enabled, correlation_id, complete: bool, partial: bool, truncated: 'oldest' | null, events: [...] }
+                                                                          oldest first, at most 500; when cut at the bound it is the OLDEST events that are missing
+GET  hq-api?section=activity_ledger                                      the Team HQ row shape (`who` is the raw slug, `who_name` the display name)
+GET  hq-api?section=activity_health                                      includes indexes_missing (empty when the staged index build has completed)
 ```
 
 Word lists and shapes are checked at the gateway and refused by name with a 400. A cursor's instant is passed on **as written** (it has microseconds).

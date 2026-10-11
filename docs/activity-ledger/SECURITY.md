@@ -1,9 +1,10 @@
 # Unified Activity Ledger - security, privacy and redaction
 
 The ledger must not become a second, ungoverned store of private information, and must not become a new route across an office boundary. Each
-control below names the test that fails when it is removed. The sabotage runner (`scripts/isolated/activity-ledger-sabotage.sh`) removes 17 of them
-on a copy, one at a time, and requires the named proof to go red; the last full run caught **17 of 17**, and the unmodified control ran green
-(76/76 and 17/17). Unit-level sabotages (7) are listed at the end.
+control below names the test that fails when it is removed. The sabotage runner (`scripts/isolated/activity-ledger-sabotage.sh`) removes 26 of them
+on a copy, one at a time, and requires the named proof to go red; the last full run caught **26 of 26** (in three batches, each ending with the unmodified control green: 76/76 and 17/17).
+Running them found one control that had gone vacuous after an optimisation (S9) and it was repaired. Unit-level sabotages are listed at the end. Everything reviewed independently
+(`RELEASE-READINESS.md`, section 1) was reproduced by the reviewer on a clone before it was fixed, and each fix has a check that fails on the code before it.
 
 ## What is protected, and from whom
 
@@ -17,11 +18,19 @@ on a copy, one at a time, and requires the named proof to go red; the last full 
 | A secret is stored | `app.activity_redact` (twin of `src/text/secrets.ts` plus a PEM header) on every summary and every string value; credential-named keys (`secret`, `token`, `passw`, `authorization`, `api_key`, `cookie`, `credential`, `bearer`, `private_key`, `session`, `signature`) are replaced by a marker whatever they hold | `activity-ledger` (S3), `activity-redaction` (37 cases, SQL and TypeScript byte-identical) |
 | Message or document text is stored | Content-named keys (`body`, `text`, `content`, `transcript`, `instruction`, `prompt`, `message`, `document`, `payload`, `raw`, `headers`, `email`, `address`, `phone`, `query`) are replaced; projected events carry **references** (`evidence`) and never copy a body, a transcript, a destination id or a reason text; the worker's recovery event sends a state name and an attempt only | `activity-ledger` ("no message text, document text or destination id is in the feed"), `tests/activity/record.test.ts` |
 | Malicious or careless metadata | Refused, not cleaned: not an object; a key that is not a short snake-case word; more than 40 keys; deeper than 4 levels; over 4 KB. Summary cut at 300 characters; strings at 200; arrays at 20 | `activity-ledger` (five abuse cases, each refused for its own reason) |
-| An external worker widens its own reach | One door; type must be `external_writable`; actor forced to `external:<name>`; `provenance = external` forced and a `check` ties it to `actor_kind`; no `critical`; no `confirmed` or `authorised`; metadata cannot name the actor | `activity-ledger` (S6, six refusals, a spoof attempt, a direct insert) |
+| An external worker widens its own reach | One door; type must be `external_writable`; actor forced to `external:<name>`; `provenance = external` forced and a `check` ties it to `actor_kind`; no `critical`; no `confirmed` or `authorised`; metadata cannot name the actor; **`external.review_decided` (a person's decision) is not worker-writable** | `activity-ledger` (S6, six refusals, a spoof attempt, a direct insert), `activity-ledger-review` |
+| An external worker forges a link, a cause or a record | Evidence is cleaned like metadata, bounded to 1 KB and always `kind: external` (it can no longer pose as a link into an approval or a delivery); the correlation is **taken from the job** and a mismatch, or a correlation no work of the office has, is refused | `activity-ledger-review` (S19) |
+| An external worker fills the table (it is append-only, on a 500 MB tier) | 300 new reports an hour per worker and 1 000 per office, refused with `54000`; a retry of an already-accepted report is never refused, and another worker is unaffected | `activity-ledger-review` (S24) |
+| A long string holds a CPU at the door | `app.activity_redact` redacts and returns at most the first 4 000 characters (its long-opaque pattern was quadratic: 6.1 s at 80 000 characters, 15 ms after); the tail is dropped, never returned unredacted | `activity-ledger-review` (S23) |
+| A future-dated event pins itself to the top of every feed | The strict writer refuses a date more than five minutes ahead | `activity-ledger-review` |
+| A person is told they said yes when they did not | An approval is `granted` only where the question is positively an approval and the answer is not the writer's named decline; a no only for that decline; anything else is `approval.answered` with the option as text; a closed question nobody answered is "closed" | `activity-ledger-review` (S18) |
+| A person's word is shown as a provider's | A delivery a person marked as arrived (`confirmed-by-person:`) is `completed`, `provider_confirmed: false`, "marked as delivered by you" | `activity-ledger-review` (S22) |
+| A failure reason (handler or provider text) is shown to an ordinary reader | `metadata.reason` is returned only to a diagnostic reader, and only for a state a reason explains | `activity-ledger-review` |
+| An HTTP caller writes to the ledger (Hermes or anyone) | No public wrapper exists for any writer, no HTTP role can execute one or use schema `app`, the gateway names none, and the contract says the door is not exposed | `activity-ledger-review`, `tests/gateway/activity-no-write-door.test.ts` |
 | A diagnostic type is shown as ordinary activity | A trigger refuses a native row below its type's default visibility | `activity-ledger` (S8) |
 | Operator-only events reach an ordinary person | `operator` is capped to `diagnostic` unless `app.office_sees_the_deployment` | `activity-ledger`, `activity-gateway` |
 | History is rewritten | Update, delete and truncate refused (trigger shared with `public.events`); moving an event to another office refused (write-once office) | `activity-ledger` (S2) |
-| A suite's traffic appears as a person's | `jobs.synthetic`, `jobs.is_fixture`, then `app.harness_job`, applied to the newest candidates; a command a door stamped synthetic is excluded | `activity-ledger` (S7, S16) |
+| A suite's traffic appears as a person's | `jobs.synthetic`, `jobs.is_fixture`, then `app.harness_job`, applied to the newest candidates; a command a door stamped synthetic is excluded; a job-less row (a question, an action) in a **fixture project** is excluded too | `activity-ledger` (S7, S16), `activity-ledger-review` (S25) |
 | The ledger is switched on by accident | Default **off**; the switch **fails closed** (absent setting, or any value but JSON `true`, is off) | `activity-ledger` (S5, S5b) |
 | A broken writer floods the table or recurses | Failures are counted (not recorded as events) and stop at 200 an hour per office; the health reading writes nothing | `activity-ledger` (S10) |
 | The gateway turns a bad parameter into a database error or a wrong page | Ids, instants, counts and words are shape-checked and refused by name with a 400; an instant is passed on as written, because a rounded cursor skips rows | `activity-gateway`, `tests/gateway/activity-sections.test.ts` (S13, S15) |
@@ -49,6 +58,15 @@ the one above it: **content never enters the ledger**; it holds references to re
   them from the two branches; nothing else depends on them.
 - **`app.activity_for_the_page` splits the summary into a verb and an object at the first space** to fit the existing renderer; that is cosmetic and can read oddly.
 - **Timing and size side channels** (whether a filtered read was fast because it found nothing) were not analysed.
+- **The redactor does not know these shapes** (the TypeScript twin does not either, so there is no parity gap): a URL's userinfo (`postgresql://user:password@host`), `password=value`, a short
+  Stripe key, `Token:value` with no space, and a token split by a zero-width space. They matter only where a native caller writes free text; the control is that native callers pass references and short
+  summaries. Teaching both redactors these shapes is a change to the office-wide redactor and was not made here.
+- **Native events make a project permanently undeletable** (a same-office foreign key on an append-only table), the same class as a project that has gathered a job. `app.project_delete` refuses it gracefully; no
+  product path writes a native event to a project with no job yet. A fixture project that a suite tears down must not receive native events.
+- **Timestamps of a settled delivery are its row's last change**: `delivery.failed` and `delivery.suppressed` are dated `updated_at`, the only column that records when, and a later update to the settled row moves the
+  event. A consumer that needs the first time should read it from the delivery row itself.
+- **Causation is only as good as the column.** A `job.delegated` points at the parent's creation, which is a diagnostic event: a link may name an event the caller's visibility hides, and consumers must tolerate it.
+  Events written in one transaction share a timestamp and are ordered by id, which is deterministic and not causal; causality is `causation_id`.
 - **`public.activity_write_failures` is not pruned** (it is a bounded counter, at most 200 rows an hour per office). A prune after 90 days is proposed, not built.
 
 ## Retention

@@ -333,27 +333,9 @@ export const CRITICAL: readonly Proof[] = [
     'a finished answer is redriven until it is sent or visibly given up, never left claimed, and a failed or uncertain one puts ONE question on the person list (never auto-resent, resolvable by his answer, none for harness traffic)',
   ),
 
-  // ---- the unified activity ledger (1060, 1061; default off) ---------------------------------------------------------
-  p(
-    'activity-ledger',
-    62,
-    'the one activity history is read from the tables that own each fact, never invents or copies one, shows nothing of a suite, cannot cross an office, redacts what it stores, takes an idempotent and concurrent write, refuses an update or a forged external report, and fails closed',
-  ),
-  p(
-    'activity-ledger-review',
-    35,
-    "each defect the independent review demonstrated stays fixed: no yes or no is invented for an answer the data cannot classify, a person-marked delivery is not provider-confirmed, a stopped job is the person's, a job filter includes every descendant, a fixture project's job-less rows are hidden, a selective filter on a busy office is complete, the page gets slugs, and a chain says when it is not complete",
-  ),
-  p(
-    'activity-ledger-equivalence',
-    7,
-    'a filter on the activity read model (severity, category, type, agent, project, job, correlation, alone and combined) returns exactly what filtering the whole history afterwards returns, by id and in order, never partial; shown red by a pushdown predicate made too narrow',
-  ),
-  p(
-    'activity-gateway',
-    14,
-    'the same ledger through the real hq-api gateway: each person reads only their own, a malformed id, instant, word or count is refused by name, a cursor never skips or repeats an event, and switched off it answers nothing',
-  ),
+  // The unified activity ledger's proofs (activity-ledger, activity-gateway and the rest) are in the EXTENDED tier: this tier is at its
+  // cap of 70 on main (tests/gate/registry.test.ts), and the ledger is a default-off read model, not a boundary an existing write
+  // depends on. Moving one back here is a decision about the cap (docs/activity-ledger/RELEASE-READINESS.md).
 
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p(

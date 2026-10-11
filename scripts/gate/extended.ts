@@ -19,6 +19,26 @@ export const EXTENDED: readonly Proof[] = [
     "the worker's recovery sweep records one system.recovered event per reclaimed job, once, only when the ledger is on, and never fails the sweep when the ledger cannot be written",
   ),
   p(
+    'activity-ledger',
+    62,
+    'the one activity history is read from the tables that own each fact, never invents or copies one, shows nothing of a suite, cannot cross an office, redacts what it stores, takes an idempotent and concurrent write, refuses an update or a forged external report, and fails closed',
+  ),
+  p(
+    'activity-gateway',
+    14,
+    'the same ledger through the real hq-api gateway: each person reads only their own, a malformed id, instant, word or count is refused by name, a cursor never skips or repeats an event, and switched off it answers nothing',
+  ),
+  p(
+    'activity-ledger-review',
+    35,
+    "each defect the independent review demonstrated stays fixed: no yes or no is invented for an answer the data cannot classify, a person-marked delivery is not provider-confirmed, a stopped job is the person's, a job filter includes every descendant, a fixture project's job-less rows are hidden, a selective filter on a busy office is complete, the page gets slugs, a chain says when it is not complete, the external door cleans and bounds what a worker sends, and no HTTP role can reach a writer",
+  ),
+  p(
+    'activity-ledger-equivalence',
+    8,
+    'a filter on the activity read model (severity, category, type, agent, project, job, correlation, alone and combined) returns exactly what filtering the whole history afterwards returns, by id and in order, never partial; shown red by a pushdown predicate made too narrow',
+  ),
+  p(
     'activity-indexes',
     11,
     'the read model access paths are built one at a time with CREATE INDEX CONCURRENTLY while the worker keeps writing: no write refused or stalled, a plain build of the same index shown to stall (the control), a second run changes nothing, an invalid leftover is dropped and rebuilt, and the health reading names what is missing',

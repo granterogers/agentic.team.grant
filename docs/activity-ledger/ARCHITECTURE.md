@@ -1,8 +1,9 @@
 # Unified Activity Ledger - architecture
 
 Status: built on `feature/unified-activity-ledger`, **default off**, verified on the isolated replica only. Not merged, not deployed, no
-production contact. Migrations `1060` and `1061`. Read `PROGRESS.md` for what is done and what is not, `EVENT-CONTRACT.md` for the shape of an
-event, `SECURITY.md` for the threat model, `EXTERNAL-AGENT-CONTRACT.md` for Hermes and other outside workers, `MIGRATION-PLAN.md` for rollout.
+production contact. Migrations `1060`, `1061` and `1062`. Read `RELEASE-READINESS.md` for the verdicts and the evidence, `PROGRESS.md` for what is done and
+what is not, `EVENT-CONTRACT.md` for the shape of an event, `SECURITY.md` for the threat model, `EXTERNAL-AGENT-CONTRACT.md` for Hermes and other outside
+workers, `MIGRATION-PLAN.md` for rollout.
 
 ## 1. The decision, in one paragraph
 
@@ -21,14 +22,17 @@ What the office records today, which table is authoritative, and how the record 
 | A job moved to a new state | `job_state_transitions` | **By trigger, in the same transaction as the state change** (`app.log_job_creation`, `app.enforce_job_transition`): no code path can move a job unrecorded | `job.created`, `job.delegated`, `job.started`, `job.paused`, `job.waiting`, `retry.scheduled`, `job.completed`, `job.failed`, `job.cancelled`, `job.state_changed` |
 | A person's message or voice note arrived | `inbound_commands` | By the channel adapter, before routing (button presses carry `callback_action` and are not requests) | `request.received` (never the text; only voice/transcribed flags) |
 | Who was asked to handle it | `routing_decisions` | By the router, one row per job | `request.routed` |
-| An approval was asked and answered | `blockers` | By the office (ask) and by the person's answer | `approval.requested`, `approval.granted`, `approval.denied`, `approval.expired`, `approval.withdrawn` |
+| An approval was asked and answered | `blockers` | By the office (ask) and by the person's answer | `approval.requested`, `approval.granted`, `approval.denied`, `approval.expired`, `approval.withdrawn`, `approval.answered`. A yes is claimed only for a question that is positively an approval (it names what answering performs or grants) answered with an option other than the decline its writer named; a no only for that named decline; any other answer is `approval.answered`, with the option as text, because several writers name no decline and the record cannot say which it was |
 | An action was stopped for want of a permission | `job_impediments` (append-only) | By the gate that refused | `action.blocked`, `job.impeded` |
 | A specialist produced an answer, and it was reviewed | `outputs` | By the handler; review by the reviewer | `output.created`, `output.reviewed` (never the body) |
 | A message was sent, failed or was withheld | `deliveries` | By the delivery state machine (`claimed` to `sent`, `failed`, `suppressed`; `sent` requires a provider `message_ref`) | `delivery.attempted`, `delivery.succeeded`, `delivery.failed`, `delivery.suppressed` |
 | A model was called, and what it cost | `inference_usage` | By the provider router; `provenance` is `authoritative` (provider reported), `calculated` or `estimated` | `inference.completed` with the cost status the row has |
 | What the office did, with the means to undo it | `events` (append-only, reversible, compensating) | By `app.append_event` from handlers | the action's own type (`task.created`, `finding.*`, ...) with the reversal |
 | A recovery sweep reclaimed work a dead worker held | **nothing** (the transition to `retrying` is recorded; the reclaim is not) | (new) `activity_events` | `system.recovered` |
-| A rate limit, a budget threshold, a tool call, an external worker's report | **nothing** | (new) `activity_events` | `integration.rate_limited`, `budget.threshold_reached`, `tool.*`, `external.*` |
+| Work was parked to wait out a rate limit | `job_pauses` (reason `rate_limited`) | by `app.pause_job` | `integration.rate_limited`, **projected**: the office already records the throttle it waited out |
+| A spending limit held background work back | **nothing** (`defer_over_budget` moves `not_before` and writes a reason; no state changes, so no transition) | (new) `activity_events`, written by 1062 inside `defer_over_budget` | `budget.threshold_reached`, once per office, agent and day |
+| A plan step ran a tool | **nothing** | (new) `activity_events`, written by the plan executor after the autonomy policy said proceed | `tool.call_requested`, `tool.call_completed`, `tool.call_failed` (diagnostic; the capability, step and outcome, never an input or an output) |
+| An external worker's report | **nothing** | (new) `activity_events`, through the one door | `external.*` |
 
 ### Kinds of record, kept apart
 
@@ -91,6 +95,22 @@ native types an external worker may report.
 | An attempt is not read as a success | **Status vocabulary** | `attempted`, `completed`, `confirmed` are distinct; a delivery is `confirmed` only with a provider `message_ref` | `activity-ledger` |
 | Nothing from a suite reaches a person's feed | **Canonical predicate** | `jobs.synthetic`, `jobs.is_fixture`, then `app.harness_job` | `activity-ledger` (a control that is shown when real; a job only the canonical predicate recognises) |
 
+### Audit durability (what is lost when a write fails)
+
+`public.activity_event_types.durability` classes every type, and each class has a stated consequence that `scripts/isolated/activity-ledger-durability.ts` proves by
+breaking the path on purpose (the ledger table renamed out from under the writer, then its failure counter too, inside a transaction that is rolled back):
+
+| Class | Types | Written how | When the write fails |
+|---|---|---|---|
+| `derived` | every projected type (job, request, approval, output, delivery, usage, `integration.rate_limited`, the action ledger) | **not written**: read from the table that owns the fact | nothing to lose: the owning table is the record |
+| `critical` | `activity.corrected` (a correction supersedes an earlier record, so losing it leaves the wrong record standing) | the **strict** writer, in the transaction of the change it records | the change fails with it; the best-effort writer **refuses** the type, counts the refusal and `critical_via_best_effort_24h` shows it |
+| `operational` | `system.recovered`, `budget.threshold_reached`, `external.*` | best effort (`record_activity_safely`), or the external door (which raises to its caller) | returns null, never raises, leaves the caller's work, is counted (200 an hour per office) |
+| `diagnostic` | `tool.call_*` | best effort | the same, and nothing depends on it |
+
+There is no event type about the ledger failing to write, and the counter's own writer records no event, so a failing ledger cannot write about itself (no loop). What is
+deliberately **not** claimed: an operational event is not guaranteed to exist after a crash between the work and the call; for those the underlying fact is recorded elsewhere
+(the transition to `retrying`, the job's `state_reason`, the job_pauses row).
+
 **Not claimed.**
 
 - **No exactly-once across an external service.** A delivery can be sent and the process die before the row says so; the delivery state machine's
@@ -139,39 +159,56 @@ A page is trusted only when nothing unread could belong in it: a source that ret
 `(time, id)` key, than the page's last row. Otherwise the pool is widened (x8, to 16 384) and the page rebuilt; past that the answer says
 `partial: true`. The initial pool is twice the page, so the ordinary case is one pass.
 
-Same data, same machine, 15 runs each (milliseconds, p50; `scripts/isolated/activity-ledger-perf.ts`):
+Same data, same machine, 15 runs each (milliseconds, p50; `scripts/isolated/activity-ledger-perf.ts`). **Before** is the three-stage design above with filters applied
+after each source's newest rows; **after** pushes the selective filters into each source's own query (below):
 
-| Read | 300 jobs (2 403 transitions) | 3 000 jobs (24 003 transitions, 18 000 model calls, 3 000 deliveries, 3 500 native) |
-|---|---|---|
-| newest 50, ordinary | 63 | **100** |
-| newest 50, diagnostic | 85 | 201 |
-| one project, diagnostic | 86 | 183 |
-| page three by cursor | 84 | 177 |
-| one agent | 165 | 465 |
-| severity >= error (selective) | 242 | 1 468 |
-| one root job's chain | 503 | 929 |
-| the existing `hq_studio_lately`, for scale | 88 | 755 |
+| Read | 300 jobs, before | 300 jobs, after | 3 000 jobs, before | 3 000 jobs, after |
+|---|---|---|---|---|
+| newest 50, ordinary | 63 | 83 | 100 | 104 |
+| newest 50, diagnostic | 85 | 90 | 201 | 199 |
+| one project, diagnostic | 86 | 85 | 183 | 206 |
+| page three by cursor | 84 | 82 | 177 | 191 |
+| one agent | 165 | **68** | 465 | **115** |
+| severity >= error (selective) | 242 | **53** | 1 468 | **94** |
+| one root job's chain (up to 500 events, three pages) | 503 | 461 | 929 | 895 |
+| the existing `hq_studio_lately`, for scale | 88 | 87 | 755 | 823 |
 
-Ten times the history cost the newest page **1.6 times** as much. The selective filters are the weak spot and are stated as such: a filter whose
-matches are rare reads wide pools to find them (it is still exact, or says `partial`). JIT is switched off in the function: the query is wide
-enough to cross `jit_above_cost` and the compile took about 650 ms of a 70 ms query.
+The unchanged rows (newest page, project, cursor) are within the run-to-run spread of a shared laptop; the two selective reads that were the stated weak spot are 3.6 and 16 times faster
+at 24 000 transitions. Ten times the history cost the newest page **1.3 to 1.6 times** as much. JIT is switched off in the function: the query is wide enough to cross `jit_above_cost`
+and the compile took about 650 ms of a 70 ms query.
+
+**Pushdown.** A job, a correlation, a project, a severity, a category, a type or an agent names a small set of rows however busy the office is, so each is applied inside each source's own
+query rather than to its newest N rows. The jobs under a job at any depth (`jset`) and the jobs of a correlation (`cset`) are computed once; each source's possible event types are known with the
+state of the owning row that produces them, so a source that cannot emit an allowed type is not read and one that can is asked only for rows in the right state; an agent is a column, or one indexed
+lookup, in every source. Every predicate is **wider** than the outer filter, never narrower, so none can drop a row the filter would keep. That is what is proved, not the plan:
+`scripts/isolated/activity-ledger-equivalence.ts` compares 45 filters, alone and combined, by id and in order, with the same filter applied to the whole history, over data holding every job,
+delivery and approval ending; it goes red when one predicate is made too narrow. A filter the read model cannot push (status, source interface) still works by widening the pool and says
+`partial: true` past 16 384 rows. Before this, a job or project older than the newest 16 384 transitions came back `partial`, and `activity_chain` reported `complete: true` over a lifecycle with its
+first events missing; the chain now reports `partial` and is bounded exactly (it drops the **oldest** events when it truncates, and says so).
 
 Writes (same run, one round trip each): strict **1.0 ms**, safe **1.1 ms**, with the switch off **0.2 ms**. Twenty concurrent connections, fifty rounds each, every round
 a distinct key plus a key all twenty repeat: no error, no lost event, shared keys written once, about 4 300 calls a second. A native event with its indexes
 is about **660 bytes**. The ledger adds **no trigger** to `jobs`, `job_state_transitions`, `deliveries`, `inbound_commands`, `blockers`, `outputs`
 or `inference_usage`, so none of their critical paths costs anything it did not.
 
-Additive indexes (11) give each source a newest-first, per-office path; none changes a result. They are non-concurrent `create index` statements
-inside the migration, so on a large table they hold a write lock while they build (see `MIGRATION-PLAN.md`).
+Additive indexes (11) give each source a newest-first, per-office path; none changes a result. They are **not** in a migration: a plain build holds a write lock for its whole duration
+(measured: the writer's slowest insert 2 061 ms plain against 88 ms concurrent, on a 2 000 000 row table), so `npm run activity:indexes` builds them with `CREATE INDEX CONCURRENTLY`, idempotently
+and resumably, and `activity_ledger_health.indexes_missing` says which are absent (`MIGRATION-PLAN.md`).
 
 ## 6. Team HQ
 
 The existing Activity page is untouched visually. `app.activity_for_the_page` returns the ledger in the shape `app.hq_studio_lately.office[]` already
 has (id, who, kind, verb, what, project, when, at, via, category, reversible, undo_with) plus severity, status, evidence and provenance, which the
-current renderer ignores. `needLately` in `web/studio/app.js` asks for it **after** the existing read and replaces the list of rows **only when the
-ledger answers `enabled` with at least one row**; off, absent, empty or failing, the page's own list stands, so switching the ledger on can never empty it
-(`tests/web/activity-ledger-wiring.test.ts`, each property with a mutant that must fail). Deferred: a richer page (filters, a chain view, severity
-badges, links to the evidence record). That is a design task and is not attempted here.
+current renderer ignores. `who` is the raw actor slug, exactly as `hq_studio_lately` sends it, because the page looks a face up by slug and a display name matches nobody (it would
+render every agent row as the first crew member); the display name is `who_name`. `needLately` in `web/studio/app.js` starts the ledger read **alongside** the existing one, draws from the
+existing answer the moment it arrives (a slow or hanging ledger cannot delay the first render), and replaces only the list of rows, and only when the ledger answers `enabled` with at
+least one **drawable** row (a unique string id and a parseable instant; `ledgerRows`, which never throws) **and the page still holds the copy it drew**, so an answer that arrives after a
+refresh cannot overwrite a newer one. Off, absent, empty, malformed or failing, the page's own list stands, so switching the ledger on can never empty it (`tests/web/activity-ledger-wiring.test.ts`:
+the extracted source run through each of those states, and each wiring property with a mutant that must fail).
+
+Known differences while the ledger is on, none a regression of the page: the ledger's rows are not folded (the existing list folds a burst into one line with a count, so there is no `times`),
+and the counters above the list (`jobs_done` and the like) still come from `hq_studio_lately`, so a person can see a count and a list drawn from two sources. A richer page (filters, a chain view,
+severity badges, links to the evidence record) is a design task and is not attempted here.
 
 ## 7. Historical data
 
@@ -187,21 +224,19 @@ of truth this design avoids. The one case that would want it (a faster read at m
 | Taxonomy as data, native table, redactor, strict/safe/external writers, default-off switch | **Implemented** (1060) |
 | Unified read model, chain, page adapter, health, indexes, public wrappers | **Implemented** (1061) |
 | Gateway sections `activity_feed`, `activity_chain`, `activity_ledger`, `activity_health`; page hook | **Implemented**, off until the switch is on |
-| Native event writer in the worker | **Partial**: `system.recovered` only |
-| Native `tool.*`, `integration.rate_limited`, `budget.threshold_reached`, `activity.corrected` | **Proposed**: in the taxonomy and writable by SQL; no caller yet (named in `tests/activity/taxonomy.test.ts`, so adding one is a decision) |
+| Native event writers | **Implemented**: `system.recovered` (the recovery sweep), `tool.call_*` (the plan executor, after the policy says proceed), `budget.threshold_reached` (`defer_over_budget`, 1062) |
+| `integration.rate_limited` | **Implemented as a projection** of `job_pauses` (reason `rate_limited`); no second write |
+| `activity.corrected`, `external.review_decided` | **Not wired, on purpose**: a correction is an operator act through the strict writer (a critical type), and a worker may not assert that a person decided something. Named in `tests/activity/taxonomy.test.ts`, so adding a caller is a decision. Rate limits of services other than the model providers (Slack, Notion, GitHub, Telegram) are handled in each client and recorded nowhere; recording them needs one shared seam in those clients, a larger change than this one |
 | External worker door (`app.record_external_activity`) | **Implemented in SQL**, proved, **not exposed** through any gateway: the authenticated boundary that will call it is not built |
 | Richer Activity UI | **Proposed** |
 | A materialised read model | **Not needed**; revisit only on measured need |
 | Retention policy | **Stated** in `SECURITY.md`; nothing deletes |
 | Rolling-deploy matrix on real versions | **Not run**: the new-worker-on-old-schema case is proved (writer missing); old-worker-on-new-schema is true by construction (additive) |
 
-## 9. Checks this change could not run
+## 9. The production-catalogue checks
 
-`check:callers`, `check:consumed`, `check:gateway-wrappers`, `check:anon-exposure`, `check:machine-key`, `check:office-callers` and
-`check:carrier-writers` read the production catalogue and refuse to run without `ALLOW_PRODUCTION_CHECKS=1`, which this work was not given and did
-not set. What was done instead, so a reviewer can run them: `check:ownership` and `check:office-edges` (replica mode) pass with the three new
-tables classified; `check:proofs`, `check:migrations`, `check:secrets`, `check:templates`, `check:deployment-state` pass; and for the others the
-reasoning is stated: every public function takes `p_office` first and is executable by `service_role` alone (asserted by `activity-ledger` and by
-`tests/gateway/activity-sections.test.ts`); no browser role holds any privilege on the new tables or functions (asserted); every insert names its
-office; `app.record_external_activity` has no caller by design and is baselined in `docs/testing/callers-baseline.json` with a reason; no new table is
-written and never read (`activity_write_failures` is read by the health reading). A reviewer with the flag should run all seven before merging.
+`check:callers`, `check:consumed`, `check:gateway-wrappers`, `check:anon-exposure`, `check:machine-key`, `check:office-callers` and `check:carrier-writers` read a database catalogue and, run
+without a flag, refuse to contact production without `ALLOW_PRODUCTION_CHECKS=1`, which this work was not given and did not set. Each now has a `--replica` mode (`scripts/lib/catalogue-db.ts`):
+it reads the same catalogue from the local replica built from this repository's migrations, refuses any database that does not carry the replica's marker table, prints that it is **not**
+production verification, and leaves the production mode exactly as it was (still gated; `tests/safety` pins it). What each asks, what it reads and what it established is in
+`RELEASE-READINESS.md`, section 4.
