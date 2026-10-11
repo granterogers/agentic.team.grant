@@ -195,6 +195,8 @@ const storeCommand = async (
       ...('context' in command && command.context !== undefined
         ? { context: command.context }
         : {}),
+      // The person's own word `hermes:` at the start of the message, already removed from the instruction (Hermes, M9).
+      ...('engine' in command && command.engine === 'hermes' ? { engine: 'hermes' } : {}),
       received_at: command.received_at,
     },
     'resolution=merge-duplicates,return=representation',

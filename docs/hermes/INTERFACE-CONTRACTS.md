@@ -585,6 +585,14 @@ sent (the parked pass is silent); recorded as a limitation for M6.
 | D-35 | (not specified) a Hermes message that cannot be recorded | The voice door answers 503 `hermes_not_sent` in words and records nothing; it is **never** stored as a team message. | A silent team fallback is an automatic switch. |
 | D-36 | (not specified) deploy order | `deploy:voice` reads the LIVE worker bundle and refuses unless it carries the two awaited engine calls (`scripts/deploy/lib/engine-order.ts`). | A worker that predates the seam would answer a Hermes-chosen message as the team, with nothing saying so. |
 
+### 10.2 M9 as built (Telegram `/hermes `, Slack `hermes:`)
+
+| ID | Table says | Built | Why |
+|---|---|---|---|
+| D-37 | "prefixes translated in the adapters" | Each rule is a small exported function **inside its own adapter file** (`telegramEngine` in `src/channels/telegram.ts`, `slackEngine` in `src/slack/events.ts`), not a shared module. | `deploy:telegram` and `deploy:slack` upload those files flat, beside the entrypoint and nothing else of `src/`; an import of `../engines/...` would resolve in the repository and fail in the deployed function. |
+| D-38 | (not specified) which messages can select | Only a **typed, non-forwarded** message that BEGINS with the prefix and has something after it. A bare `/hermes`, a prefix in the middle, the other channel's prefix, a forwarded or shared message, a voice note and a button press are the team's and are stored untouched. On Slack the leading `<@bot>` mention is addressing and is removed first. | A prefix is a power: forwarded text is somebody else's words, and a recording has no words yet. |
+| D-39 | (not specified) a database that predates 1070 | A Hermes-prefixed message whose insert fails (no `engine` column) takes the doors' existing failure path (Telegram retries, Slack is told to retry); it is never stored as a team message. Ship order: migrations, then the worker, then the two doors. | Same rule as D-35: no automatic switch. |
+
 ---
 
 ## 11. Error and cancellation matrix

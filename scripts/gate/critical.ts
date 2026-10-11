@@ -364,6 +364,12 @@ export const CRITICAL: readonly Proof[] = [
     'what a person sees of Hermes: the status the composer asks (nothing for an office not given Hermes, a reason when the host is away, the host by name only), the REAL voice door recording only the word hermes and refusing in its own words, never as a team message, when it cannot record; the thread labels each message and each answer by the run that wrote it and hides the notes left while Hermes worked; the page sends the engine only when chosen and never chooses for the person (7 database sabotages; 2 voice-door sabotages run by hand)',
   ),
 
+  p(
+    'engine-channels',
+    18,
+    "choosing Hermes from Telegram (/hermes) and Slack (hermes:) through the REAL webhook and events doors: the person's typed prefix records engine hermes and is removed from the stored instruction, everything else (no prefix, a prefix in the middle, the other channel's prefix, a bare prefix) is the team and untouched, forwarded and shared text never selects, the job's own command says hermes, and a stranger is refused before any engine is read (3 sabotages run by hand)",
+  ),
+
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p(
     'replay-parity',

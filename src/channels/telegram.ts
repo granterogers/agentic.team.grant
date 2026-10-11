@@ -147,6 +147,11 @@ export interface CanonicalCommand {
    * say; today: `forwarded`, which says the text is somebody else's, carried by him.
    */
   readonly context?: { readonly forwarded?: true; readonly reply_to_message_id?: string }
+  /**
+   * Present only when the person began a typed, non-forwarded message with `/hermes ` (Hermes, M9). The prefix is removed from
+   * `instruction`. Absent means the team: nothing here ever chooses an engine for the person.
+   */
+  readonly engine?: 'hermes'
 }
 
 export class UnsupportedUpdateError extends Error {
@@ -211,6 +216,28 @@ const contextOf = (
       ...(replyTo === undefined ? {} : { reply_to_message_id: replyTo }),
     },
   }
+}
+
+/**
+ * Choosing Hermes from Telegram (Hermes, M9): a typed message that BEGINS with `/hermes ` (or `/hermes@some_bot `) is the person asking
+ * for Hermes to answer it, and the prefix is not part of what they asked.
+ *
+ * Translation only (section 5). This decides nothing about whether Hermes can answer: the office does, when the turn is worked, and says
+ * so in words. It never chooses for the person: no prefix is the team, and so is a message that is only the prefix, because nothing was
+ * asked of anybody. Forwarded text is somebody else's words carried by the person, so it never selects an engine. It is declared here and
+ * not imported because the deploy uploads this file flat, beside the entrypoint, with nothing else of `src/`.
+ */
+const HERMES_PREFIX = /^\/hermes(?:@[A-Za-z0-9_]{3,64})?[ \t\r\n]+(\S[\s\S]*)$/i
+
+export const telegramEngine = (
+  text: string,
+  forwarded: boolean,
+): { readonly engine: 'team' | 'hermes'; readonly instruction: string } => {
+  if (forwarded) return { engine: 'team', instruction: text }
+  const m = HERMES_PREFIX.exec(text.replace(/^\s+/, ''))
+  return m === null
+    ? { engine: 'team', instruction: text }
+    : { engine: 'hermes', instruction: m[1] ?? text }
 }
 
 export function toCanonicalCommand(
@@ -311,6 +338,13 @@ export function toCanonicalCommand(
     throw new UnsupportedUpdateError(update.update_id)
   }
 
+  const arrival = contextOf(message)
+  // A prefix is a translation of how the person addressed the office, not a reading of what they asked. Forwarded text is
+  // somebody else's words and a recording has none yet, so neither can select an engine (prefix.ts).
+  const chosen =
+    recording === undefined
+      ? telegramEngine(typed, 'context' in arrival && arrival.context.forwarded === true)
+      : { engine: 'team' as const, instruction: '' }
   return {
     origin_channel: 'telegram',
     origin_ref: `${String(message.chat.id)}:${String(message.message_id)}`,
@@ -318,7 +352,8 @@ export function toCanonicalCommand(
     // Raw text, never pre-digested. §1: "Never pre-digested by the adapter."
     // Empty for a recording: the words do not exist yet, and inventing a
     // placeholder here is how a placeholder ends up being acted on.
-    instruction: recording === undefined ? typed : '',
+    instruction: chosen.instruction,
+    ...(chosen.engine === 'hermes' ? { engine: 'hermes' as const } : {}),
     voice_file_id: recording?.file_id ?? null,
     voice_seconds:
       recording === undefined || recording.duration === undefined ? null : recording.duration,
@@ -342,7 +377,7 @@ export function toCanonicalCommand(
     // Forwarded text is somebody else's words carried by him. It is recorded here, at the door, because nothing
     // later can tell (#392); what reads it is app.open_questions_for_reply (a forwarded "yes" answers nothing).
     // And the message a reply points at, because that is what makes "yes" mean THIS question (#396).
-    ...contextOf(message),
+    ...arrival,
   }
 }
 

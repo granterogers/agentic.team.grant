@@ -39,6 +39,11 @@ export interface CanonicalCommand {
    * provider exposes to a forward - a plain paste of somebody's text is indistinguishable from typing it).
    */
   readonly context?: { readonly forwarded?: true; readonly thread_ts?: string }
+  /**
+   * Present only when the person began a non-shared message with `hermes:` (Hermes, M9). The prefix is removed from `instruction`.
+   * Absent means the team: nothing here ever chooses an engine for the person.
+   */
+  readonly engine?: 'hermes'
   /** Slack-specific routing the core does not interpret, only carries. */
   readonly slack: {
     readonly team_id: string
@@ -73,6 +78,27 @@ const slackContext = (
       ...(threadRoot === undefined ? {} : { thread_ts: threadRoot }),
     },
   }
+}
+
+/**
+ * Choosing Hermes from Slack (Hermes, M9): a message that BEGINS with `hermes:` (after the leading mention, which is addressing) is the
+ * person asking for Hermes to answer it, and the prefix is not part of what they asked.
+ *
+ * Translation only (section 5). It decides nothing about whether Hermes can answer, never chooses for the person (no prefix is the team,
+ * and so is a prefix with nothing after it), and a shared message is somebody else's words so it never selects an engine. Declared here
+ * and not imported because the deploy uploads this file flat, beside the entrypoint, with nothing else of `src/`.
+ */
+const HERMES_PREFIX = /^hermes[ \t]*:[ \t\r\n]*(\S[\s\S]*)$/i
+
+export const slackEngine = (
+  text: string,
+  forwarded: boolean,
+): { readonly engine: 'team' | 'hermes'; readonly instruction: string } => {
+  if (forwarded) return { engine: 'team', instruction: text }
+  const m = HERMES_PREFIX.exec(text.replace(/^\s+/, ''))
+  return m === null
+    ? { engine: 'team', instruction: text }
+    : { engine: 'hermes', instruction: m[1] ?? text }
 }
 
 export class UnsupportedSlackEventError extends Error {
@@ -266,13 +292,17 @@ export const toCanonicalCommand = (
     // The mention prefix is addressing, not content — "@ai_team_hq summarise
     // this" instructs "summarise this". Everything after it is verbatim: §1's
     // "never pre-digested" is about the instruction, not about the envelope.
-    const instruction = withoutLeadingMention(raw)
-    if (instruction.trim() === '') {
+    const mentionless = withoutLeadingMention(raw)
+    if (mentionless.trim() === '') {
       throw new UnsupportedSlackEventError(event.type, 'it carries no text')
     }
 
     const isDm = event.channel_type === 'im'
     const ts = event.ts ?? event.event_ts ?? 'unknown'
+    const arrival = slackContext(event, ts)
+    // A prefix is a translation of how the person addressed the office. A shared message is somebody else's words (prefix.ts).
+    const chosen = slackEngine(mentionless, arrival.context?.forwarded === true)
+    const instruction = chosen.instruction
 
     return {
       origin_channel: 'slack',
@@ -292,7 +322,8 @@ export const toCanonicalCommand = (
       voice_file_id: null,
       voice_seconds: null,
       compensates_event_id: null,
-      ...slackContext(event, ts),
+      ...(chosen.engine === 'hermes' ? { engine: 'hermes' as const } : {}),
+      ...arrival,
       slack: {
         team_id: teamId,
         channel_id: event.channel ?? null,

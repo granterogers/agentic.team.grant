@@ -365,6 +365,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
       compensates_event_id: command.compensates_event_id,
       // How it arrived, when that is not his own words (#392): forwarded.
       ...(command.context === undefined ? {} : { context: command.context }),
+      // The person's own `/hermes ` at the start of the message, already removed from the instruction (Hermes, M9).
+      ...(command.engine === 'hermes' ? { engine: 'hermes' } : {}),
       received_at: command.received_at,
       // Who it was sent TO. Opening @atg_research_bot addresses Ines, and that
       // is a clearer signal than any classifier could produce from the text.
