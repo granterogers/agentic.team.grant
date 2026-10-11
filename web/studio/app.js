@@ -9674,7 +9674,7 @@ function drawShell() {
     : state.view === 'tasks' ? tasksView()
     : portfolio())
   // The room takes its colour from whatever is in front of you.
-  ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0].hue)
+  ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0]?.hue)
   breathe(root)
   scatter(root)
   /*
