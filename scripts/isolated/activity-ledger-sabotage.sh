@@ -45,7 +45,31 @@ SABOTAGES=(
 want=("$@")
 selected() { [ ${#want[@]} -eq 0 ] && return 0; for w in "${want[@]}"; do [ "$w" = "$1" ] && return 0; done; return 1; }
 
-clone() { $P -d postgres -c "drop database if exists ledger_sab" -c "create database ledger_sab template post" >/dev/null 2>&1; }
+# The replica's `post` may ALREADY carry migrations 1060 and 1061 (replica.sh replays every file), and re-applying a sabotaged copy over
+# them would change only the functions: a seed row, a table or a trigger would keep its real definition and the sabotage would not land.
+# So every clone starts from `post` with the ledger's objects removed, and the migrations are applied fresh, as they would be on production.
+strip_ledger() {
+  $P -d ledger_sab -c "
+    do \$\$ declare r record; begin
+      for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                where n.nspname in ('app', 'public')
+                  and ((p.proname like 'activity\_%' and p.proname <> 'activity_category')
+                       or p.proname in ('record_activity', 'record_activity_safely', 'record_external_activity'))
+      loop execute 'drop function ' || r.sig || ' cascade'; end loop;
+    end \$\$;
+    drop table if exists public.activity_write_failures cascade;
+    drop table if exists public.activity_events cascade;
+    drop table if exists public.activity_event_types cascade;
+    delete from public.system_config where key = 'activity.ledger_enabled';" >/dev/null 2>&1
+  left=$($P -d ledger_sab -At -c "select (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('app','public') and p.proname in ('activity_read','record_activity'))
+                                   + (select count(*) from pg_class where relname in ('activity_events','activity_event_types'))
+                                   + (select count(*) from public.system_config where key = 'activity.ledger_enabled')")
+  [ "$left" = "0" ] || { echo "  (the clone still holds $left ledger object(s); the sabotage would not be honest)"; return 1; }
+}
+clone() {
+  $P -d postgres -c "drop database if exists ledger_sab" -c "create database ledger_sab template post" >/dev/null 2>&1
+  strip_ledger
+}
 apply() { for f in "$@"; do $P -d ledger_sab -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 || { echo "  (migration did not apply: $f)"; return 1; }; done; }
 mutate() { # file old new out  -> exit 0 only if the old text was present and the output differs
   python3 -I - "$1" "$2" "$3" "$4" <<'PY'
