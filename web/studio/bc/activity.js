@@ -68,6 +68,7 @@ export const createActivity = (deps) => {
     chain: new Map(),
     attn: { state: 'idle', events: [] },
     legacy: () => '',
+    header: () => '',
     note: '',
   })
   let S = fresh('\u0000')
@@ -366,7 +367,7 @@ export const createActivity = (deps) => {
       S.view !== 'attention' && waiting > 0
         ? `<button type="button" class="bcact-banner" data-act-view="attention" data-act-focus="banner"><span class="bcact-mark bcact-mark--wait" aria-hidden="true">${icon('approval')}</span><span><b>${String(waiting)} ${waiting === 1 ? 'thing needs' : 'things need'} you</b><span>See what is waiting for your decision</span></span><span aria-hidden="true">›</span></button>`
         : ''
-    return `${controls()}${banner}${happeningNow()}<div class="bcact-list" data-act-list>${timeline()}</div>`
+    return `${S.header()}${controls()}${banner}${happeningNow()}<div class="bcact-list" data-act-list>${timeline()}</div>`
   }
 
   const html = () => body()
@@ -393,9 +394,10 @@ export const createActivity = (deps) => {
 
   // ---------------------------------------------------------------------------------------------- the shell's entry points
   /** Called by the shell on every redraw of an Activity screen. Starts the first read once; never starts one per redraw. */
-  const render = (scope, legacy) => {
+  const render = (scope, legacy, header = () => '') => {
     if (S.scope !== scope) S = fresh(scope)
     S.legacy = legacy
+    S.header = header
     if (!S.started) {
       S.started = true
       queueMicrotask(() => {
@@ -502,7 +504,7 @@ let inst = null
 export const configure = (deps) => {
   inst = createActivity(deps)
 }
-export const render = (scope, legacy) => (inst === null ? legacy() : inst.render(scope, legacy))
+export const render = (scope, legacy, header) => (inst === null ? legacy() : inst.render(scope, legacy, header))
 export const wire = (root) => inst?.wire(root)
 export const reset = () => inst?.reset()
 export const peek = () => inst?.peek() ?? null

@@ -197,8 +197,8 @@ describe('the module is wired the way these rules assume', () => {
     expect(src.match(/if \(mine !== S\.seq\) return/g)?.length).toBeGreaterThanOrEqual(2)
   })
   it('the office page and the project page both go through it, with the older list as the fallback', () => {
-    expect(shell).toMatch(/activity\.render\(''\, older\)/)
-    expect(shell).toMatch(/activity\.render\(p\.slug, older\)/)
+    expect(shell).toMatch(/activity\.render\('', \(\) => allActivity\(\)/)
+    expect(shell).toMatch(/activity\.render\(p\.slug, \(\) => activitySurface\(p\)/)
     expect(wire).toMatch(/activity\.wire\(root\)/)
   })
   it('a second approval mechanism is not built here: no answer or decide call exists in the module', () => {

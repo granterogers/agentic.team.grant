@@ -2503,17 +2503,21 @@ const activitySurface = (p) => {
   const on = offered.some((f) => f.id === want) ? want : 'all'
   const test = (offered.find((f) => f.id === on) ?? offered[0]).test
   const shown = acts.filter(test)
-  // The ledger's timeline when it is on for this office and answers; otherwise exactly the older list below (see activity.js).
-  const older = () => `${
-    offered.length > 1
-      ? `<div class="bcsrcchips bcactfilter" role="group" aria-label="Filter the activity">${offered
-          .map(
-            (f) =>
-              `<button type="button" class="bcsrcchip${f.id === on ? ' is-on' : ''}" data-bc-actf="${esc(f.id)}" aria-pressed="${f.id === on ? 'true' : 'false'}">${esc(f.name)}${f.id === 'all' ? '' : ` <span class="bcsrcn">${String(acts.filter(f.test).length)}</span>`}</button>`,
-          )
-          .join('')}</div>`
-      : ''
-  }
+  return `${crumbFor(p, 'activity')}
+    <div class="bcrecordhead"><h1>${esc(toolById('activity')?.name ?? 'Activity')}</h1></div>
+    <p class="bcpmeta bcprose bcgap-l">
+      What has happened on this project, most recent first. Each line says who did it and, where it is known, which door it came through.
+    </p>
+    ${
+      offered.length > 1
+        ? `<div class="bcsrcchips bcactfilter" role="group" aria-label="Filter the activity">${offered
+            .map(
+              (f) =>
+                `<button type="button" class="bcsrcchip${f.id === on ? ' is-on' : ''}" data-bc-actf="${esc(f.id)}" aria-pressed="${f.id === on ? 'true' : 'false'}">${esc(f.name)}${f.id === 'all' ? '' : ` <span class="bcsrcn">${String(acts.filter(f.test).length)}</span>`}</button>`,
+            )
+            .join('')}</div>`
+        : ''
+    }
     ${
       acts.length === 0
         ? empty({ title: 'Nothing yet', body: 'What people and the team do on this project is listed here.' })
@@ -2521,13 +2525,8 @@ const activitySurface = (p) => {
           ? empty({ title: 'Nothing matches', body: 'Nothing on this project fits that filter.' }, button('Show everything', { 'data-bc-actf': 'all' }))
           : bcMini.timelineMini({ ...p, activity: shown }, { items: shown.length })
     }`
-  return `${crumbFor(p, 'activity')}
-    <div class="bcrecordhead"><h1>${esc(toolById('activity')?.name ?? 'Activity')}</h1></div>
-    <p class="bcpmeta bcprose bcgap-l">
-      What has happened on this project, most recent first. Each line says who did it and, where it is known, which door it came through.
-    </p>
-    ${activity.render(p.slug, older)}`
 }
+
 const STAGE = [
   { id: 'todo', name: 'Not started' },
   { id: 'doing', name: 'In progress' },
@@ -3212,7 +3211,13 @@ const SURFACE = {
   documents: documentsSurface,
   contacts: contactsSurface,
   sources: sourcesSurface,
-  activity: activitySurface,
+  // The ledger's timeline when it is on for this office and answers; otherwise the older page, whole (see activity.js).
+  activity: (p) =>
+    activity.render(p.slug, () => activitySurface(p), () => `${crumbFor(p, 'activity')}
+    <div class="bcrecordhead"><h1>${esc(toolById('activity')?.name ?? 'Activity')}</h1></div>
+    <p class="bcpmeta bcprose bcgap-l">
+      What has happened on this project, most recent first. Each line says who did it and, where it is known, which door it came through.
+    </p>`),
   board: boardSurface,
   schedule: scheduleSurface,
   chat: chatSurface,
@@ -3377,12 +3382,13 @@ const allActivity = () => {
     a.line !== undefined
       ? `${a.line.byline === '' ? '' : `${a.line.byline}: `}${a.line.sentence}`.trim()
       : `${whoName(a.who) || 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim()
-  const older = () =>
-    rows.length === 0
-      ? empty({ title: 'Nothing yet', body: 'What happens across your projects is listed here.' })
-      : `<div class="bclist">${rows
-          .map(
-            (a) => `<div class="bcitem bcitem--log">
+  return `<h1 class="bcsectiontitle">Activity</h1>
+    ${
+      rows.length === 0
+        ? empty({ title: 'Nothing yet', body: 'What happens across your projects is listed here.' })
+        : `<div class="bclist">${rows
+            .map(
+              (a) => `<div class="bcitem bcitem--log">
                 <span></span>
                 <div class="bcitembody">
                   <span class="bcitemtitle">${esc(titleOf(a))}</span>
@@ -3390,11 +3396,9 @@ const allActivity = () => {
                 </div>
                 <span></span>
               </div>`,
-          )
-          .join('')}</div>`
-  // The ledger's timeline (activity.js) when it is on for this office and answers; otherwise exactly the older list above.
-  return `<h1 class="bcsectiontitle">Activity</h1>
-    ${activity.render('', older)}`
+            )
+            .join('')}</div>`
+    }`
 }
 
 /* ======================================================================== *
@@ -3647,7 +3651,7 @@ const body = () => {
   const s = state()
   if (s.view === 'bcsearch') return search()
   if (s.view === 'tasks') return myTasks()
-  if (s.view === 'lately') return allActivity()
+  if (s.view === 'lately') return activity.render('', () => allActivity(), () => '<h1 class="bcsectiontitle">Activity</h1>')
   if (s.view === 'project') {
     const p = project()
     if (p === null || p === undefined) {

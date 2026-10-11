@@ -161,7 +161,9 @@ const shot = async (page: Page, name: string, full = false) => {
   await mkdir(shotsDir, { recursive: true })
   await page.screenshot({ path: `${shotsDir}/${name}.png`, fullPage: full })
 }
-const overflowOf = (page: Page) => page.evaluate(`(() => { var vw = window.innerWidth, worst = 0; Array.prototype.slice.call(document.body.querySelectorAll('*')).forEach(function (e) { if (e.closest('svg')) return; var r = e.getBoundingClientRect(); if (r.width === 0 || r.right <= vw + 1) return; for (var p = e; p && p !== document.body; p = p.parentElement) { var cs = getComputedStyle(p); if (cs.position === 'fixed' || /(auto|scroll|hidden|clip)/.test(cs.overflowX)) return } worst = Math.max(worst, Math.round(r.right)) }); return { vw: vw, scroll: Math.max(document.documentElement.scrollWidth, worst) } })()`) as Promise<{ vw: number; scroll: number }>
+// Measured against the DEVICE's width (the context viewport), never window.innerWidth: a phone widens its layout viewport to fit whatever
+// overflows, so innerWidth reads 964 on a 390px device with the defect live and a check against it can never fail.
+const overflowOf = (page: Page) => page.evaluate(`(() => { var vw = ${page.viewportSize()?.width ?? 0}, worst = 0; Array.prototype.slice.call(document.body.querySelectorAll('*')).forEach(function (e) { if (e.closest('svg')) return; var r = e.getBoundingClientRect(); if (r.width === 0 || r.right <= vw + 1) return; for (var p = e; p && p !== document.body; p = p.parentElement) { var cs = getComputedStyle(p); if (cs.position === 'fixed' || /(auto|scroll|hidden|clip)/.test(cs.overflowX)) return } worst = Math.max(worst, Math.round(r.right)) }); return { vw: vw, scroll: Math.max(document.documentElement.scrollWidth, worst) } })()`) as Promise<{ vw: number; scroll: number }>
 
 export const H = { db, one, json, check, timed, timings, open, goto, shot, overflowOf, VIEWPORTS, seeded, hist, officeA, officeB, projB, S_A, S_B, gw, APP, GW, setList, setMaster, run, shotsDir }
 

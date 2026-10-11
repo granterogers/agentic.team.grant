@@ -92,7 +92,7 @@ export async function runAll(H: any): Promise<void> {
       const o = await overflowOf(page)
       check(`${tag}: no horizontal overflow`, o.scroll <= o.vw, `${o.scroll} of ${o.vw}`)
       // overflow checks ignore clipped content, which is exactly how a cut-off chip hides: measure every visible control's edges instead
-      const clipped = (await page.evaluate(`Array.prototype.slice.call(document.querySelectorAll('.bcact button, .bcact select, .bcact-tag, .bcact-result')).filter(function (e) { return e.offsetParent !== null }).map(function (e) { var r = e.getBoundingClientRect(); return { l: (e.textContent || '').trim().slice(0, 20), left: Math.round(r.left), right: Math.round(r.right), h: Math.round(r.height), cls: e.className } }).filter(function (x) { return x.left < -0.5 || x.right > window.innerWidth + 0.5 })`)) as any[]
+      const clipped = (await page.evaluate(`Array.prototype.slice.call(document.querySelectorAll('.bcact button, .bcact select, .bcact-tag, .bcact-result')).filter(function (e) { return e.offsetParent !== null }).map(function (e) { var r = e.getBoundingClientRect(); return { l: (e.textContent || '').trim().slice(0, 20), left: Math.round(r.left), right: Math.round(r.right), h: Math.round(r.height), cls: e.className } }).filter(function (x) { return x.left < -0.5 || x.right > ${vp.w} + 0.5 })`)) as any[]
       check(`${tag}: no control or tag is cut off at either edge`, clipped.length === 0, clipped.map((x) => `${x.l}:${x.left}-${x.right}`).join(' ') || 'all inside')
       const wrapped = (await page.evaluate(`Array.prototype.slice.call(document.querySelectorAll('.bcact-tag, .bcact-result')).filter(function (e) { return e.offsetParent !== null && e.getBoundingClientRect().height > 26 }).map(function (e) { return e.textContent.trim() })`)) as string[]
       check(`${tag}: a tag or result is never broken across lines`, wrapped.length === 0, wrapped.join(' | ') || 'whole')
@@ -170,6 +170,11 @@ export async function runAll(H: any): Promise<void> {
       // The range is the person's own calendar ("Last 7 days" = today and the six days before, from local midnight), so the oracle asks
       // the database from the very instant the page sent, not from "now minus 7 days".
       const sinceSent = new URLSearchParams(q.replace(/^\?/, '')).get('since') ?? ''
+      // the filtered state is a layout of its own (active chips, the open panel): measured here, not only in the default state
+      const fclip = (await page.evaluate(`Array.prototype.slice.call(document.querySelectorAll('.bcact button, .bcact select, .bcact label')).filter(function (e) { return e.offsetParent !== null }).map(function (e) { var r = e.getBoundingClientRect(); return { l: (e.textContent || '').trim().slice(0, 18), left: Math.round(r.left), right: Math.round(r.right) } }).filter(function (x) { return x.left < -0.5 || x.right > ${vp.w} + 0.5 })`)) as any[]
+      const fo = await overflowOf(page)
+      const hs = (await page.evaluate(`({ x: window.scrollX, dw: document.documentElement.scrollWidth, bw: document.body.scrollWidth, cw: (document.querySelector('.bcact') || {}).scrollWidth, cc: (document.querySelector('.bcact-controls') || {}).scrollWidth, ccw: (document.querySelector('.bcact-controls') || {}).clientWidth })`)) as any
+      check(`${tag}: with filters on (chips and panel open) nothing is cut off, nothing scrolls sideways`, fclip.length === 0 && fo.scroll <= fo.vw && hs.x === 0 && hs.dw <= vp.w, `${fclip.map((x) => `${x.l}:${x.left}-${x.right}`).join(' ') || 'all inside'}; scroll ${fo.scroll} of ${fo.vw}; ${JSON.stringify(hs)}`)
       const agentWant = await db.execute(`select count(*)::int as n from jsonb_array_elements((app.activity_read(p_office => '${officeA}'::uuid, p_min_severity => 'warning', p_agent => 'research-director', p_since => '${sinceSent.replace(/'/g, '')}'::timestamptz, p_visibility => 'user', p_limit => 40))->'events') e`)
       check(`${tag}: the combined result matches the database count`, rows.length === (agentWant.rows[0] as any).n, `${rows.length} vs ${(agentWant.rows[0] as any).n}`)
       await press(page,'[data-act-clear="range"]')
@@ -190,6 +195,9 @@ export async function runAll(H: any): Promise<void> {
       const nZero = (zero.rows[0] as any).n
       if (nZero === 0) check(`${tag}: a filter nothing matches says so for the whole history and offers to clear`, /Nothing matches/.test(emptyText ?? '') && /whole history/.test(emptyText ?? '') && (await page.$$('[data-act-clear="all"]')).length >= 1, (emptyText ?? '').slice(0, 80))
       else check(`${tag}: combination has results in this data set (${nZero}); empty state covered at another width`, true)
+      const e2 = (await page.evaluate(`Array.prototype.slice.call(document.querySelectorAll('.bcact button, .bcact select, .bcact label, .bcact .bcempty, .bcact-banner')).filter(function (e) { return e.offsetParent !== null }).map(function (e) { var r = e.getBoundingClientRect(); return { l: (e.textContent || '').trim().slice(0, 18), cls: e.className.slice(0, 20), left: Math.round(r.left), right: Math.round(r.right) } }).filter(function (x) { return x.left < -0.5 || x.right > ${vp.w} + 0.5 })`)) as any[]
+      const hs2 = (await page.evaluate(`({ x: window.scrollX, dw: document.documentElement.scrollWidth, vw: window.innerWidth })`)) as any
+      check(`${tag}: the "nothing matches" state with three filters on is not cut off and does not scroll sideways (measured against the ${vp.w}px device, not the layout viewport)`, e2.length === 0 && hs2.x === 0 && hs2.dw <= vp.w, `${e2.map((x) => `${x.l}[${x.cls}]:${x.left}-${x.right}`).join(' ') || 'all inside'}; ${JSON.stringify(hs2)}`)
       await shot(page, `after-filters-${vp.name}`)
       await close()
     }

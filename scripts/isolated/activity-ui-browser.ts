@@ -139,6 +139,8 @@ const open = async (vp: (typeof VIEWPORTS)[number], opts: Opts = {}) => {
       await route.fulfill({ response: res, body: text.replace(from ?? '', () => to ?? '') })
     })
   }
+  // A phone widens its layout viewport to fit what overflows, so window.innerWidth cannot say the page overflows; the device's own width can.
+  await ctx.addInitScript(`window.__deviceWidth = ${vp.w};`)
   await ctx.addInitScript(`window.HQ_API = '${GW}/hq-api'; window.HQ_SIGNIN = '${GW}/signin';`)
   await ctx.addInitScript(`try { localStorage.setItem('hq.session', JSON.stringify({ access_token: '${S}', refresh_token: 'r', expires_at: Date.now() + 36e5 })) } catch {}`)
   const page = await ctx.newPage()
@@ -158,7 +160,7 @@ const READ = `(() => {
     return { title: t ? t.textContent.trim() : '', meta: m ? m.textContent.trim() : '', tr: t ? rect(t) : null, mr: m ? rect(m) : null, ir: rect(it),
              fs: t ? parseFloat(getComputedStyle(t).fontSize) : 0 };
   });
-  var vw = window.innerWidth, worst = 0;
+  var vw = window.__deviceWidth || window.innerWidth, worst = 0;
   Array.prototype.slice.call(document.body.querySelectorAll('*')).forEach(function (e) {
     if (e.closest('svg') || !vis(e)) return; var r = e.getBoundingClientRect(); if (r.width === 0 || r.right <= vw + 1) return;
     for (var p = e; p && p !== document.body; p = p.parentElement) { var cs = getComputedStyle(p); if (cs.position === 'fixed' || /(auto|scroll|hidden|clip)/.test(cs.overflowX)) return; }

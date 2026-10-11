@@ -5,7 +5,9 @@
   Source order matters here (a media query adds no specificity): the phone rules are at the END of this file.
 */
 
-[data-experience='basecamp'] .bcact { display: grid; gap: var(--bc-4); }
+/* Secondary text inside this screen is the ordinary ink pulled toward the surface, not the shared muted token: on a hovered or tapped row the
+   shared token measured 4.38:1 (axe), under the 4.5:1 floor. Redefined here only, so nothing outside the screen changes. */
+[data-experience='basecamp'] .bcact { --bc-text-muted: color-mix(in srgb, var(--bc-text) 82%, var(--bc-surface)); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--bc-4); min-width: 0; }
 [data-experience='basecamp'] .bcact-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 [data-experience='basecamp'] .bcact-filterbar { display: contents; }
 
@@ -39,9 +41,9 @@
   border: 1px solid var(--bc-border-subtle); border-radius: var(--bc-r-control); background: color-mix(in srgb, var(--bc-surface) 70%, transparent);
 }
 [data-experience='basecamp'] .bcact-panel[hidden] { display: none; }
-[data-experience='basecamp'] .bcact-field { display: grid; gap: 4px; font: 500 12.5px/1.2 var(--bc-font); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcact-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; font: 500 12.5px/1.2 var(--bc-font); color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcact-field select {
-  min-height: 44px; padding: 0 10px; border: 1px solid var(--bc-border-control, var(--bc-border-subtle)); border-radius: var(--bc-r-control);
+  width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; min-height: 44px; padding: 0 10px; border: 1px solid var(--bc-border-control, var(--bc-border-subtle)); border-radius: var(--bc-r-control);
   background: var(--bc-surface); color: var(--bc-text); font: 400 16px/1.2 var(--bc-font);
 }
 
@@ -131,8 +133,8 @@
   display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 999px; font: 600 12px/1 var(--bc-font);
   background: var(--bc-hover); color: var(--bc-text);
 }
-[data-experience='basecamp'] .bcact-result--ok { background: color-mix(in srgb, var(--bc-success) 16%, transparent); color: var(--bc-success); }
-[data-experience='basecamp'] .bcact-result--bad { background: color-mix(in srgb, var(--bc-danger) 16%, transparent); color: var(--bc-danger); }
+[data-experience='basecamp'] .bcact-result--ok { background: color-mix(in srgb, var(--bc-success) 16%, transparent); color: color-mix(in srgb, var(--bc-success) 55%, var(--bc-text-strong)); }
+[data-experience='basecamp'] .bcact-result--bad { background: color-mix(in srgb, var(--bc-danger) 16%, transparent); color: color-mix(in srgb, var(--bc-danger) 55%, var(--bc-text-strong)); }
 [data-experience='basecamp'] .bcact-result--warn,
 [data-experience='basecamp'] .bcact-result--wait { background: color-mix(in srgb, var(--bc-section-accent) 18%, transparent); color: var(--bc-text-strong); }
 
@@ -223,7 +225,7 @@ html:has(.bcact) { scroll-padding-top: calc(var(--bc-nav-h, 64px) + 16px); scrol
   [data-experience='basecamp'] .bcact-nowrow { grid-template-columns: auto 1fr; }
   [data-experience='basecamp'] .bcact-nowrow .bcbtn { grid-column: 2; justify-self: start; }
   [data-experience='basecamp'] .bcact-need .bcbtn { grid-column: 1 / -1; justify-self: stretch; }
-  [data-experience='basecamp'] .bcact-panel { grid-template-columns: 1fr; }
+  [data-experience='basecamp'] .bcact-panel { grid-template-columns: minmax(0, 1fr); }
   [data-experience='basecamp'] .bcact-mark { width: 32px; height: 32px; }
   [data-experience='basecamp'] .bcact-mark--face .bcface { width: 32px; height: 32px; }
 }
