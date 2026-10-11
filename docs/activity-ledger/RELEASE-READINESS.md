@@ -238,3 +238,95 @@ Reference figures were reproduced, not required; the 913 ms chain read at this v
 **Migration hashes (sha256, as committed):** `1060` `3e7999f78eb7280fc0e8f00fd85722cbbe7a5eff3592c4cfbbcbaa7149aa997d`, `1061` `7c24ed0a4438b476aae033d3667aef02873bf8d25483912681c07695dcd45a3f`, `1062` `07c26ad8eb700e0fc79f8504ea60faccd90db0a97a3d59bb66b66ab90fd40534`. These supersede the hashes in section 15.
 
 **Final verdicts.** MERGE READINESS **READY**. DEPLOYMENT READINESS **CONDITIONAL** (the conditions are item 10, none of which can be met without production access or a person). ACTIVATION READINESS **CONDITIONAL** (indexes valid, real-host latency, a rendered look at real ledger rows, a human review of the SQL, and a decision that a deployment-wide switch is acceptable).
+
+---
+
+## Phase 4 addendum - integration with real rows, release checklist (11 October 2026)
+
+This section is the **current** record; where it restates a figure above it supersedes it. Local replica evidence is labelled as such and is never entered below as production evidence. Model reviews are not human review.
+
+### What phase 4 found and fixed (all by looking at the real thing)
+
+1. **Team HQ never drew the ledger.** The hook fed only the classic studio; Team HQ's Activity screen reads each project's own list. Activating the ledger would have changed nothing a person sees. Found by drawing genuine ledger rows (written to the owning tables and through the ledger writers) through the real gateway in a real browser; Team HQ now draws the ledger's rows when it is on and answered, and the old behaviour when it is not. 126 checks at 1440, 390 and 320 px (`bash scripts/isolated/activity-ui-browser.sh`); screenshots in `docs/activity-ledger/screens/`.
+2. **Wording and attribution**: a ledger sentence would have read "Claire You said yes", an outside worker would have been shown under the first crew member, an unknown specialist likewise, and jobs read as `office.instruction`. Fixed (adapter and page), with unit tests (37 in the wiring file) and SQL checks.
+3. **The 390 px overlap** (a wrapped title printing over its meta line) was the shared `.bcitemtitle` touch rule (inline-flex, 44 px, margin -11 px) built for one-line titles. Fixed for the Activity rows only (`.bcitem--log`); the same defect may exist in other lists with wrapped titles (not checked, not touched).
+4. **A latency cliff**: the newest user page went from 110 ms (3 500 native events) to 1.9 s (5 550) when about two thousand diagnostic tool-call events were the newest rows (the native pool ignored the visibility floor and was widened repeatedly; past 16 384 rows it would have returned `partial`). Fixed with a pushed-down visibility predicate and a partial index (123 ms), regression with 17 000 diagnostic events, sabotage S45.
+5. **The mixed-version matrix found a regression I had just introduced**: the per-office check as an office-less overload failed `p3-app-attack`; renamed `activity_ledger_covers`.
+6. **A sabotage that no longer discriminated** (S11 stayed green because the new pool filter duplicated the outer filter); it now removes both.
+
+### Per-office activation (decision)
+
+Implemented, small and additive: `activity.ledger_offices` narrows the master switch; absent = every office, an array = those offices, anything else = none; the master switch always wins; nothing is cached; `npm run activity:switch` plans and applies a canary/add/all/off in the safe order. Proof `activity-office-scope` (26 checks, S41-S44) and 8 planner tests. **Known property:** deleting the allowlist row while the master is on activates every office (fail-open by absence, documented in stage D). Existing convention surveyed: the only office-level mechanism is a global `system_config` flag; no office-scoped configuration exists to reuse.
+
+### Mixed-version matrix (local replicas, NOT deployed versions)
+
+Old = `origin/main` `5fa1fbdc`, new = this branch; each cell is the 68-proof critical gate. A (old/old) 68 green; B (new code, old schema) 66 green + 2 structural reds; C (old code, new schema) 66 green + the same 2; D (new/new) 68 green. The two reds (`replay-parity`, `office-ownership-sabotage`) compare the schema with the checkout's own migration history and manifest, so they cannot be green in any mixed cell and are not behavioural. Browser cells (new page/old gateway, old page/new gateway, new page and gateway over the old schema) all draw the older list, no error. New worker over a schema without the ledger: 4/4 (`activity-mixed-version.ts`). **The production matrix has not been run.**
+
+### Performance and resources (replica, 3 000 jobs, 24 003 transitions; not production)
+
+| Read | p50 | p95 | Reference (phase 3) |
+|---|---|---|---|
+| newest page | 106 ms | 120 | ~106 |
+| severity >= error | 103 | 143 | ~96 |
+| one agent | 113 | 145 | ~108 |
+| diagnostic newest | 209 | 325 | n/a |
+| page 3 by cursor | 196 | 211 | n/a |
+| one correlation chain (up to 500 events) | 934 | 1 006 | ~913 |
+
+Eight concurrent readers: newest p95 375 ms (x2.9 one reader), diagnostic 491 (x2.5), sparse 310 (x2.3), no errors. The chain read is bounded (five pages) and its cost is the 500-event cap, not a defect; no safe targeted improvement was evident and none was made. Writes 1.4 ms, 0.2 ms with the switch off. **Footprint on the 500 MB tier:** 685 bytes per native event including indexes, so 1 000 native events a day is about 0.25 GB a year and 10 000 a day about 2.5 GB, over the tier in two years. The external door is capped at 4 000 reports a day per office and 5 000 an hour for the deployment. **Real production rates are unknown**; measure after activation and decide retention before the table passes 100 MB (nothing deletes).
+
+### Security re-review (a second model reviewer, read-only, on a throwaway clone; not human review)
+
+No confirmed defect. Noted and dispositioned: fail-open by absence of the allowlist (documented; mitigated by the operator tool); unknown-specialist misattribution in the byline (fixed); repeated worker markers in a summary (fixed, the page escapes everything regardless); `activity_health` tells an unlisted office the scope (accepted: scope only, not membership); the deployment-wide external cap can be exhausted by five offices cooperating (accepted, documented). All 45 sabotage rows were caught in a full run, and the eight that touch `1061` (S1, S9, S11, S38-S40, S44, S45) were re-run after the last SQL edit and caught.
+
+### Counts (current)
+
+`npm test` 6 853 passed (6 955 on the merged tree); `verify:critical` 68/68, 3 682 assertions (branch and merged tree); extended ledger tier 11 proofs, 335 assertions (branch and merged tree); UI harness 126; migration rehearsal 17; sabotage 45 of 45; typecheck, lint, `check:migrations`, `check:secrets`, `check:templates`, `check:pressable`, `check:deployment-state`, `check:proofs` exit 0 (merged tree adds `check:branding`, `check:tokens`). Catalogue checks in `--replica` mode: callers, consumed, gateway-wrappers, anon-exposure, machine-key, ownership, office-edges exit 0 (re-run in phase 3; phase 4 added `activity_ledger_covers`, `activity_kind_words` and one index, which `--replica` runs would classify the same way); `check:carrier-writers --replica` has the same two failures on the base replica as before.
+
+### Release checklist and go/no-go
+
+PASS means shown, on the stated target. **No production-only requirement is marked PASS from replica evidence.**
+
+**Merge**
+
+| Requirement | Status | Evidence | Owner / authority | Next action |
+|---|---|---|---|---|
+| Verified remote branch | PASS | `git ls-remote` shows `refs/heads/feature/unified-activity-ledger` at the pushed head (the earlier `unified-activity_ledger` was a typo in a report; no such ref exists) | agent | none |
+| Collision-free migration numbers | PASS | main ends at 1053, this branch 1060-1062; the only other branch with new numbers (`feature/hermes-agent-integration`) uses 1070-1071; `check:migrations` 0 | agent | re-check at merge time |
+| Trial merge of latest main | PASS | 80 commits ahead; 2 conflicts (`docs/adr/README.md`: keep ADR 0071, 0072, 0073; `scripts/verify/serve-studio.ts`: identical `STUDIO_ROOT` line, main's comment kept); not committed | agent | none |
+| Merged-tree checks green | PASS | typecheck, lint, branding, tokens, templates, secrets, migrations, deployment-state; 6 955 unit; 68 critical; 11 extended ledger; 126 UI | agent | re-run if main moves |
+| Security regressions passing | PASS | 45 sabotages caught; two model reviews; proofs above | agent | human SQL review is a deployment item |
+| Docs consistent with implementation | PASS | this addendum, plan, contract, security, architecture updated in phase 4 | agent | none |
+| Decision to merge | NOT RUN | requires Grant | Grant | decide |
+
+**Deployment**
+
+| Requirement | Status | Evidence | Owner / authority | Next action |
+|---|---|---|---|---|
+| Explicit approval | NOT RUN | none given | Grant | approve in writing |
+| Human SQL review | NOT RUN | only two model reviews | Grant or a reviewer he names | review `1060`-`1062` (hashes below) |
+| Authorised production catalogue checks | NOT RUN | replica mode only | Grant sets `ALLOW_PRODUCTION_CHECKS=1` for the seven read-only checks | run them, record results |
+| Production table sizes measured | NOT RUN | not contacted | Grant | run the read-only size query in the plan, stage B |
+| Index-build connection method confirmed | NOT RUN | a direct session is required and untested; the Management API's handling of `CREATE INDEX CONCURRENTLY` is unknown | Grant provides `SUPABASE_DB_URL` | confirm a direct session; otherwise print the statements and use the SQL editor |
+| Healthy platform baseline | NOT RUN | not contacted | Grant | read the project health API immediately before each stage |
+| Migration and rollback plan | PASS (replica rehearsal) | `MIGRATION-PLAN.md`; rehearsal 17/17 | agent | none |
+| Deployment-state update | NOT RUN | done in the deploy commit | whoever deploys | update `docs/ops/deployment-state.json` with the deploy |
+| Mixed-version evidence | PASS on local replicas, NOT RUN on deployed versions | matrix above | Grant | accept the local evidence or run the deployed matrix |
+
+**Activation**
+
+| Requirement | Status | Evidence | Owner / authority | Next action |
+|---|---|---|---|---|
+| Explicit approval | NOT RUN | none given | Grant | approve, choosing canary or all |
+| Valid indexes | NOT RUN | production not contacted (replica: build, interruption and recovery proved) | Grant | stage B, then `activity_health.indexes_missing` empty |
+| No unexpected write failures | NOT RUN | needs live traffic | Grant | read `activity_health` after the canary |
+| Real-host latency within agreed bounds | NOT RUN | replica figures only; the host differs | Grant to set the bounds | measure after the canary |
+| Ledger rows visually verified | PASS on genuine rows in a replica, NOT RUN on real data | screenshots in `docs/activity-ledger/screens/`, 126 checks | Grant | open Activity signed in, desktop and phone, after the canary |
+| Approval and delivery provenance correct | PASS on the replica (proofs and the screen), NOT RUN on real records | `activity-ledger`, `activity-ledger-review`, UI harness | Grant | compare three real events with their source rows |
+| Acceptable security findings | PASS for model review, NOT RUN for human review | section above | Grant | human review |
+| Working global kill switch | PASS on the replica (master precedence proved, `--off` plans the master only), NOT RUN in production | `activity-office-scope`, planner tests | Grant | rehearse `--off` plan before activation |
+| Office-scoped canary | IMPLEMENTED and proved on the replica; not used | `activity:switch -- --canary` | Grant | choose the canary office, or accept deployment-wide activation explicitly |
+
+**Migration hashes (sha256, as committed at the head named in the final report):** `1060` `877756ad32784973313fc0278e653074e20c388f2b5ad93e6b703db73faeb8ae`, `1061` `e63654273171dd222c85b1d616dc9cad2b58478fe8e7fb0abcef597c2a358a9c`, `1062` `07c26ad8eb700e0fc79f8504ea60faccd90db0a97a3d59bb66b66ab90fd40534`. These supersede every earlier hash in this file. Verify with `sha256sum migrations/106[012]_*.sql` before applying; the runner records name and checksum and refuses a changed applied file.
+
+**Phase 4 verdicts.** MERGE READINESS **READY**. DEPLOYMENT READINESS **CONDITIONAL**: every locally verifiable prerequisite is done; the rest needs production access or a person (the NOT RUN rows above). ACTIVATION READINESS **CONDITIONAL**: it needs the deployment steps first, then a canary and the production measurements above.
