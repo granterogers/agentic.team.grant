@@ -573,6 +573,18 @@ sent (the parked pass is silent); recorded as a limitation for M6.
 | Telegram / Slack (M9) | A message beginning `/hermes ` (Telegram) or `hermes:` (Slack) sets `engine = 'hermes'` and the prefix is removed from `instruction`. | Translation only (§5). |
 | hq-api | New section `engine_status`; new action `engine_retire_bridge` (`office: true`). | `check:pressable` and `tests/gateway/operator-only.test.ts` classify both. |
 
+### 10.1 M6 as built, and where it differs from the table above
+
+| ID | Table says | Built | Why |
+|---|---|---|---|
+| D-30 | hq-api action `engine_retire_bridge` | **Not added.** Minting and retiring a bridge stay operator commands (`scripts/ops/engine-bridge-credential.ts`). | A person pressing "retire" on the Hermes host from Settings is a destructive control with no caller in this milestone, and `check:pressable` would list it as an unpressed action. The operator tool is the door until a Settings pane exists (M8+). |
+| D-31 | The control is "disabled, with the reason as its label, when `engine_available` says no" | The control is drawn **only** for an office that has been given Hermes (`enabled`). When it is not available the **Hermes option stays selectable**, is marked "(not available)", and the sentence from `engine_available` is shown beside it. | Disabling the option would make the page choose for the person, and a stored choice of Hermes would then fall back to the team silently. Selecting an unavailable Hermes sends nothing to the team: the office answers with the reason (HD-1, no automatic switching). |
+| D-32 | The control lives in `web/studio/bc/shell.js` and `bc/wire.js` | It lives in `web/studio/engine.js` and is drawn from `app.js` in the dock composer and the Chat page composer (the two composers the thread has). | The dock composer is built in `app.js`; `bc/shell.js` only supplies the dictate button. One module, two callers. |
+| D-33 | Thread label "Hermes" and "Hermes is working on it" with Stop | A message sent to Hermes carries "To Hermes"; an answer reads "<person> · answered by Hermes" and its screen-reader line says so; the waiting row reads "With Hermes. It is working on it." and uses the **existing** Stop. | The label is read from `engine_runs` in the history reader (migration 1072), never from the text. |
+| D-34 | (not specified) the notes Hermes leaves while it works | The history reader hides every output of a job that has a run **written before the run finished**; a job with no run is untouched. | The handler parks the job on each look and writes one "working on it" row each time (D-22); left in, a thread shows a dozen. The sentence "I haven't sent this to Hermes" (no run opened) is the office speaking and stays. |
+| D-35 | (not specified) a Hermes message that cannot be recorded | The voice door answers 503 `hermes_not_sent` in words and records nothing; it is **never** stored as a team message. | A silent team fallback is an automatic switch. |
+| D-36 | (not specified) deploy order | `deploy:voice` reads the LIVE worker bundle and refuses unless it carries the two awaited engine calls (`scripts/deploy/lib/engine-order.ts`). | A worker that predates the seam would answer a Hermes-chosen message as the team, with nothing saying so. |
+
 ---
 
 ## 11. Error and cancellation matrix

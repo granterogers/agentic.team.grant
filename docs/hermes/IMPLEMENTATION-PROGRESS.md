@@ -15,7 +15,7 @@ The resume point for any session picking this up. Read `ARCHITECTURE-HANDOFF.md`
 | **M3 MCP server: the engine client kind** | **done (undeployed)** | migration `1071_…` (the gate names the project and the run), `supabase/functions/mcp/{index,tools}.ts`, `scripts/isolated/engine-mcp.ts` 27/27 with 5 sabotages (`verify:critical` 71/71, 3,873 assertions), `tests/engines/mcp-engine-tools.test.ts` (13, one sabotage), V4a golden unchanged and V4b 11/11 re-run through the changed function. Notes: D-16 below |
 | **M4 handler seam** | **done (undeployed)** | `src/engines/hermes/{turn,brief,result,drain}.ts`, two calls in `src/handlers/instruction.ts`, `scripts/isolated/engine-turn.ts` 29/29 (`verify:critical` 72/72, 3,902 assertions), `tests/engines/{brief,result,turn,drain}.test.ts`, `npm run engine:drain` (never run); D-17 to D-22 in `INTERFACE-CONTRACTS.md` §8.6 |
 | **M5 bridge and host kit** | **done (never run on a real host)** | `scripts/hermes-bridge/` (6 files), `tests/engines/{bridge,bridge-fakes,host-kit}` (72 checks, 7 sabotages), `scripts/isolated/engine-bridge.ts` **21/21 with a REAL Hermes** on the replica (scripted model; evidence `docs/hermes/m5-evidence/engine-bridge-acceptance-2026-10-11.txt`; not in `verify:critical` because it needs a Hermes install), `docs/hermes/host/{config.yaml,.env.example,RUNBOOK.md,*.service}`; D-23 to D-29 in `INTERFACE-CONTRACTS.md` §5.3 |
-| **M6 Team HQ selection and status, voice adapter** | **next** | `IMPLEMENTATION-TASKS.md` M6, `INTERFACE-CONTRACTS.md` §10 |
+| **M6 Team HQ selection and status, voice adapter** | **done (undeployed)** | migration `1072_…` (`app.engine_status`, `public.hq_engine_status`, the thread reader labels engine and hides the notes), `supabase/functions/voice/index.ts` (records only the word `hermes`; 503 `hermes_not_sent`, never a team fallback), hq-api section `engine_status`, `web/studio/engine.js` + `chat.js` + `app.js` + `studio.css`, `scripts/isolated/engine-ui.ts` **43/43** (in `verify:critical`, 73/73, 3,945 assertions; 7 database and 2 voice-door sabotages), `scripts/isolated/engine-ui-browser.ts` **33/33** in a real browser as a second person, desktop and phone (extended tier; 3 page sabotages), `deploy:voice` refuses unless the live worker carries the engine seam (`scripts/deploy/lib/engine-order.ts`, `tests/deploy/engine-order.test.ts`); D-30 to D-36 in `INTERFACE-CONTRACTS.md` §10.1. Screenshots (local, not uploaded): `.out/engine-ui-*.png` |
 | M7 live free run | gated on V6 (Grant's zero-credit key) and on the Activity Ledger branch | |
 | M8 to M11 | not started | |
 
@@ -78,7 +78,23 @@ Eleven tests went red together and all seven restored green (55 of 55, then 58 o
 throttle is measured from when the previous claim REACHED the gateway; Hermes repairs unknown tool names; and a harness whose global fetch is wrapped by the edge
 emulator must give Hermes's health probe and the bridge's clients the real fetch (captured before the emulator exists).
 
-## M6 start recipe
+## M6 notes
+
+* **UX QA, Level 1B** (a new control on the composer: interactive, desktop and phone, keyboard, the unavailable and the answered states). Driven by
+  `engine-ui-browser.ts` as a real second person, not the Sample and not Grant. It found two real defects that the database proofs could not:
+  a Hermes message was acknowledged as "Put to the team" (fixed: "Sent to Hermes"), and with Hermes chosen the box still said "Message the team"
+  (fixed: "Message Hermes"). Captures were opened and read. **The Hermes control is drawn only in Team HQ's dock**; the Chat page composer in the
+  older studio at `/classic` is wired too but is not what a person sees.
+* **`verify:wired` fails identically on the unchanged base** (`Cannot read properties of undefined (reading 'hue')`, then a missing
+  `.project[data-open="legacy-coaching-course"]`): it drives the older prototype. Not introduced here, not fixed here.
+* **Not run (production reads need Grant's authorisation):** `check:callers`, `check:consumed`, `check:pressable`, `check:gateway-wrappers`. The
+  `engine_status` section has a visible caller (`web/studio/engine.js`), and its wrapper and the gateway entry are asserted in `engine-ui.ts` B1/B2.
+* **Process disclosure.** Two files in `scripts/isolated/` were touched with a Python heredoc against the File editing rule (one string replacement in
+  `engine-ui.ts`, read back and re-run); three `sed -i … /dev/null` reflexes were typed and did nothing. All other edits went through Edit or Write.
+* **Deploy order when this ships (not done):** migration 1072, then `deploy:worker` (the engine seam), then `deploy:hq`, then `deploy:voice` (it checks
+  the worker for itself), then the page.
+
+## M6 start recipe (kept for history)
 
 1. Read `INTERFACE-CONTRACTS.md` §10 and `IMPLEMENTATION-TASKS.md` M6. The page is `web/studio` (no build step); the adapter is `supabase/functions/voice/index.ts`.
 2. hq-api: new section `engine_status` (`office: true`) reading `app.engine_available`, and action `engine_retire_bridge`; classify both in

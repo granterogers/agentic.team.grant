@@ -150,6 +150,12 @@ export const EXTENDED: readonly Proof[] = [
     { timeoutS: 420 },
   ),
   p(
+    'engine-ui-browser',
+    33,
+    'the Hermes engine choice in the real Team HQ dock, real gateway and real voice door, signed in as a second person on a desktop and a phone: nothing is drawn for an office not given Hermes, the team is the default and sends no engine field, only a chosen Hermes is sent and recorded, a host that is away says why beside the choice and nothing is switched, the thread labels messages and answers by the run that wrote them and hides the notes, 44px and 16px on the phone with no sideways overflow (3 page sabotages: --sabotage=send|default|label)',
+    { timeoutS: 480 },
+  ),
+  p(
     'series-ui-browser',
     46,
     'Team HQ My Tasks, real page and real gateway: ticking a recurring reminder completes that time only, Stop repeating is its own press that asks twice and cancels exactly that series (also from the Repeating reminders section when it is not due: #450), stopping again is a no-op, another office cannot stop it, and the proof reads the database (a refused stop turns it red)',

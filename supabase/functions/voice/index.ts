@@ -288,8 +288,19 @@ Deno.serve(async (request: Request): Promise<Response> => {
     to?: unknown
     project?: unknown
     message?: unknown
+    engine?: unknown
   }
   const said = typeof body.said === 'string' ? body.said.trim() : ''
+  /*
+    WHICH ENGINE THE PERSON CHOSE FOR THIS MESSAGE (Hermes, M6).
+
+    Translated, never decided: the page says `hermes` when the person picked it for this one message, and anything else is `team`.
+    There is no default to inherit and nothing remembered here, so a message never becomes a Hermes message because an earlier one was.
+    Only `hermes` is written to the row. `team` is the column's default, so an ordinary message does not name the column at all, and a
+    database that has not been given the column yet takes it exactly as before. If a Hermes message cannot be recorded it is REFUSED
+    (below), never recorded as a team message: the office does not change the engine behind a person's back.
+  */
+  const engine = body.engine === 'hermes' ? 'hermes' : 'team'
   const session = typeof body.session === 'string' ? body.session : ''
   if (said === '') return json({ error: 'nothing was said' }, 400)
   // A session id names one page VISIT. Shaped, not trusted: it goes into the
@@ -446,6 +457,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     addressed_also: alsoAddressed,
     dedupe_key: `voice:turn:${session}.${turn}`,
     ...(stated === null ? {} : { project_id: stated }),
+    ...(engine === 'hermes' ? { engine: 'hermes' } : {}),
   })
   const store = (r: Record<string, unknown>) =>
     fetch(`${DB_URL}/rest/v1/inbound_commands`, {
@@ -503,6 +515,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
     attempt = await store(row(stated, null))
   }
   if (!attempt.ok && attempt.status !== 409) {
+    // A Hermes message that could not be recorded is refused outright, in its own words: it is never retried as a team message.
+    if (engine === 'hermes')
+      return json(
+        {
+          error: 'hermes_not_sent',
+          message:
+            'That was not sent to Hermes, and nothing else was done with it. Send it again, or send it to the team.',
+        },
+        503,
+      )
     return json({ error: 'could not record what you said' }, 503)
   }
   const rows = (await attempt.json().catch(() => [])) as { command_id?: string }[]
@@ -524,10 +546,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   // 2. Ask the canonical layer whether this is answerable. The decision is
   //    there, not here.
-  const answer = (await rpc('voice_answer', { p_office: office, p_command_id: commandId })) as {
-    speak?: string
-    kind?: string
-  } | null
+  // A message the person sent to Hermes is Hermes's to answer: the office's quick spoken answers are the team's, so they are not asked.
+  const answer =
+    engine === 'hermes'
+      ? null
+      : ((await rpc('voice_answer', { p_office: office, p_command_id: commandId })) as {
+          speak?: string
+          kind?: string
+        } | null)
 
   if (answer !== null && typeof answer.speak === 'string') {
     return json({ speak: answer.speak, did: 'answered', command_id: commandId })
@@ -553,10 +579,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   return json({
     speak:
-      'Right — I have put that to the team. It takes a few minutes. The answer will ' +
-      'appear in your project’s chat and on its Team page, and in Slack or Telegram if ' +
-      'you have connected them.',
+      engine === 'hermes'
+        ? 'Right — I have sent that to Hermes. It can take a few minutes. The answer will ' +
+          'appear in your project’s chat, and in Slack or Telegram if you have connected them.'
+        : 'Right — I have put that to the team. It takes a few minutes. The answer will ' +
+          'appear in your project’s chat and on its Team page, and in Slack or Telegram if ' +
+          'you have connected them.',
     did: 'delegated',
+    ...(engine === 'hermes' ? { engine: 'hermes' } : {}),
     job_id: queued.job_id,
     command_id: commandId,
   })

@@ -10,7 +10,9 @@
 
 import '../../src/safety/require-production-writes.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { readEszip } from '../lib/eszip.ts'
 import { bundleForm } from './lib/bundle.ts'
+import { workerCanAnswerHermes } from './lib/engine-order.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 if (supabaseToken === undefined || supabaseToken === '') {
@@ -46,6 +48,34 @@ const PAGE_ORIGINS = [
 ]
 const api = `https://api.supabase.com/v1/projects/${ref}`
 const db = new ManagementApiExecutor(ref, supabaseToken)
+
+/*
+  The door that lets a person choose Hermes ships AFTER the worker that can answer it (Hermes, M6). Read the live worker bundle and
+  refuse, before anything is written, if it does not carry the engine seam: a message sent to Hermes would otherwise be answered by
+  the team with nothing saying it was not Hermes. Nothing is printed from the bundle but the verdict.
+*/
+{
+  const live = await fetch(`${api}/functions/worker/body`, {
+    headers: { Authorization: `Bearer ${supabaseToken}` },
+  })
+  if (!live.ok) {
+    console.error(
+      `could not read the live worker bundle (http ${String(live.status)}); the order check cannot run, so nothing was deployed`,
+    )
+    process.exit(1)
+  }
+  const sources = readEszip(new Uint8Array(await live.arrayBuffer()))
+    .modules.filter((m) => m.kind === 'module' && m.source !== undefined)
+    .map((m) => Buffer.from(m.source ?? new Uint8Array()).toString('utf8'))
+  const seam = workerCanAnswerHermes(sources)
+  if (!seam.ready) {
+    console.error(
+      `the live worker does not carry the engine seam (missing: ${seam.missing.join(', ') || 'nothing was readable'}; ${String(seam.modulesRead)} module(s) read). Run npm run deploy:worker first, then this. Nothing was deployed.`,
+    )
+    process.exit(1)
+  }
+  console.log(`live worker carries the engine seam (${String(seam.modulesRead)} module(s) read)`)
+}
 
 // Both functions ship their import graph, because both ask `src/auth/speaker.ts` who is calling. They are resolved and
 // validated HERE, before the secrets below are written: a bundle the platform would refuse is known locally.

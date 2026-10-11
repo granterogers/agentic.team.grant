@@ -48,6 +48,7 @@ import * as undo from './undo.js'
 import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
+import * as engine from './engine.js'
 import * as dictate from './dictate.js'
 import * as command from './command.js'
 import * as config from './settings.js'
@@ -1882,11 +1883,12 @@ function paintDock() {
         ? ''
         : `<form class="composer" data-dockform${bcNote ? ` data-bc-noteproject="${esc(p.slug)}"` : ''}>
       <div class="crow">
-        <textarea data-docksay rows="1" placeholder="${bcNote ? 'Message the team…' : p.slug !== 'unnamed' ? `Ask the team about ${esc(p.name)}…` : 'Ask the team…'}"
-                  aria-label="Message the team"></textarea>
+        <textarea data-docksay rows="1" placeholder="${engine.offered() && engine.chosen(p.slug) === 'hermes' ? 'Message Hermes…' : bcNote ? 'Message the team…' : p.slug !== 'unnamed' ? `Ask the team about ${esc(p.name)}…` : 'Ask the team…'}"
+                  aria-label="${engine.offered() && engine.chosen(p.slug) === 'hermes' ? 'Message Hermes' : 'Message the team'}"></textarea>
         ${bcNote ? bc.dockDictateButton(dictate.supported(), dictate.supported() ? dictate.disclosure() : dictate.why()) : ''}
         <button class="btn primary" type="submit">Send</button>
       </div>
+      ${engine.controlHtml(p.slug)}
       ${bcNote ? '<p class="dockdic t-meta" data-dockdic role="status" aria-live="polite"></p>' : ''}
     </form>`
     }`
@@ -1954,6 +1956,8 @@ function paintDock() {
     up somewhere in the source, and this one is, in the other half.
   */
   tickWaiting()
+  engine.wire(el, () => { paintDock() })
+  if (p !== null) engine.ensureLoaded(presented(), () => { paintDock() })
 
   for (const b of el.querySelectorAll('[data-chat-retry]')) {
     b.addEventListener('click', () => {
@@ -1994,7 +1998,7 @@ function paintDock() {
     if (text === '' || !p) return
     if (box) box.value = ''
     state.dockDraft = null
-    chat.send(p.slug, text, null)
+    chat.send(p.slug, text, null, undefined, [], engine.offered() ? engine.chosen(p.slug) : 'team')
     paintDock()
     // `also` is its own slot: the callback in it was the #375 defect, here too.
     void chat.ask(p.slug, text, null, presented(), undefined, undefined, () => { paintDock() })
@@ -3512,8 +3516,8 @@ const saidBy = (who, m) => {
     ? ''
     : `, ${new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
   const to = m.to === undefined || m.to === null || m.to === ''
-    ? ''
-    : `, to ${crewBy(m.to)?.name ?? String(m.to)}`
+    ? (m.engine === 'hermes' ? ', to Hermes' : '')
+    : `, to ${crewBy(m.to)?.name ?? String(m.to)}${m.engine === 'hermes' ? ' through Hermes' : ''}`
   const where = m.surface === undefined || m.surface === null || m.surface === 'teamhq'
     ? ''
     : `, from ${String(m.surface)}`
@@ -3543,6 +3547,7 @@ const bubble = (m) => {
       return `<div class="msg mine" role="listitem">
         <span class="aonly">${esc(saidBy('grant', m))}</span>
         ${m.context ? `<span class="ctxchip">${esc(m.context.title)}</span>` : ''}
+        ${m.engine === 'hermes' ? '<span class="t-meta enginetag">To Hermes</span>' : ''}
         ${prose(m.text)}
         ${m.backfilled ? '<span class="t-meta pendmark">From the channel history</span>' : ''}
       </div>`
@@ -3574,7 +3579,7 @@ const bubble = (m) => {
       // `say` is the office's own report of a turn it is following (turn_status): words it derived, never ours.
       const said = typeof m.say === 'string' && m.say !== '' ? m.say : ({
         sending: 'Sending to the office…',
-        thinking: 'With the team. They are working on it.',
+        thinking: m.engine === 'hermes' ? 'With Hermes. It is working on it.' : 'With the team. They are working on it.',
         slow: 'No answer yet. The office may still be working — it also answers in Slack and Telegram.',
       }[m.waiting] ?? 'Waiting.')
       return `<div class="msg theirs waitrow" role="listitem" aria-live="polite">
@@ -3605,7 +3610,7 @@ const bubble = (m) => {
       ${face(c, 30)}
       <div class="mbody">
         <span class="aonly">${esc(saidBy(m.from, m))}</span>
-        <span class="t-label" aria-hidden="true">${esc(c.name)} · ${esc(c.role)}</span>
+        <span class="t-label" aria-hidden="true">${esc(c.name)} · ${esc(c.role)}${m.engine === 'hermes' ? ' · answered by Hermes' : ''}</span>
         ${prose(m.text)}
         <!--
           A failure that can be tried again (#215).
@@ -3636,7 +3641,9 @@ const bubble = (m) => {
           the page imply it was there. No backticks in this comment.
         -->
         ${m.backfilled ? '<span class="t-meta pendmark">From the channel history, before the office was watching</span>' : ''}
-        ${m.delegated ? `<span class="t-meta pendmark">Put to the team — the answer will appear in this chat and
+        ${m.delegated && m.engine === 'hermes' ? `<span class="t-meta pendmark">Sent to Hermes — it can take a few minutes.
+          The answer will appear in this chat, and in Slack or Telegram if you have connected them.</span>` : ''}
+        ${m.delegated && m.engine !== 'hermes' ? `<span class="t-meta pendmark">Put to the team — the answer will appear in this chat and
           on the Team page, and in Slack or Telegram if you have connected them.</span>` : ''}
         <!--
           Could not be delivered (#202).
@@ -3833,6 +3840,7 @@ function chatTab(p) {
 
         No backticks in this comment: template literal.
       -->
+      ${engine.controlHtml(state.project)}
       <label class="askwho">
         <span class="t-label">Ask</span>
         <select data-askwho aria-label="Who this message is for">
@@ -11655,6 +11663,9 @@ function drawShell() {
   if (composer) {
     const say = $('[data-say]', composer)
     const thread = $('[data-thread]', root)
+    // A change of engine redraws only the composer's own choice; the unsent draft is kept by the lines below (#197).
+    engine.wire(composer, () => { state.drafts[state.project] = say?.value ?? ''; render() })
+    engine.ensureLoaded(presented(), () => { keepingPlace(() => { render() }) })
     /*
       A thread you have to scroll to read is a thread you do not read — so it
       opens at the bottom. But NOT while somebody is reading further up (#205).
@@ -11723,7 +11734,7 @@ function drawShell() {
       // Only when somebody is named. With "the whole team" there is nobody for
       // a companion to be a companion OF, and the control is not drawn.
       const also = to === 'everyone' ? [] : (state.askAlso ?? [])
-      chat.send(state.project, text, about, to, also)
+      chat.send(state.project, text, about, to, also, engine.offered() ? engine.chosen(state.project) : 'team')
       // It has been said, so it is no longer a draft — without this it would
       // be restored into the empty composer on the very next render (#197).
       state.drafts[state.project] = ''

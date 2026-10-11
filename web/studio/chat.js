@@ -118,6 +118,8 @@ const asBubble = (m) => ({
   delivery: m.delivery ?? null,
   undelivered: Number(m.undelivered ?? 0),
   job: m.job ?? null,
+  // The engine the office recorded: for a message, the one the person chose; for an answer, the one that wrote it.
+  engine: m.engine === 'hermes' ? 'hermes' : 'team',
 })
 
 /**
@@ -326,10 +328,12 @@ export function newMessageId() {
   return `m${Date.now().toString(36)}${r}`.slice(0, 64)
 }
 
-export function send(slug, text, context, to, also = []) {
+export function send(slug, text, context, to, also = [], engine = 'team') {
   const now = new Date().toISOString()
   const mine = {
     id: `m${Date.now()}`, from: 'grant', text, at: now,
+    // Which engine the person chose for THIS message. It travels with the message and with every retry of it.
+    engine: engine === 'hermes' ? 'hermes' : 'team',
     context: context ? { kind: context.kind, id: context.id, title: context.title } : null,
     // Recorded on the message, not only on the composer, so the thread shows
     // who each thing was asked of after the composer has moved on (#26).
@@ -367,6 +371,7 @@ export function send(slug, text, context, to, also = []) {
     // This message's own name, minted once HERE and reused by every retry, so the office files a replay of it once.
     // The visit it was sent from travels with it: the office keys a turn on both.
     messageId: newMessageId(), visit: SESSION,
+    engine: engine === 'hermes' ? 'hermes' : 'team',
     // And who else was asked, or a retry sends the request to fewer people
     // than the first attempt did (#375).
     also: Array.isArray(also) ? also : [],
@@ -418,6 +423,8 @@ export async function ask(slug, text, context, token, to, also, onState) {
     typeof waitingRow?.visit === 'string' && /^s[a-z0-9]{1,10}$/.test(waitingRow.visit)
       ? waitingRow.visit
       : SESSION
+  // Only ever sent when Hermes was chosen: the team is the absence of the field, so an office without Hermes sends what it always sent.
+  const engine = waitingRow?.engine === 'hermes' ? 'hermes' : 'team'
   /*
     Sending, then waiting.
 
@@ -503,6 +510,7 @@ export async function ask(slug, text, context, token, to, also, onState) {
               said: text,
               session: visit,
               message: messageId,
+              ...(engine === 'hermes' ? { engine: 'hermes' } : {}),
               // The thread's project, so the office files it there and nowhere else.
               project: projectIdOf(slug),
               to: staffSlug(to),

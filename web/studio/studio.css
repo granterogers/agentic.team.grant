@@ -1769,6 +1769,20 @@ button.woutfile:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* `li .m, .meta` needs an `li` ancestor; a bare `.t-meta` is styled by its own
    class, so this one does not. */
 .askwho .t-meta { flex: 1 1 auto; min-width: 0; }
+/* Which engine answers (Hermes, M6). Drawn only for an office that has been given Hermes. */
+.enginepick {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  min-width: 0;
+}
+.enginepick select {
+  min-height: 44px; padding: 0 var(--s3);
+  border: 1px solid var(--edge); border-radius: var(--r-control);
+  background: var(--ground); color: var(--ink);
+  font: inherit; font-size: 16px; max-width: 100%;
+}
+.enginepick select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.enginepick .enginewhy { flex: 1 1 14ch; min-width: 0; }
+.enginetag { display: block; }
 .crow { display: flex; align-items: flex-end; gap: var(--s3); }
 /*
   16px, NOT 15. Below 16px iOS Safari zooms the page when the field takes
@@ -6968,4 +6982,11 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .myfind { display: grid; grid-template-columns: 1fr auto; gap: var(--s2); }
   .myfind input, .myfind select { inline-size: 100%; max-inline-size: 100%; }
   .myfind [data-my-clear] { grid-column: 1 / -1; justify-self: start; }
+}
+
+/* The engine choice on a phone: the select takes the line and the reason wraps under it. Last in the file, so source order does not undo it. */
+@media (max-width: 860px) {
+  .enginepick { gap: var(--s1) var(--s2); }
+  .enginepick select { flex: 1 1 auto; min-width: 0; }
+  .enginepick .enginewhy { flex-basis: 100%; white-space: normal; }
 }

@@ -267,6 +267,8 @@ const SECTIONS: Readonly<
   channel_link: { fn: 'channel_link_status', office: true },
   // Whether THIS person's own Slack workspace is installed, waiting for the consent, or not, and what it can do (ADR-0065).
   slack_link: { fn: 'slack_link_status', office: true },
+  // Whether Hermes is switched on for this person's office and, if so, whether it can take a message now and why not (Hermes, M6).
+  engine_status: { fn: 'hq_engine_status', office: true },
   projects: { fn: 'hq_projects', office: true },
   artifacts: { fn: 'hq_artifacts', office: true },
   settings: { fn: 'hq_settings', office: true },
