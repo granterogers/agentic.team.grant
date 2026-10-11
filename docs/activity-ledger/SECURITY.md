@@ -62,7 +62,7 @@ the one above it: **content never enters the ledger**; it holds references to re
   native `evidence_ref`, `actor`, `tool` and `model` were stored uncleaned (now redacted, evidence bounded to 1 KB); the strict writer trusted its actor and provenance, so a holder of EXECUTE could forge `external.review_decided` or an external actor (a native writer
   now cannot write an `external.*` type or an external actor); an external summary could imitate "You said yes:" (now prefixed `[external:<worker>]`); five read functions had `public` before `pg_catalog` in `search_path` (proved hijackable by a role holding CREATE on
   `public`; now `pg_catalog` first); rotating worker names could add about 1 000 undeletable rows an hour per office (now a daily per-office cap of 4 000 and a deployment-wide cap of 5 000 an hour); a filter that matches nothing widened every source's pool
-  (a status outside the vocabulary is now refused outright and `activity_read` carries an 8 s statement timeout). **Not changed, documented:** the first row to supersede an activity claims its one correction permanently (any strict-writer holder can pre-empt a correction);
+  (a status outside the vocabulary is now refused outright and `activity_read` declares an 8 s statement timeout, **which does not bound the call that is running** (a function-level SET does not re-arm the timer; phase 7 review F2, open); the real bound is the connecting role's own timeout). **Not changed, documented:** the first row to supersede an activity claims its one correction permanently (any strict-writer holder can pre-empt a correction);
   a native `correlation_id` from another office is not validated on the native path (nothing leaks: reads are office-bound, the row only stores the uuid); `activity_health` shows the deployment-level `indexes_missing` list to a signed-in office (counts are per office);
   helper functions are PUBLIC-executable but nobody holds USAGE on schema `app`. Every one of those requires holding EXECUTE on `app` functions, which only the owner and the worker's database role do.
 - **Phase 4 changes, reviewed again (a second model reviewer; see `RELEASE-READINESS.md`, phase 4 addendum, for its findings and their disposition).** Per-office activation (`activity_ledger_covers`): the office test is the master switch AND an allowlist, both read on every call, so
@@ -102,3 +102,10 @@ age to a cold table with a verified copy, never a delete, and do it per office. 
 Removing the worker's call (`tests/activity/record.test.ts`), its `.catch`, its attempt in the key, the chain's `requireOne`, the verbatim instant,
 a taxonomy row the read model emits, and the page's `enabled === true` guard each turned the named test red; the first attempt at one of them
 produced a syntax error rather than a red test and was redone as a valid mutation (a sabotage that did not apply is not a passing control).
+
+## Phase 7 second review (model-assisted; not a human review) - summary
+
+Ten findings; F1, F4 to F9 and the length caps of F10 are fixed on the release candidate, F2 (no enforced read time limit) and F3 (read cost grows with other offices' transition volume,
+which is also a timing channel on their volume) are open and documented as release risks, and the rest of F10 (caller-asserted worker name, deployment-wide advisory lock, replay with a different payload returns the first row) is accepted.
+The redactor additionally matches a credential name with an identifier prefix and strips tag characters and further format characters; **still not caught**: short secrets in prose, look-alike letters, percent-encoded and base64 secrets (pinned by the proof's limitation cases).
+The full table, dispositions and the human-review package are in `RELEASE-READINESS.md`, Phase 7 addendum.

@@ -74,6 +74,9 @@ SABOTAGES=(
   "S24|60|a.occurred_at > app.now_utc() - interval '1 hour') >= 300 then|a.occurred_at > app.now_utc() - interval '1 hour') >= 300000000 then|activity-ledger-review|limited per hour"
   "S25|61|and not exists (select 1 from public.projects fp where fp.project_id = b.project_id and fp.is_fixture)||activity-ledger-review|fixture project, with no job"
   "S15|gw|args = { ...args, [extra.arg]: text }|args = { ...args, [extra.arg]: new Date(Date.parse(text)).toISOString() }|activity-gateway|microseconds apart"
+  "S51|60|  if p_provenance is distinct from 'native' and coalesce(current_setting('activity.external_door', true), '') <> 'on' then|  if false then|activity-external-attack|the strict writer refuses provenance external"
+  "S52|60|  if p_status in ('confirmed', 'authorised', 'declined', 'expired') then|  if p_status in ('confirmed', 'authorised') then|activity-external-attack|a worker cannot report a person's refusal"
+  "S53|60|revoke all on public.activity_events, public.activity_event_types, public.activity_write_failures from service_role;|grant all on public.activity_events, public.activity_event_types, public.activity_write_failures to service_role;|activity-external-attack|holds no insert or update on the ledger tables"
 )
 
 want=("$@")

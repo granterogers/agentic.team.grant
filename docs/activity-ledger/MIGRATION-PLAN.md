@@ -3,15 +3,31 @@
 Nothing here has been executed against production, and nothing may be until a person with the production flags decides. Everything below was
 rehearsed on the isolated replica (`scripts/isolated/replica.sh`): the whole history 0001 to 1062 replays, the three new files apply to a clone of
 the replica with `ON_ERROR_STOP`, and the failure modes (an interrupted migration, an interrupted index build, the wrong kind of connection) are rehearsed by
-`bash scripts/isolated/activity-migration-rehearsal.sh` (17 checks). `RELEASE-READINESS.md` holds the verdicts and the evidence; this file is the procedure.
+`bash scripts/isolated/activity-migration-rehearsal.sh` (19 checks, re-run on the release candidate after its security fixes). `RELEASE-READINESS.md` holds the verdicts and the evidence; this file is the procedure.
 
 **Four stages, deliberately separate, each with its own approval:** (A) schema, (B) index preparation, (C) application deployment, (D) activation. Each is
 reversible or harmless on its own, and each is checked before the next starts. Merging the branch is none of them.
 
+## Release runbook at a glance (phase 7; every step needs a person; the release candidate executed none of them)
+
+Seven steps, in this order, each with its own approval and its own stop condition. The stages A to D below carry the detail.
+
+| # | Step | Command (a person sets the flags named, for this one operation) | Stop and do not continue if |
+|---|---|---|---|
+| 0 | **Production baseline and authorisation.** Grant approves the release in writing; nothing in this repository can. Re-read what production holds | `git fetch origin main`; `git ls-tree --name-only origin/main migrations/ \| tail -3`; `npm run check:migrations`; `ALLOW_PRODUCTION_CHECKS=1 npm run q -- "select name from app.schema_migrations order by name desc limit 5"`; `ALLOW_PRODUCTION_CHECKS=1 npm run q -- "select key, value from public.system_config where key like 'activity.%'"` (expect no rows); the platform health reading (`GET /v1/projects/<ref>/health`, all services healthy); `docs/ops/deployment-state.json` agrees with the ledger | 1060 to 1062 are taken or applied under another name; the ledger holds a name this tree does not; a `checksum/` error; any service UNHEALTHY; a setting named `activity.*` already exists (somebody else has been here) |
+| 1 | **Schema** (stage A) | the three `npm run migrate:one -- migrations/106x_*.sql` lines in stage A, one at a time, with both production flags | a file reports an error (nothing of it is left; read it, fix it while it is unapplied); `activity.ledger_enabled` is not `false` afterwards; `activity_event_types` is not 42 rows; the platform turns unhealthy (wait, do not retry into it) |
+| 2 | **Concurrent index build** (stage B) | measure the eight tables first; then `SUPABASE_DB_URL=<direct session> npm run activity:indexes` with both flags, in a quiet window, or `-- --print` and run each statement alone | a `failed:` line (leave nothing invalid; change the connection, do not edit the script); `25001` means the session wraps a transaction; `55P03` repeats (a long transaction holds the table: find it); `indexes_missing` is not empty at the end |
+| 3 | **Application deployment with the master DISABLED** (stage C) | `npm run deploy:worker`, then `deploy:hq-api`, then the page deploy, one per call, each probing itself; compare the live bytes of the files that could differ with `origin/main` first | a probe fails; the live bytes differ from `origin/main` in a file this change touches and nobody has carried the other workstream's diff in; any deploy output that mentions the ledger being on |
+| 4 | **Post-deployment checks, still disabled** | `activity_health` through the gateway reads `enabled: false` and `scope: none`; `select app.activity_ledger_on()` is `false`; the Activity page draws the older list; `npm run check:deployment-state`; the office's health reading is no worse than before step 3; `npm run check:chatter` unchanged | anything drawn from the ledger while off; a new failing kind in `app.office_health()`; the worker's `recordToolCall` raising (it must not) |
+| 5 | **Single-office canary** (stage D) | `npm run activity:switch` (read), `-- --canary <office-id>` (plan; read CURRENT and PROPOSED), then the same with `--apply`; the office is Grant's own, `kind = 'person'` | any `refused:` or `stopped at` line; `scope: invalid`; a plan whose CURRENT is not what step 0 read; `write_failures_1h` above 0, `indexes_missing` not empty or `critical_via_best_effort_24h` above 0 in the canary's first hour |
+| 6 | **Global kill switch and rollback** | `npm run activity:switch -- --off --apply` (the master only; the list is kept); narrowing: `-- --canary <the one office> --apply` or `-- --remove <id> --apply` | the apply stops part-way (re-read `--status`, plan again, never edit the rows by hand). Nothing already recorded is deleted by any rollback |
+
+The global mode (every office) is **not part of this release**: it is a separate, later decision (`-- --all-offices --confirm="ALL OFFICES"`).
+
 ## Numbers and compatibility with `main`
 
-`main` (checked at `5fa1fbdc`, 11 October 2026) and every other branch end at or below **1053**, which is applied to production
-(`docs/ops/deployment-state.json`). This work uses **1060, 1061 and 1062**, leaving 1054 to 1059 for others. The ADR is **0073** (main holds 0071 and 0072). The files are
+`main` (checked at `5fa1fbdc`, 11 October 2026) ends at **1053**, which is applied to production (`docs/ops/deployment-state.json`); the Hermes branch's files
+(1070 to 1078, read only, not modified) are above this range. This work uses **1060, 1061 and 1062**, leaving 1054 to 1059 and 1063 to 1069 free (the release inventory test asserts this branch carries nothing in them). The ADR is **0073** (main holds 0071 and 0072). The files are
 unapplied, so they may still be edited until they are applied; after that they are immutable (`check:migrations` enforces it, against you too).
 
 Before applying, every time: `git fetch origin main && git ls-tree --name-only origin/main migrations/ | tail -3`, `npm run check:migrations`, and a read of
@@ -155,7 +171,7 @@ Not run: the matrix on real deployed versions, and old worker plus new schema wi
 
 On the replica: `npm run verify:critical` (70 proofs, including `activity-ledger` and `activity-gateway`); `npx tsx scripts/gate/run.ts --tier extended --only
 activity-ledger-review,activity-ledger-equivalence,activity-indexes,activity-ledger-durability,activity-native-writers,activity-worker,activity-redaction,activity-external-attack,activity-office-scope --rebuild` (`--rebuild`: after rebuilding the replica the gate can otherwise reuse a stale candidate and report red for code that is fine); `npx tsx scripts/gate/run.ts --tier critical --rebuild`;
-`bash scripts/isolated/activity-ledger-sabotage.sh` (50 sabotages, in batches of ten so each call fits ten minutes); `bash scripts/isolated/activity-migration-rehearsal.sh`; `bash scripts/isolated/activity-ui-browser.sh` (the Activity screen from genuine ledger rows plus eight activation states, 174 checks);
+`bash scripts/isolated/activity-ledger-sabotage.sh` (53 sabotages, in batches of ten so each call fits ten minutes); `bash scripts/isolated/activity-migration-rehearsal.sh`; `bash scripts/isolated/activity-ui-browser.sh` (the Activity screen from genuine ledger rows plus eight activation states, 174 checks);
 `npx tsx scripts/isolated/activity-ledger-perf.ts <db> 3000` for the timings. The seven production-catalogue checks run against the replica with `--replica` (`scripts/lib/catalogue-db.ts`) and are listed with
 their status in `RELEASE-READINESS.md`; with production access a reviewer grants, run them again without the flag.
 

@@ -390,3 +390,88 @@ The migrations write neither the list nor the master on (the rehearsal proves th
 | **ACTIVATION** | Rehearse the `--off` plan before activating; global activation (`--all-offices --confirm`) only as a later, separate decision | NOT RUN | Grant |
 
 **Phase 5 verdicts.** MERGE READINESS **READY** (the open item is a human decision and human SQL review; the branch is mergeable and nothing was merged). DEPLOYMENT READINESS **CONDITIONAL**: all locally verifiable work is done; every remaining row needs production access or a person. ACTIVATION READINESS **CONDITIONAL**: it follows deployment, then an approved single-office canary and the real-host measurements; it is not blocked by anything in the code.
+
+## Phase 7 addendum - release candidate `release/activity-ledger-v1` (11 October 2026)
+
+This is release engineering, not feature work. The candidate is the backend ledger (`feature/unified-activity-ledger`, 96a7dec4) and the Activity UX (`feature/activity-ledger-ux`, e1d68ec2) merged onto `main` at `5fa1fbdc`, by two merge commits that keep both histories (no squash, no duplicated commits). **Nothing was merged to `main`, deployed, applied to production or activated, and no production credential or flag was used.** Everything below is replica, local-browser and model-assisted evidence; none of it is a production result and none of it is a human sign-off.
+
+### The merge
+Two conflicts, as predicted: `docs/adr/README.md` (kept 0071 and 0072 from main and 0073 from the ledger) and `scripts/verify/serve-studio.ts` (kept main's `STUDIO_ROOT` note). Phase 6's call-site hooks in `shell.js` were kept; main did not require otherwise, and main's own Activity range control (`ACT_RANGES`, `data-bc-actr`) survived. A clean merge was not taken as proof: `tests/activity/release-inventory.test.ts` (19 tests, three of them controls that go red on a synthetic loss) asserts every part of the 21-item list is present and wired in the integrated tree, and a removed-lines review against main found nothing of main's removed.
+
+### Integration audit
+All 21 items are present and wired (inventory test): migrations 1060 to 1062 and nothing in 1054 to 1059 or 1063 to 1069; append-only native store; projections of the owning tables with no second source of truth; the single fail-closed decision `app.activity_ledger_covers`; the master kill switch and the allowlist (no migration writes either); the external door with its quotas and idempotency; the SQL and TypeScript redactors; approval and delivery provenance read from the owning rows; the four gateway sections; the Activity timeline, Needs attention, Happening now, filters, keyset paging, details, causal history, mobile styling and the older-list fallback. The screen has no approval mechanism of its own: the autonomy and approval controls are untouched (asserted).
+
+### Security review (model-assisted, read-only, on a throwaway clone; NOT a human review)
+An adversarial reviewer read the SQL, the gateway, the writers, the redactors and the UI and reproduced each finding on a clone. **Nothing here satisfies the human SQL and redactor review in the checklist; that row stays NOT RUN.**
+
+| # | Severity | Finding | Disposition on the candidate |
+|---|---|---|---|
+| F1 | Medium | The strict writer accepted `p_provenance => 'external'` from any caller, which skipped the guard and let a caller store an external actor, a confirmed `external.review_decided` or a critical row. Needs EXECUTE on the function, which only the owner and the worker role hold; no HTTP role does | **Fixed.** Provenance other than native is accepted only inside the external door, which sets a transaction-local marker and clears it afterwards. Proof checks: refused, nothing stored, door still works, the marker does not stay open. Sabotage S51 |
+| F2 | Medium | The 8 s `statement_timeout` set on `activity_read` does not bound the call that is already running (a function-level SET does not re-arm the timer) | **Open, documented.** The claim is removed from the review package; the bound is the connecting role's timeout, which was not checked on the real host. Release risk R1 |
+| F3 | Medium | A quiet office's read costs time proportional to other offices' transition volume (the time-ordered index is not office-leading): 91 ms with 12 000 transitions elsewhere, 431 ms with 42 000, about linear; non-pushed filters 0.65 to 1.7 s with `partial: true` at the 16 384 cap. Also a timing channel on other offices' volume | **Open, documented.** Design change (office-leading source, default time window); not made in a release phase. Release risk R2: measure on the real host before any activation beyond one canary office |
+| F4 | Medium | The redactor missed prefixed credential names (`DB_PASSWORD=`, `GITHUB_TOKEN=`, `adminPassword=`, `PGPASSWORD=`) because the word anchor cannot match inside an identifier | **Fixed** in the SQL and the TypeScript twin (a bounded identifier prefix); 5 parity cases added |
+| F5 | Low to Medium | Invisible characters outside the stripped set (tag characters, further variation selectors, Arabic format characters) split a token past the redactor | **Fixed** in both (explicit ranges, same list in both twins); 3 parity cases added. A general Unicode-category strip was not used because the SQL regex engine has no property classes; the known limitation stays listed in SECURITY.md |
+| F6 | Low | `delivery.failed` carried provider text (`error_code`, `suppressed_reason`) at user visibility, which can name a chat id | **Fixed:** diagnostic readers only (migration 1061) |
+| F7 | Low | An outside worker could report `declined` or `expired` and the page would read it as "You said no" | **Fixed at the door:** both are refused for an external worker (S52). The page's wording is unchanged because the door is the authority |
+| F8 | Low | A native event with a non-boolean `metadata.reversible` made `activity_for_the_page` fail for that office for good | **Fixed:** typed read |
+| F9 | Info | Stock Supabase default privileges could grant `service_role` DML on the new tables (the replica does not model that) | **Fixed:** all three tables revoked from `service_role` (S53); a check asserts it. To be verified against production's ACLs by a person (the catalogue check without `--replica`) |
+| F10 | Info | External worker name is caller-asserted; the deployment-wide advisory lock is held to the end of the caller's transaction; a replay with a different payload returns the first row; length caps of agent and tool did not match the table (raised on 61 to 80 and 81 to 120 characters) | Length caps **fixed**. The others are documented and accepted: the worker name and the boundary belong to the external-boundary work, and the lock only matters at a volume of external reports no one has |
+
+Held (checked by the reviewer and unchanged): EXECUTE privileges (`app.*` owner-only, the four public wrappers `service_role` only, nothing for anon, authenticated or public), pinned search paths, no injection in the dynamic SQL, office isolation in every read, composite keys on both write paths, quotas under six concurrent writers, append-only against every route, 24 malformed switch values, no ReDoS, escaping in the UI. Findings were edited into 1060 and 1061 in place because both are unapplied (the plan states this rule); the hashes below are those of the edited files.
+
+### Counts on the release candidate (replica and local browser; after the fixes)
+| Check | Result |
+|---|---|
+| `npm test` (vitest) | 7 040 passed, 21 skipped, 0 failed (450 files; the new inventory test is 19 of them) |
+| `verify:critical` equivalent (`scripts/gate/run.ts --tier critical`) | 68 of 68, 3 682 assertions |
+| Extended tier | 84 of 84, 2 106 assertions |
+| Redaction parity proof | 79 of 79 (SQL and TypeScript agree) |
+| External attack proof | 54 of 54 (includes F1, F7, F8 and F9 regression checks) |
+| Ledger sabotage suite | 53 of 53 caught (50 existing, all re-run; S51 to S53 new) |
+| Migration rehearsal (clean apply, re-apply, failure rollback, no implicit activation, interrupted and invalid index recovery) | 19 of 19 |
+| Backend timings, 3 000 jobs, 24 003 transitions | newest page p50 102 ms, filtered 94 to 105 ms, page 3 192 ms, one root job chain 920 ms; the older `hq_studio_lately` is 752 ms at the same size; ten times the rows cost 1.38 times the time; strict native write 1.42 ms; 670 bytes an event with its indexes |
+| Concurrent readers (eight) | all answered, no errors, p95 x2.4 to x3.2 of one reader |
+| Activity UX browser harness (real gateway, replica, Chromium at 1440 and 390 with the rest in the screenshot set at 768 and 320) | 276 of 276 (axe clean, inputs at least 16 px, contrast at least 4.5:1 in light and dark, no overflow measured against the device width, office B outside the canary sees only the older list, master off draws the older list); page to first row 1 188 ms (gateway 346 ms), filter change 164 ms, opening an event 46 ms on a 400-event history, a 200-event page 103 ms |
+| Fallback harness | green, no errors |
+| Static | `biome ci` clean, typecheck clean, migrations (817 files, 814 recorded as applied), secrets, templates, pressable (14 known, may only shrink), deployment-state, branding clean |
+| Not run, with the reason | `check:icons` and `check:consumed` (production-gated: they would contact production; no flag was set); `check:carrier-writers` keeps 2 pre-existing red functions from main's migrations 0990 and 1020 (existing main baseline) |
+
+Mixed versions (replicas of the schema, code from this branch and from `origin/main`): old code on the new schema, 66 of 68 critical proofs green, the two red (`replay-parity`, `office-ownership-sabotage`) assert that the schema equals the checking-out tree's own history and manifest and are structural, not behavioural (read from their failure lines); new code on a schema without the ledger, 4 of 4 (writers resolve and never throw into the sweep or a plan step). The other two cells (old/old and new/new) are the main baseline and the candidate's own gates. This is the repository's replica method, not deployed versions.
+
+Screenshots: `docs/activity-ledger/screens/release/` (timeline, Needs attention, Happening now, filters, detail with related history, project Activity, the older-list fallback and the disabled office, at 1440, 768, 390 and 320; light and dark at 1440 and 390). A representative sample was opened and read (the 1440 timeline, the 390 dark detail, the 320 detail with its related history): no overlap, clipping or low-contrast text found; the rest are covered by the harness's measured checks (overflow against the device width, contrast, axe) rather than by reading each image. **Avatars:** the harness serves a stand-in picture for the avatar storage address, and the Activity screen itself draws a glyph per event type and a text name rather than a photograph, so photograph rendering was not exercised here; real photographs, real iOS Safari and a real screen reader were not tested.
+
+### Release risks that stay visible
+R1 (F2) no enforced read time limit in the function. R2 (F3) read cost grows with other offices' volume and an unselective filter on a busy office is partial at the pool cap; production table sizes are not measured. R3 the 500 MB tier: a native event is about 670 bytes with indexes (66 MB per 100 000), the eleven read indexes and the `jobs`-sized heaps are the larger cost on a host with about 434 MiB of memory, and no retention policy is decided (`SECURITY.md`, Retention): the table is append-only and nothing is deleted. R4 `activity_write_failures` is unpruned. R5 the model-assisted review above is not a human review.
+
+### Human-review package (what a person reads, and the hashes of the files as they stand on this branch)
+Read, in order: `migrations/1060` (tables, `activity_ledger_covers`, `activity_redact`, `activity_clean`, `record_activity`, `record_activity_safely`, `record_external_activity`, the table and function grants at its end), `migrations/1061` (`activity_read`, `activity_chain`, `activity_for_the_page`, `activity_ledger_health`, the four public wrappers and their grants), `migrations/1062` (one `perform` spliced into `app.defer_over_budget`), `src/text/secrets.ts` (the TypeScript twin of the redactor), `supabase/functions/hq-api/index.ts` (the four sections only), `src/activity/*` (the planner and the best-effort writers). Questions for the reviewer: is a function-level `statement_timeout` an acceptable stand-in (it is not); is the external worker name acceptable as caller-asserted until the boundary exists; are the redactor's documented limitations (short secrets in prose, look-alike letters, percent-encoding, base64) acceptable for text the office writes; should the ledger tables carry row policies as well as owner-only functions.
+
+| File | sha256 |
+|---|---|
+| `migrations/1060_one_ledger_of_activity_records_what_no_other_table_holds.sql` | `e82d2535647c9256154d55986b8dc5e8f20468f81a81ea46b6c1c7fdd532823f` |
+| `migrations/1061_the_activity_read_model_reads_each_table_that_owns_the_state.sql` | `51fdf2caf1afa73b730be9b957a2bafe325d5dfe13376e834301a51156517085` |
+| `migrations/1062_a_held_back_over_budget_agent_is_recorded_in_the_activity_ledger.sql` | `07c26ad8eb700e0fc79f8504ea60faccd90db0a97a3d59bb66b66ab90fd40534` |
+| `src/text/secrets.ts` | `5b37e02263682d1b0e9e63ba304e62e705b07b692ea2d3b9d36a1b41dfd68413` |
+| `supabase/functions/hq-api/index.ts` | `5c66957b7c5129cd8f1308a98d86803f2946bd05620e68eb54678bae44b1d2c0` |
+| `web/studio/bc/activity.js` | `40cc98cf0bda07d4a78a5e8507e1d4fb407e293873d0c77d9328cfa742f2a01d` |
+| `web/studio/bc/activity-model.js` | `27575d0fb1937bce0848ab44c9a5e30cd8cd36b429152fb2df583201415992b9` |
+
+(Recompute before the review with `sha256sum` on the exact commit under review; these are of the working tree at the time of writing.)
+
+### Checklist, three separate stages (PASS means shown on the stated target; no production-only requirement is PASS from replica evidence)
+| Stage | Requirement | Status | Authority |
+|---|---|---|---|
+| **MERGE** | Candidate branch exists, builds on current `main` with both histories preserved | PASS | agent |
+| **MERGE** | Integration inventory, unit, critical, extended, sabotage, rehearsal, browser and static gates on the candidate | PASS (counts above) | agent |
+| **MERGE** | Model-assisted security review done and its fixable findings fixed | PASS (F2 and F3 open as documented risks) | agent |
+| **MERGE** | Human review of the SQL and the redactor | NOT RUN | Grant |
+| **MERGE** | Decision to merge | NOT RUN | Grant |
+| **DEPLOYMENT** | Production baseline re-read and Grant's written authorisation (runbook step 0) | NOT RUN | Grant |
+| **DEPLOYMENT** | Apply 1060 to 1062 with provenance; concurrent index build on the real host with the platform healthy; production ACLs on the three tables checked | NOT RUN | Grant, production writes |
+| **DEPLOYMENT** | Worker, `hq-api`, page deployed one at a time with the master disabled; post-deployment checks | NOT RUN | Grant, production writes |
+| **DEPLOYMENT** | Mixed-version matrix on real deployed versions | NOT RUN | Grant |
+| **ACTIVATION** | Approved single-office canary through `npm run activity:switch`; real-host read latency within bounds Grant sets (R1, R2); the Activity page signed in on desktop and a real phone | NOT RUN | Grant |
+| **ACTIVATION** | Retention decision for the native table and the failure counter | NOT RUN | Grant |
+| **ACTIVATION** | Global activation | not proposed | a separate, later decision |
+
+**Phase 7 verdicts.** MERGE READINESS **READY**, subject to the human review and Grant's decision (nothing was merged). DEPLOYMENT READINESS **CONDITIONAL**: every remaining step needs production access, a person, or the real-host measurements, and R1 to R3 should be looked at first. ACTIVATION READINESS **CONDITIONAL**, and **not for more than one canary office** until F3's cost is measured on the real host and retention is decided; technical readiness and authorisation are different things, and no authorisation has been given.
