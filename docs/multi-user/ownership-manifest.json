@@ -375,6 +375,52 @@
         }
       ]
     },
+    "engine_bridges": {
+      "class": "OFFICE_CARRIER",
+      "why": "One Hermes host bridging to one office (1070): office_id is written at creation and write-once, and the bridge's MCP client must be the same office's (a same-office composite key).",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["mcp_client_id"],
+          "parent": "mcp_clients",
+          "constraint": "engine_bridges_mcp_client_id_fkey"
+        }
+      ]
+    },
+    "engine_run_calls": {
+      "class": "OFFICE_CARRIER",
+      "why": "Every MCP call the office served to an engine run (1070), append-only: office_id is written at creation and write-once, and the run it belongs to must be the same office's (a same-office composite key).",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["run_id"],
+          "parent": "engine_runs",
+          "constraint": "engine_run_calls_run_id_fkey"
+        }
+      ]
+    },
+    "engine_runs": {
+      "class": "OFFICE_CARRIER",
+      "why": "One outside attempt at one turn (1070): office_id is written at creation and write-once, and the job, project and bridge it names must all be the same office's (same-office composite keys).",
+      "caller_selects": true,
+      "cross": [
+        {
+          "columns": ["job_id"],
+          "parent": "jobs",
+          "constraint": "engine_runs_job_id_fkey"
+        },
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "engine_runs_project_id_fkey"
+        },
+        {
+          "columns": ["bridge_id"],
+          "parent": "engine_bridges",
+          "constraint": "engine_runs_bridge_id_fkey"
+        }
+      ]
+    },
     "eval_cases": {
       "class": "SYSTEM",
       "why": "Evaluation corpus; harness."

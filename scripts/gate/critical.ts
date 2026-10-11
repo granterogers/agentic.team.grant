@@ -333,6 +333,13 @@ export const CRITICAL: readonly Proof[] = [
     'a finished answer is redriven until it is sent or visibly given up, never left claimed, and a failed or uncertain one puts ONE question on the person list (never auto-resent, resolvable by his answer, none for harness traffic)',
   ),
 
+  // ---- an outside engine answers only the turn a person chose to send it (Hermes, M1) --------------------------------------
+  p(
+    'engine-runs',
+    105,
+    "an outside engine (Hermes) can open a run only for a person's own turn, claims only what is waiting in its own office, is fenced on every call, lapses at most three times, finishes once, is stopped by a Stop, reaches only the v1 read tools of its own run, leaves no credential behind, and the office router can never pick it (15 sabotages)",
+  ),
+
   // ---- the migration history itself ----------------------------------------------------------------------------------
   p(
     'replay-parity',

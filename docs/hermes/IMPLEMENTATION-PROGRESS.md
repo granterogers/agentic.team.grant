@@ -10,8 +10,9 @@ The resume point for any session picking this up. Read `ARCHITECTURE-HANDOFF.md`
 |---|---|---|
 | Architecture | done, commit `c3787c5a` | `docs/hermes/*`, ADR-0073 |
 | **M0 validation** | **done: PASS, V6 BLOCKED** | `VALIDATION-RESULTS.md`, `m0-evidence/`, `scripts/hermes-m0/` |
-| M1 schema and SQL functions (replica only) | **next** | |
-| M2 to M6 | not started | |
+| **M1 schema and SQL functions (replica only)** | **done** | migration `1070_…`, `scripts/isolated/engine-runs.ts` 131/131 with 15 sabotages (in `verify:critical`, 69/69 green, 3,813 assertions), `tests/engines/types.test.ts`, contract deviations D-7 to D-13 in `INTERFACE-CONTRACTS.md` §3.1 |
+| M2 engine gateway and bridge credentials | **next** | |
+| M3 to M6 | not started | |
 | M7 live free run | gated on V6 (Grant's zero-credit key) and on the Activity Ledger branch | |
 | M8 to M11 | not started | |
 
@@ -30,17 +31,32 @@ Manual engine choice only; no automatic switching on any failure, retry, cancell
 and permission systems stay authoritative. No unrestricted database credential for Hermes; no unapproved human contact; no automatic skill
 adoption; no paid inference. Reuse the Activity Ledger's external-agent contract if present; never merge, cherry-pick or modify that branch.
 
-## M1 start recipe
+## Checks that need Grant's authorisation (not run, by the production guard)
 
-1. `bash scripts/isolated/replica.sh` (about 36 s) rebuilds the replica. Read `app.schema_migrations` for free numbers; the plan is `1070`
-   (tables `engine_bridges`, `engine_runs` with `attempt`, `engine_run_calls`; functions `app.engine_*`; widen `mcp_clients_kind_known` to
-   `engine`; a disabled `hermes` row in `public.providers`; settings `engine.hermes.offices`, `.daily_runs`, `.deadline_s`, `.no_progress_s`)
-   and `1071` (`decide_suggestion` `p_tools`, `engine_runs.profile`). Re-check the numbers: other branches use 1023 to 1035.
-2. Write `src/engines/hermes/types.ts` and `timing.ts` from `INTERFACE-CONTRACTS.md`, honouring D-1 to D-6.
-3. Prove it in `scripts/isolated/engine-runs.ts`, registered as ONE `p(...)` line in `scripts/gate/critical.ts`. Every proof needs its sabotage.
-4. Run: `check:migrations`, `check:ownership`, `check:office-edges`, `check:carrier-writers`, `check:anon-exposure`, `check:secrets`
-   (read `$?`), lint, typecheck, `npm test`, `npm run verify:critical`.
-5. Commit with the attribution footer, push the feature branch, update this file, then M2.
+These read the production catalogue and refuse without `ALLOW_PRODUCTION_CHECKS=1`, which is never set without Grant's explicit word:
+`check:callers`, `check:consumed`, `check:machine-key`, `check:anon-exposure`, `check:gateway-wrappers`, `check:carrier-writers`.
+What stands in for them on the replica: `engine-runs` asserts no grant reaches the new tables and that service_role reaches only the public
+wrappers (A2, A3), the carrier-writer predicate was applied to the migration locally (5 inserts, all name `office_id`), and
+`check:ownership` and `check:office-edges` run with `--replica`. **Expected, and not a defect:** `check:callers` will list
+`app.engine_run_open`, `engine_run_for_job`, `engine_run_grounding`, `engine_available`, `engine_mint_bridge`, `engine_retire_bridge` and the
+seven public wrappers until M2 to M4 and M6 give them callers; its baseline may only shrink, so none is added to it. Run all six once with
+Grant's authorisation after M6.
+
+## Numbering and collisions to resolve at merge
+
+* Migration **1070** is this work's; the ledger branch holds 1060 to 1062 and `main` ends at 1053. Re-check before applying anywhere.
+* ADR number: this branch uses **0073**; the ledger branch also has `0073-one-activity-ledger-…`. Whichever merges second takes the next free number.
+
+## M2 start recipe
+
+1. `bash scripts/isolated/replica.sh` rebuilds the replica (about 40 s). Proofs run on a clone of `post`: `create database x template post`.
+2. Build `supabase/functions/engine` (`index.ts`, `routes.ts`) per `INTERFACE-CONTRACTS.md` §4 over the public wrappers listed in §3.1 D-12.
+   The gateway authenticates with `public.engine_bridge_for`, derives the office from it, and fills it into every wrapper call itself.
+3. Operator mint script `scripts/ops/engine-bridge-credential.ts` (first import `require-production-writes`), `deploy:engine` modelled on
+   `deploy:mcp`. Both are written and tested, never run against production.
+4. Prove claim, heartbeat and finish through the real function under Deno against the replica, with a fake bridge (reuse `scripts/hermes-m0/mcp-rig.ts`
+   for the Deno launcher), registered as ONE `p(...)` line in `scripts/gate/critical.ts`. Each proof needs its sabotage.
+5. Run lint, typecheck, `npm test`, `check:migrations`, `check:secrets` (read `$?`), `verify:critical`. Commit with the footer, push, update this file.
 
 ## Process notes
 
