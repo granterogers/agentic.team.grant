@@ -475,3 +475,34 @@ Read, in order: `migrations/1060` (tables, `activity_ledger_covers`, `activity_r
 | **ACTIVATION** | Global activation | not proposed | a separate, later decision |
 
 **Phase 7 verdicts.** MERGE READINESS **READY**, subject to the human review and Grant's decision (nothing was merged). DEPLOYMENT READINESS **CONDITIONAL**: every remaining step needs production access, a person, or the real-host measurements, and R1 to R3 should be looked at first. ACTIVATION READINESS **CONDITIONAL**, and **not for more than one canary office** until F3's cost is measured on the real host and retention is decided; technical readiness and authorisation are different things, and no authorisation has been given.
+
+## Phase 8 addendum - security closure, performance hardening, storage (11 October 2026)
+
+State verified first: PR #462 open and draft, head `8d212126` as reported, `main` still `5fa1fbdc` (already contained in the candidate), no other branch uses 1054 to 1069 (Hermes 1070 to 1078, read only). **No merge, deployment, production migration, production read or activation was performed or authorised in this phase.** All evidence below is replica, local browser or model-assisted.
+
+- **F2 closed (with a stated limit):** root cause reproduced; cooperative read budget (`PT504`), gateway 504 and abort deadline, page error state with Try again, hard-cancel mechanism proved but not deployed (needs a production decision). `docs/activity-ledger/READ-TIME-BOUND.md`.
+- **F3: not reproduced** (the reviewer withdrew it); a genuine own-office cost found and fixed (an unmatched interface filter took 2.5 to 5.2 s on a 7 000 job office, now 0.3 s); a regression guard `activity-scaling` is in the extended tier. The measured limit and the canary rollback bound are stated.
+- **Storage:** 750 B an event with its indexes measured (850 planned), about 21 MB of read indexes on the recorded row counts (inferred); `STORAGE-AND-RETENTION.md`. **The database was projected to reach its 500 MB allowance between 10 and 19 October (`docs/ops/capacity-scenarios-2026-10-06.md`); the ledger cannot be activated without a baseline reading of the real headroom (a stop condition in the runbook).** A diagnostic volume cap (default 500 a day an office) was added; destructive retention and any paid capacity are **decisions for Grant, not made**.
+- **Security:** a third model-assisted review of the phase 8 diff found no Critical, High or Medium issue; two Low findings were fixed (replay at the cap; budget versus deadline) and two accepted and documented. The human-review package with final hashes is `HUMAN-REVIEW-PACKAGE.md`. **Human review has not happened.**
+
+Counts on the final candidate (replica, local browser): vitest 7 047 passed, 21 skipped; critical gate 68 of 68 (3 682 assertions); extended gate 85 of 85 (2 130 assertions, includes the new `activity-scaling`); ledger sabotage 56 of 56 caught; migration rehearsal 19 of 19; Activity UX harness 288 of 288 (1440, 768, 390, 320; axe, contrast in light and dark, overflow against device width, timed-out read scenario); fallback harness green; mixed versions unchanged (old code on the new schema 66 of 68, the two structural reds; new code on the old schema 4 of 4); typecheck and `biome ci` clean; `check:migrations`, `check:secrets`, `check:templates`, `check:pressable`, `check:deployment-state`, `check:branding`, `check:callers` and the replica forms of `check:anon-exposure`, `check:machine-key`, `check:ownership`, `check:office-edges`, `check:consumed`, `check:gateway-wrappers` clean; `check:carrier-writers` keeps its 2 known baseline failures from main's migrations; `check:icons` has no replica form and was not run. Performance on the replica (3 000 jobs, 24 003 transitions) is unchanged from phase 7: newest page p50 103 ms, one agent 111, page 3 186, a root job 885 (the older `hq_studio_lately` is 730); the UX harness measures page to first row 1 165 ms (gateway 308 ms), filter change 125 ms, opening an event 37 ms.
+
+**Real iPhone and Safari testing was not available**: Chromium only; no claim of Safari acceptance. A real screen reader was not used.
+
+**Checklist (three separate stages; PASS only on the stated target):**
+
+| Stage | Requirement | Status | Authority |
+|---|---|---|---|
+| MERGE | Code complete, gates green on the final candidate, `main` reconciled (no new commits) | PASS (replica) | agent |
+| MERGE | Human review of the SQL and the redactor (`HUMAN-REVIEW-PACKAGE.md`) | NOT RUN | a named person |
+| MERGE | Decision to merge PR #462 | NOT RUN | Grant |
+| DEPLOYMENT | Production baseline reads (headroom, sizes, indexes, role timeouts, errors) and the storage gate | NOT RUN | Grant (read approval) |
+| DEPLOYMENT | Apply 1060 to 1062, build the indexes, deploy worker, gateway, page with the master off | NOT RUN | Grant (writes) |
+| DEPLOYMENT | Decision on the hard read bound (role timeout or pre-request hook) | NOT RUN | Grant |
+| ACTIVATION | Single-office canary, observation window, rollback rehearsal | NOT RUN | Grant |
+| ACTIVATION | Retention horizon, diagnostic cap value, any paid capacity | NOT DECIDED | Grant |
+| ACCEPTANCE | Production acceptance (real events visible, isolation, rollback verified, release record) | PENDING | after the above |
+
+**Phase 8 verdicts.** CODE COMPLETE: YES (nothing further is needed from engineering before human review). MERGE READINESS **READY FOR APPROVAL**. DEPLOYMENT READINESS **READY FOR APPROVAL** only once the baseline passes the storage gate; if the headroom is as projected on 5 October it is **BLOCKED by capacity**, which no code change in this release can remove. ACTIVATION READINESS **BLOCKED** until deployment is verified and Grant approves a canary. PRODUCTION ACCEPTANCE **PENDING**.
+
+*Process disclosure:* one edit to `scripts/isolated/activity-scale-seed.ts` was made with a Python heredoc instead of the Edit tool, and two no-op heredocs were run, against the File editing rule; the result was read back and checked. Everything else went through Edit or Write.

@@ -109,3 +109,9 @@ Ten findings; F1, F4 to F9 and the length caps of F10 are fixed on the release c
 which is also a timing channel on their volume) are open and documented as release risks, and the rest of F10 (caller-asserted worker name, deployment-wide advisory lock, replay with a different payload returns the first row) is accepted.
 The redactor additionally matches a credential name with an identifier prefix and strips tag characters and further format characters; **still not caught**: short secrets in prose, look-alike letters, percent-encoded and base64 secrets (pinned by the proof's limitation cases).
 The full table, dispositions and the human-review package are in `RELEASE-READINESS.md`, Phase 7 addendum.
+
+## Phase 8 third review (model-assisted; not a human review) - summary
+
+F2 is closed as far as a replica can close it: the claim that `activity_read` carries an 8 s statement timeout is withdrawn (it bounded nothing); a cooperative budget (`activity.read_budget_ms`), a gateway 504 and a page error state replace it, and the hard bound a caller can arm is a production decision (`READ-TIME-BOUND.md`). F3 was not reproduced and the reviewer withdrew it; a real own-office cost was fixed.
+A review of the phase 8 diff found no Critical, High or Medium issue. Two Low findings were fixed (a replay at the diagnostic cap was counted as a loss; the read budget could exceed the gateway deadline) and two accepted (the cap is soft under concurrent writers; a gateway abort may not cancel the database work). New settings, all operator-only: `activity.read_budget_ms`, `activity.diag_native_per_day`.
+The package a human reads, with final file hashes, is `HUMAN-REVIEW-PACKAGE.md`. **No human review has taken place.**

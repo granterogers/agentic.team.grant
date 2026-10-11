@@ -826,7 +826,7 @@ begin
   -- of the one before it, so a pass that took t milliseconds predicts the next at 8 t. It raises PT504 (which the REST layer answers as
   -- HTTP 504) rather than returning a page it could not validate, so a read that ran out of time is an ERROR and never an empty or
   -- partial-looking answer. A single pass is not interruptible from inside: the bound on THAT is the caller's own statement timeout
-  -- (docs/activity-ledger/ARCHITECTURE.md, "Read time bound"). The budget is the setting activity.read_budget_ms (50 to 11 000, default 8 000: always below the gateway's 12 s deadline, so the database's own refusal arrives first).
+  -- (docs/activity-ledger/READ-TIME-BOUND.md). The budget is the setting activity.read_budget_ms (50 to 11 000, default 8 000: always below the gateway's 12 s deadline, so the database's own refusal arrives first).
   v_budget := coalesce((select case when jsonb_typeof(c.value) = 'number' then least(greatest((c.value #>> '{}')::numeric, 50), 11000)::int end
                           from public.system_config c where c.key = 'activity.read_budget_ms'), 8000);
   v_t0 := clock_timestamp();
