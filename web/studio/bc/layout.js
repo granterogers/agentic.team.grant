@@ -98,7 +98,8 @@ export const validTint = (t) =>
 export const DEFAULT_TINT = {
   tasks: 'sky',
   board: 'violet',
-  documents: 'amber',
+  // Slate, not amber: amber is the warning colour, and a warm default made the Docs panel the one brown in the default look (M1b).
+  documents: 'slate',
   schedule: 'teal',
   contacts: 'rose',
   activity: 'mint',

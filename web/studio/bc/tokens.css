@@ -28,7 +28,7 @@
   --bc-text-muted: #4d5258;
   --bc-accent: #2b6cb0;
   --bc-accent-ink: #ffffff;
-  --bc-section-accent: #a2502f;
+  --bc-section-accent: #4d6378;
 
   /* --- Module identity (§§9-10) ------------------------------------------
    *
@@ -47,10 +47,10 @@
    * The hues are deliberately close together and all desaturated against the
    * dark surface, so the board still reads as one object.
    */
-  --bc-heading: #7a5314;
+  --bc-heading: #1f2a37;
   --bc-mod-tasks: #3f7fa8;
   --bc-mod-board: #5f8a48;
-  --bc-mod-documents: #a07a3a;
+  --bc-mod-documents: #7d8a99;
   --bc-mod-schedule: #7c62a8;
   --bc-mod-contacts: #b0675e;
   --bc-mod-activity: #4d8479;
@@ -189,11 +189,11 @@
   --bc-text-muted: #a8afb3;
   --bc-accent: #6ab3fd;
   --bc-accent-ink: #0e1d24;
-  --bc-section-accent: #fbbda8;
-  --bc-heading: #e8c88f;
+  --bc-section-accent: #9fb4c9;
+  --bc-heading: #dfe6ee;
   --bc-mod-tasks: #7fb4d8;
   --bc-mod-board: #9db98a;
-  --bc-mod-documents: #c9a978;
+  --bc-mod-documents: #aab6c4;
   --bc-mod-schedule: #b49ad4;
   --bc-mod-contacts: #d99b93;
   --bc-mod-activity: #8fb8b0;
@@ -225,11 +225,11 @@
     --bc-text-muted: #a8afb3;
     --bc-accent: #6ab3fd;
     --bc-accent-ink: #0e1d24;
-    --bc-section-accent: #fbbda8;
-    --bc-heading: #e8c88f;
+    --bc-section-accent: #9fb4c9;
+    --bc-heading: #dfe6ee;
     --bc-mod-tasks: #7fb4d8;
     --bc-mod-board: #9db98a;
-    --bc-mod-documents: #c9a978;
+    --bc-mod-documents: #aab6c4;
     --bc-mod-schedule: #b49ad4;
     --bc-mod-contacts: #d99b93;
     --bc-mod-activity: #8fb8b0;
