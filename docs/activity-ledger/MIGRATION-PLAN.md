@@ -10,6 +10,8 @@ reversible or harmless on its own, and each is checked before the next starts. M
 
 ## Release runbook at a glance (phase 7; every step needs a person; the release candidate executed none of them)
 
+> **Phase 9 (12 October 2026):** the step 0 baseline was read ONCE under approval A3, read-only (`PRODUCTION-BASELINE-2026-10-12.md`): production holds **814 migrations, highest `1053`, none at or above 1060**; no `activity.*` setting and no `activity_events` table; database **381.5 MB used, 118.5 MB free, no invalid index**; storage gate (about 31.5 MB) **PASS**. The step 0 reads must be repeated on the day of the run (they are the stop conditions), through the read-only endpoint: `ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/release/preflight-read.ts --file=docs/audit/ACTIVITY-CAPACITY-BASELINE-QUERIES-2026-10-12.sql --only=Q01,Q11,Q12,Q16,Q17,Q19`. **At activation (step 5) set `activity.read_budget_ms` to 6000**, below the platform's recorded 8 s role timeout, so the controlled PT504 answer arrives before a platform cancel (the default 8000 is level with it). **File storage is the nearest limit** (602.9 MB of 1 GB, +36 MB a night, full about 22 to 24 October): do not start the release while a nightly backup is at risk of failing; decision A11.
+
 Seven steps, in this order, each with its own approval and its own stop condition. The stages A to D below carry the detail.
 
 | # | Step | Command (a person sets the flags named, for this one operation) | Stop and do not continue if |

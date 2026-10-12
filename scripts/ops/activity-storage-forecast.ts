@@ -17,17 +17,16 @@ const EVENT = { typical: 742, withLinks: 797, external: 780, largest: 1371, plan
 // MEASURED bytes of index per row of the table (unique timestamps, concurrent build): transitions 23.3, model calls 43.0, deliveries 3 x 48.6,
 // outputs 33.7. ASSUMED for tables with no rows in the replica: events and inbound commands (office, time) 45, blockers 45, impediments 30.
 const INDEX_BYTES_PER_ROW = { job_state_transitions: 23.3, inference_usage: 43.0, deliveries: 145.9, outputs: 33.7, events: 45, inbound_commands: 45, blockers: 45, job_impediments: 30 }
-// RECORDED row counts: transitions 146 893 and deliveries 4 554 from the 5 October 2026 capture (docs/ops/evidence/2026-10-05, autovacuum_tables);
-// the rest are the exact counts of 1 October (docs/multi-user/TABLE-REVIEW-399.md) scaled by the jobs growth between the two dates (22 647 / 19 797).
-const GROWTH = 22_647 / 19_797
-const ROWS = { job_state_transitions: 146_893, deliveries: 4_554, inference_usage: Math.round(15_245 * GROWTH), outputs: Math.round(13_957 * GROWTH), events: Math.round(9_958 * GROWTH), inbound_commands: Math.round(2_771 * GROWTH), blockers: Math.round(993 * GROWTH), job_impediments: Math.round(1_978 * GROWTH) }
+// RECORDED row counts: the LIVE production reading of 12 October 2026 08:12 UTC (docs/activity-ledger/PRODUCTION-BASELINE-2026-10-12.md, Q07: planner estimates
+// from pg_stat_user_tables), read through the read-only endpoint under approval A3. The 11 October capacity audit scaled older counts instead (transitions 146 893).
+const ROWS = { job_state_transitions: 169_922, deliveries: 4_678, inference_usage: 16_905, outputs: 18_715, events: 14_514, inbound_commands: 4_570, blockers: 1_229, job_impediments: 2_347 }
 const indexBytes = (Object.keys(INDEX_BYTES_PER_ROW) as (keyof typeof ROWS)[]).reduce((a, k) => a + ROWS[k] * INDEX_BYTES_PER_ROW[k], 0)
 const MIGRATION_BYTES = 260_000 // MEASURED: pg_database_size delta of applying 1060 to 1062 (empty tables and indexes, function bodies)
 
 const mb = (b: number) => b / 1_000_000
 const fmt = (n: number) => (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2))
-const headroom = Number(process.argv[2] ?? 125) // MB; RECORDED 9 October 2026: 374.8 MB used of 500 MB (docs/audit/V1-FINAL-PRODUCTION-PREFLIGHT-2026-10-09.md, P04b)
-const existing = Number(process.argv[3] ?? 0.75) // MB a day; RECORDED 5 to 9 October: 371.8 to 374.8 MB = 0.75 a day (7 to 9 October alone was +2.5 a day)
+const headroom = Number(process.argv[2] ?? 118.5) // MB; RECORDED 12 October 2026 08:12 UTC: 381 521 043 bytes used of 500 MB decimal (live read, Q01)
+const existing = Number(process.argv[3] ?? 2.2) // MB a day; RECORDED 9 to 12 October: 374.80 to 381.52 MB = +6.72 MB in about 3 days (capacity_samples: 378.6, 380.9, 381.5 MB on 10, 11, 12 October). The earlier 0.75 a day (5 to 9 October) understated it.
 
 console.log(`headroom ${headroom} MB, growth of everything else ${existing} MB a day\n`)
 console.log(`A. one-off cost`)
@@ -42,7 +41,7 @@ console.log(`   executed plan step with a capability: 2 events (requested, then 
 console.log(`   a stalled job reclaimed by the sweep: 1 event a job and attempt;  budget threshold: at most 1 a day an office and agent`)
 console.log(`   an outside worker's report: 1 each, capped at 300 an hour a worker, 1 000 an hour and 4 000 a day an office;  nothing else writes a native row`)
 console.log(`   so events a day = 2 x executed plan steps + reclaimed jobs + thresholds + external reports. A message or a task alone writes none (the read model reads their own rows).`)
-console.log(`   RECORDED ceiling for the current office: 4 906 job_steps in all since August (docs/ops/evidence/2026-10-05) is about 120 steps a day counting every harness job, so at most about 240 events a day; the real figure is lower`)
+console.log(`   RECORDED ceiling for the current deployment: executed plan steps a day, every office and every harness job counted, were 142 to 163 on each of 2 to 11 October 2026 (live read Q10, 12 October), so at most about 330 events a day across the whole deployment; one canary office is a fraction of that`)
 
 // ---- the requested grid -------------------------------------------------------------------------------------------------------------
 const rates = [100, 250, 500, 1000, 2000, 5000]
@@ -57,7 +56,7 @@ console.log(`   the diagnostic cap (500 a day an office) bounds tool-call events
 // ---- scenarios against the headroom -------------------------------------------------------------------------------------------------
 type S = { name: string; offices: number; perOffice: number; low: number; high: number }
 const scenarios: S[] = [
-  { name: 'current single user (about 100 a day; 25 to 250)', offices: 1, perOffice: 100, low: 25, high: 250 },
+  { name: 'current single user (about 100 a day; 25 to 330)', offices: 1, perOffice: 100, low: 25, high: 330 },
   { name: 'heavier autonomous operation (500 a day, at the cap; 300 to 1 000)', offices: 1, perOffice: 500, low: 300, high: 1000 },
   { name: 'two active offices (the recorded count), 250 each (100 to 500)', offices: 2, perOffice: 250, low: 100, high: 500 },
   { name: 'external workers and Hermes added: 500 + 500 reports a day (300 to 4 500)', offices: 1, perOffice: 1000, low: 600, high: 4500 },
@@ -78,7 +77,7 @@ console.log(`   "days to full" = (headroom - one-off) / (ledger MB a day + other
 // ---- the gate ------------------------------------------------------------------------------------------------------------------------
 const canary90 = mb(250 * 90 * EVENT.withLinks)
 const gate = (oneOff + canary90) * 1.25
-console.log(`\nE. the runbook's safety gate for a canary: one-off ${fmt(oneOff)} MB + 90 days at 250 a day ${fmt(canary90)} MB, plus 25 percent = ${fmt(gate)} MB (the runbook says about 65 MB, which was computed from the inferred 21 MB; the measured need is ${fmt(gate)} MB)`)
+console.log(`\nE. the runbook's safety gate for a canary: one-off ${fmt(oneOff)} MB + 90 days at 250 a day ${fmt(canary90)} MB, plus 25 percent = ${fmt(gate)} MB (the first runbook said about 65 MB, computed from an inferred 21 MB; the measured need is ${fmt(gate)} MB). The gate covers the ledger only: ADD the other growth over the observation window (${fmt(existing * 30)} MB for 30 days at ${existing} MB a day) to see the runway`)
 console.log(`   index build transient: the old files are not touched, so the build adds only the new indexes; WAL is transient and the recorded max_wal_size is 1 GB on a 2 GB volume`)
 
 // ---- the ledger's effect on FILE storage, through the nightly backup ------------------------------------------------------------------

@@ -1,8 +1,13 @@
 -- THE PRODUCTION CAPACITY BASELINE (read-only). Written 11 October 2026 for docs/activity-ledger/STORAGE-CAPACITY-DECISION.md.
 --
--- NOTHING HERE HAS BEEN RUN AGAINST PRODUCTION. It needs Grant's explicit authorisation for a production READ, then, one statement at a time:
+-- RUN ON 12 OCTOBER 2026 (08:12 to 08:16 UTC) under approval A3, through the Management API's READ-ONLY endpoint (it executes as supabase_read_only_user, so the
+-- database refuses any write) with the repository's static single-select check in front: it was run with
 --
---   ALLOW_PRODUCTION_CHECKS=1 npm run qq -- "<the statement under one Q number, without its comment lines>"
+--   ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/release/preflight-read.ts --file=docs/audit/ACTIVITY-CAPACITY-BASELINE-QUERIES-2026-10-12.sql [--only=Q01,...]
+--
+-- (this copy lives under docs/audit/ because that tool only reads statement files there; scripts/ops/capacity-baseline.sql is an identical copy). Results:
+-- docs/activity-ledger/PRODUCTION-BASELINE-2026-10-12.md. Q06 needs an extension that is NOT installed in production and failed harmlessly. Q16 to Q23 were added on
+-- 12 October. Any rerun needs a fresh authorisation for a production READ.
 --
 -- Every statement is a single plain SELECT over catalogue views and public tables: no function in the `app` schema is called (the read-only
 -- role may not execute them), nothing is written, no row content is selected (counts, sizes and names only), and nothing returns a message,
@@ -74,3 +79,19 @@ select rolname, rolconfig from pg_roles where rolname in ('anon', 'authenticated
 select name, setting, unit from pg_settings where name in ('statement_timeout', 'lock_timeout', 'maintenance_work_mem', 'max_wal_size', 'work_mem', 'shared_buffers', 'autovacuum') order by 1
 -- Q15 the backups bucket: nightly object counts and bytes over the last 30 days (a date and numbers, no object names).
 select date_trunc('day', created_at)::date as day, count(*) as objects, sum(coalesce((metadata ->> 'size')::bigint, 0)) as bytes from storage.objects where bucket_id = 'backups' and created_at > now() - interval '30 days' group by 1 order by 1 desc
+-- Q16 the migration catalogue: how many are applied, the highest, and whether any of the ledger's three (1060 to 1062) is applied.
+select count(*) as applied, max(name) as highest, count(*) filter (where name >= '1060') as at_or_above_1060 from app.schema_migrations
+-- Q17 the ledger's activation state: whether its table exists and how many activity.* settings are held (counts only; no value is selected).
+select to_regclass('public.activity_events')::text as ledger_table, (select count(*) from public.system_config where key like 'activity.%') as activity_settings
+-- Q18 database error and pressure indicators since the statistics were last reset (counters only).
+select numbackends, xact_commit, xact_rollback, deadlocks, conflicts, temp_files, temp_bytes, blks_read, blks_hit, stats_reset from pg_stat_database where datname = current_database()
+-- Q19 index health: how many public indexes are invalid (an interrupted concurrent build leaves one).
+select count(*) filter (where not i.indisvalid) as invalid_indexes, count(*) as indexes from pg_index i join pg_class c on c.oid = i.indrelid join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public'
+-- Q21 the newest applied migrations (names only), to compare with the repository's migrations/ directory before 1060 to 1062 are numbered into the sequence.
+select name from app.schema_migrations where name >= '1040' order by name
+-- Q22 the privilege inputs of the human review: default table privileges that a NEW table in public inherits (role names and privilege letters only), and who has USAGE on schema app.
+select r.rolname as owner_role, n.nspname as schema, d.defaclobjtype as object_type, d.defaclacl::text as acl from pg_default_acl d join pg_roles r on r.oid = d.defaclrole left join pg_namespace n on n.oid = d.defaclnamespace order by 1, 2, 3
+-- Q23 schema app reachability by the browser and gateway roles (booleans only).
+select has_schema_privilege('service_role', 'app', 'USAGE') as service_role_app_usage, has_schema_privilege('authenticated', 'app', 'USAGE') as authenticated_app_usage, has_schema_privilege('anon', 'app', 'USAGE') as anon_app_usage, has_schema_privilege('service_role', 'public', 'CREATE') as service_role_create_in_public
+-- Q20 connections by state (counts only; no statement text).
+select state, count(*) as connections from pg_stat_activity where datname = current_database() group by 1 order by 2 desc

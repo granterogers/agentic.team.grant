@@ -1,6 +1,6 @@
 # Unified Activity Ledger - one consolidated approval request
 
-11 October 2026. Everything that needs no approval is done. What follows is what only Grant (or a named reviewer) can authorise. **Approving one item approves nothing else.** No production access of any kind has been used.
+11 October 2026, updated 12 October (Phase 9). Everything that needs no approval is done. What follows is what only Grant (or a named reviewer) can authorise. **Approving one item approves nothing else.** **A3 has been used once** (12 October 08:11 to 08:16 UTC, read-only, 20 statements and two metadata reads; results in `PRODUCTION-BASELINE-2026-10-12.md`). Nothing else has touched production.
 
 ## 1. The release candidate
 
@@ -12,7 +12,7 @@ F2 closed (cooperative budget, gateway 504, page error state; the hard bound nee
 
 ## 3. The things you should know before deciding
 
-1. **Capacity may block deployment.** The 6 October capacity note projected the 500 MB database to be full between 10 and 19 October. Nobody has read the real number since. The capacity audit (`STORAGE-CAPACITY-DECISION.md`, 11 October) corrected the cost: about **6.4 MB once** (the eleven read indexes on the recorded row counts, plus the migrations) and 0.2 MB a day at 250 events a day (measured 742 to 800 B an event), so the gate is about **30 MB free, not 65**. The last recorded reading (9 October) had 125 MB free, and the database grew only about 0.75 MB a day after 5 October, so the 6 October projection did not materialise. A fresh read-only baseline (`scripts/ops/capacity-baseline.sql`, approval A3) is still required before deployment. The nearer limit is the 1 GB file allowance (backups), which `backup:prune` addresses separately.
+1. **Capacity does not block the ledger, but file storage is the nearest limit in the whole release.** Read live on 12 October 08:12 UTC: the database is **381.5 MB of 500 MB, 118.5 MB free**, growing about 1.4 to 2.2 MB a day (so about seven weeks of runway, with or without the ledger). The ledger costs about **7 MB once** and 0.2 MB a day at 250 events a day, so the migration gate (about 31.5 MB) **passes 3.8 times over**; no extra capacity is needed. **File storage is 602.9 MB of 1 GB and is growing about 36 MB a night** (87 percent of it backups): the nightly backup would fail on **about 22 to 24 October**. That is independent of the ledger and **needs decision A11 before then**. The bloated tables (about 136 MB estimated recoverable) are a rewrite decision (A9) that can wait inside the seven weeks.
 2. **A human must read the SQL and the redactor** (`HUMAN-REVIEW-PACKAGE.md`). Three model-assisted reviews are not that.
 3. **The hard read bound is a production setting** nobody has chosen. Without it, one slow database pass is not interruptible (the rest is bounded).
 4. Nothing destructive is proposed or done. Retention of old diagnostic events is your decision (`STORAGE-AND-RETENTION.md`).
@@ -23,12 +23,17 @@ F2 closed (cooperative budget, gateway 504, page error state; the hard bound nee
 |---|---|---|---|---|
 | A1 | **Human SQL and redactor review** by a named person | their sign-off recorded in `HUMAN-REVIEW-PACKAGE.md` | anything on its own | A3 onward |
 | A2 | **Merge PR #462** into `main` | the merge commit (the change is dormant: ledger off, nothing applied) | deploying, migrating, activating | nothing |
-| A3 | **Production read-only checks** (`ALLOW_PRODUCTION_CHECKS=1`), the five baseline reads in `MIGRATION-PLAN.md` step 0 | reading headroom, table sizes, index state, role timeouts, error baselines, the platform health reading | any write | A4 |
+| A3 | **Production read-only checks** (`ALLOW_PRODUCTION_CHECKS=1`), the baseline reads in `MIGRATION-PLAN.md` step 0 | reading headroom, table sizes, index state, role timeouts, error baselines, the platform health reading | any write | A4 |
+| | **A3 status: EXECUTED once on 12 October** (Phase 9). Re-read Q01, Q11, Q12, Q19 on the day of any migration; a new run needs a new authorisation | | | |
 | A4 | **Production migrations** (both production flags), `1060`, `1061`, `1062` one at a time, then the concurrent index build | applying the three files and building eleven indexes, in a quiet window, stopping on any unexpected result | deploying services, activating | A1, A3, the storage gate |
 | A5 | **Production deployment** of the worker, then `hq-api`, then the page, with the master switch off | the three deploys, each probing itself | activating | A4 |
 | A6 | **Hard read bound** (one of: role `statement_timeout`; PostgREST pre-request hook; or accept the cooperative bound) | the chosen setting, after reading the current values | anything else | A5 (or accept) |
 | A7 | **Canary activation** for ONE named office, with the observation window (suggested 7 days) and the rollback limits in the runbook | `npm run activity:switch -- --canary <office> --apply` | any other office, the global mode | A5 and A6 |
 | A8 | **Retention and capacity decisions** | the diagnostic cap value (default 500 a day), the retention horizon for diagnostic events (for example 90 days), whether to record `tool.call_requested`, whether any paid capacity may be bought (no price is assumed) | none done without this | before more than one office |
+| A9 | **Rewrite the bloated tables** (`jobs`, `events`, `inference_usage`, `deliveries`, `inbound_commands`, `projects`) in an idle-queue window; production write | about 136 MB estimated, a peak of about 30 MB transient space, minutes of table locks, no data change | any deletion; any other maintenance | within about six weeks, or sooner if headroom falls under 60 MB; **not before the ledger** |
+| A10 | **Archive/retention mechanism for diagnostic events** | as rehearsed on the replica | anything before the ledger holds data | before more than one office |
+| A11 | **Backup prune** (`npm run backup:prune -- --attended` with both production flags) for the exact list the dry run prints | about 263 MB if all 35 backups verify (24 runs; 11 kept), after a restore rehearsal | any other deletion | **before about 22 October** (file storage) |
+| A12 | **Any paid capacity** | nothing is requested; the evidence does not support it | | |
 
 ## 5. How each step is done and undone (full commands and stop conditions: `MIGRATION-PLAN.md`)
 
@@ -48,4 +53,4 @@ R1 one database pass is not interruptible without the hard bound (A6). R2 capaci
 
 ## 8. What this phase did NOT do
 
-Merge, deploy, apply a migration, read or write production, change a flag, activate any office, contact anyone, spend money, or touch the Hermes branch.
+Merge, deploy, apply a migration, **write** to production, change a flag, activate any office, contact anyone, spend money, or touch the Hermes branch. (Phase 9 did read production, read-only, under A3 only.)

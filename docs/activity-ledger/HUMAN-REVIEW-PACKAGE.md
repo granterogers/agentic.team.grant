@@ -72,3 +72,38 @@ then: the office's credential families (Slack, OpenAI, Supabase, Notion, Google,
 
 `npx tsx scripts/gate/run.ts --tier critical` and `--tier extended --rebuild`; `bash scripts/isolated/activity-ledger-sabotage.sh` (56 sabotages, in batches of ten or eleven); `npx tsx scripts/isolated/activity-redaction.ts post`; `npx tsx scripts/isolated/activity-external-attack.ts post` (run on a clone, never on `post`);
 `bash scripts/isolated/activity-migration-rehearsal.sh`; `npx tsx scripts/isolated/activity-scaling.ts <clone>`.
+
+## 8. Phase 9 reconciliation (12 October 2026): exactly what a person must read
+
+**No human review has taken place, and none is claimed.** Nothing was sent to any reviewer. The files below are the whole inspection surface; everything else in the pull request is tests, harnesses, documentation and the Team HQ page.
+
+| # | File | sha256 at the Phase 9 commit | Lines | Why a person must read it |
+|---|---|---|---|---|
+| 1 | `migrations/1060_one_ledger_of_activity_records_what_no_other_table_holds.sql` | `6a680002590130cd771acd29042a59a407bdfad0a4885d10019823ba4f6ecf28` | see `wc -l` | the redactor, the writers, the external door, the append-only triggers, the grants and revokes, the diagnostic cap |
+| 2 | `migrations/1061_the_activity_read_model_reads_each_table_that_owns_the_state.sql` | `8b535909ae8b036c96c23b2b56242086b3047b6bb72baa245d002865b6eca9e4` | 1,073 | the read model's dynamic SQL, office isolation, the time budget, the page wrappers, the health keys added in the capacity audit |
+| 3 | `migrations/1062_a_held_back_over_budget_agent_is_recorded_in_the_activity_ledger.sql` | `07c26ad8eb700e0fc79f8504ea60faccd90db0a97a3d59bb66b66ab90fd40534` | 67 | the one best-effort `perform` spliced into a live function |
+| 4 | `src/text/secrets.ts` | `5b37e02263682d1b0e9e63ba304e62e705b07b692ea2d3b9d36a1b41dfd68413` | 270 | the TypeScript twin of the redactor (`redactStrict`); parity with the SQL is proved, not assumed |
+| 5 | `src/activity/record.ts` | `602347b2c79626a37d3039cadbe984c46e7eb542be359797fd02b47d88d076f5` | 132 | the worker's best-effort recording call (must never raise) |
+| 6 | `src/activity/switch.ts` | `8cfa618a044550944b44ab931bbd21b64d93ff75cac3b444ad07120449871636` | 294 | the operator's activation tool: the plan, the kill switch, the per-office list |
+| 7 | `supabase/functions/hq-api/index.ts` | `7e2a7688aa087434da33b47b9fc6dcf8e3fac902a746274b5fde7e192d3a0c41` | the four `activity_*` sections and the timeout mapping only | the gateway's deadline, 504 mapping (including a platform 57014) and error bodies |
+
+Also worth a glance, not a security surface: `src/activity/indexes.ts` (the concurrent index builder: drops an invalid index it finds, builds one at a time) and `src/activity/switch-cli.ts`.
+
+### Checklist (tick each against the file, not against this document)
+
+| Area | Where | Ask |
+|---|---|---|
+| `SECURITY DEFINER` | 1060, 1061, 1062 (every `create function`) | Is each definer function needed, and does each do only its one job? None may take a caller-supplied office without checking it |
+| `search_path` | each function's `set search_path` clause | Pinned to `pg_catalog` (and `public` or empty) with every object qualified; none left to the caller |
+| Privilege grants | the revokes and grants at the end of 1060 and 1061 | `app.*` executable by the owner only; the four `public.activity_*` wrappers `service_role` only; the three tables owner-only. **Production facts (Q22, Q23, 12 Oct): `service_role` has no USAGE on schema `app`; `authenticated` and `anon` neither; a new `public` table by `postgres` grants `service_role` full DML by default, so the `revoke all ... from service_role` is load-bearing and must be confirmed against the final table ACLs after step 1** |
+| Office isolation | the `office_id` predicates in `activity_read`, `activity_chain`, `activity_for_the_page` | Every source filters to the caller's office before anything is returned; a deployment-wide read is operator-only (`native_table_bytes` is null for a person's office) |
+| Append-only integrity | the update, delete and truncate triggers and the office write-once trigger in 1060 | A ledger row cannot change or leave; a replayed key adds nothing |
+| External-worker authority | `app.record_external_activity`, the provenance marker, the caps | An outside worker can only write `external` rows of the listed types, never approve or decline, never name an office it does not hold; caps of 300 an hour a worker and 1,000 an hour and 4,000 a day an office. Known and open: the worker name is caller-asserted (F10) |
+| Credential redaction | `app.activity_redact` and `redactStrict` | 4,000 character bound, NFKC and invisible characters removed, the credential families covered; the documented limitations in section 4 are accepted or not |
+| Approval provenance | the approval source in `activity_read` | An approval is shown as decided by a person only when the approval row says so; an agent's action is never shown as the person's |
+| Delivery provenance | the delivery source and the error-text handling | A delivery is attributed to the job's office and channel; error text is withheld from a person who may not see it |
+| Read timeouts | the budget in `activity_read` (PT504), the gateway deadline | The cooperative budget, the gateway abort and the 504 mapping behave as `READ-TIME-BOUND.md` says; **the role-level bound is a separate decision (A6)**. Live role settings are in `PRODUCTION-BASELINE-2026-10-12.md` section 7 |
+| Rate limits and caps | `record_activity_safely`, the external door | The diagnostic cap is 500 a day an office (soft under concurrency, F8 L2); replays are exempt |
+| Idempotency | the `(office_id, idempotency_key)` unique index and `on conflict do nothing` | The same key twice is one row; a different payload under the same key returns the first (accepted, F10) |
+
+The review record at the top of this file stays **unsigned** until a named person writes into it.

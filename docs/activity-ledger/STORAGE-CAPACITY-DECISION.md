@@ -2,6 +2,23 @@
 
 11 October 2026. Branch `release/activity-ledger-v1`, PR #462 (draft). **No production access of any kind was used for this document.** Nothing was deployed, migrated, activated, deleted, rewritten or bought.
 
+> ## UPDATE, 12 October 2026 (Phase 9): the live baseline has been read
+>
+> Under approval A3 (read-only) production was read at 08:11 to 08:16 UTC. **`PRODUCTION-BASELINE-2026-10-12.md` supersedes every UNVERIFIED and INFERRED production figure below.** What changed:
+>
+> | | 11 October (below) | 12 October, MEASURED-LIVE |
+> |---|---|---|
+> | Database used / free | 374.8 MB / 125 MB (9 Oct, recorded) | **381.5 MB / 118.5 MB** |
+> | Existing growth | 0.75 MB a day | **about 1.4 to 2.2 MB a day** |
+> | Runway to the 500 MB allowance | 143 days with the ledger | **about 50 to 80 days, with or without the ledger** (49 at 2.2 MB a day) |
+> | Ledger one-off cost | 6.4 MB | **7.0 MB** on today's row counts (transitions 169,922 rows) |
+> | Migration gate | 30 MB, not yet tested | **31.5 MB against 118.5 MB free: PASS (3.8 times)** |
+> | File storage | 504.7 MB (9 Oct) | **602.9 MB of 1 GB, +36 MB a night: full about 22 to 24 October** |
+> | Bloat | modelled | **estimated 136 MB wasted** (jobs 81, events 20, inference 16, deliveries 14, other 5); Q06 unavailable |
+> | Event rate ceiling | about 240 a day (estimated) | **142 to 163 executed plan steps a day for the whole deployment, so at most about 330 events a day** |
+>
+> The recommendation changes from **D to A for the ledger** (deploy within the existing capacity; no purchase), with two things that are **not** about the ledger and are time-bound: **A11 (backup prune) before about 22 October**, and **A9 (table rewrite) within about six weeks**. The sections below keep the 11 October reasoning and figures as written; where they differ, this box and the baseline win.
+
 Evidence labels, used on every number: **RECORDED** (a production reading already in this repository; the file and date are named), **MEASURED** (the isolated replica with the final candidate schema; the script is named), **INFERRED** (arithmetic from the first two), **ASSUMED**, **UNVERIFIED** (a vendor behaviour that could not be checked offline).
 
 ## 1. The decision, first
