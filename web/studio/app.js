@@ -560,13 +560,43 @@ const rememberTab = (slug, tab) => {
 let cameFrom = null
 let settingsCameFrom = null
 
+/*
+  CLOSING MOTION (M7). A surface being closed stays on screen for its exit, then is hidden. A re-open bumps the token, which
+  cancels the pending hide, so a quick toggle never leaves a surface hidden while it is wanted. Reduced motion skips the exit.
+*/
+const EXIT_MS = 200
+const wantsMotion = () => typeof matchMedia === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches
+const bumpExit = (el) => {
+  el.dataset.exitToken = String(Number(el.dataset.exitToken || 0) + 1)
+  return el.dataset.exitToken
+}
+const hideAfterExit = (el, done) => {
+  const token = bumpExit(el)
+  el.classList.add('leaving')
+  window.setTimeout(() => {
+    if (el.dataset.exitToken !== token) return
+    el.classList.remove('leaving')
+    el.hidden = true
+    if (done) done()
+    el.dispatchEvent(new Event('exited'))
+  }, EXIT_MS)
+}
+
 const sheet = (el, open) => {
   const wasOpen = !el.hidden
-  el.hidden = !open
+  const exiting = !open && wasOpen && (el.id === 'settings' || el.id === 'viewer') && wantsMotion()
+  if (open) {
+    bumpExit(el)
+    el.classList.remove('leaving')
+  }
+  if (exiting) hideAfterExit(el, () => el.classList.remove('page'))
+  else el.hidden = !open
   // A background that was only being previewed goes back to the project's own when the sheet goes away (#445).
   if (!open && el.id === 'viewer' && wasOpen) backdropUi.cancel()
   if (el.id === 'settings') {
-    el.classList.toggle('page', open)
+    // While Settings leaves, it keeps its full-page look until the exit has played (hideAfterExit removes the class).
+    if (!exiting) el.classList.toggle('page', open)
+    else el.classList.add('page')
     /*
       Settings covers the whole screen, so what it covers must not be reachable by keyboard or announced
       to a screen reader: Tab from the last section control used to walk into the shell hidden behind it.
@@ -1725,6 +1755,17 @@ function paintDock() {
   const el = $('#dock')
   if (!el) return
   const open = dockOpen()
+  if (!open && !el.hidden && !el.classList.contains('leaving') && wantsMotion()) {
+    // The drawer leaves on screen for its exit. Once it is hidden, this function runs again and takes the normal close path,
+    // which clears the content and releases the microphone.
+    el.addEventListener('exited', () => paintDock(), { once: true })
+    hideAfterExit(el)
+    return
+  }
+  if (open) {
+    bumpExit(el)
+    el.classList.remove('leaving')
+  }
   el.hidden = !open
   document.body.classList.toggle('docked', open)
   if (!open) {

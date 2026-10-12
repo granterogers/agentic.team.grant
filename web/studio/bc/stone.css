@@ -417,17 +417,16 @@
 .bdbody .btn.quiet:not([disabled]) { color: var(--ink-2, inherit); }
 .bdactions button[disabled] { opacity: 0.45; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .bdthumb, .bdseg { transition: none; } }
-/* While a background is being previewed the sheet steps to the corner and stops dimming, so the canvas can be judged. */
+/*
+  While a background is being previewed the sheet stays exactly where it was opened, at its size, and only the backdrop lets go:
+  the canvas behind it is unblurred and un-dimmed so it can be judged (M11/M5 review: the dialog used to move to a corner and
+  change width when a texture was picked, which the brief forbids). The sheet keeps all its fields, so its height does not change.
+*/
 body.behind:has(#viewer.bd-preview) .shell { filter: none; transform: none; }
-#viewer.bd-preview { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; place-items: start end; pointer-events: none; padding-top: 64px; }
-#viewer.bd-preview .sheet { pointer-events: auto; max-height: calc(100dvh - 80px); width: min(440px, 100%); }
-/* Previewing: only the background picker stays, so the sheet is a small panel at the corner and the canvas is visible. */
-#viewer.bd-preview .sheet .field:not(.bdfield), #viewer.bd-preview .sheet .chead p { display: none; }
+#viewer.bd-preview { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; pointer-events: none; }
+#viewer.bd-preview .sheet { pointer-events: auto; }
 /* One column: the label above the picker, not squeezed into the 108px label column the other fields use. */
 [data-experience='basecamp'] .sheet:has([data-icon-picker]) .field.bdfield,
 .field.bdfield { grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: stretch; }
 .field.bdfield > .t-label { padding-top: 0; }
-@media (max-width: 760px) {
-  #viewer.bd-preview { place-items: end center; padding: 0; }
-  #viewer.bd-preview .sheet { max-height: 62dvh; width: 100%; border-radius: 16px 16px 0 0; }
-}
+
