@@ -3,7 +3,39 @@
 Candidate: branch `claude/busy-darwin-21mr9n` at `6857c7be` (pushed). It contains all of `origin/main` at `a37188da` (verified
 12 October 2026: `git merge-base --is-ancestor origin/main HEAD` succeeds). Production: https://ai-team-hq.vercel.app
 
-## Status: READY FOR RELEASE, pending the production authorisation in section 5
+## Status: DEPLOYED to production (13 October 2026). Workspace checks on production are NOT complete; see section 6.
+
+## 0. Deployment record
+
+- `main` fast-forwarded from `a37188da` to `a5363d94` (`git push origin a5363d94:refs/heads/main`, no force).
+- Deployment `dpl_FGxJYkQsYV5543Pr5zLveujwbPSD` created by `scripts/deploy/hq-page-delta.ts --root=web/studio --go`, state READY,
+  target production, `meta.gitCommitSha` `a5363d94816ef6978f73289c6358bbbc44f1e15e`, `deployedBy` `deploy:hq-page`.
+- Rollback point (the deployment that was live before): `dpl_EwZ7ghJP8uutmxVzyeruQUZvme6C`. Rollback = promote it in Vercel, or redeploy
+  the saved copy of the 16 files in `.out/release/live-baseline-a37188da/` with the same script and flags.
+- Before the write: the 16 changed files matched `origin/main` `a37188da` on the live site (checked twice). The dry compare named
+  only `out/api/notebook*` build outputs as live-only, which the script excludes by rule. `config.js` was generated with
+  `npm run config:site` and is byte-identical to the live file; it is gitignored and was not committed.
+- After the write: the 16 files served from `ai-team-hq.vercel.app` are byte-identical to the branch at `a5363d94`.
+- Flags: `ALLOW_PRODUCTION_CHECKS=1` and `ALLOW_PRODUCTION_WRITES=1` were set for this one deployment and for the read-only checks
+  in section 6, on Grant's approval.
+
+## 6. Production verification (13 October 2026)
+
+- Landing screen, read-only (`scripts/verify/probe-production-landing.ts`, no non-GET request): renders with the default look
+  `silver` (Slate & Silver) when nothing is stored; renders with the stored Dark choice; no page errors. A first cold load took
+  13 seconds to draw and a later one 2 seconds, which is recorded as an observation.
+- NOT verified on production: the workspace (Global Settings, background controls, canvas, modules, Team Chat, calendar,
+  documents). Signed out, the live root shows only the landing screen. Reaching the workspace uses the public Sample Office,
+  whose route sent a `POST` to the production sign-in function (`/functions/v1/signin`, creating a visitor session). That was the
+  only write the browser made, and it was made once; I did not repeat it. In that visit the workspace stayed on "Connecting to
+  your office" for six seconds and did not show data. Those workspace checks were run instead against a local server with the
+  byte-identical release files (sections 3 and the checklist), and they passed. They are not production evidence.
+- Authenticated workflows (Team Settings save, appearance saved to an account, background upload, gateway document thumbnails,
+  agent configuration) remain untested: no signed-in account was used, and none was authorised.
+- Lint and tests run before the deploy are as recorded in section 3.
+
+Follow-up for Grant: a production workspace check needs either a signed-in test account authorised for this, or a decision that
+the Sample visit is acceptable for the purpose; and the slow cold start (13 s) should be examined on the platform side.
 
 Implementation and available QA are complete for the scope recorded in `docs/ux-overhaul/CHECKLIST.md`. Known limits remain
 and are listed there. The release itself has not been performed: it needs the production flags, which have not been set.
