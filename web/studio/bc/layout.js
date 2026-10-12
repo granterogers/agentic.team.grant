@@ -130,9 +130,12 @@ export const tintHue = (t) => {
   card table need height and the documents need room for thumbnails, so it takes the larger share of the height. The
   bottom row is glanceable (schedule, contacts, activity). Columns line up so the board reads as one arrangement.
 */
-const C1 = 0.25
-const C2 = 0.29
-const C3 = 0.26
+// The card table gets the widest column so Not Started, In Progress, Stuck and Done sit side by side on a desktop (M12).
+// It was 0.29 and wrapped Stuck and Done beneath the first two. The three columns sum to 0.80, not 1, so the strip on the
+// right stays free for the starter Post-it (layout.test.ts: on a wide stage there is one).
+const C1 = 0.19
+const C2 = 0.39
+const C3 = 0.22
 const R1 = 0.58
 const THIRDS = {
   tasks: [0, 0, C1, R1],

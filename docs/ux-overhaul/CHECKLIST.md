@@ -30,7 +30,7 @@ Branch: `claude/busy-darwin-21mr9n`. Production page: `ai-team-hq.vercel.app`.
 - [x] M9. Global Settings. The top-right three-dot control now reads Global Settings (title and accessible name), distinct from Project Settings. It was already a direct control; a dropdown menu was not built.
 - [ ] M10. Team Settings: real per-agent configuration backed by existing contracts (no invented controls).
 - [ ] M11. Canvas drag and resize reliability for notes and modules; persistence after reload.
-- [ ] M12. Card Table default width shows Not Started, In Progress, Stuck, Done together.
+- [~] M12. Card Table default width. Overview preset widened the board from 0.29 to 0.39 of the stage (layout.js). Measured at 1440: Not Started, In Progress and Stuck now sit side by side; Done still wraps beneath. Four readable columns need about 0.48, which would remove the starter Post-it strip that layout.test.ts requires, so this is a recorded trade-off, not a finished item. Open: horizontal scroll for narrow widths, and whether to accept a wider board with the starter note hidden on desktop.
 - [ ] M13. Hamburger direct module navigation with maximised view and return to canvas.
 - [ ] M14. Team Chat: inline avatars, full-width bodies, drawer animation.
 - [ ] M15. Document thumbnails (PDF first page, images, markdown/text, spreadsheet, fallbacks).
