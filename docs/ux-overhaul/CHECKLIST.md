@@ -113,3 +113,48 @@ Re-verified after the fixes: vitest tests/web and tests/studio, 498 pass in 32 f
 ## Verification log
 
 - M1: `npx vitest run tests/web` (16 files). Result recorded in the commit message.
+
+## Final verification pass (13 October 2026, after the second review)
+
+Recorded from runs in this session. Each line names the probe that produced it.
+
+- Exit defects, FIXED and regression-tested in `scripts/verify/probe-exit-races.ts` (6 checks, all green):
+  reopening the viewer during its exit keeps it open with focus and the blur; closing that reopened viewer returns focus into
+  the workspace; a repaint during the chat drawer's exit does not cut the fade; Settings keeps the workspace inert and
+  unclickable while it leaves, then releases it and returns focus to the opener (opened from the keyboard); rapid repeated
+  Settings open and close ends consistent with the history stack. Pre-fix behaviour: the Settings check was red on the
+  previous code. The viewer and dock checks were not separately proven red on the old code: the old-code run stopped at the
+  initial menu click, so treat those two as regression guards, not proven discriminators.
+- Two pre-existing defects found and fixed on the way: the opener was captured after the workspace went inert, so focus was
+  never returned (`sheet()`); and Settings' opener is redrawn when it closes, so focus is returned to its live replacement.
+- Activity Log colour, FIXED: `bc/activity.css` waiting and warning rules read `--bc-state` again. The light value is darkened
+  to `#8f4220` (4.9:1 on the silver canvas; the inherited `#a2502f` measured 3.9:1); dark stays `#fbbda8` (11.7:1).
+  `scripts/verify/probe-activity-state.ts` checks both colour modes, the warm hue, and 4.5:1. The Activity Log's functionality,
+  data, migrations and routing are unchanged; only three colour rules in its stylesheet changed.
+- M13 maximised module navigation, VERIFIED: `scripts/verify/probe-modules.ts` opens all seven modules and measures the open
+  view: desktop 98% of width and 97% of height, phone 100% of both. Each closes back to the project it came from. No page errors.
+- M17 screenshot and overflow matrix, RUN: `scripts/verify/probe-matrix.ts` captures home, overview, chat, Settings and the
+  maximised Docs module at 1920, 1440, 820 (tablet) and 390 (phone), light and dark: 40 captures, 0 horizontal overflows, 0 page
+  errors. The PNGs are in `.out/probe/matrix-*`.
+- Card Table, DECISION recorded: at 1440 the board shows four stages in one row. On a phone, the maximised Card Table stacks
+  its stages into one vertical list with a "The list instead" control, because four columns at 390 px are not legible. Every
+  card remains reachable by scrolling. This replaces the earlier open item "four columns on phone".
+- M15 documents, PARTIAL, limitation stated: real first-page PDF thumbnails are proven through `probe-pdf-thumb.ts` on the
+  three repository samples. In the product, the document tiles show a typed label (PDF, DOC) until a person opens the file
+  in the viewer, which fills the on-device cache. Those seeded documents have no bytes behind them in this environment, so the
+  open-to-thumbnail path cannot run here. Images show a real picture, and spreadsheets, files and audio show deliberate
+  glyphs. Signed-in gateway warm-up is not verified (needs a signed-in writer).
+- Browser evidence, PASS (page errors none in every run): probe-backdrop (textures and sliders), probe-drag and probe-canvas
+  (drag, resize, zoom, overlap, touch), probe-slider-touch, probe-entry and probe-entry-interactions (sign-in tabs, invalid
+  address refused), probe-keyboard, probe-calendar, probe-team, probe-project, probe-dialog-stable, probe-pdf-thumb, probe-history,
+  probe-scheme, probe-review, probe-axe (zero violations on ten surfaces, light and dark), probe-close-motion, probe-motion.
+- Authenticated functionality (item 3), BLOCKED, precise limitation: Team Settings save, appearance persistence, background
+  upload persistence, document thumbnail generation through the gateway and agent configuration all need a signed-in writer.
+  The only sign-in account the product offers for UX work is the Sample Person in production, and reaching production needs
+  `ALLOW_PRODUCTION_CHECKS=1` and, for writes, `ALLOW_PRODUCTION_WRITES=1`, which have not been authorised. A local backend is
+  not running: Docker is not running, the Supabase Edge Functions and Auth are not served, and `scripts/isolated/replica.sh`
+  builds only the database schema from migrations (Postgres 16 is installed), so it cannot serve the gateway. Alternatives
+  completed: the browser-side persistence paths (appearance, backdrop, sliders) are verified in unsigned prototype storage, and
+  the signed-out entry and refusal paths are verified against the real page.
+- M18 independent review of the final combined change set: requested after this entry; findings to be recorded here.
+- M19 merge and M20 deployment: not started. Both require the production authorisation described in RELEASE-CANDIDATE.md.

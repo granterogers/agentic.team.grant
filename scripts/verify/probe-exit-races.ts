@@ -172,6 +172,42 @@ try {
     { during, after },
   )
 
+  // 4. Rapid repeated opening and closing of Global Settings, with no pauses between presses. The last press decides the
+  // final state, and the history stack must match it: a Back afterwards must not reopen a page that is shut.
+  for (let i = 0; i < 4; i++) {
+    await page.locator('[data-bc-settings]').first().click({ force: true })
+    await page
+      .locator('[data-stg-back]')
+      .first()
+      .click({ force: true, timeout: 2000 })
+      .catch(() => undefined)
+  }
+  await page.locator('[data-bc-settings]').first().click({ force: true })
+  await page.waitForTimeout(900)
+  const openAfterRapid = await page.evaluate(
+    () => !(document.getElementById('settings')?.hidden ?? true),
+  )
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(600)
+  const rapid = await page.evaluate(() => ({
+    settingsHidden: document.getElementById('settings')?.hidden ?? null,
+    leaving: document.getElementById('settings')?.classList.contains('leaving') ?? null,
+    shellInert: document.querySelector('.shell')?.hasAttribute('inert') ?? null,
+    historySettingsEntry: history.state?.settings === true,
+  }))
+  record(
+    'rapid repeated Settings open and close ends in a consistent state',
+    openAfterRapid &&
+      rapid.settingsHidden === true &&
+      rapid.leaving === false &&
+      rapid.shellInert === false &&
+      rapid.historySettingsEntry === false,
+    {
+      openAfterRapid,
+      rapid,
+    },
+  )
+
   record('no page errors', errors.length === 0, errors.slice(0, 3))
   await context.close()
 } finally {

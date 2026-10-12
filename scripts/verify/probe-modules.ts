@@ -91,6 +91,18 @@ try {
       await item.click({ force: true })
       await page.waitForTimeout(700)
       const closable = (await page.locator('.bcexpx').count()) > 0
+      // Maximised means the open view fills most of the screen, not that it merely opened.
+      const fill = await page.evaluate(() => {
+        const e = document.querySelector('.bcexp')
+        const panel =
+          e === null ? undefined : [...e.children].find((c) => !c.classList.contains('bcexpback'))
+        const r = panel?.getBoundingClientRect()
+        if (r === undefined) return null
+        return {
+          widthShare: Math.round((r.width / window.innerWidth) * 100) / 100,
+          heightShare: Math.round((r.height / window.innerHeight) * 100) / 100,
+        }
+      })
       await page.screenshot({
         path: join(OUT, `module-${id}-${name}${scheme === '' ? '' : `-${scheme}`}.png`),
       })
@@ -102,7 +114,14 @@ try {
         if (id === 'sources') await page.screenshot({ path: join(OUT, 'closed-sources.png') })
         await page.screenshot({ path: join(OUT, `closed-${id}-${name}.png`) })
       }
-      results[id] = { closable, closedTo: backTo, returnedToProject: backTo === projectUrl }
+      const maximised = fill !== null && fill.widthShare >= 0.8 && fill.heightShare >= 0.6
+      results[id] = {
+        closable,
+        maximised,
+        fill,
+        closedTo: backTo,
+        returnedToProject: backTo === projectUrl,
+      }
     }
     console.log(
       JSON.stringify({ viewport: name, projectUrl, results, pageErrors: errors.slice(0, 2) }),
