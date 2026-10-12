@@ -1137,7 +1137,7 @@ const wireExpanded = (root) => {
         reference captured before the redraw - #197's lesson, which cost four
         attempts the first time.
       */
-      const back = document.querySelector(`[data-bc-expand="${lastOpener}"]`)
+      const back = expandOpenerNow()
       /* A module header is not focusable; its title button is. */
       ;(back?.querySelector?.('.bcmodopen') ?? back)?.focus()
     })
@@ -1147,6 +1147,28 @@ const wireExpanded = (root) => {
 }
 
 let lastOpener = ''
+
+/*
+  The control to focus when an expanded module closes: the module's own opener if it is on screen, otherwise the menu button.
+  A module opened from the project menu has no header of its own showing, and its menu item is gone once the menu closes, so
+  without the fallback focus fell to the body on every module close.
+*/
+const expandOpenerNow = () => {
+  // A menu item that has closed is still in the page, hidden; only a control a person can see can take focus.
+  const shown = [...document.querySelectorAll(`[data-bc-expand="${lastOpener}"]`)].find(
+    (n) => n instanceof HTMLElement && n.offsetParent !== null,
+  )
+  return shown ?? document.querySelector('[data-bc-menu]')
+}
+
+/*
+  Called once the closing module has been redrawn away. The exit animation draws the shell again when it ends, which replaces
+  any control focused before that, so focus is given back here, after the redraw.
+*/
+export const restoreExpandFocus = () => {
+  const back = expandOpenerNow()
+  ;(back?.querySelector?.('.bcmodopen') ?? back)?.focus()
+}
 
 /* ----------------------------- the page menu, and the voice button ------ */
 
@@ -1208,7 +1230,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return
   if (document.querySelector('[data-bc-expanded]') === null) return
   ctx?.closeExpanded?.()
-  const back = document.querySelector(`[data-bc-expand="${lastOpener}"]`)
+  const back = expandOpenerNow()
   ;(back?.querySelector?.('.bcmodopen') ?? back)?.focus()
 })
 

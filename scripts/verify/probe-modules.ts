@@ -107,10 +107,16 @@ try {
         path: join(OUT, `module-${id}-${name}${scheme === '' ? '' : `-${scheme}`}.png`),
       })
       let backTo: string | null = null
+      let focusAfterClose = false
       if (closable) {
         await page.locator('.bcexpx').first().click()
         await page.waitForTimeout(900)
         backTo = new URL(page.url()).pathname
+        // Focus after the module closes must be on a live control in the workspace, not lost to the body.
+        focusAfterClose = await page.evaluate(() => {
+          const a = document.activeElement
+          return a instanceof HTMLElement && a !== document.body && a.isConnected
+        })
         if (id === 'sources') await page.screenshot({ path: join(OUT, 'closed-sources.png') })
         await page.screenshot({ path: join(OUT, `closed-${id}-${name}.png`) })
       }
@@ -121,6 +127,7 @@ try {
         fill,
         closedTo: backTo,
         returnedToProject: backTo === projectUrl,
+        focusAfterClose,
       }
     }
     console.log(

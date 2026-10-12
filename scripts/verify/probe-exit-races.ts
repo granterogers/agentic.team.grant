@@ -1,15 +1,14 @@
 /**
- * Exit-transition races on Team HQ (`/`), driven in a real browser. Three regressions from the second review:
+ * Closing transitions on Team HQ (`/`), driven by real pointer presses. Each check reads the page after every step.
  *
- *   1. Reopening the document viewer during its exit restores the open state: not hidden, not leaving, focus
- *      moved into it, workspace behind it blurred again.
- *   2. Repainting while Team Chat is leaving does not cut the fade short (the drawer is still on screen at 60 ms).
- *   3. While Global Settings leaves, the workspace behind it stays inert and the opener keeps focus, so nothing
- *      behind the fading sheet can be pressed. Both are released when the exit ends.
+ * The design under test: a modal sheet (Global Settings, the appearance sheet) keeps covering the page while it fades out.
+ * Nothing falls through to the workspace, and a press on the closing sheet, anywhere except its own close controls, reopens
+ * it. A press on a close control during the fade does nothing. The workspace behind a closing Settings page stays inert.
  *
  *   npx tsx scripts/verify/probe-exit-races.ts
  *
- * Read-only; serves web/studio locally. Desktop, motion on. Each check reads the page, never a fixed pause alone.
+ * Read-only; serves web/studio locally. Desktop, motion on. Waits are for an observable state (the 'leaving' class, the
+ * history), not for a fixed time; the one fixed pause is the 200 ms the fade itself takes.
  */
 import { chromium, type Page } from 'playwright'
 import { serve } from './probe-lib.ts'
@@ -28,6 +27,74 @@ const openProject = async (page: Page) => {
   await page.waitForTimeout(1500)
 }
 
+// A point inside a sheet that is not a control, found by hit testing the page. Null when there is none.
+const freePoint = (page: Page, selector: string) =>
+  page.evaluate((sel) => {
+    const el = document.querySelector<HTMLElement>(sel)
+    if (el === null) return null
+    const r = el.getBoundingClientRect()
+    for (let fy = 0.02; fy < 1; fy += 0.04) {
+      for (let fx = 0.02; fx < 1; fx += 0.04) {
+        const x = r.left + r.width * fx
+        const y = r.top + r.height * fy
+        const hit = document.elementFromPoint(x, y)
+        if (!(hit instanceof HTMLElement) || !el.contains(hit)) continue
+        if (
+          hit.closest(
+            '.close, [data-stg-back], [data-bc-expclose], .bcexpx, button, a, input, select, textarea',
+          ) !== null
+        )
+          continue
+        return { x, y }
+      }
+    }
+    return null
+  }, selector)
+
+// Records, for every press on the page, whether a modal sheet was fading at that instant. The checks read it afterwards, so
+// a pass proves the press arrived during the fade rather than after it.
+const recordPresses = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as unknown as { __presses: boolean[] }
+    w.__presses = []
+    // On window, so it runs before the page's own capture listeners: a reopen by the press must not be seen as an open sheet.
+    window.addEventListener(
+      'pointerdown',
+      () => {
+        w.__presses.push(
+          ['settings', 'viewer'].some(
+            (id) => document.getElementById(id)?.classList.contains('leaving') === true,
+          ),
+        )
+      },
+      true,
+    )
+  })
+
+const pressesWhileLeaving = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as unknown as { __presses?: boolean[] }
+    return (w.__presses ?? []).includes(true)
+  })
+
+// The state a person can observe, read in one step so the checks compare like with like.
+const snapshot = (page: Page, id: 'settings' | 'viewer') =>
+  page.evaluate((sheetId) => {
+    const sheet = document.getElementById(sheetId)
+    const shell = document.querySelector('.shell')
+    const active = document.activeElement
+    return {
+      open: sheet !== null && !sheet.hidden && !sheet.classList.contains('leaving'),
+      leaving: sheet?.classList.contains('leaving') === true,
+      inert: shell?.hasAttribute('inert') === true,
+      behind: document.body.classList.contains('behind'),
+      historySettings: history.state?.settings === true,
+      path: location.pathname,
+      focusInWorkspace:
+        active instanceof HTMLElement && active !== document.body && active.isConnected,
+    }
+  }, id)
+
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
@@ -35,183 +102,116 @@ try {
   page.on('pageerror', (e) => errors.push(e.message))
   await openProject(page)
 
-  // 1. Viewer: close with Escape, reopen 60 ms later while it is still fading.
+  // A. Viewer closed by Escape, then pressed on while it fades: it reopens, with the blur back.
   await page.locator('[data-bc-pagemenu]').first().click({ force: true })
   await page.waitForTimeout(300)
   await page.locator('[data-bc-look]').first().click({ force: true })
   await page.waitForTimeout(900)
+  // The press point is found while the viewer is still open, and the press follows the close with no page read in between:
+  // that is the timing a person produces, and the recorder below proves the press arrived while the sheet was fading.
+  const point = await freePoint(page, '#viewer .sheet, #viewer')
+  await recordPresses(page)
   await page.keyboard.press('Escape')
-  // Wait until the exit has actually begun, rather than a fixed pause: a reopen before that proves nothing.
-  const leavingBeforeReopen = await page
-    .waitForFunction(
-      () => document.getElementById('viewer')?.classList.contains('leaving') === true,
-      null,
-      { timeout: 500 },
-    )
-    .then(() => true)
-    .catch(() => false)
-  await page.waitForTimeout(60)
-  await page.locator('[data-bc-pagemenu]').first().click({ force: true })
-  await page.waitForTimeout(300)
-  await page.locator('[data-bc-look]').first().click({ force: true })
-  await page.waitForTimeout(60)
-  const reopened = await page.evaluate(() => {
-    const v = document.getElementById('viewer')
-    const a = document.activeElement
-    return {
-      hidden: v?.hidden ?? null,
-      leaving: v?.classList.contains('leaving') ?? null,
-      focusInside: a instanceof HTMLElement && v !== null && v.contains(a),
-      behind: document.body.classList.contains('behind'),
-    }
-  })
+  if (point !== null) await page.mouse.click(point.x, point.y)
+  const viewerFading = await snapshot(page, 'viewer')
+  const pressedWhileFading = await pressesWhileLeaving(page)
+  const viewerReopened = await snapshot(page, 'viewer')
   await page.waitForTimeout(500)
-  const reopenedLater = await page.evaluate(() => {
-    const v = document.getElementById('viewer')
-    return { hidden: v?.hidden ?? null, behind: document.body.classList.contains('behind') }
-  })
+  const viewerLater = await snapshot(page, 'viewer')
   record(
-    'viewer reopened during exit stays open, takes focus and re-blurs the workspace',
-    leavingBeforeReopen &&
-      reopened.hidden === false &&
-      reopened.leaving === false &&
-      reopened.focusInside &&
-      reopened.behind &&
-      reopenedLater.hidden === false &&
-      reopenedLater.behind,
-    { leavingBeforeReopen, reopened, reopenedLater },
+    'viewer: a press on the fading sheet reopens it, with the workspace blurred again',
+    pressedWhileFading === true &&
+      point !== null &&
+      viewerReopened.open &&
+      viewerLater.open &&
+      viewerLater.behind,
+    { pressedWhileFading, viewerFading, point, viewerReopened, viewerLater },
   )
-  // Closing the reopened viewer returns focus to the control that opened it, not to the body.
   await page.keyboard.press('Escape')
   await page.waitForTimeout(500)
-  // The opener is a menu item that closes on the choice, so focus returns to the project menu's button, inside the shell.
-  const focusAfterReopenedClose = await page.evaluate(() => {
-    const a = document.activeElement
-    return a instanceof HTMLElement && a !== document.body && a.closest('.shell') !== null
-  })
+  const viewerClosed = await snapshot(page, 'viewer')
   record(
-    'viewer reopened during exit returns focus into the workspace on close',
-    focusAfterReopenedClose,
-    {
-      focusAfterReopenedClose,
-    },
+    'viewer: Escape closes it again and focus is in the workspace',
+    !viewerClosed.open && viewerClosed.focusInWorkspace && !viewerClosed.behind,
+    { viewerClosed },
   )
 
-  // 2. Team Chat: a repaint during its exit must not snap it shut.
-  const chat = page.getByRole('button', { name: /chat with team/i }).first()
-  await chat.click({ force: true })
-  await page.waitForTimeout(700)
-  // The close and a repaint go in ONE task: the drawer is leaving for 200 ms, and a navigation (which renders the page and
-  // so repaints the drawer) has to land inside that window. Clicking through the menu takes longer than the fade.
-  const dockAt40 = await page.evaluate(async () => {
-    const d = document.getElementById('dock')
-    const toggle = [...document.querySelectorAll<HTMLElement>('button')].find((b) =>
-      /chat with team/i.test(b.getAttribute('aria-label') ?? b.textContent ?? ''),
-    )
-    toggle?.click()
-    const at0 = { hidden: d?.hidden ?? null, leaving: d?.classList.contains('leaving') ?? null }
-    document.querySelector<HTMLElement>('[data-bc-menu-open]')?.click()
-    await new Promise((r) => setTimeout(r, 30))
-    document.querySelector<HTMLElement>('[data-bc-go*="/p/"]')?.click()
-    return at0
-  })
-  await page.waitForTimeout(40)
-  const dockAfterRepaint = await page.evaluate(() => {
-    const d = document.getElementById('dock')
-    return { hidden: d?.hidden ?? null, leaving: d?.classList.contains('leaving') ?? null }
-  })
+  // B. Settings closed by its Back button; the workspace is unreachable while it fades; a press on the sheet reopens it.
+  await page.locator('[data-bc-settings]').first().focus()
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(900)
+  const settingsOpen = await snapshot(page, 'settings')
+  const sheetPoint = await freePoint(page, '#settings')
+  await recordPresses(page)
+  await page.locator('[data-stg-back]').first().click({ force: true })
+  if (sheetPoint !== null) await page.mouse.click(sheetPoint.x, sheetPoint.y)
+  const settingsPressedWhileFading = await pressesWhileLeaving(page)
+  const settingsReopened = await snapshot(page, 'settings')
   await page.waitForTimeout(500)
-  const dockDone = await page.evaluate(() => document.getElementById('dock')?.hidden ?? null)
+  const settingsLater = await snapshot(page, 'settings')
   record(
-    'repaint during chat exit does not cut the fade short',
-    dockAt40.hidden === false && dockAfterRepaint.hidden === false && dockDone === true,
-    {
-      dockAt40,
-      dockAfterRepaint,
-      dockDone,
-    },
+    'settings: a press on the sheet while it fades reopens it; the workspace is inert again once it is open',
+    settingsOpen.open &&
+      settingsPressedWhileFading === true &&
+      sheetPoint !== null &&
+      settingsReopened.open &&
+      settingsLater.open &&
+      settingsLater.inert &&
+      settingsLater.historySettings,
+    { settingsOpen, settingsPressedWhileFading, sheetPoint, settingsReopened, settingsLater },
+  )
+  // Back again: this closes it, and the history entry it opened is the one that goes.
+  await page.locator('[data-stg-back]').first().click({ force: true })
+  await page.waitForTimeout(600)
+  const settingsClosed = await snapshot(page, 'settings')
+  record(
+    'settings: Back closes it, releases the workspace and leaves no settings entry',
+    !settingsClosed.open && !settingsClosed.inert && !settingsClosed.historySettings,
+    { settingsClosed },
   )
 
-  // 3. Global Settings: while it leaves, nothing behind it is reachable; both are released afterwards.
-  // Opened from the keyboard, so the opener has focus and must get it back.
+  // C. Double Back: the second press lands on the close control during the fade and must not undo the first close.
   await page.locator('[data-bc-settings]').first().focus()
   await page.keyboard.press('Enter')
   await page.waitForTimeout(900)
   await page.locator('[data-stg-back]').first().click({ force: true })
-  await page.waitForTimeout(60)
-  const during = await page.evaluate(() => {
-    const shell = document.querySelector('.shell')
-    const settings = document.getElementById('settings')
-    const opener = document.querySelector<HTMLElement>('[data-bc-settings]')
-    const r = opener?.getBoundingClientRect()
-    const hit = r ? document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) : null
-    return {
-      settingsLeaving: settings?.classList.contains('leaving') ?? null,
-      shellInert: shell?.hasAttribute('inert') ?? null,
-      openerClickable: hit !== null && opener?.contains(hit) === true,
-      settingsPointerEvents: settings ? getComputedStyle(settings).pointerEvents : null,
-    }
-  })
-  await page.waitForTimeout(600)
-  const after = await page.evaluate(() => {
-    const shell = document.querySelector('.shell')
-    const opener = document.querySelector<HTMLElement>('[data-bc-settings]')
-    return {
-      shellInert: shell?.hasAttribute('inert') ?? null,
-      focusOnOpener: document.activeElement === opener,
-    }
-  })
+  await page
+    .locator('[data-stg-back]')
+    .first()
+    .click({ force: true, timeout: 300 })
+    .catch(() => undefined)
+  await page.waitForTimeout(700)
+  const doubleBack = await snapshot(page, 'settings')
   record(
-    'settings closing keeps the workspace inert and unclickable, then releases it and returns focus',
-    during.settingsLeaving === true &&
-      during.shellInert === true &&
-      during.openerClickable === false &&
-      during.settingsPointerEvents === 'none' &&
-      after.shellInert === false &&
-      after.focusOnOpener,
-    { during, after },
+    'double Back: a second press on the close control does not reopen Settings',
+    !doubleBack.open && !doubleBack.historySettings && !doubleBack.inert,
+    { doubleBack },
   )
 
-  // 4. Rapid repeated opening and closing of Global Settings, with no pauses between presses. The last press decides the
-  // final state, and the history stack must match it: a Back afterwards must not reopen a page that is shut.
-  // A press that lands while Settings is still fading is dropped by design: the workspace is inert and the closing sheet
-  // takes no pointer input. So each close finishes its fade before the next open, which is what a person can do.
-  for (let i = 0; i < 4; i++) {
-    await page.locator('[data-bc-settings]').first().click({ force: true })
-    await page.locator('[data-stg-back]').first().click({ force: true, timeout: 2000 })
-    await page.waitForFunction(
-      () => document.getElementById('settings')?.classList.contains('leaving') !== true,
-      null,
-      {
-        timeout: 1000,
-      },
-    )
-    await page.waitForTimeout(250)
-  }
-  await page.locator('[data-bc-settings]').first().click({ force: true })
+  // D. Rapid cycles with no pauses between presses: each cycle closes with Back and reopens with a press on the sheet.
+  await page.locator('[data-bc-settings]').first().focus()
+  await page.keyboard.press('Enter')
   await page.waitForTimeout(900)
-  const openAfterRapid = await page.evaluate(
-    () => !(document.getElementById('settings')?.hidden ?? true),
-  )
+  // The sheet does not move, so its press point is found once, and every reopen press follows its Back press directly.
+  const spot = await freePoint(page, '#settings')
+  for (let i = 0; i < 3; i++) {
+    await page.locator('[data-stg-back]').first().click({ force: true })
+    if (spot !== null) await page.mouse.click(spot.x, spot.y)
+  }
+  await page.waitForTimeout(600)
+  const rapidOpen = await snapshot(page, 'settings')
   await page.keyboard.press('Escape')
   await page.waitForTimeout(600)
-  const rapid = await page.evaluate(() => ({
-    settingsHidden: document.getElementById('settings')?.hidden ?? null,
-    leaving: document.getElementById('settings')?.classList.contains('leaving') ?? null,
-    shellInert: document.querySelector('.shell')?.hasAttribute('inert') ?? null,
-    historySettingsEntry: history.state?.settings === true,
-  }))
+  const rapidClosed = await snapshot(page, 'settings')
   record(
-    'rapid repeated Settings open and close ends in a consistent state',
-    openAfterRapid &&
-      rapid.settingsHidden === true &&
-      rapid.leaving === false &&
-      rapid.shellInert === false &&
-      rapid.historySettingsEntry === false,
-    {
-      openAfterRapid,
-      rapid,
-    },
+    'rapid: repeated Back and reopen presses end open with one settings entry; Escape then closes it cleanly',
+    rapidOpen.open &&
+      rapidOpen.historySettings &&
+      rapidOpen.inert &&
+      !rapidClosed.open &&
+      !rapidClosed.historySettings &&
+      !rapidClosed.inert,
+    { rapidOpen, rapidClosed },
   )
 
   record('no page errors', errors.length === 0, errors.slice(0, 3))

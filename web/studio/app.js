@@ -621,13 +621,60 @@ const stepBackFromSettings = () => {
 }
 
 const restoreSettingsFocus = () => {
-  let target = settingsCameFrom
-  // Closing Settings redraws the shell (popstate paints), which replaces the opener's node. Its replacement carries the same
-  // marker, so focus that rather than dropping focus on the body.
-  if (target !== null && !target.isConnected && target.hasAttribute('data-bc-settings'))
-    target = document.querySelector('[data-bc-settings]')
-  if (target instanceof HTMLElement && target.isConnected) target.focus()
+  const target = liveOpener(settingsCameFrom)
+  if (target !== null) target.focus()
   settingsCameFrom = null
+}
+
+/*
+  The live node that stands for a removed opener. A shell redraw replaces every node, so the opener captured before it is
+  gone, but its replacement carries the same data attribute (data-bc-settings, data-bc-expand, data-bc-pagemenu, ...). A node
+  with no replacement (a menu item whose menu has closed) gives null, and the caller picks its own fallback.
+*/
+const liveOpener = (node) => {
+  if (node === null) return null
+  if (node.isConnected) return node
+  for (const attr of node.attributes) {
+    if (!attr.name.startsWith('data-')) continue
+    const hit = document.querySelector(`[${attr.name}="${CSS.escape(attr.value)}"]`)
+    if (hit instanceof HTMLElement) return hit
+  }
+  return null
+}
+
+/*
+  A MODAL sheet that is closing is still on top and still takes presses, so nothing falls through to the workspace.
+  A press on it, anywhere but on its own close controls, reopens it: that is the deliberate way back during the fade.
+  A press on a close control during the fade does nothing, so a second Back press cannot undo the first close.
+*/
+const CLOSE_CONTROLS = '.close, [data-stg-back], [data-bc-expclose], .bcexpx'
+let swallowClick = false
+const reopenOnPress = (event) => {
+  swallowClick = false
+  for (const id of ['settings', 'viewer']) {
+    const el = document.getElementById(id)
+    if (el === null || !el.classList.contains('leaving')) continue
+    // The click that follows this press belongs to the reopen, not to the sheet: a viewer's backdrop click closes it, so it
+    // is swallowed here or the reopen would close again at once.
+    swallowClick = true
+    // The default of the press (moving focus to the pressed spot, which is not focusable) must not undo the focus this
+    // reopen gives back to the sheet.
+    if (event.target instanceof Element && event.target.closest(CLOSE_CONTROLS) !== null) return
+    event.preventDefault()
+    if (id === 'settings') bcContext.openGlobalSettings()
+    else sheet(el, true)
+    return
+  }
+}
+const swallowCloseClick = (event) => {
+  if (!swallowClick) return
+  swallowClick = false
+  event.stopPropagation()
+  event.preventDefault()
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('pointerdown', reopenOnPress, true)
+  document.addEventListener('click', swallowCloseClick, true)
 }
 
 const sheet = (el, open) => {
@@ -673,6 +720,12 @@ const sheet = (el, open) => {
         if (n === el || n.tagName === 'SCRIPT' || n.id === 'viewer') continue
         n.setAttribute('inert', '')
       }
+      // Opening Settings moves focus into it, to its own Back control, so a keyboard user keeps their place. A reopen during
+      // the fade already has focus inside the sheet and is left alone.
+      if (!wasOpen) {
+        const first = el.querySelector('[data-stg-back]') ?? el.querySelector(FOCUSABLE)
+        if (first instanceof HTMLElement) first.focus()
+      }
     } else if (!exiting) {
       releaseWorkspace()
       restoreSettingsFocus()
@@ -700,11 +753,13 @@ const sheet = (el, open) => {
     const first = el.querySelector(FOCUSABLE)
     if (first instanceof HTMLElement) first.focus()
   } else if (!open && wasOpen) {
-    let target = cameFrom
-    // The appearance sheet is chosen from the project menu. That menu closes on the choice and removes its items, so the
-    // item cannot hold focus; focus goes to the menu's own button, which stays put.
-    if (target !== null && target.hasAttribute('data-bc-look')) target = document.querySelector('[data-bc-pagemenu]')
-    if (target instanceof HTMLElement && target.isConnected) target.focus()
+    // The appearance sheet is chosen from the project menu. That menu closes on the choice and takes its items with it, so the
+    // item is never a place to hold focus: the menu's own button is, and it is the fallback for anything with no live opener.
+    const target =
+      cameFrom !== null && cameFrom.hasAttribute('data-bc-look')
+        ? document.querySelector('[data-bc-pagemenu]')
+        : (liveOpener(cameFrom) ?? document.querySelector('[data-bc-pagemenu]'))
+    if (target instanceof HTMLElement) target.focus()
     cameFrom = null
   }
 }
@@ -7254,6 +7309,8 @@ function importSheet(p) {
 
 function settingsSheet() {
   const v = $('#settings')
+  // A redraw replaces the sheet's controls, and with them whichever one had focus. Remember whether focus was in the sheet.
+  const hadFocus = v.contains(document.activeElement)
   // Opening Settings is what asks the office for it (see needSettings); the draw below says so until it answers. The sheet is
   // hidden exactly when a person is opening it; a redraw while it is showing must not retry a failed read.
   void needSettings(v.hidden)
@@ -8309,6 +8366,10 @@ function settingsSheet() {
   }
 
   wireAppearance(v)
+  if (hadFocus && !v.contains(document.activeElement)) {
+    const back = v.querySelector('[data-stg-back]') ?? v.querySelector(FOCUSABLE)
+    if (back instanceof HTMLElement) back.focus()
+  }
 }
 
 /*
@@ -13906,6 +13967,7 @@ if (typeof window !== 'undefined') {
       bcExpand.exit(was, () => {
         state.bcExpanded = null
         render()
+        bcWire.restoreExpandFocus()
       })
       return
     }
@@ -14045,6 +14107,7 @@ const bcContext = {
     bcExpand.exit(was, () => {
       state.bcExpanded = null
       render()
+      bcWire.restoreExpandFocus()
     })
   },
   /*
