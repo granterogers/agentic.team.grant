@@ -657,11 +657,16 @@ const reopenOnPress = (event) => {
     // The click that follows this press belongs to the reopen, not to the sheet: a viewer's backdrop click closes it, so it
     // is swallowed here or the reopen would close again at once.
     swallowClick = true
+    // A press that never becomes a click (a drag off the sheet, a touch scroll) must not leave the flag armed for a later
+    // keyboard or assistive activation, so it expires. The window is long enough for the click of a slow press.
+    window.setTimeout(() => {
+      swallowClick = false
+    }, 1000)
     // The default of the press (moving focus to the pressed spot, which is not focusable) must not undo the focus this
     // reopen gives back to the sheet.
     if (event.target instanceof Element && event.target.closest(CLOSE_CONTROLS) !== null) return
     event.preventDefault()
-    if (id === 'settings') bcContext.openGlobalSettings()
+    if (id === 'settings') bcContext.openGlobalSettings(undefined, true)
     else sheet(el, true)
     return
   }
@@ -728,7 +733,9 @@ const sheet = (el, open) => {
       }
     } else if (!exiting) {
       releaseWorkspace()
-      restoreSettingsFocus()
+      // Under reduced motion this runs inside popstate, before its redraw replaces the opener. A microtask runs after the handler
+      // (and its redraw) has finished, so focus lands on the live opener.
+      queueMicrotask(restoreSettingsFocus)
     }
   }
   syncBehind()
@@ -14144,17 +14151,18 @@ const bcContext = {
     lookSheet(p)
   },
   /* The office's own settings, in the sheet that already holds them. */
-  openGlobalSettings: (tab) => {
+  openGlobalSettings: (tab, keepPane = false) => {
     // A close is still on its way out (see stepBackFromSettings): open again once the popstate has finished it.
     if (settingsBackPending) {
       queuedSettingsOpen = { tab }
       return
     }
-    // Named a section: show it. Not named: on a phone, start at the list of sections.
+    // Named a section: show it. Not named: on a phone, start at the list of sections, unless the caller is reopening the page
+    // it was on (a press on the fading sheet), which keeps its pane.
     if (typeof tab === 'string' && tab !== '') {
       state.setting = config.tabId(tab)
       state.settingsPane = 'detail'
-    } else {
+    } else if (!keepPane) {
       state.settingsPane = 'index'
     }
     // Opening Global Settings is a history entry, so browser Back returns to where the person was (M8).

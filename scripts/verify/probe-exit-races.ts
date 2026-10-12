@@ -214,6 +214,36 @@ try {
     { rapidOpen, rapidClosed },
   )
 
+  // 5. Reduced motion: Settings closes at once, with no fade, and focus must still land on a live opener after the redraw.
+  const still = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    reducedMotion: 'reduce',
+  })
+  const rm = await still.newPage()
+  await openProject(rm)
+  await rm.locator('[data-bc-settings]').first().focus()
+  await rm.keyboard.press('Enter')
+  await rm.waitForTimeout(900)
+  await rm.keyboard.press('Escape')
+  await rm.waitForTimeout(500)
+  const reducedMotion = await rm.evaluate(() => {
+    const active = document.activeElement
+    return {
+      closed: document.getElementById('settings')?.hidden === true,
+      focusLive:
+        active instanceof HTMLElement &&
+        active !== document.body &&
+        active.isConnected &&
+        active.closest('.shell') !== null,
+    }
+  })
+  record(
+    'reduced motion: closing Settings returns focus to a live opener',
+    reducedMotion.closed && reducedMotion.focusLive,
+    reducedMotion,
+  )
+  await still.close()
+
   record('no page errors', errors.length === 0, errors.slice(0, 3))
   await context.close()
 } finally {
