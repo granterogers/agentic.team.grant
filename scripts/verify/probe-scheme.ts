@@ -54,7 +54,10 @@ try {
     for (const dark of [false, true]) {
       const context = await browser.newContext({
         colorScheme: dark ? 'dark' : 'light',
-        viewport: { width: 1440, height: 900 },
+        viewport:
+          process.env.VIEW === 'phone' ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+        isMobile: process.env.VIEW === 'phone',
+        hasTouch: process.env.VIEW === 'phone',
       })
       await context.addInitScript((s) => {
         // The page reads its appearance from storage before first paint, so the seed goes in first.

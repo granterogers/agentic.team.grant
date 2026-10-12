@@ -47,7 +47,13 @@ const port = typeof address === 'object' && address !== null ? address.port : 0
 
 const browser = await chromium.launch()
 try {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  // VIEW=phone runs the same Back and Forward checks at an iPhone width, with touch emulation on.
+  const phone = process.env.VIEW === 'phone'
+  const context = await browser.newContext(
+    phone
+      ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
+      : { viewport: { width: 1440, height: 900 } },
+  )
   const page = await context.newPage()
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
