@@ -45,7 +45,7 @@ await new Promise<void>((ok) => server.listen(0, '127.0.0.1', () => ok()))
 const address = server.address()
 const port = typeof address === 'object' && address !== null ? address.port : 0
 
-const MODULES = ['tasks', 'board', 'documents', 'schedule', 'contacts', 'activity']
+const MODULES = ['tasks', 'board', 'documents', 'schedule', 'contacts', 'activity', 'sources']
 
 const browser = await chromium.launch()
 try {
@@ -80,7 +80,10 @@ try {
       await page.waitForTimeout(1200)
       await page.locator('[data-bc-menu]').first().click({ force: true })
       await page.waitForTimeout(300)
-      const item = page.locator(`[data-bc-menu-modules] [data-bc-expand="${id}"]`).first()
+      const item =
+        id === 'sources'
+          ? page.locator('[data-bc-menu-modules] [data-bc-sources]').first()
+          : page.locator(`[data-bc-menu-modules] [data-bc-expand="${id}"]`).first()
       if ((await item.count()) === 0) {
         results[id] = 'menu item missing'
         continue
@@ -96,6 +99,7 @@ try {
         await page.locator('.bcexpx').first().click()
         await page.waitForTimeout(900)
         backTo = new URL(page.url()).pathname
+        if (id === 'sources') await page.screenshot({ path: join(OUT, 'closed-sources.png') })
         await page.screenshot({ path: join(OUT, `closed-${id}-${name}.png`) })
       }
       results[id] = { closable, closedTo: backTo, returnedToProject: backTo === projectUrl }

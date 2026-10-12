@@ -1973,6 +1973,9 @@ const wirePageMenu = (root) => {
   for (const b of root.querySelectorAll('[data-bc-sources]')) {
     b.addEventListener('click', () => {
       shut()
+      // The same fix as the module items (M13): the navigation menu is closed here, so its handler cannot redraw the shell
+      // under the close control that comes next.
+      if (menu.isOpen()) menu.setOpen(false)
       ctx.openExpanded?.('sources')
     })
   }
