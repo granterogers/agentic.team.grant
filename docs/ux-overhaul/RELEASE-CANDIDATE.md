@@ -3,9 +3,9 @@
 Candidate: branch `claude/busy-darwin-21mr9n` at `6857c7be` (pushed). It contains all of `origin/main` at `a37188da` (verified
 12 October 2026: `git merge-base --is-ancestor origin/main HEAD` succeeds). Production: https://ai-team-hq.vercel.app
 
-## Status: DEPLOYED to production (13 October 2026). Production workspace verification performed (section 6): desktop passes, and
-one phone defect was found. Its fix is on the branch and proven locally; it is NOT yet on production, and deploying it needs Grant's
-authorisation (section 6, last part).
+## Status: DEPLOYED to production. The phone Team Chat correction is merged into `main` (`d75b651a`) and deployed (deployment
+`dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2`, section 0, "Phone correction release"). Production verified on a 390 x 844 phone and at 1440 x 900,
+with the limits listed in section 6.
 
 ## 0. Deployment record
 
@@ -20,6 +20,69 @@ authorisation (section 6, last part).
 - After the write: the 16 files served from `ai-team-hq.vercel.app` are byte-identical to the branch at `a5363d94`.
 - Flags: `ALLOW_PRODUCTION_CHECKS=1` and `ALLOW_PRODUCTION_WRITES=1` were set for this one deployment and for the read-only checks
   in section 6, on Grant's approval.
+
+### Phone correction release (merged and deployed)
+
+- Pre-release: the working tree was clean; `claude/busy-darwin-21mr9n` at `d75b651a` was pushed; `origin/main` was `a5363d94`, an
+  ancestor of it, so the merge was a fast-forward. Commits added to `main`: `775f7aee` (the earlier release record, documentation and
+  probes only) and `d75b651a` (the correction). The web tree differs from `a5363d94` only in `web/studio/bc/polish.css`.
+- Checks on `d75b651a`: `npx vitest run tests/web tests/studio` 498 of 498; `check:templates`, `check:branding`,
+  `check:deployment-state` and `check:secrets` clean. Before the write, the live `polish.css` and `config.js` were byte-identical to
+  `origin/main` and to the generated file.
+- Merge: `main` fast-forwarded from `a5363d94` to `d75b651a` (`git push origin d75b651a:refs/heads/main`, no force).
+- Dry compare (`scripts/deploy/hq-page-delta.ts --root=web/studio`): 291 files; no name missing locally; names only live were
+  `out/api/notebook` and `out/api/notebook-act`, excluded by rule. Rollback point printed: `dpl_FGxJYkQsYV5543Pr5zLveujwbPSD`.
+- Deploy (`hq-page-delta.ts --go`, with `ALLOW_PRODUCTION_CHECKS=1` and `ALLOW_PRODUCTION_WRITES=1` for this one frontend deployment):
+  uploaded one file (`polish.css`); deployment `dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2`, build READY, the page serves the new bytes.
+- Production file verification: all 142 tracked files under `web/studio` at `d75b651a` were fetched from
+  `https://ai-team-hq.vercel.app` and compared by md5: 142 matched, 0 mismatched. `config.js` matches the generated file.
+- Database: no migration, function, setting or schema touched. The three committed Activity Ledger migrations are still not applied,
+  as `check:deployment-state` records; this release does not run them.
+- Rollback: `dpl_FGxJYkQsYV5543Pr5zLveujwbPSD` (the Team HQ page of `a5363d94`). Promote it in Vercel, or redeploy the saved copy.
+
+**Mobile regression, 390 x 844, real touch input, production Sample Office (`scripts/verify/probe-production-mobile-chat.ts`):**
+- Three full runs, 11 of 11 checks each. Each run: enter the Sample Office (visitor session); open Team Chat; close it normally; then
+  ten cycles of reopen, rapid close, and a touch tap at the header's Sign out position during the 200 ms closing fade, with no wait for
+  the fade to finish. Every cycle read the hit point during the fade: the dock was leaving and the point was inside the dock. Thirty of
+  thirty cycles across the runs passed, and Sign out was never reached.
+- The visitor session stayed active through the cycles, with no stale overlay, no lost inertness and no lingering blur. Team Chat then
+  opened, showed its composer and closed normally. A module (Tasks) opened maximised and returned to the canvas, and the final press on
+  the Team Chat toggle answered. No page errors. The only non-GET request in each run was the Sample's own sign-in.
+- Positive control: `scripts/verify/probe-dock-fade.ts` (local) fails on the phone before the correction (a press on the header falls
+  through to its menu button) and passes after it (4 of 4). The desktop control still passes both before and after.
+
+**Desktop regression, 1440 x 900, production (`scripts/verify/probe-production-workspace.ts desktop`):** 23 of 23 on the clean run
+after the deployment. This covers Global Settings open and close with Back; the appearance sheet (preview, Cancel, Escape); the canvas
+drag and zoom; the Tasks, Documents, Schedule and Contacts modules maximised and returned; calendar next and today; Team Chat with five
+rapid presses and one more; document records; browser Back; no page errors. The Team Chat drawer still behaves as a side drawer.
+
+**Browser failures seen during this release, and how each was classified.**
+- Every classification below rests on the failing response itself. Vercel stamps `x-vercel-id` on every response it sends, so a
+  Vercel-hosted static file that returns an error with no `x-vercel-id` did not come from Vercel. Direct requests that succeed are
+  recorded as well, but they are not the basis for the classification.
+  - `502 GET /bc/dockdictate.js` with no `x-vercel-id` and `text/plain`: not a Vercel response. Classed as the sandbox proxy's transfer
+    fault (environment).
+  - `502 GET /bc/dockgrip.js` on one phone landing load, and `502 GET /textures/bg/warm-microcement.thumb.webp` on one desktop run: the
+    headers were not captured on those runs, so the origin is NOT confirmed. Neither reproduced in the later runs, which captured headers.
+  - `ERR_ABORTED` on static files (`skins.css`, `polish.css`, `account.css`, `settings.css`) and on `hq-api`: the request was cut off
+    before any response, so there is no header to read. Classed as the same transfer fault, by evidence of the cut-off, not by any
+    direct request.
+  - `400 GET /functions/v1/hq-api?section=activity_ledger`: a Supabase response, which carries no Vercel header by design. The Activity
+    Ledger is off in production by policy, so the 400 is expected; the page catches the read and renders.
+- A run where the landing page never drew the Sample button, and the product's own "could not finish loading" screen appeared
+  (`Part of the page did not arrive`): that screen is the application handling a missing file, and it appeared only on the runs where
+  the transfer fault occurred. The three full mobile runs and the clean desktop run completed without it.
+
+**Initial load.** The Sample takes about 10 to 24 s from entry to a usable workspace across runs (sign-in, then the data read; see
+section 6 above). This was not changed.
+
+**Not verified on production (authenticated functionality, not tested):** Team Settings save; appearance saved to a signed-in
+account; background picture upload; gateway document thumbnails; agent configuration. The Sample is a read-only visitor office, and
+no signed-in account was used.
+
+**Limits (phone):** no visible zoom control is drawn on a phone, so the zoom is not tested there; the phone canvas is not dragged.
+
+**Rollback:** `dpl_FGxJYkQsYV5543Pr5zLveujwbPSD`.
 
 ## 6. Production verification of the workspace (this session)
 
@@ -56,15 +119,14 @@ no zoom check there; the canvas is not dragged on a phone either. Documents, mod
 - Cause: `web/studio/bc/polish.css`, `#dock.leaving { pointer-events: none; }`. The rule is right for the desktop side drawer, where
   the drawer sits beside the workspace and a press should reach the workspace. On a phone the dock covers the whole screen
   (`web/studio/bc/stone.css`, `max-width: 760px`), so the same rule lets a press fall through to the header beneath it.
-- Fix (on the branch, not deployed): the rule is now inside `@media (min-width: 761px)`. On a phone the fading dock keeps its
+- Fix (merged and deployed, see the phone correction release above): the rule is now inside `@media (min-width: 761px)`. On a phone the fading dock keeps its
   pointer input and absorbs the press.
 - Proof: `scripts/verify/probe-dock-fade.ts` (local, real presses, the hit point read during the fade). Before the fix: phone FAILED
   (a press on the header fell through to the header's menu button), desktop control passed. After the fix: 4 of 4 pass, and the desktop
   control still passes, so the desktop behaviour is unchanged. Re-run after formatting: 4 of 4.
 - Regression checks run after the fix (local): `probe-exit-races` 8 of 8, `probe-history-sequences` 21 of 21, `probe-close-motion`
   and `probe-viewer-close` pass, unit tests `tests/web tests/studio` 498 of 498, biome clean on the two new probes, `check:secrets` clean.
-- Not yet verified on the fixed production build: the phone rapid-press sequence itself. It is not run on a phone in the probe, because
-  on the current production build it ends the Sample session. Run it after the deploy.
+- Verified on the fixed production build: the phone rapid-press sequence (see the phone correction release above).
 
 **Transient transfer failures, classed as ENVIRONMENT.** Across the browser runs, some static files and some gateway sections came
 back as `502` or as `text/plain` (`appearance.js`, `refine.css`, `docs.css`, `settings.css`, `docorder.js`, a texture, and `hq-api`
@@ -86,14 +148,13 @@ not authorised, so it is recorded as a candidate, not changed.
 Team Settings save; appearance saved to an account and restored on reload; background picture upload; gateway document thumbnails;
 agent configuration. The Sample is a visitor's read-only office, so these were not tested there either.
 
-**NOT verified on production (phone):** the rapid Team Chat sequence (defect above, fix not yet deployed); a visible zoom control (none is
-drawn on a phone).
+**NOT verified on production (phone):** a visible zoom control (none is drawn on a phone).
 
 **Other environment notes.** `npm run typecheck` fails on this branch in every `scripts/verify/probe-*.ts` file (the node typecheck has no
 DOM types for them), including the earlier committed probes, so it was already red before the two probes added here. The two new probes
 follow the same convention as the rest of that family.
 
-**What Grant must authorise to deploy the phone fix.** It is one changed file (`web/studio/bc/polish.css`), so the deployment is the same
+**Deploy steps for the phone fix (performed; kept for the record).** It is one changed file (`web/studio/bc/polish.css`), so the deployment is the same
 named write as before, for this file only:
 1. Merge: fast-forward `main` to the commit that carries the fix (`origin/main` must still be `a5363d94` before the merge).
 2. Dry compare: `npx tsx scripts/deploy/hq-page-delta.ts --root=web/studio` with `ALLOW_PRODUCTION_CHECKS=1`.
@@ -153,9 +214,9 @@ and no unrelated live work would be overwritten.
 - On a phone the maximised Card Table stacks its stages rather than showing four columns (a deliberate decision).
 - The viewer restores focus at the start of its fade, and its blur is removed at the start too; this is deliberate.
 - The dangling settings-history case from the second review was not reached by any user action and is unverified.
-- The phone Team Chat close fade (section 6) is fixed on the branch and not yet on production.
+- The phone Team Chat close fade is fixed and deployed (see the phone correction release in section 0).
 
 ## 5. Release steps and the authorisation required
 
-Steps 1 to 5 were performed for the release at `a5363d94` (section 0). The phone fix in section 6 needs its own authorised run, using
-the steps listed at the end of section 6.
+Steps 1 to 5 were performed for the release at `a5363d94` (section 0). The phone correction went through the same steps and is recorded
+in section 0 under "Phone correction release".

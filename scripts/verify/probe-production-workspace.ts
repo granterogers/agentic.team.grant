@@ -125,11 +125,14 @@ try {
       writes.push(`${r.method()} ${new URL(r.url()).host}${new URL(r.url()).pathname.slice(0, 60)}`)
   })
   // HTTP errors are not request failures: a 400 or 502 arrives as a response, so it is recorded from the response.
+  // x-vercel-id is stamped by Vercel on every response it sends: its presence separates a platform error from a proxy fault.
   page.on('response', (res) => {
-    if (res.status() >= 400)
+    if (res.status() >= 400) {
+      const h = res.headers()
       httpErrors.push(
-        `${String(res.status())} ${res.request().method()} ${new URL(res.url()).pathname}${new URL(res.url()).search.slice(0, 80)}`,
+        `${String(res.status())} ${res.request().method()} ${new URL(res.url()).pathname}${new URL(res.url()).search.slice(0, 80)} vercel-id=${h['x-vercel-id'] ?? 'NONE'} type=${h['content-type'] ?? 'NONE'}`,
       )
+    }
   })
 
   // Enter the public Sample Office and wait for the workspace to settle, not for a fixed time.

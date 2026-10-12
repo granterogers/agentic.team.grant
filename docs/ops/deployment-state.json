@@ -41,10 +41,12 @@
       "report": "docs/audit/V1-RELEASE-REPORT-2026-10-09.md"
     },
     "page": {
-      "deployment": "dpl_EwZ7ghJP8uutmxVzyeruQUZvme6C",
-      "deploymentNote": "12 October 2026: the Activity Log improvement (commit 3b439236, branch feature/activity-log-details, plus the Activity UX already merged in PR #462) shipped as the page alone with deploy:hq-page from a staged tree (the branch's web/studio plus the live generated config.js, taken from the live site); 143 of 143 live files byte-identical to that tree after deploy; the previous page equalled main 5fa1fbdc plus config.js; the six new names were allowed by name; no function, migration or setting touched, ledger still off. Live check as a Sample visitor: scripts/verify/activity-live-sample.ts, 22 of 22.",
-      "previous": "dpl_3otBfKtZsGatfqgu1SgeJjVPb7Ld",
+      "deployment": "dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2",
+      "deploymentNote": "Team HQ release, then its phone correction: dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2 is main d75b651a (the polish.css correction that stops a press falling through the fading phone chat dock to Sign out; one file uploaded, 291 files in the set, the live file set and every tracked studio file byte-identical to d75b651a after deploy, config.js byte-identical to the generated file). Rollback: dpl_FGxJYkQsYV5543Pr5zLveujwbPSD, the Team HQ page of main a5363d94 (the first Team HQ release, byte-identical to a5363d94 after its deploy). 12 October 2026 before that: the Activity Log improvement (commit 3b439236, branch feature/activity-log-details, plus the Activity UX already merged in PR #462) shipped as the page alone with deploy:hq-page from a staged tree (the branch's web/studio plus the live generated config.js, taken from the live site); 143 of 143 live files byte-identical to that tree after deploy; the previous page equalled main 5fa1fbdc plus config.js; the six new names were allowed by name; no function, migration or setting touched, ledger still off. Live check as a Sample visitor: scripts/verify/activity-live-sample.ts, 22 of 22.",
+      "previous": "dpl_FGxJYkQsYV5543Pr5zLveujwbPSD",
       "rollback": [
+        "dpl_FGxJYkQsYV5543Pr5zLveujwbPSD",
+        "dpl_EwZ7ghJP8uutmxVzyeruQUZvme6C",
         "dpl_3otBfKtZsGatfqgu1SgeJjVPb7Ld",
         "dpl_E1J5U7iX4SDAH9Jo4hW8g9W5DQ2W",
         "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41",
