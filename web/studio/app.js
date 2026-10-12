@@ -607,6 +607,19 @@ const releaseWorkspace = () => {
   }
 }
 
+/*
+  Closing Settings by stepping back over its own history entry. The popstate that follows is what actually closes it, so until
+  then the page still reads open. A press to open Settings in that window is queued and replayed after the popstate; opening
+  straight away would be closed by that popstate. A second close press in the window is a no-op.
+*/
+let settingsBackPending = false
+let queuedSettingsOpen = null
+const stepBackFromSettings = () => {
+  if (settingsBackPending) return
+  settingsBackPending = true
+  history.back()
+}
+
 const restoreSettingsFocus = () => {
   let target = settingsCameFrom
   // Closing Settings redraws the shell (popstate paints), which replaces the opener's node. Its replacement carries the same
@@ -758,7 +771,7 @@ if (typeof document !== 'undefined') {
         // Escape closes Settings the way the page's Back button does: stepping back over the entry that opened it, so no
         // stale settings entry is left for a later Back or Forward to reopen (M8 review finding).
         if (id === '#settings' && typeof history !== 'undefined' && history.state?.settings === true) {
-          history.back()
+          stepBackFromSettings()
           return
         }
         sheet(el, false)
@@ -1806,6 +1819,9 @@ function wireDockKeyboard() {
   if (window.visualViewport) window.visualViewport.addEventListener('resize', follow, { passive: true })
 }
 
+// One named listener, so reopening during the fade can take back the one that was waiting for the exit to end.
+const onDockExited = () => paintDock()
+
 function paintDock() {
   const el = $('#dock')
   if (!el) return
@@ -1815,11 +1831,12 @@ function paintDock() {
   if (!open && !el.hidden && wantsMotion()) {
     // The drawer leaves on screen for its exit. Once it is hidden, this function runs again and takes the normal close path,
     // which clears the content and releases the microphone.
-    el.addEventListener('exited', () => paintDock(), { once: true })
+    el.addEventListener('exited', onDockExited, { once: true })
     hideAfterExit(el)
     return
   }
   if (open) {
+    el.removeEventListener('exited', onDockExited)
     bumpExit(el)
     el.classList.remove('leaving')
   }
@@ -7318,7 +7335,7 @@ function settingsSheet() {
     // Closing Settings steps back over the entry that opened it, as a maximised module's close does, so the close button and
     // the browser's Back agree. Forward then goes forward into that entry, which is what Forward means (M8).
     if (typeof history !== 'undefined' && history.state?.settings === true) {
-      history.back()
+      stepBackFromSettings()
       return
     }
     sheet(v, false)
@@ -13857,6 +13874,8 @@ if (typeof window !== 'undefined') {
     */
     const path = e.state?.path ?? addressNow()
     shownPath = path
+    // The step back that was pending has now happened (see stepBackFromSettings).
+    settingsBackPending = false
     /*
       Global Settings follows its own history entry (M8). Back past the entry that opened it closes the page; Forward onto
       it reopens the page where it was left. Either way the workspace underneath is drawn from the path, not reset.
@@ -13868,6 +13887,12 @@ if (typeof window !== 'undefined') {
     } else if (!settingsShown && e.state?.settings === true) {
       settingsSheet()
       sheet($('#settings'), true)
+    }
+    // An open pressed while that close was on its way out is replayed now, once the history has settled.
+    if (queuedSettingsOpen !== null) {
+      const queued = queuedSettingsOpen
+      queuedSettingsOpen = null
+      queueMicrotask(() => bcContext.openGlobalSettings(queued.tab))
     }
     const was = state.bcExpanded
     goToPath(path)
@@ -14057,6 +14082,11 @@ const bcContext = {
   },
   /* The office's own settings, in the sheet that already holds them. */
   openGlobalSettings: (tab) => {
+    // A close is still on its way out (see stepBackFromSettings): open again once the popstate has finished it.
+    if (settingsBackPending) {
+      queuedSettingsOpen = { tab }
+      return
+    }
     // Named a section: show it. Not named: on a phone, start at the list of sections.
     if (typeof tab === 'string' && tab !== '') {
       state.setting = config.tabId(tab)
@@ -14065,8 +14095,11 @@ const bcContext = {
       state.settingsPane = 'index'
     }
     // Opening Global Settings is a history entry, so browser Back returns to where the person was (M8).
-    if (!isOpenNow($('#settings')) && typeof history !== 'undefined' && history.state?.settings !== true) {
+    if (!isOpenNow($('#settings')) && typeof history !== 'undefined') {
       try {
+        // An entry left over from a reload is not an open page: turn it into the page's own entry before adding Settings on top.
+        if (history.state?.settings === true)
+          history.replaceState({ path: history.state.path ?? addressNow() }, '', location.href)
         history.pushState({ path: shownPath ?? addressNow(), settings: true }, '', location.href)
       } catch {
         /* A page opened from a file has no history to write to; the sheet still opens. */
@@ -14077,7 +14110,7 @@ const bcContext = {
     // The count beside Requests needs one read; the page draws again when it lands.
     if (!config.GOVERNANCE.loaded) {
       void config.hydrateGovernance(read).then(() => {
-        if (!$('#settings').hidden) {
+        if (isOpenNow($('#settings'))) {
           settingsSheet()
           sheet($('#settings'), true)
         }
@@ -15527,7 +15560,7 @@ function needSettings(retry = false) {
   if (settingsAsked !== null || !canWrite()) return settingsAsked
   settingsAsked = Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
     render()
-    if (!$('#settings').hidden) settingsSheet()
+    if (isOpenNow($('#settings'))) settingsSheet()
   })
   return settingsAsked
 }
@@ -16102,7 +16135,7 @@ async function startOfficeReads(token) {
   // What Settings may OFFER depends on who is looking, which is only known once the settings payload has arrived; if
   // the page is already open it is drawn again.
   document.addEventListener('hq:viewer', () => {
-    if (!$('#settings').hidden) settingsSheet()
+    if (isOpenNow($('#settings'))) settingsSheet()
   })
 
   /*

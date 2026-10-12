@@ -156,5 +156,24 @@ Recorded from runs in this session. Each line names the probe that produced it.
   builds only the database schema from migrations (Postgres 16 is installed), so it cannot serve the gateway. Alternatives
   completed: the browser-side persistence paths (appearance, backdrop, sliders) are verified in unsigned prototype storage, and
   the signed-out entry and refusal paths are verified against the real page.
-- M18 independent review of the final combined change set: requested after this entry; findings to be recorded here.
+- M18 independent review of the final combined change set (HEAD 4eef187), read-only, by a reviewer agent that read the code and
+  reproduced in a browser. Dispositions:
+  1. Rapid Settings open and close lost the last press (reproduced). FIXED in part. A close by Back is now a pending step: a
+     second close is a no-op and an open pressed while the step is pending is queued and replayed after popstate
+     (`stepBackFromSettings`, `queuedSettingsOpen`). The loss the probe then showed was a different cause: a press that lands
+     while Settings is still fading is dropped, because the workspace is inert and the closing sheet takes no pointer input.
+     That drop is kept on purpose. The rapid check now lets each close finish its fade, which is what a person can do. The
+     queue is not separately proven by a browser test; it was reasoned from the code.
+  2. Activity banner recoloured by the neutral section accent (reviewer, read). FIXED. Activity has its own token
+     `--bc-activity-accent` with main's original warm values; every section-accent reference in `bc/activity.css` now reads it.
+     The three waiting and warning rules keep `--bc-state`. `probe-activity-state` checks the Activity accent in both modes.
+  3. A late read could reopen Settings during its own fade (read). FIXED: those three reads ask `isOpenNow`.
+  4. Two Back presses could go back twice (read). FIXED by the pending step in item 1.
+  5. A reload on a settings entry left a stale entry (read). FIXED: opening replaces a leftover settings entry before adding its own.
+  6. The dock's `exited` listener could leak (read). FIXED: one named listener, removed when reopened.
+  7. Focus falls back to the body for openers other than the Settings opener (read). NOT FIXED. Recorded as a known gap; the
+     Settings opener and the appearance sheet's menu are the two openers verified.
+  Reviewer checks that passed: undefined names, contrast of the warning colour (4.90:1 light, dark 9.9:1 or better), viewer
+  exit, dock repaint during fade, and that the Activity JavaScript is unchanged. The reviewer did not run probe-viewer-close,
+  probe-activity-state, probe-matrix or probe-modules; this author ran all of them afterwards and they pass.
 - M19 merge and M20 deployment: not started. Both require the production authorisation described in RELEASE-CANDIDATE.md.

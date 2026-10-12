@@ -72,11 +72,13 @@ try {
       'document.querySelectorAll("[data-probe-activity]").forEach(function (n) { n.remove(); });',
       'return {',
       '  stateColour: resolved("var(--bc-state)"), sectionColour: resolved("var(--bc-section-accent)"),',
+      '  activityColour: resolved("var(--bc-activity-accent)"),',
       '  canvas: resolvedBg("var(--bc-canvas)"),',
       '  waitColor: wait.color, resultWash: result.background, noteBackground: note.background',
       '};',
     ].join('\n')
     const report = (await page.evaluate(`(function () {\n${measure}\n})()`)) as {
+      activityColour: string
       stateColour: string
       sectionColour: string
       canvas: string
@@ -95,7 +97,10 @@ try {
     // Small warning text reads at WCAG AA (4.5:1) on the canvas in both modes.
     const ratio = contrast(report.waitColor, report.canvas)
     const contrastOk = ratio !== null && ratio >= 4.5
-    const ok = markIsWarning && washesDrawn && contrastOk
+    // The Activity accent is main's original warm value in each mode, so its banner and marks are unchanged by the chrome.
+    const expectedActivity = scheme === 'light' ? 'rgb(162, 80, 47)' : 'rgb(251, 189, 168)'
+    const activityUnchanged = report.activityColour === expectedActivity
+    const ok = markIsWarning && washesDrawn && contrastOk && activityUnchanged
     if (!ok) failed += 1
     console.log(
       JSON.stringify({

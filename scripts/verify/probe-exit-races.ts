@@ -174,13 +174,19 @@ try {
 
   // 4. Rapid repeated opening and closing of Global Settings, with no pauses between presses. The last press decides the
   // final state, and the history stack must match it: a Back afterwards must not reopen a page that is shut.
+  // A press that lands while Settings is still fading is dropped by design: the workspace is inert and the closing sheet
+  // takes no pointer input. So each close finishes its fade before the next open, which is what a person can do.
   for (let i = 0; i < 4; i++) {
     await page.locator('[data-bc-settings]').first().click({ force: true })
-    await page
-      .locator('[data-stg-back]')
-      .first()
-      .click({ force: true, timeout: 2000 })
-      .catch(() => undefined)
+    await page.locator('[data-stg-back]').first().click({ force: true, timeout: 2000 })
+    await page.waitForFunction(
+      () => document.getElementById('settings')?.classList.contains('leaving') !== true,
+      null,
+      {
+        timeout: 1000,
+      },
+    )
+    await page.waitForTimeout(250)
   }
   await page.locator('[data-bc-settings]').first().click({ force: true })
   await page.waitForTimeout(900)

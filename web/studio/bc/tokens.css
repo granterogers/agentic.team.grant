@@ -29,6 +29,9 @@
   --bc-accent: #2b6cb0;
   --bc-accent-ink: #ffffff;
   --bc-section-accent: #4d6378;
+  /* The Activity Log's own warm accent, as it was on main. Kept apart from the neutral section accent so that changing the
+     chrome cannot silently recolour the Activity Log. */
+  --bc-activity-accent: #a2502f;
   /* State, not decoration: overdue, waiting, blocked and trouble. Kept warm on purpose so it still reads as a warning.
      Darkened from #a2502f (3.77:1 on the silver canvas) to reach 4.5:1 for small text. */
   --bc-state: #8f4220;
@@ -193,6 +196,7 @@
   --bc-accent: #6ab3fd;
   --bc-accent-ink: #0e1d24;
   --bc-section-accent: #9fb4c9;
+  --bc-activity-accent: #fbbda8;
   --bc-state: #fbbda8;
   --bc-heading: #dfe6ee;
   --bc-mod-tasks: #7fb4d8;
@@ -230,6 +234,7 @@
     --bc-accent: #6ab3fd;
     --bc-accent-ink: #0e1d24;
     --bc-section-accent: #9fb4c9;
+    --bc-activity-accent: #fbbda8;
     --bc-state: #fbbda8;
     --bc-heading: #dfe6ee;
     --bc-mod-tasks: #7fb4d8;
