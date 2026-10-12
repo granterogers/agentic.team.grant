@@ -218,7 +218,7 @@
 [data-experience='basecamp'] .bdactions { background: var(--bc-panel, var(--bc-surface)); }
 
 /* ------------------------------------------- the schedule module's own views -- */
-[data-experience='basecamp'] .bccal2compact { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; gap: 6px; }
+[data-experience='basecamp'] .bccal2compact { display: flex; flex-direction: column; min-height: 0; flex: 1 1 0; gap: 6px; }
 [data-experience='basecamp'] .bccal2compact .bccal2minibar { margin: 0; }
 [data-experience='basecamp'] .bccal2views--mini { display: flex; width: 100%; border: 1px solid var(--bc-border-control); border-radius: 9px; padding: 2px; gap: 2px; background: color-mix(in srgb, var(--bc-canvas) 40%, transparent); }
 [data-experience='basecamp'] .bccal2views--mini .bccal2btn--seg { flex: 1 1 0; min-height: 26px; justify-content: center; text-align: center; border: 0; border-radius: 7px; background: transparent; color: var(--bc-text-muted); font-size: 12px; }
@@ -236,6 +236,26 @@
 [data-experience='basecamp'] .bccal2compact { overflow-y: auto; scrollbar-width: thin; }
 [data-experience='basecamp'] .bccal2compact > * { flex: none; }
 [data-experience='basecamp'] .bccal2compact > .bccal2agenda { overflow: visible; }
+/*
+  The toolbar stays where it is when the view changes (M16). The body above is the scroll container, so a view that is shorter
+  or longer clamps the scroll position and the title row and the Day / Week / Month switch moved with it (measured in
+  Chromium: the switch's top went 639, 643, 630 and New 604, 599, 595 px across the three views). Sticking them to the top of
+  the container keeps them still while only the body below changes.
+*/
+[data-experience='basecamp'] .bccal2compact > .bccal2minibar,
+[data-experience='basecamp'] .bccal2compact > .bccal2views--mini {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bc-surface);
+}
+/*
+  The title is one line whatever the view says. A week range ("5-11 Oct 2026") wrapped where "October 2026" did not, and the
+  taller bar pushed the switch down by 18px and centred New down by 9px (measured). One line and a fixed bar height make the
+  toolbar the same height in every view.
+*/
+[data-experience='basecamp'] .bccal2compact > .bccal2minibar { min-height: 34px; }
+[data-experience='basecamp'] .bccal2compact .bccal2minititle { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ------------------------------------------------ the material, page-wide -- */
 [data-experience='basecamp'] #root.shell[data-bg-page] {

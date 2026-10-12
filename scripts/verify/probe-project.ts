@@ -66,12 +66,19 @@ try {
     await first.click({ force: true })
     await page.waitForTimeout(1500)
     const box = await page.evaluate(() => {
-      const el = document.querySelector<HTMLElement>('[data-panel="board"], [data-module="board"]')
+      const el = document.querySelector<HTMLElement>('[data-mod="board"]')
       if (!el) return null
       const r = el.getBoundingClientRect()
-      return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }
+      return {
+        x: Math.round(r.x),
+        y: Math.round(r.y),
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+      }
     })
-    console.log(JSON.stringify({ label, viewport: name, cardTable: box, pageErrors: errors.slice(0, 2) }))
+    console.log(
+      JSON.stringify({ label, viewport: name, cardTable: box, pageErrors: errors.slice(0, 2) }),
+    )
     await page.screenshot({ path: join(OUT, `project-${label}-${name}.png`), fullPage: false })
     await context.close()
   }
