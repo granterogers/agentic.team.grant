@@ -30,7 +30,8 @@
   font: 700 12px/16px var(--bc-font);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--bc-heading);
+  /* The accent, not the warm heading colour: the old brown kicker read as the retired Original palette (M4). */
+  color: var(--bc-accent);
 }
 .bcentrytitle {
   margin: 0;
@@ -159,7 +160,8 @@
   display: grid;
   gap: var(--bc-2);
   padding: var(--bc-4);
-  border: 1px solid var(--bc-section-accent);
+  /* A neutral hairline, not the gold section accent (M4). */
+  border: 1px solid var(--bc-border-subtle);
   border-radius: 14px;
   background: var(--bc-hover);
 }
