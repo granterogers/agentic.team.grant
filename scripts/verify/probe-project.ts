@@ -93,8 +93,23 @@ try {
         h: Math.round(r.height),
       }
     })
+    const columns = await page.evaluate(() => {
+      const cols = document.querySelectorAll<HTMLElement>('[data-mod="board"] .bcminicol')
+      return Array.from(cols, (c) => {
+        const r = c.getBoundingClientRect()
+        return [Math.round(r.x), Math.round(r.y), Math.round(r.width)]
+      })
+    })
+    const rows = new Set(columns.map((c) => c[1])).size
     console.log(
-      JSON.stringify({ label, viewport: name, cardTable: box, pageErrors: errors.slice(0, 2) }),
+      JSON.stringify({
+        label,
+        viewport: name,
+        cardTable: box,
+        columns: columns.length,
+        rows,
+        pageErrors: errors.slice(0, 2),
+      }),
     )
     await page.screenshot({ path: join(OUT, `project-${label}-${name}.png`), fullPage: false })
     await context.close()

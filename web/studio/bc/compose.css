@@ -2003,7 +2003,8 @@
     not a number written here.
   */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  /* 106px, not 128: four columns need 4 x 106 + 3 x 8 = 448px, which a 550px module's card area holds (M12). At 128px the fourth wrapped. */
+  grid-template-columns: repeat(auto-fit, minmax(106px, 1fr));
   gap: 8px;
   align-items: start;
 }
