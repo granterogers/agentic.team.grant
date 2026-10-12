@@ -238,6 +238,18 @@
   [data-experience='basecamp'] .bccal2views--mini .bccal2btn--seg { min-height: 36px; }
 }
 
+/*
+  The type sheet (M15): a document with no drawn first page yet says what it is. The word is large, set in the page's own
+  paper, and tinted by type so a PDF, a document and a picture can be told apart at a glance. The tints are dark enough to
+  clear 4.5:1 on the paper in BOTH schemes (the dark scheme's paper is a light grey): PDF 7.1:1, document 5.2:1, picture 5.1:1.
+*/
+[data-experience='basecamp'] .bcftype { display: flex; align-items: center; justify-content: center; align-content: center; }
+[data-experience='basecamp'] .bcftypeword { font-size: 15px; font-weight: 700; letter-spacing: 0.08em; color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcftype--pdf .bcftypeword { color: #8f2a22; }
+[data-experience='basecamp'] .bcftype--doc .bcftypeword,
+[data-experience='basecamp'] .bcftype--made .bcftypeword { color: #174a80; }
+[data-experience='basecamp'] .bcftype--image .bcftypeword { color: #1b5a3c; }
+
 /* A picker tile is as wide as its column, whatever its face is made of. */
 [data-experience='basecamp'] .bdgrid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
 [data-experience='basecamp'] .bdthumb { grid-template-columns: minmax(0, 1fr); min-width: 0; }

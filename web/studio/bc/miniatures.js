@@ -957,10 +957,20 @@ export const docRef = (d) =>
  * of an external file is a real glimpse of it without the file having been copied. A row thumbnail is too small to read
  * words on, so it keeps the drawn lines. The excerpt is text, always escaped, never markup.
  */
+const TYPE_TAG = { pdf: 'PDF', doc: 'DOC', made: 'DOC', image: 'IMG' }
+
 const drawnPage = (d, most = 9, small = false) => {
   const excerpt = typeof d.excerpt === 'string' ? d.excerpt.trim() : ''
   if (excerpt !== '' && !small) {
     return `<span class="bcpage bcxpage" aria-hidden="true"><span class="bcxpagetext">${esc(excerpt)}</span></span>`
+  }
+  /*
+    A TYPE, NOT INVENTED LINES (M15). Until a real first page is drawn, a PDF, a document or a picture says what it is in its
+    own words, rather than showing bars of random length that look like text and are not. Types with no label keep the lines.
+  */
+  const type = TYPE_TAG[String(d.kind ?? '')]
+  if (type !== undefined) {
+    return `<span class="bcpage bcftype bcftype--${esc(String(d.kind))}" aria-hidden="true"><span class="bcftypeword">${esc(type)}</span></span>`
   }
   const lines = (Array.isArray(d.lines) && d.lines.length > 0 ? d.lines : [92, 100, 96, 84, 98, 70, 90]).slice(0, most)
   return `<span class="bcpage" aria-hidden="true">

@@ -55,6 +55,13 @@ try {
     ['phone', { width: 390, height: 844 }, true],
   ] as const) {
     const context = await browser.newContext({ viewport, isMobile, hasTouch: isMobile })
+    // SCHEME=dark stores the scheme the way a person's choice is stored, so the audit sees the dark theme.
+    const scheme = process.env.SCHEME ?? ''
+    if (scheme !== '') {
+      await context.addInitScript((s) => {
+        localStorage.setItem('studio.appearance', JSON.stringify({ scheme: s, look: 'silver' }))
+      }, scheme)
+    }
     const page = await context.newPage()
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
@@ -81,7 +88,9 @@ try {
       await item.click({ force: true })
       await page.waitForTimeout(700)
       const closable = (await page.locator('.bcexpx').count()) > 0
-      await page.screenshot({ path: join(OUT, `module-${id}-${name}.png`) })
+      await page.screenshot({
+        path: join(OUT, `module-${id}-${name}${scheme === '' ? '' : `-${scheme}`}.png`),
+      })
       let backTo: string | null = null
       if (closable) {
         await page.locator('.bcexpx').first().click()
@@ -94,7 +103,9 @@ try {
     console.log(
       JSON.stringify({ viewport: name, projectUrl, results, pageErrors: errors.slice(0, 2) }),
     )
-    await page.screenshot({ path: join(OUT, `modules-${name}.png`) })
+    await page.screenshot({
+      path: join(OUT, `modules-${name}${scheme === '' ? '' : `-${scheme}`}.png`),
+    })
     await context.close()
   }
 } finally {
