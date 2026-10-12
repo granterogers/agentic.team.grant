@@ -16,7 +16,7 @@
   A NOTE ON COMMENTS IN THIS FILE: functions here return template literals, and a backtick inside a comment inside one ends the
   string. Comments inside returned templates use plain words only, and this file keeps its comments outside them.
 */
-import { activeFilters, appendPage, clock, describe, destinationFor, exactTime, groupByDay, howWeKnow, kindWords, queryFor, RANGES, safeFacts, stageOf, VIEWS } from './activity-model.js'
+import { activeFilters, appendPage, clock, describe, destinationFor, exactTime, filterFeed, fromFeedRow, groupByDay, howWeKnow, kindWords, queryFor, RANGES, safeFacts, sortFeed, stageOf, VIEWS } from './activity-model.js'
 
 const PAGE = 40
 const HELD_MAX = 400
@@ -47,6 +47,10 @@ const icon = (cat, size = 18) =>
 
 export const createActivity = (deps) => {
   const { esc, read, crew, projects, avatar, go, repaintShell } = deps
+  // The office's existing activity rows for a scope (or null while none have arrived) and the last day's counts: what the screen
+  // draws when the ledger is off, so it never needs one. Optional, so a host that supplies neither keeps the plain older list.
+  const feedRows = (scope) => (typeof deps.rows === 'function' ? deps.rows(scope) : null)
+  const feedToday = () => (typeof deps.today === 'function' ? deps.today() : null)
   const fresh = (scope) => ({
     scope,
     view: 'all',
@@ -76,6 +80,17 @@ export const createActivity = (deps) => {
   const ctxFor = () => ({ crew: crew(), projects: projects() })
   const agentName = (slug) => crew().find((c) => c.staffSlug === slug || c.slug === slug)?.name ?? slug
   const projectName = (id) => projects().find((p) => p.id === id)?.name ?? id
+
+  // ---------------------------------------------------------------------------------------------- the ledger-off path
+  // The ledger is switched off (or not answering): the screen draws the office's existing activity rows, through the same timeline.
+  // Held rows are filtered here because that older feed has no server-side filter; the screen says so.
+  const feed = () => {
+    const raw = feedRows(S.scope)
+    if (!Array.isArray(raw)) return null
+    return sortFeed(raw.map((r, i) => fromFeedRow(r, i, ctxFor())).filter((e) => e !== null))
+  }
+  const legacyOn = () => S.enabled !== true && feedRows(S.scope) !== null
+  const feedShown = (all) => filterFeed(all, S, { scopeProject: scopeProject() })
 
   // ---------------------------------------------------------------------------------------------- reading
   const withDeadline = (p, ms) =>
@@ -164,6 +179,9 @@ export const createActivity = (deps) => {
         ${row('Result', d.result === '' ? '' : esc(d.result))}
         ${row('Came through', esc(d.via))}
         ${row('How we know', esc(howWeKnow(e)))}
+        ${row('Why', esc(String(e.rationale ?? '')))}
+        ${e.more > 0 ? row('Repeated', esc(`${String(e.more)} more like this, folded into this line`)) : ''}
+        ${e.reversible === true ? row('Can be undone', 'Yes') : ''}
         ${facts.map(([k, v]) => row(k, esc(v))).join('')}
       </dl>
       <div class="bcact-actions">
@@ -171,7 +189,10 @@ export const createActivity = (deps) => {
         ${chainKey === '' ? '' : `<button type="button" class="bcbtn bcbtn--outline" data-act-chain="${esc(chainKey)}" data-act-job="${esc(d.jobId)}" data-act-corr="${esc(d.correlationId)}" data-act-focus="chain:${esc(d.id)}">View related activity</button>`}
       </div>
       <div class="bcact-chain" data-act-chainbox="${esc(chainKey)}" aria-live="polite">${chainKey === '' ? '' : chainHtml(chainKey, d.id)}</div>
-      <details class="bcact-tech"><summary data-act-focus="tech:${esc(d.id)}">Technical details</summary>
+      ${
+        e.feed === true
+          ? ''
+          : `<details class="bcact-tech"><summary data-act-focus="tech:${esc(d.id)}">Technical details</summary>
         <dl class="bcact-facts">
           ${row('Event', `<code>${esc(e.id)}</code>`)}
           ${row('Type', `<code>${esc(e.type)}</code>`)}
@@ -180,7 +201,8 @@ export const createActivity = (deps) => {
           ${row('Correlation', d.correlationId === '' ? '' : `<code>${esc(d.correlationId)}</code>`)}
           ${row('Evidence', e.evidence?.kind === undefined ? '' : `<code>${esc(String(e.evidence.kind))}</code>`)}
         </dl>
-      </details>
+      </details>`
+      }
     </div>`
   }
 
@@ -209,10 +231,10 @@ export const createActivity = (deps) => {
     const d = describe(e, ctxFor())
     const open = S.open.has(d.id)
     const dom = `bcact-d-${d.id}`
-    return `<article class="bcact-item bcact-item--${esc(d.tone)}${d.problem ? ' is-problem' : ''}${open ? ' is-open' : ''}" data-act-item="${esc(d.id)}">
+    return `<article class="bcact-item bcact-item--${esc(d.tone)}${d.problem ? ' is-problem' : ''}${open ? ' is-open' : ''}" data-act-item="${esc(d.id)}"${e.feed === true ? ' data-act-source="feed"' : ''}>
       ${who(d)}
       <div class="bcact-main">
-        <span class="bcact-who">${esc(d.who)}${d.reported ? ' <span class="bcact-tag">Reported</span>' : ''}</span>
+        <span class="bcact-who">${esc(d.who)}${d.reported ? ' <span class="bcact-tag">Reported</span>' : ''}${e.more > 0 ? ` <span class="bcact-tag">+${String(e.more)} similar</span>` : ''}</span>
         <button type="button" class="bcact-sentence" aria-expanded="${open ? 'true' : 'false'}" aria-controls="${esc(dom)}" data-act-toggle="${esc(d.id)}" data-act-focus="row:${esc(d.id)}">${esc(d.sentence)}</button>
         ${d.projectName === '' && d.via === '' && d.result === '' ? '' : `<span class="bcact-meta">${d.projectName === '' ? '' : `<span class="bcact-where"><span class="bcact-cat" title="${esc(d.category)}">${icon(d.category, 14)}</span><span class="bcact-proj">${esc(d.projectName)}</span></span>`}${d.via === '' ? '' : `<span class="bcact-via">via ${esc(d.via)}</span>`}${resultChip(d)}</span>`}
       </div>
@@ -221,8 +243,8 @@ export const createActivity = (deps) => {
     </article>`
   }
 
-  const groups = () =>
-    groupByDay(S.events)
+  const groups = (events = S.events) =>
+    groupByDay(events)
       .map((g) => `<section class="bcact-day" aria-labelledby="bcact-h-${esc(g.key)}"><h2 class="bcact-dayhead" id="bcact-h-${esc(g.key)}">${esc(g.label)}</h2>${g.events.map(item).join('')}</section>`)
       .join('')
 
@@ -267,15 +289,20 @@ export const createActivity = (deps) => {
     return `<section class="bcact-attn" aria-labelledby="bcact-attn-h">
       <h2 class="bcact-subhead" id="bcact-attn-h">Waiting for you</h2>
       ${items.length === 0 ? '<p class="bcact-note">Nothing is waiting for a decision from you. Approvals and blocked work appear here the moment they need you.</p>' : `<ul class="bcact-needs">${waiting}</ul>`}
-      <h2 class="bcact-subhead" id="bcact-prob-h">Went wrong in the last 7 days</h2>
+      ${
+        legacyOn()
+          ? ''
+          : `<h2 class="bcact-subhead" id="bcact-prob-h">Went wrong in the last 7 days</h2>
       <p class="bcact-note bcact-note--quiet">These are records of what happened. They say nothing about whether it has since been put right.</p>
-      ${probList}
+      ${probList}`
+      }
     </section>`
   }
 
   const controls = () => {
     const counts = activeFilters(S, { agentName, projectName, scopeProject: scopeProject() })
-    const chips = VIEWS.map((v) => {
+    // Completed and Errors are queries over a recorded outcome; the older feed records none, so it offers only what it can answer.
+    const chips = VIEWS.filter((v) => !legacyOn() || v.id === 'all' || v.id === 'attention').map((v) => {
       const on = S.view === v.id
       const waiting = v.id === 'attention' ? attentionItems().length : 0
       // A phone has room for one word: the short name is shown there and the full one stays the accessible name.
@@ -354,20 +381,47 @@ export const createActivity = (deps) => {
     return `<section class="bcact-now" aria-labelledby="bcact-now-h"><h2 class="bcact-subhead" id="bcact-now-h">Happening now${items.length > 3 ? ` (${String(items.length)})` : ''}</h2><ul class="bcact-nowlist">${rows}</ul></section>`
   }
 
+  const bannerHtml = () => {
+    const waiting = attentionItems().length
+    return S.view !== 'attention' && waiting > 0
+      ? `<button type="button" class="bcact-banner" data-act-view="attention" data-act-focus="banner"><span class="bcact-mark bcact-mark--wait" aria-hidden="true">${icon('approval')}</span><span><b>${String(waiting)} ${waiting === 1 ? 'thing needs' : 'things need'} you</b><span>See what is waiting for your decision</span></span><span aria-hidden="true">›</span></button>`
+      : ''
+  }
+
+  // The ledger-off screen: the same timeline over the office's existing activity rows. The last day's counts are the office's own tallies.
+  const legacyTimeline = () => {
+    if (S.view === 'attention') return attentionPanel()
+    const all = feed() ?? []
+    if (all.length === 0) return '<div class="bcempty"><b>Nothing yet</b><span>What you and your team do is listed here, newest first.</span></div>'
+    const shown = feedShown(all)
+    const narrowed = activeFilters(S, { scopeProject: scopeProject() }).length > 0
+    if (shown.length === 0)
+      return '<div class="bcempty"><b>Nothing matches</b><span>None of the most recent activity fits these filters.</span><button type="button" class="bcbtn bcbtn--outline" data-act-clear="all" data-act-focus="x:all">Clear the filters</button></div>'
+    const count = narrowed ? `${String(shown.length)} of the ${String(all.length)} most recent` : `the ${String(all.length)} most recent`
+    return `${groups(shown)}<p class="bcact-end">Showing ${count} things the office has recorded. Open any line for who, when, where and why.</p>`
+  }
+  const legacyBody = () => {
+    const t = feedToday()
+    const bits = []
+    if (Number(t?.jobs_done) > 0) bits.push(`${String(t.jobs_done)} finished`)
+    if (Number(t?.jobs_failed) > 0) bits.push(`${String(t.jobs_failed)} failed`)
+    if (Number(t?.events) > 0) bits.push(`${String(t.events)} things recorded`)
+    const today = bits.length === 0 ? '' : `<p class="bcact-note bcact-note--quiet">In the last day: ${esc(bits.join(', '))}.</p>`
+    const waitingOnLedger = S.enabled === null && S.error === '' ? '<p class="bcact-note bcact-note--quiet" role="status">Loading the full timeline…</p>' : ''
+    return `${S.header()}${today}${controls()}${bannerHtml()}${happeningNow()}<div class="bcact-list" data-act-list>${legacyTimeline()}</div>${waitingOnLedger}`
+  }
+
   const body = () => {
-    // Off, outside the canary, failed on the first read, or never answered: the older list, exactly as before.
+    // Off, outside the canary, failed on the first read or never answered: the office's existing activity rows through the same timeline;
+    // and only if the host supplied none, the plainer older list.
+    if (legacyOn()) return legacyBody()
     const unavailable = S.enabled === false || (S.enabled === null && S.error !== '')
     if (unavailable) return S.legacy()
     if (S.enabled === null) {
       const old = S.legacy()
       return `${old.includes('bcitem') ? '' : skeleton()}${old}<p class="bcact-note bcact-note--quiet" role="status">Loading the full timeline…</p>`
     }
-    const waiting = attentionItems().length
-    const banner =
-      S.view !== 'attention' && waiting > 0
-        ? `<button type="button" class="bcact-banner" data-act-view="attention" data-act-focus="banner"><span class="bcact-mark bcact-mark--wait" aria-hidden="true">${icon('approval')}</span><span><b>${String(waiting)} ${waiting === 1 ? 'thing needs' : 'things need'} you</b><span>See what is waiting for your decision</span></span><span aria-hidden="true">›</span></button>`
-        : ''
-    return `${S.header()}${controls()}${banner}${happeningNow()}<div class="bcact-list" data-act-list>${timeline()}</div>`
+    return `${S.header()}${controls()}${bannerHtml()}${happeningNow()}<div class="bcact-list" data-act-list>${timeline()}</div>`
   }
 
   const html = () => body()
@@ -430,14 +484,16 @@ export const createActivity = (deps) => {
         let b
         if ((b = hit('[data-act-view]'))) {
           S.view = b.getAttribute('data-act-view')
-          if (S.view === 'attention') void loadAttention()
+          if (legacyOn()) {
+            // nothing to ask a server: the older feed answers from the rows already held
+          } else if (S.view === 'attention') void loadAttention()
           else reload()
           paint()
         } else if ((b = hit('[data-act-toggle]'))) {
           const id = b.getAttribute('data-act-toggle')
           if (S.open.has(id)) S.open.delete(id)
           else S.open.add(id)
-          const ev2 = S.events.find((x) => x.id === id)
+          const ev2 = S.events.find((x) => x.id === id) ?? (legacyOn() ? (feed() ?? []).find((x) => x.id === id) : undefined)
           const art = b.closest('[data-act-item]')
           const pane = art?.querySelector('.bcact-detail')
           if (art !== null && pane !== null && ev2 !== undefined) {
@@ -463,7 +519,7 @@ export const createActivity = (deps) => {
           if (k === 'all' || k === 'agent') S.agent = ''
           if (k === 'all' || k === 'project') S.project = ''
           if (k === 'all' || k === 'range') S.range = ''
-          reload()
+          if (!legacyOn()) reload()
           paint()
         } else if ((b = hit('[data-act-more]'))) {
           if (!S.loadingMore && S.next !== null) void load({ more: true })
@@ -485,7 +541,7 @@ export const createActivity = (deps) => {
         const s = ev.target instanceof Element ? ev.target.closest('[data-act-sel]') : null
         if (s === null) return
         S[s.getAttribute('data-act-sel')] = s.value
-        reload()
+        if (!legacyOn()) reload()
         paint()
       })
     }

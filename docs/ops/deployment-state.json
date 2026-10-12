@@ -41,10 +41,11 @@
       "report": "docs/audit/V1-RELEASE-REPORT-2026-10-09.md"
     },
     "page": {
-      "deployment": "dpl_3otBfKtZsGatfqgu1SgeJjVPb7Ld",
-      "deploymentNote": "11 October 2026: the Dashboard Polish release (PR #459, main f2044df6) shipped as the page alone with deploy:hq-page; 285 of 285 live files byte-identical to that tree; the previous page equalled main 3caaebfe plus the generated config.js; no function, migration or setting touched. Smoke record: docs/integration/dashboard-polish-production-release.md",
-      "previous": "dpl_E1J5U7iX4SDAH9Jo4hW8g9W5DQ2W",
+      "deployment": "dpl_EwZ7ghJP8uutmxVzyeruQUZvme6C",
+      "deploymentNote": "12 October 2026: the Activity Log improvement (commit 3b439236, branch feature/activity-log-details, plus the Activity UX already merged in PR #462) shipped as the page alone with deploy:hq-page from a staged tree (the branch's web/studio plus the live generated config.js, taken from the live site); 143 of 143 live files byte-identical to that tree after deploy; the previous page equalled main 5fa1fbdc plus config.js; the six new names were allowed by name; no function, migration or setting touched, ledger still off. Live check as a Sample visitor: scripts/verify/activity-live-sample.ts, 22 of 22.",
+      "previous": "dpl_3otBfKtZsGatfqgu1SgeJjVPb7Ld",
       "rollback": [
+        "dpl_3otBfKtZsGatfqgu1SgeJjVPb7Ld",
         "dpl_E1J5U7iX4SDAH9Jo4hW8g9W5DQ2W",
         "dpl_6zXtXeMzJVMLgh1S8kr2xy86Eu41",
         "dpl_7Lfbc (id truncated in the release record)",
