@@ -95,6 +95,7 @@ let officeStarted = false
   timeout waiting for a selector that cannot exist.
 */
 const latest = { lately: null, tasks: null }
+let latelyAsking = false
 
 /*
   The waiting-time ticker's handle, declared HERE for the reason directly
@@ -14083,6 +14084,25 @@ const bcContext = {
   */
   ledgerActivity: () =>
     latest.lately?.fromLedger === true && Array.isArray(latest.lately.office) ? latest.lately.office.map((e) => ({ ...e, line: ledgerLine(e) })) : null,
+  /*
+    THE EXISTING ACTIVITY FEED, for the Activity screen when the ledger is off. `lately` is the gateway section the office has always
+    served (who, what, project, when, through which door, why); the screen turns each row into the shape it draws. Null until it has
+    arrived with something in it, and null for a ledger-sourced copy, which has its own path above.
+  */
+  officeActivity: () =>
+    latest.lately?.fromLedger !== true && Array.isArray(latest.lately?.office) && latest.lately.office.length > 0 ? latest.lately.office : null,
+  activityToday: () => latest.lately?.today ?? null,
+  /* Starts the read if nothing holds it or is already fetching it: a redraw while the read is in flight must not start a second. */
+  askActivity: () => {
+    if (latest.lately !== null || latelyAsking) return
+    latelyAsking = true
+    // Deferred: a first draw can happen while this module is still being evaluated, and the read's helpers are declared further down.
+    queueMicrotask(() => {
+      void needLately().finally(() => {
+        latelyAsking = false
+      })
+    })
+  },
   /* After a tick or a stop on My Tasks: the kept lists are behind, so forget them and read again. */
   refreshMyTasks: async () => {
     await Promise.all([reloadMine(), refresh()])

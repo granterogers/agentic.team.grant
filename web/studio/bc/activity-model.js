@@ -227,3 +227,79 @@ export const safeFacts = (meta) => {
   const words = { kind: 'Kind of work', answer: 'Answer given', channel: 'Channel', provider_confirmed: 'Confirmed by the provider', confirmed_by_person: 'Marked by you', indeterminate: 'Outcome unknown', reason_class: 'Reason', cost_usd: 'Cost (USD)', cost_provenance: 'Cost is', total_tokens: 'Tokens', duration_ms: 'Duration (ms)' }
   return SAFE_META.filter((k) => ['string', 'number', 'boolean'].includes(typeof meta[k]) && String(meta[k]).length <= 120).map((k) => [words[k], typeof meta[k] === 'boolean' ? (meta[k] ? 'Yes' : 'No') : k === 'kind' ? kindWords(meta[k]) : String(meta[k])])
 }
+
+/*
+  THE EXISTING FEED, SHAPED LIKE A LEDGER EVENT.
+
+  The office's own activity feed (the gateway's `lately` section, and each project's `activity`) already says who did what, when, on which
+  project, through which door and, for some rows, why. The Activity screen was built to read ledger events; this turns one of those older
+  rows into the same shape so the same timeline, faces, grouping and detail panel draw it, with no ledger and no new endpoint.
+
+  Nothing is invented: the feed carries no outcome, so `status` stays empty and no result word is drawn; a row with no instant keeps its
+  place under Undated; an actor the roster does not know is never credited to somebody else.
+*/
+const cap = (s) => (s === '' ? s : `${s.charAt(0).toUpperCase()}${s.slice(1)}`)
+export const fromFeedRow = (row, i, { crew = [], projects = [] } = {}) => {
+  if (row === null || typeof row !== 'object') return null
+  const str = (x) => (typeof x === 'string' ? x : '')
+  const sentence = cap([str(row.verb), str(row.what)].filter((x) => x !== '').join(' ').trim())
+  if (sentence === '') return null
+  const at = Number.isNaN(Date.parse(str(row.at))) ? '' : str(row.at)
+  const who = str(row.who)
+  const known = crew.find((c) => c.slug === who || c.staffSlug === who)
+  const kindIn = str(row.kind)
+  let actorKind = 'system'
+  let actor = who
+  if (who === 'you' || kindIn === 'user') {
+    actorKind = 'user'
+    actor = 'you'
+  } else if (kindIn === 'external') {
+    actorKind = 'external'
+    actor = `external:${str(row.who_name) || who}`
+  } else if (kindIn === 'agent' || known !== undefined) {
+    actorKind = 'agent'
+  }
+  const projectName = str(row.project)
+  const more = Number.isInteger(row.times) && row.times > 0 ? row.times : 0
+  return {
+    id: str(row.id) !== '' ? str(row.id) : `feed-${String(i)}-${at}-${sentence}`,
+    at,
+    summary: sentence,
+    actor_kind: actorKind,
+    actor,
+    category: str(row.category),
+    project: projectName,
+    project_id: projects.find((p) => p.name === projectName)?.id ?? '',
+    source_interface: str(row.via).toLowerCase(),
+    status: '',
+    severity: '',
+    provenance: 'projected',
+    rationale: str(row.why),
+    reversible: row.reversible === true,
+    more,
+    feed: true,
+  }
+}
+
+/** Newest first; a row with no instant keeps its relative place after every dated one. */
+export const sortFeed = (events) =>
+  events
+    .map((e, i) => ({ e, i, t: Date.parse(e.at) }))
+    .sort((a, b) => (Number.isNaN(b.t) ? 0 : 1) - (Number.isNaN(a.t) ? 0 : 1) || (Number.isNaN(a.t) || Number.isNaN(b.t) ? 0 : b.t - a.t) || a.i - b.i)
+    .map((x) => x.e)
+
+/**
+ * The filters, applied to the rows already held (the older feed has no server-side filter). A project page narrows to its own project
+ * first; the person's choices narrow further. Never throws.
+ */
+export const filterFeed = (events, { agent = '', project = '', range = '' } = {}, { scopeProject = '', now = new Date() } = {}) => {
+  const since = sinceFor(range, now)
+  const sinceMs = since === '' ? Number.NEGATIVE_INFINITY : Date.parse(since)
+  const p = scopeProject !== '' ? scopeProject : project
+  return events.filter((e) => {
+    if (agent !== '' && e.actor !== agent) return false
+    if (p !== '' && e.project_id !== p) return false
+    if (since !== '' && !(Date.parse(e.at) >= sinceMs)) return false
+    return true
+  })
+}

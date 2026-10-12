@@ -73,6 +73,15 @@ export const mount = (c) => {
     avatar: (person, size) => avatar(person, size),
     go: (to) => ctx.goAnywhere(to),
     repaintShell: () => ctx.render(),
+    // The office's existing activity rows, for when the ledger is off. The gateway's `lately` section is office-wide and already folds
+    // repeats and leaves out test traffic; a project page, and the moment before it arrives, use each project's own activity.
+    rows: (scope) => {
+      ctx?.askActivity?.()
+      const lately = ctx?.officeActivity?.() ?? null
+      if (scope === '' && Array.isArray(lately)) return lately
+      return PROJECTS.filter((p) => scope === '' || p.slug === scope).flatMap((p) => (Array.isArray(p.activity) ? p.activity : []).map((a) => ({ ...a, project: p.name })))
+    },
+    today: () => ctx?.activityToday?.() ?? null,
   })
   contacts.mount(c)
   compose.mount(c)
