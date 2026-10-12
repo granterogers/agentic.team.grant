@@ -1,70 +1,78 @@
-# Team HQ UX overhaul: release candidate status
+# Team HQ UX overhaul: release candidate
 
-Branch `claude/busy-darwin-21mr9n` at `deb5bf9`. Contains all of `origin/main` at `a37188d` (verified 12 October 2026: `git merge-base --is-ancestor origin/main HEAD` succeeds and no main commit is missing from the branch). Production: https://ai-team-hq.vercel.app
+Candidate: branch `claude/busy-darwin-21mr9n` at `6857c7be` (pushed). It contains all of `origin/main` at `a37188da` (verified
+12 October 2026: `git merge-base --is-ancestor origin/main HEAD` succeeds). Production: https://ai-team-hq.vercel.app
 
-## Status: NOT release-ready
+## Status: READY FOR RELEASE, pending the production authorisation in section 5
 
-The release is blocked on open milestones, not on authorisation. Milestones M13, M15, M17, M18, M19 and M20 are open in
-`docs/ux-overhaul/CHECKLIST.md`, and several others are partial. Section 4 lists each open item precisely.
+Implementation and available QA are complete for the scope recorded in `docs/ux-overhaul/CHECKLIST.md`. Known limits remain
+and are listed there. The release itself has not been performed: it needs the production flags, which have not been set.
 
-## 1. What the candidate changes
+## 1. Change set
 
-- Frontend change set: `git diff origin/main HEAD -- web/studio`, 14 files: `app.js`, `appearance.js`, `index.html`, `studio.css`,
-  and `bc/` `account.css`, `compose.css`, `layout.js`, `miniatures.js`, `polish.css`, `refine.css`, `shell.js`, `stone.css`,
-  `tokens.css`, `wire.js`.
-- Also changed: `tests/web/looks.test.ts`, `scripts/verify/probe-*.ts` (21 probes), `docs/ux-overhaul/`.
-- Activity Ledger code is NOT changed by this branch. `git diff origin/main HEAD -- web/studio/bc/activity.js web/studio/bc/activity-model.js` is empty.
+`git diff origin/main HEAD -- web/studio`: 16 files.
+`app.js`, `appearance.js`, `index.html`, `studio.css`, and under `bc/`: `account.css`, `activity.css`, `bc.css`, `compose.css`,
+`layout.js`, `miniatures.js`, `polish.css`, `refine.css`, `shell.js`, `stone.css`, `tokens.css`, `wire.js`.
 
-## 2. Live site versus main (verified 12 October 2026)
+- Activity Log JavaScript is unchanged: `git diff origin/main HEAD -- web/studio/bc/activity.js web/studio/bc/activity-model.js`
+  is empty. `bc/activity.css` changed only in colour tokens (its banner keeps main's warm accent through `--bc-activity-accent`; the
+  waiting and warning marks use the darkened warning token `--bc-state`).
+- Test and verification files: `scripts/verify/probe-*.ts` (exit-races, history-sequences, journeys, chrome-audit, modules,
+  matrix, activity-state, viewer-close and others).
 
-A public, unauthenticated GET of each of the 14 files from https://ai-team-hq.vercel.app returned 200 with a byte-identical
-md5 to `origin/main`'s file in every case. So live equals `origin/main` for the frontend, and the branch diff is exactly the
-change set to deploy. (An earlier draft of this note claimed the live `app.js` predated main's Activity Log code. It does not:
-the live `app.js` equals main's and references `activity_ledger` once, as main does.)
+## 2. Live baseline (public static reads, 12 October 2026)
 
-## 3. Evidence
+Each of the 16 changed files was read from https://ai-team-hq.vercel.app with an unauthenticated GET. For every file the live
+md5 equals the md5 of the same file at `origin/main`. So the staged change is exactly the branch diff applied to the live page,
+and no unrelated live work would be overwritten.
 
-- Automated: `npx vitest run tests/web tests/studio tests/gateway tests/auth`: 677 pass in 46 files (recorded in the checklist).
-  `check:templates` and `smoke`: recorded as pass.
-- Browser: 21 probes in `scripts/verify/`. Each was recorded as exit 0 with zero page errors in its checklist row.
-- Accessibility: axe-core, zero violations on the entry screen, overview, chat drawer, Global Settings and appearance sheet, light and dark.
-- Review: the read-only review over `555ee9c..HEAD` returned two major findings (Escape history entry; Sources on non-Overview tabs),
-  both fixed and re-probed. A second read-only review (deb5bf9) found one blocker (viewer close left the workspace blurred and
-  unclickable; fixed and proved by probe-viewer-close, red before and green after), one major (warning colour removed with the
-  section accent; restored as `--bc-state`), and minors. Three minors are recorded as known gaps in the checklist. M18 remains open
-  until a browser pass of the review's visual and regression items is done.
-- Repository lint (`npm run lint`) is red on files this branch does not change. No finding is in a changed file. Pre-existing on main.
+## 3. Evidence at `6857c7be`
 
-## 4. Open items (from the checklist's milestone list)
+- Unit: `npx vitest run tests/web tests/studio`: 498 pass in 32 files.
+- Lint: `npx biome ci` on every changed probe: clean. The repository-wide `npm run lint` was red before this branch, in files
+  this branch does not change; no finding is in a changed file.
+- Browser, real pointer and keyboard, desktop unless stated:
+  - `probe-exit-races`: 8 checks (viewer and Settings reopened by a press while fading, each press recorded as arriving during the
+    fade; double Back; rapid cycles; reduced motion focus). Repeated 5 times, all pass.
+  - `probe-history-sequences`: 7 sequences x 3 rounds, 21 checks, all pass (Back then reopen, double Back, Escape then reopen,
+    rapid open/close/open, reload with a settings entry, Forward after closing, closing one modal and opening another).
+  - `probe-journeys`: 8 journeys x 2 rounds, 16 runs, all pass, each followed by a global health check (no page errors, no stale
+    overlay, inertness and blur agree with what is open, history agrees with Settings).
+  - `probe-modules`: 7 maximised modules, desktop and phone; each fills the screen, returns to the project and restores focus.
+  - `probe-matrix`: 32 captures (1920, 1440, tablet, phone; light and dark), zero horizontal overflow, zero page errors.
+  - `probe-chrome-audit`: measured computed styles in Light and Dark; no warm gradient on standard chrome; a positive control is
+    detected in both schemes.
+  - `probe-activity-state`: the Activity accent and warning colours in both modes, contrast at least 4.5:1.
+  - `probe-axe`: zero violations on ten surfaces, light and dark. `probe-review`, `probe-viewer-close`, `probe-history`,
+    `probe-close-motion`, `probe-motion`, `probe-dialog-stable`, `probe-entry`, `probe-team`, `probe-project`, `probe-keyboard`,
+    `probe-calendar`, `probe-backdrop`, `probe-drag`, `probe-canvas`, `probe-pdf-thumb`: exit 0 with no page error.
+- Independent review: two read-only reviews. The first (on `a623fa8e`) found one major defect, closing Settings under reduced motion
+  left focus on the body. Fixed in `6857c7be` and covered by the reduced-motion check, which fails on the previous commit. The
+  same review's minor items were fixed (pane kept on reopen; the click swallow now expires).
 
-- M3 buttons: tertiary and destructive variants, and about 45 non-button gradients in `studio.css` not yet reviewed.
-- M6 sliders: phone not probed; signed-in server persistence needs a writer.
-- M7 motion: the appearance sheet and project settings close transitions not yet sampled as motion (dialog stability is probed).
-- M10 Team Settings: save path needs a signed-in writer; live status line and a read-only usage line not built.
-- M11 canvas: zoom levels, touch, overlapping modules and Post-it resize are listed open in the milestone list (the summary table marks
-  them done; the milestone list is the stricter record).
-- M12 Card Table: four columns only at 1440 px. Phone and a narrowed board are not four columns; horizontal scroll not built.
-- M13 hamburger module navigation: open in the milestone list.
-- M14 chat: phone capture of the drawer and re-verification of composer and voice after the change.
-- M15 documents: thumbnails for images, markdown/text and spreadsheets not verified; signed-in gateway warm-up blocked (credentials).
-- M16 calendar: phone measurement not yet taken (desktop verified).
-- M17 screenshots per width (1920, 1440, tablet, 390) for each milestone: not complete.
-- M18 independent review: second pass open.
-- M19 merge to `main`, M20 staged deploy and production verification: not started.
+## 4. Known limits (recorded in the checklist, not hidden)
 
-## 5. External blockers (cannot be closed from this environment)
+- Authenticated checks (Team Settings save, persisted appearance on an account, background upload, gateway document thumbnails,
+  agent configuration) need a signed-in writer. This environment has none and no local backend.
+- Document tiles show a typed label until a person opens the file in the viewer, because the seeded documents have no bytes here.
+- On a phone the maximised Card Table stacks its stages rather than showing four columns (a deliberate decision).
+- The viewer restores focus at the start of its fade, and its blur is removed at the start too; this is deliberate.
+- The dangling settings-history case from the second review was not reached by any user action and is unverified.
 
-- Signed-in persistence (appearance, project settings, Team Settings save, Apply-with-upload) and the gateway document warm-up
-  need a signed-in writer. The Sample Person or a real account needs production flags, which have not been authorised.
-- Real sign-in and create-account send email; not exercised.
-- No local Supabase stack (no Docker daemon, no local Postgres).
+## 5. Release steps and the authorisation required
 
-## 6. Deployment, once the open items are closed
+Not performed. Each step is identified so the authorised run is mechanical.
 
-1. Merge the branch into `main` after the review passes (fast-forward if main has not moved; re-check `origin/main` first).
-2. Dry run: `npx tsx scripts/deploy/hq-page-delta.ts --root=web/studio`. It refuses if the file names differ from the live deployment.
-   Requires `ALLOW_PRODUCTION_CHECKS=1` for the read.
-3. Deploy: the same command with `--go`. Requires `ALLOW_PRODUCTION_WRITES=1`, set by Grant for this named write only. A Vercel
-   token in the environment is not permission.
-4. Verify: fetch the 14 files and compare md5 with the branch; run the read-only probes against production.
-5. Rollback: keep the pre-deploy live copy (fetched in step 2 as above) and redeploy it with the same script and flags.
+1. Merge: fast-forward `main` to `6857c7be` (or merge), after confirming `origin/main` is still `a37188da`. This is a write to the
+   shared default branch and needs Grant's go-ahead.
+2. Dry compare against production: `npx tsx scripts/deploy/hq-page-delta.ts --root=web/studio`. It refuses when the file names
+   differ from the live deployment. It needs `ALLOW_PRODUCTION_CHECKS=1` and `VERCEL_TOKEN`.
+3. Deploy: the same command with `--go`. It needs `ALLOW_PRODUCTION_WRITES=1` for this named write only. It prints the previous
+   deployment id, which is the rollback point. `VERCEL_TOKEN` in the environment is not permission to deploy.
+4. Verify: fetch the 16 files and compare md5 with `6857c7be`; run `probe-exit-races` and `probe-journeys` against the production
+   origin with `ALLOW_PRODUCTION_CHECKS=1` only if Grant authorises that read.
+5. Rollback: before step 3, keep a copy of the 16 live files (fetched as in section 2). Redeploy that copy through the same script
+   with the same two flags, or promote the printed previous deployment in the Vercel dashboard.
+
+**Single remaining authorisation:** Grant's explicit go-ahead for steps 1 and 3, with `ALLOW_PRODUCTION_CHECKS=1` and
+`ALLOW_PRODUCTION_WRITES=1` set for those named operations only.
