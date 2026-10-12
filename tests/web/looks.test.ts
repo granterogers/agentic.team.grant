@@ -119,13 +119,11 @@ describe('every accent is readable on every look', () => {
     return [m?.[1] ?? '', m?.[2] ?? '']
   }
   const surfaces = (look: string, scheme: 'dark' | 'light'): [string, string] => {
-    if (look === 'original')
-      return scheme === 'dark' ? ['#0b151b', '#1b2930'] : ['#d6d3cc', '#f0eee9']
     const b = lookBlock(look, scheme)
     return [b?.canvas as string, b?.surface as string]
   }
   for (const scheme of ['dark', 'light'] as const)
-    for (const look of ['original', 'silver', 'forest', 'graphite'])
+    for (const look of ['silver', 'forest', 'graphite'])
       for (const palette of ['slate', 'moss', 'clay', 'ink', 'paper']) {
         it(`${palette} accent on ${look} (${scheme}): the ink on it is 4.5:1 and the accent stands off the surface 3:1`, () => {
           const [accent, ink] = accentOf(palette, scheme)

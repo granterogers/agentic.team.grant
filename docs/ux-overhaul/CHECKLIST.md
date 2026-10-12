@@ -60,6 +60,16 @@ settings-sheet transitions (M7).
 - [ ] M19. Merge to `main` (requires branch-protection and review checks to pass).
 - [ ] M20. Staged-tree production deploy, then production verification of the intended commit.
 
+## Independent review (12 October 2026, read-only reviewer over 555ee9c..HEAD)
+
+Findings and disposition:
+1. MAJOR, Escape left a stale settings history entry. FIXED: Escape now steps back over the entry, like the Back button. Verified: scripts/verify/probe-review.ts (Escape, then Back: Settings stays closed; no settings entry left on the stack).
+2. MAJOR, Sources in the project menu did nothing on non-Overview tabs. FIXED: the handler is bound in wireExpanded, not behind wirePageMenu's early return. Verified: probe-review.ts (opens from the Tasks route, Sources open).
+3. MINOR, Settings opened by a deep link closes on Back and also moves the workspace. NOT CHANGED: deep links have no settings entry by design; recorded here.
+4. MINOR, stale references to the retired look. FIXED: refine.css comment; looks.test.ts no longer iterates 'original' (test count 495 to 485, all pass).
+5. MINOR, new menu items hard-coded role=menuitem. FIXED: they follow the same role rule as the existing items.
+6. MINOR, To-dos narrowed on the Overview (0.25 to 0.19). A TRADE-OFF, not a regression of intent: the three Overview columns must sum to 0.80 so the starter Post-it strip stays free. Recorded, not hidden.
+
 ## Verification log
 
 - M1: `npx vitest run tests/web` (16 files). Result recorded in the commit message.

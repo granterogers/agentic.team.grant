@@ -669,6 +669,12 @@ if (typeof document !== 'undefined') {
       const el = $(id)
       if (el && !el.hidden) {
         if (id === '#viewer') unwireCall()
+        // Escape closes Settings the way the page's Back button does: stepping back over the entry that opened it, so no
+        // stale settings entry is left for a later Back or Forward to reopen (M8 review finding).
+        if (id === '#settings' && typeof history !== 'undefined' && history.state?.settings === true) {
+          history.back()
+          return
+        }
         sheet(el, false)
         syncCallButtons()
         return

@@ -356,9 +356,9 @@ const menuPanel = () => {
     <div class="bcmenulist" data-bc-menu-modules>${Object.entries(compose.NAMES)
       .map(
         ([id, name]) =>
-          `<button type="button" role="menuitem" class="bcmenuitem" data-bc-expand="${esc(id)}"><span class="bcmenuname">${esc(name)}</span></button>`,
+          `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-expand="${esc(id)}"><span class="bcmenuname">${esc(name)}</span></button>`,
       )
-      .join('')}${item(at(`/p/${here}/chat`), 'Team Chat')}<button type="button" role="menuitem" class="bcmenuitem" data-bc-sources="1"><span class="bcmenuname">Sources</span></button></div>`
+      .join('')}${item(at(`/p/${here}/chat`), 'Team Chat')}<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-sources="1"><span class="bcmenuname">Sources</span></button></div>`
     }
     <hr class="bcmenusep">
     ${item(at('/search'), 'Search')}

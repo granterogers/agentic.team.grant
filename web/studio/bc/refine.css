@@ -16,7 +16,7 @@
 /* ---------------------------------------------------------------- 3. looks, glass and depth --- */
 
 /*
-  LOOKS. The default ("original") is the interface as it already is and needs no rule. The others change only what the
+  LOOKS. The default is Slate & Silver (silver), which has a rule below like the others. Each look changes only what the
   surfaces are made of (canvas, surface, popover edge); the accent is the person's other choice and is never touched here,
   so any look can wear any accent. Each pair is checked for contrast by tests/web/looks.test.ts and the surface lab.
 */

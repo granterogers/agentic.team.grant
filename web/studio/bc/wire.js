@@ -1099,6 +1099,22 @@ const asBase64 = (file) =>
   it once on the document viewer.
 */
 const wireExpanded = (root) => {
+  /*
+    Sources from the navigation menu (M13). Bound here, not in wirePageMenu: that function returns early on the tabs that have
+    no page menu, and the Sources item is listed on every project tab. The page menu is closed only if it is drawn.
+  */
+  for (const b of root.querySelectorAll('[data-bc-sources]')) {
+    b.addEventListener('click', () => {
+      const pagePanel = root.querySelector('[data-bc-pagemenu-panel]')
+      if (pagePanel !== null) {
+        pagePanel.hidden = true
+        compose.setPageMenuOpen(false)
+      }
+      // The navigation menu is closed here, so its handler cannot redraw the shell under the close control (M13).
+      if (menu.isOpen()) menu.setOpen(false)
+      ctx.openExpanded?.('sources')
+    })
+  }
   for (const b of root.querySelectorAll('[data-bc-expand]')) {
     b.addEventListener('click', () => {
       lastOpener = b.dataset.bcExpand ?? ''
@@ -1968,15 +1984,6 @@ const wirePageMenu = (root) => {
       shut()
       const p = ctx.projects().find((q) => q.slug === ctx.state.project)
       if (p !== undefined) void styleForm.open(p)
-    })
-  }
-  for (const b of root.querySelectorAll('[data-bc-sources]')) {
-    b.addEventListener('click', () => {
-      shut()
-      // The same fix as the module items (M13): the navigation menu is closed here, so its handler cannot redraw the shell
-      // under the close control that comes next.
-      if (menu.isOpen()) menu.setOpen(false)
-      ctx.openExpanded?.('sources')
     })
   }
 
