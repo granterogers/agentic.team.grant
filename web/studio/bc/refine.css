@@ -154,7 +154,7 @@
   stays the fill, so every accent and every look wears it unchanged. Nothing here changes a size.
 */
 [data-experience='basecamp'] :is(.bcbtn--primary, .bccal2btn--primary) {
-  background-image: linear-gradient(180deg, color-mix(in srgb, #fff 11%, transparent) 0%, transparent 55%, color-mix(in srgb, #000 6%, transparent) 100%);
+  background-image: none;
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--bc-shadow-ink) 18%, transparent),
@@ -162,10 +162,12 @@
   transition: background-color var(--bc-t-focus) var(--bc-ease-out), box-shadow var(--bc-t-focus) var(--bc-ease-out), transform var(--bc-t-focus) var(--bc-ease-out);
 }
 [data-experience='basecamp'] :is(.bcbtn--primary, .bccal2btn--primary):hover:not(:disabled) {
-  background-image: linear-gradient(180deg, color-mix(in srgb, #fff 18%, transparent) 0%, color-mix(in srgb, #fff 3%, transparent) 55%, color-mix(in srgb, #000 5%, transparent) 100%);
+  background-image: none;
+  filter: brightness(1.04);
 }
 [data-experience='basecamp'] :is(.bcbtn--primary, .bccal2btn--primary):active:not(:disabled) {
-  background-image: linear-gradient(180deg, color-mix(in srgb, #000 10%, transparent), transparent 70%);
+  background-image: none;
+  filter: brightness(0.94);
   box-shadow: inset 0 1px 3px color-mix(in srgb, var(--bc-shadow-ink) 38%, transparent);
   transform: translateY(0.5px);
 }

@@ -20,8 +20,8 @@ Branch: `claude/busy-darwin-21mr9n`. Production page: `ai-team-hq.vercel.app`.
 - [x] M1. Slate & Silver default; Original removed from `LOOKS`; saved `original` migrates to `silver`
       (`web/studio/appearance.js`, `tests/web/looks.test.ts`).
 - [ ] M1b. Remove Original-specific base styles from the chrome (tokens.css / skins.css fallback values).
-- [ ] M2. Light / Dark / Device as three real modes; device follows `prefers-color-scheme` live; no flash on load.
-- [ ] M3. Replace orange/brown gradients in buttons with the shared primary, secondary, tertiary and destructive variants.
+- [~] M2. Light / Dark / Device as three real modes. VERIFIED on `/` (scripts/verify/probe-scheme.ts, 6 cases, 0 page errors, screenshots in .out/probe): Light is light, Dark is dark, Device follows the OS both ways. The earlier 'Light looks dark' capture came from /classic/ (the shots harness loads it). Still open: no-flash-on-load proof and the segmented control's stored state after a reload.
+- [~] M3. Solid buttons: removed the stacked gradient from .btn, .btn.primary (studio.css) and the basecamp primary overlay (bc/refine.css). Verified by screenshot. Still open: tertiary and destructive variants and the remaining gradients in studio.css (about 45 non-button gradients to review).
 - [ ] M4. Landing and authentication redesign (light and dark, desktop and 390px).
 - [ ] M5. Background textures: every preset visibly applies; Apply / Cancel / Restore default; upload path.
 - [ ] M6. Scale, opacity and shade sliders: pointer, touch and keyboard; live rendering; persistence.
