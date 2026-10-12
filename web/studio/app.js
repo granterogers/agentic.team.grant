@@ -7210,6 +7210,12 @@ function settingsSheet() {
       return
     }
     state.settingsPane = 'index'
+    // Closing Settings steps back over the entry that opened it, as a maximised module's close does, so the close button and
+    // the browser's Back agree. Forward then goes forward into that entry, which is what Forward means (M8).
+    if (typeof history !== 'undefined' && history.state?.settings === true) {
+      history.back()
+      return
+    }
     sheet(v, false)
   })
   /*
@@ -13746,6 +13752,18 @@ if (typeof window !== 'undefined') {
     */
     const path = e.state?.path ?? addressNow()
     shownPath = path
+    /*
+      Global Settings follows its own history entry (M8). Back past the entry that opened it closes the page; Forward onto
+      it reopens the page where it was left. Either way the workspace underneath is drawn from the path, not reset.
+    */
+    const settingsShown = !$('#settings').hidden
+    if (settingsShown && e.state?.settings !== true) {
+      state.settingsPane = 'index'
+      sheet($('#settings'), false)
+    } else if (!settingsShown && e.state?.settings === true) {
+      settingsSheet()
+      sheet($('#settings'), true)
+    }
     const was = state.bcExpanded
     goToPath(path)
     /*
@@ -13940,6 +13958,14 @@ const bcContext = {
       state.settingsPane = 'detail'
     } else {
       state.settingsPane = 'index'
+    }
+    // Opening Global Settings is a history entry, so browser Back returns to where the person was (M8).
+    if ($('#settings').hidden && typeof history !== 'undefined' && history.state?.settings !== true) {
+      try {
+        history.pushState({ path: shownPath ?? addressNow(), settings: true }, '', location.href)
+      } catch {
+        /* A page opened from a file has no history to write to; the sheet still opens. */
+      }
     }
     settingsSheet()
     sheet($('#settings'), true)

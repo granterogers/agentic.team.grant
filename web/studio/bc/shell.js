@@ -464,8 +464,8 @@ const topRow = () => {
       <span class="bcmenuwrap bcofficemenu">
         <button type="button" class="bcbtn bcicon" data-bc-settings="1"
           aria-haspopup="dialog"
-          title="Settings for the whole office"
-          aria-label="Settings for the whole office — the team, connections, appearance and how it works">
+          title="Global Settings: the whole office, outside any project"
+          aria-label="Global Settings — the team, connections, appearance and how it works, for the whole office">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
             <circle cx="12" cy="5" r="1.7"></circle>
             <circle cx="12" cy="12" r="1.7"></circle>

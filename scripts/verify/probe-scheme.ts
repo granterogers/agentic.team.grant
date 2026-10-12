@@ -78,9 +78,15 @@ try {
         }
       })
       await mkdir(OUT, { recursive: true })
-      await page.screenshot({ path: join(OUT, `scheme-${scheme}-os-${dark ? 'dark' : 'light'}.png`) })
+      const shot = `scheme-${scheme}-os-${dark ? 'dark' : 'light'}.png`
+      await page.screenshot({ path: join(OUT, shot) })
       console.log(
-        JSON.stringify({ stored: scheme, osDark: dark, ...reading, pageErrors: errors.slice(0, 2) }),
+        JSON.stringify({
+          stored: scheme,
+          osDark: dark,
+          ...reading,
+          pageErrors: errors.slice(0, 2),
+        }),
       )
       await context.close()
     }
