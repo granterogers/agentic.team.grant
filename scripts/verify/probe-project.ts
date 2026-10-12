@@ -65,6 +65,18 @@ try {
     const first = page.locator('[data-bc-go*="/p/"]').first()
     await first.click({ force: true })
     await page.waitForTimeout(1500)
+    if (process.argv[3] === 'chat') {
+      await page.getByRole('button', { name: /chat with team/i }).first().click({ force: true })
+      await page.waitForTimeout(1200)
+      const ancestry = await page.evaluate(() => {
+        const m = document.querySelector<HTMLElement>('.msg')
+        const names: string[] = []
+        for (let el: HTMLElement | null = m; el !== null && names.length < 7; el = el.parentElement)
+          names.push(`${el.tagName.toLowerCase()}.${String(el.className).split(' ').slice(0, 3).join('.')}`)
+        return names
+      })
+      console.log(JSON.stringify({ msgAncestry: ancestry }))
+    }
     const box = await page.evaluate(() => {
       const el = document.querySelector<HTMLElement>('[data-mod="board"]')
       if (!el) return null
