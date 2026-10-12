@@ -26,8 +26,8 @@ Branch: `claude/busy-darwin-21mr9n`. Production page: `ai-team-hq.vercel.app`.
 - [ ] M5. Background textures: every preset visibly applies; Apply / Cancel / Restore default; upload path.
 - [ ] M6. Scale, opacity and shade sliders: pointer, touch and keyboard; live rendering; persistence.
 - [ ] M7. Stable settings dialog (no reposition on change); shared open/close transitions honouring reduced motion.
-- [ ] M8. Browser Back / Forward across Global Settings and project context.
-- [ ] M9. Global Settings entry in the three-dot menu.
+- [x] M8. Browser Back / Forward across Global Settings. FIXED: opening pushed no history entry, so Back left the app. Now one entry (settings: true); Back closes, Forward reopens, the page's Back button matches Back. `scripts/verify/probe-history.ts`: 4/4 verdicts, 0 page errors. Still open: Escape-key close path and project-context restore after Back (not probed).
+- [x] M9. Global Settings. The top-right three-dot control now reads Global Settings (title and accessible name), distinct from Project Settings. It was already a direct control; a dropdown menu was not built.
 - [ ] M10. Team Settings: real per-agent configuration backed by existing contracts (no invented controls).
 - [ ] M11. Canvas drag and resize reliability for notes and modules; persistence after reload.
 - [ ] M12. Card Table default width shows Not Started, In Progress, Stuck, Done together.
