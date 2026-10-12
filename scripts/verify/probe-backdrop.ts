@@ -174,6 +174,24 @@ try {
     .click({ force: true })
   await page.waitForTimeout(400)
   console.log(JSON.stringify({ afterRestore: await readBoard() }))
+  // Upload path: a real picture goes into the background control and shows as a pending choice.
+  if ((await page.locator('[data-bd-file]').count()) === 0) await openLook()
+  await page
+    .locator('[data-bd-file]')
+    .first()
+    .setInputFiles(join(ROOT, 'textures', 'bg', 'brushed-aluminium.webp'))
+  await page.waitForTimeout(1500)
+  const uploaded = await page.evaluate(() => ({
+    yourPicture: Array.from(document.querySelectorAll('[data-bd] [data-bd-pick]')).some((t) =>
+      (t.textContent ?? '').includes('Your picture'),
+    ),
+    applyEnabled:
+      (document.querySelector('[data-bd-apply]') as HTMLButtonElement | null)?.disabled === false,
+  }))
+  console.log(JSON.stringify({ upload: uploaded, board: await readBoard() }))
+  await page.locator('[data-bd-cancel]').first().click({ force: true })
+  await page.waitForTimeout(400)
+  console.log(JSON.stringify({ uploadCancelled: await readBoard() }))
   console.log(JSON.stringify({ pageErrors: errors.slice(0, 3) }))
 } finally {
   await browser.close()
