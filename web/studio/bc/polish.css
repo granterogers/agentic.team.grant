@@ -387,9 +387,15 @@
 /*
   A MODAL sheet on its way out still covers the page and keeps its pointer input: a press on it never falls through to the
   workspace behind. A press on it reopens it (app.js reopenOnPress), so the sheet's own close controls are the only things
-  that are deliberately inert while it fades. The chat drawer is not modal and takes no pointer input while it leaves.
+  that are deliberately inert while it fades.
+  The chat drawer is not modal on a desktop, where it is a side panel beside the workspace, so it takes no pointer input while
+  it leaves. On a phone (up to 760px) it covers the whole screen, so the same rule would let a press fall through to the header
+  beneath it, where Sign out sits (production, 12 October: a rapid press during the fade signed the visitor out). There it keeps
+  its pointer input and absorbs the press. Its own close control is inert again once it has gone.
 */
-[data-experience='basecamp'] #dock.leaving { pointer-events: none; }
+@media (min-width: 761px) {
+  [data-experience='basecamp'] #dock.leaving { pointer-events: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   [data-experience='basecamp'] #dock.leaving,
   [data-experience='basecamp'] #settings.leaving,
