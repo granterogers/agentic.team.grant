@@ -49,6 +49,7 @@ import * as bcDrive from './drive.js'
 import * as todos from './todos.js'
 import * as account from './account.js'
 import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, tool } from './parts.js'
+import * as activity from './activity.js'
 
 /*
   What app.js hands us at boot. Set once; never reassigned, so a stale
@@ -64,6 +65,15 @@ export const mount = (c) => {
   */
   bcMini.mount(c)
   todos.mount(c)
+  activity.configure({
+    esc,
+    read,
+    crew: () => ctx?.crew ?? [],
+    projects: () => PROJECTS,
+    avatar: (person, size) => avatar(person, size),
+    go: (to) => ctx.goAnywhere(to),
+    repaintShell: () => ctx.render(),
+  })
   contacts.mount(c)
   compose.mount(c)
   account.mount(c)
@@ -3295,7 +3305,13 @@ const SURFACE = {
   documents: documentsSurface,
   contacts: contactsSurface,
   sources: sourcesSurface,
-  activity: activitySurface,
+  // The ledger's timeline when it is on for this office and answers; otherwise the older page, whole (see activity.js).
+  activity: (p) =>
+    activity.render(p.slug, () => activitySurface(p), () => `${crumbFor(p, 'activity')}
+    <div class="bcrecordhead"><h1>${esc(toolById('activity')?.name ?? 'Activity')}</h1></div>
+    <p class="bcpmeta bcprose bcgap-l">
+      What has happened on this project, most recent first. Each line says who did it and, where it is known, which door it came through.
+    </p>`),
   board: boardSurface,
   schedule: scheduleSurface,
   chat: chatSurface,
@@ -3441,23 +3457,35 @@ const allActivity = () => {
     everything in the second" and a person could not tell what had just
     happened. Items with no instant keep their place after the dated ones.
   */
-  const rows = PROJECTS.flatMap((p) => (p.activity ?? []).map((a) => ({ ...a, project: p.name })))
-    .map((a, i) => ({ a, i, t: a.at ? Date.parse(a.at) : Number.NaN }))
-    .sort((x, y) => (Number.isNaN(y.t) ? -1 : 0) - (Number.isNaN(x.t) ? -1 : 0) || (y.t || 0) - (x.t || 0) || x.i - y.i)
-    .map((x) => x.a)
-    .slice(0, 80)
+  /*
+    THE LEDGER, WHEN IT IS ON AND ANSWERED (docs/activity-ledger/). Its rows already span the whole office, newest first, with the
+    project named in each, so they replace the per-project lists wholesale rather than being merged into them: merging two accounts
+    of the same events is how one fact appears twice. `ctx.ledgerActivity()` is null when it is switched off, unanswered or empty,
+    which leaves exactly the behaviour below. A ledger sentence already carries its actor ("You said yes: ..."), so the name goes in
+    front only for a specialist or an outside worker (`line.byline`).
+  */
+  const fromLedger = ctx?.ledgerActivity?.() ?? null
+  const rows = (fromLedger !== null
+    ? fromLedger.slice(0, 80)
+    : PROJECTS.flatMap((p) => (p.activity ?? []).map((a) => ({ ...a, project: p.name })))
+        .map((a, i) => ({ a, i, t: a.at ? Date.parse(a.at) : Number.NaN }))
+        .sort((x, y) => (Number.isNaN(y.t) ? -1 : 0) - (Number.isNaN(x.t) ? -1 : 0) || (y.t || 0) - (x.t || 0) || x.i - y.i)
+        .map((x) => x.a)
+        .slice(0, 80))
+  const titleOf = (a) =>
+    a.line !== undefined
+      ? `${a.line.byline === '' ? '' : `${a.line.byline}: `}${a.line.sentence}`.trim()
+      : `${whoName(a.who) || 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim()
   return `<h1 class="bcsectiontitle">Activity</h1>
     ${
       rows.length === 0
         ? empty({ title: 'Nothing yet', body: 'What happens across your projects is listed here.' })
         : `<div class="bclist">${rows
             .map(
-              (a) => `<div class="bcitem">
+              (a) => `<div class="bcitem bcitem--log">
                 <span></span>
                 <div class="bcitembody">
-                  <span class="bcitemtitle">${esc(
-                    `${whoName(a.who) || 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(),
-                  )}</span>
+                  <span class="bcitemtitle">${esc(titleOf(a))}</span>
                   <span class="bcitemmeta">${esc([a.project, a.when].filter(Boolean).join(' · '))}</span>
                 </div>
                 <span></span>
@@ -3717,7 +3745,7 @@ const body = () => {
   const s = state()
   if (s.view === 'bcsearch') return search()
   if (s.view === 'tasks') return myTasks()
-  if (s.view === 'lately') return allActivity()
+  if (s.view === 'lately') return activity.render('', () => allActivity(), () => '<h1 class="bcsectiontitle">Activity</h1>')
   if (s.view === 'project') {
     const p = project()
     if (p === null || p === undefined) {

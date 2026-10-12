@@ -46,6 +46,7 @@ import * as docorder from './docorder.js'
 import * as jump from './jump.js'
 import * as menu from './menu.js'
 import * as account from './account.js'
+import * as activity from './activity.js'
 
 let ctx = null
 export const mount = (c) => {
@@ -539,6 +540,7 @@ export const wire = (root) => {
   expand.play(root)
   cal.wire(root)
   docview.wire(root, ctx, fileFor)
+  activity.wire(root)
   for (const b of root.querySelectorAll('[data-bc-actf]')) {
     b.addEventListener('click', () => {
       ctx.state.bcActFilter = b.dataset.bcActf

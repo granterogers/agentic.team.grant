@@ -12,6 +12,78 @@ import { p, via } from './p.ts'
 import type { Proof } from './types.ts'
 
 export const EXTENDED: readonly Proof[] = [
+  // ---- the unified activity ledger -------------------------------------------------------------------------------------
+  p(
+    'activity-worker',
+    8,
+    "the worker's recovery sweep records one system.recovered event per reclaimed job, once, only when the ledger is on, and never fails the sweep when the ledger cannot be written",
+  ),
+  p(
+    'activity-ledger',
+    62,
+    'the one activity history is read from the tables that own each fact, never invents or copies one, shows nothing of a suite, cannot cross an office, redacts what it stores, takes an idempotent and concurrent write, refuses an update or a forged external report, and fails closed',
+  ),
+  p(
+    'activity-gateway',
+    14,
+    'the same ledger through the real hq-api gateway: each person reads only their own, a malformed id, instant, word or count is refused by name, a cursor never skips or repeats an event, and switched off it answers nothing',
+  ),
+  p(
+    'activity-ledger-review',
+    35,
+    "each defect the independent review demonstrated stays fixed: no yes or no is invented for an answer the data cannot classify, a person-marked delivery is not provider-confirmed, a stopped job is the person's, a job filter includes every descendant, a fixture project's job-less rows are hidden, a selective filter on a busy office is complete, the page gets slugs, a chain says when it is not complete, the external door cleans and bounds what a worker sends, and no HTTP role can reach a writer",
+  ),
+  p(
+    'activity-ledger-equivalence',
+    8,
+    'a filter on the activity read model (severity, category, type, agent, project, job, correlation, alone and combined) returns exactly what filtering the whole history afterwards returns, by id and in order, never partial; shown red by a pushdown predicate made too narrow',
+  ),
+  p(
+    'activity-indexes',
+    11,
+    'the read model access paths are built one at a time with CREATE INDEX CONCURRENTLY while the worker keeps writing: no write refused or stalled, a plain build of the same index shown to stall (the control), a second run changes nothing, an invalid leftover is dropped and rebuilt, and the health reading names what is missing',
+  ),
+  p(
+    'activity-native-writers',
+    14,
+    'tool-call events are written through the real TypeScript writer and carry the capability, step and outcome but never an input, output or error message; holding an over-budget agent back records budget.threshold_reached once a day (and nothing while the switch is off, the held-back behaviour unchanged); a rate-limit pause is an integration.rate_limited event projected from job_pauses; a broken ledger cannot fail a step',
+  ),
+  p(
+    'activity-ledger-durability',
+    11,
+    'audit durability by class: a critical type is refused by the best-effort writer and a failed strict record fails the change in its own transaction; with the ledger table (and then its failure counter) deliberately broken the best-effort writer returns null, never raises and writes nothing about itself; the failure counter is bounded',
+  ),
+  p(
+    'activity-redaction',
+    60,
+    'the SQL strict redactor the ledger stores through and its TypeScript twin agree byte for byte on every credential family, evasion and neighbour, in linear time, and the limits are pinned',
+  ),
+  p(
+    'activity-office-scope',
+    16,
+    'the ledger fails closed: only an explicit master plus a valid office list or the explicit all-offices setting turns an office on; absent, null, empty, malformed, unknown-version and mixed settings turn it on for nobody; every writer and reader obeys one decision; the operator statements cannot broaden under a race or an interruption; and switching off deletes nothing',
+  ),
+  p(
+    'activity-external-attack',
+    47,
+    'the external-worker door under concurrent writers holds its 300 per worker and 1000 per office, cannot be varied past by name or key, cannot claim a review, confirmation or approval, and the ledger tables are closed to browser roles and to edits',
+  ),
+  p(
+    'activity-storage',
+    9,
+    'what the ledger costs in storage on the final schema: the three migrations add under 2 MB, the eleven read indexes cost a bounded number of bytes per row of the tables they index, a typical native event is under 1 KB with its indexes and the largest payload the table accepts under 6 KB, every kind is stored once and a replay adds nothing',
+  ),
+  p(
+    'activity-archive-rehearsal',
+    10,
+    'old diagnostic events can be exported with a checksum, removed from the live table (on a disposable replica only) and restored byte for byte, the Activity read answers over what is left and again over the restored window, and no consequential event is ever in the slice',
+  ),
+  p(
+    'activity-scaling',
+    14,
+    "a small office's Activity read does not grow with other offices' volume (one to eight copies of a busy history in unrelated offices, same events in the same order, none foreign), a read that cannot finish in its time budget is refused with PT504 between passes and never answered short, and a caller-armed statement timeout cancels a running read cleanly",
+  ),
+
   // ---- answers, acknowledgements, questions --------------------------------------------------------------------------
   p(
     'acknowledgement',

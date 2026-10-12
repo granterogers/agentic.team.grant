@@ -40,6 +40,7 @@
  * and says why, because an empty result and a failed look are different
  * things and CLAUDE.md records what conflating them costs.
  */
+import { recordToolCall } from '../activity/record.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { raiseBlocker } from '../inference/record.ts'
 import { fingerprint, type Outcome, type Paused, type Step } from '../jobs/checkpoint.ts'
@@ -895,15 +896,45 @@ export const compile = (
             (parts[0]?.startsWith('r') === true && parts.length === 3 ? parts[1] : parts[0]) ?? name
           from[id] = outcome
         }
-        const answered = await executor.run({
-          db,
+        /*
+          The activity ledger observes the call and decides nothing: it is reached only on the path where the policy said proceed,
+          after `mayAct`, and records the capability, the step and how it ended - never the step's inputs or what the tool returned.
+          Best effort in both directions (src/activity/record.ts), so a ledger that is down cannot fail a step.
+        */
+        const toolCall = {
           jobId,
-          projectId,
-          request,
-          step,
-          from,
-          ...(router === undefined ? {} : { router }),
-          ...(held === undefined ? {} : { held }),
+          capability: step.capability,
+          step: step.id,
+          ...(step.specialist === null ? {} : { specialist: step.specialist }),
+        }
+        await recordToolCall(db, { ...toolCall, phase: 'requested' })
+        const startedAt = Date.now()
+        let answered: Awaited<ReturnType<Executor['run']>>
+        try {
+          answered = await executor.run({
+            db,
+            jobId,
+            projectId,
+            request,
+            step,
+            from,
+            ...(router === undefined ? {} : { router }),
+            ...(held === undefined ? {} : { held }),
+          })
+        } catch (error) {
+          await recordToolCall(db, {
+            ...toolCall,
+            phase: 'failed',
+            durationMs: Date.now() - startedAt,
+            errorClass: error instanceof Error ? error.constructor.name : 'unknown',
+          })
+          throw error
+        }
+        await recordToolCall(db, {
+          ...toolCall,
+          phase: 'completed',
+          durationMs: Date.now() - startedAt,
+          outcome: isLater(answered) ? 'paused' : answered.found ? 'found' : 'nothing',
         })
         // A step that says "not yet" stops the plan; one that says "no" is an
         // outcome the steps after it can read.

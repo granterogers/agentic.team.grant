@@ -30,6 +30,7 @@
  * process never runs is not a recovery mechanism.
  */
 
+import { recordRecovered } from '../activity/record.ts'
 import { loadConsequenceEvidence } from '../agents/consequence.ts'
 import { type Domain, howComposed } from '../agents/provenance.ts'
 import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
@@ -545,6 +546,16 @@ export const recoverStalled = async (db: SqlExecutor): Promise<readonly Recovere
   const { rows } = await db.execute(
     `select job_id::text as job_id, from_state::text as from_state, reason
      from app.recover_stalled_jobs()`,
+  )
+  // The one thing the sweep does that no table records: a worker stopped and its work was taken back. Best effort and
+  // default-off (src/activity/record.ts); the transition to `retrying` is already in job_state_transitions.
+  await recordRecovered(
+    db,
+    (rows as { job_id: string; from_state: string; reason: string }[]).map((r) => ({
+      jobId: r.job_id,
+      fromState: r.from_state,
+      reason: r.reason,
+    })),
   )
 
   // Then put them back in the queue. `recover_stalled_jobs` moves a stalled job

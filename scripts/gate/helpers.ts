@@ -7,6 +7,54 @@
  */
 export const HELPERS: readonly { readonly stem: string; readonly role: string }[] = [
   {
+    stem: 'activity-ledger-perf',
+    role: 'NOT a gate: measures what the unified activity ledger costs (read latency against history, write cost, concurrency, footprint) and reports; run by hand with a job count',
+  },
+  {
+    stem: 'activity-ledger-sabotage',
+    role: 'NOT a proof: breaks each protection of the unified activity ledger on a copy and requires the named proof to go red, then runs the unmodified control; run by hand (about 15 minutes)',
+  },
+  {
+    stem: 'activity-migration-rehearsal',
+    role: 'NOT a gate: rehearses the ledger deployment failure modes (a failing migration, an interrupted concurrent index build, a transaction-wrapped connection) on a clone with only 1060 applied; run by hand through its .sh wrapper',
+  },
+  {
+    stem: 'activity-read-concurrency',
+    role: 'NOT a gate: p50 and p95 of the newest page, a diagnostic page and a sparse filter for one reader and for several at once, on a database activity-ledger-perf has seeded; reports and asserts shape only',
+  },
+  {
+    stem: 'activity-mixed-version',
+    role: "NOT a gate: the new worker's ledger writers over a schema WITHOUT the ledger (a deploy ordering mistake); run by hand on a clone of a replica built from main",
+  },
+  {
+    stem: 'activity-ui-browser',
+    role: 'NOT a gate: draws the Activity screen from genuine ledger rows through the real gateway in a real browser at 1440, 390 and 320; run by hand through its .sh wrapper (about 4 minutes)',
+  },
+  {
+    stem: 'activity-ui-seed',
+    role: 'the genuine ledger records activity-ui-browser draws (written to the owning tables and through the ledger writers); not a proof',
+  },
+  {
+    stem: 'activity-ux-browser',
+    role: 'NOT a gate: the Activity UX (timeline, filters, Needs attention, details, related activity) in a real browser through the real gateway at 1440, 768, 390 and 320 with two signed-in offices; run by hand through its .sh wrapper (about 7 minutes); --baseline photographs the page before a change',
+  },
+  {
+    stem: 'activity-ux-checks',
+    role: 'the assertions activity-ux-browser runs (compared with the gateway answer and the database); not a proof on its own',
+  },
+  {
+    stem: 'capacity-bloat-model',
+    role: 'NOT a gate: applies the recorded production update churn to a copy of the real jobs table on a replica and reports how large it gets and what a rewrite (VACUUM FULL) returns, so the size of the optimisation is a measured shape and not a guess; run by hand',
+  },
+  {
+    stem: 'activity-scale-seed',
+    role: 'the busy history copied set-based into unrelated offices for the cross-office read-cost proof (disposable replica only, triggers and keys bypassed); not a proof',
+  },
+  {
+    stem: 'activity-ux-seed',
+    role: 'the genuine multi-day, mixed-actor records activity-ux-browser draws (jobs, approvals, deliveries, native and external events; backdated in a disposable replica only); not a proof',
+  },
+  {
     stem: 'guard',
     role: 'the connection every proof uses and the refusal that keeps it isolated (marker table, local socket)',
   },

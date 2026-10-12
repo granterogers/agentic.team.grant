@@ -160,3 +160,111 @@ export function redactDeep(value: unknown): unknown {
   }
   return value
 }
+
+/*
+  ============================================================================================================================
+  THE STRICT REDACTOR (activity ledger, migration 1060; phase 3)
+
+  `redactSecrets` above is used by the job trace, the provider router and a dozen other places, and tightening it would change
+  what all of them store. The activity ledger holds text written by agents and by outside workers, so it needs a stricter
+  reading, and the SQL redactor (`app.activity_redact`) is its twin. This is the TypeScript half; `scripts/isolated/activity-
+  redaction.ts` puts one table of cases through both and fails on any difference. It does NOT replace `redactSecrets`.
+
+  What it adds to the families above, and the limit of each (SECURITY.md says the same):
+    - INPUT IS BOUNDED, then NORMALISED (NFKC folds full-width letters and unusual spaces to ASCII), then invisible format
+      characters (zero-width spaces and joiners, bidi controls, soft hyphen, variation selectors) are removed, so a credential
+      split by one is whole again. The text it returns is the normalised text.
+    - vendor keys whose prefix is short or newer than the list above (Stripe, SendGrid, npm, Hugging Face, GitLab, Google
+      access tokens, Twilio, Slack webhooks);
+    - credentials in a URL: user:password@ and a single long token as the user part;
+    - an ASSIGNMENT of a value to a credential-named key (password=..., "token": "...", client_secret: ...), the value being
+      whatever follows to the next separator; token COUNTS (prompt_tokens=5, max_tokens) are not credential names and are left;
+    - the Authorization family also accepts a colon or equals sign after the scheme (`Token:value`);
+    - a run of credential-shaped characters is redacted when it is long (40) and has a digit, or shorter (24) and mixes upper
+      case, lower case and a digit. That is a heuristic for "a key nobody listed", not a detector: a short secret, a secret in
+      prose, one split by ordinary punctuation or one in a script's look-alike letters is NOT caught.
+  The run test is a function over linear matches, not a lookahead from every start, which is what made the old pattern quadratic.
+  ============================================================================================================================
+*/
+
+/** The most characters the strict redactor reads; the rest is dropped, never returned unredacted. */
+export const STRICT_MAX_CHARS = 4000
+
+const INVISIBLE =
+  // biome-ignore lint/suspicious/noMisleadingCharacterClass: the combining and joiner characters are exactly what is being stripped
+  /[\u{AD}\u{34F}\u{61C}\u{115F}\u{1160}\u{17B4}\u{17B5}\u{180B}-\u{180E}\u{200B}-\u{200F}\u{202A}-\u{202E}\u{2060}-\u{206F}\u{3164}\u{FE00}-\u{FE0F}\u{FEFF}\u{FFA0}\u{600}-\u{605}\u{6DD}\u{70F}\u{8E2}\u{110BD}\u{110CD}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu
+
+const CREDENTIAL_KEY =
+  '(?:pass(?:word|wd|phrase)|pwd|secret|client[_-]?secret|api[_-]?key|apikey|access[_-]?key|private[_-]?key|(?:auth|access|refresh|id|session|bearer)[_-]?token|token|credentials?|authorization|cookie|session[_-]?id|signature)'
+
+const STRICT_FAMILIES: readonly (readonly [string, RegExp, string])[] = [
+  ['slack', /xox[abeprs]-[A-Za-z0-9-]{6,}/g, '[redacted:slack]'],
+  ['openai', /sk-(?:proj-|or-|ant-|live-)?[A-Za-z0-9_-]{12,}/g, '[redacted:openai]'],
+  ['supabase', /sbp_[A-Za-z0-9]{16,}/g, '[redacted:supabase]'],
+  ['notion', /(?:ntn_|secret_)[A-Za-z0-9]{16,}/g, '[redacted:notion]'],
+  ['google', /AIza[A-Za-z0-9_-]{20,}/g, '[redacted:google]'],
+  ['google-oauth', /\b1\/\/[A-Za-z0-9_-]{20,}/g, '[redacted:google-oauth]'],
+  ['github', /\b(?:gh[posur]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/g, '[redacted:github]'],
+  ['telegram', /\b\d{6,}:[A-Za-z0-9_-]{30,}/g, '[redacted:telegram]'],
+  ['jwt', /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, '[redacted:jwt]'],
+  ['aws', /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[redacted:aws]'],
+  [
+    'vendor-key',
+    /\b(?:(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{10,}|whsec_[A-Za-z0-9]{16,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{30,}|hf_[A-Za-z0-9]{30,}|glpat-[A-Za-z0-9_-]{20,}|ya29\.[A-Za-z0-9_-]{20,}|(?:AC|SK)[0-9a-f]{32})\b|hooks\.slack\.com\/services\/[A-Za-z0-9/]{20,}/g,
+    '[redacted:vendor-key]',
+  ],
+  [
+    'url-credentials',
+    /([a-z][a-z0-9+.-]{1,20}:\/\/)(?:[^\s/@:]{1,100}:[^\s/@]{1,200}|[A-Za-z0-9._~%-]{20,200})@/gi,
+    '$1[redacted:url-credentials]@',
+  ],
+  [
+    'authorization',
+    /(?<=\b(?:Bearer|Basic|Token)(?:\s+|\s*[:=]\s*))[A-Za-z0-9._~+/=-]{8,}/gi,
+    '[redacted:authorization]',
+  ],
+  [
+    'assignment',
+    // A credential name may carry a prefix (DB_PASSWORD, GITHUB_TOKEN, adminPassword): \b does not match inside an identifier, so the
+    // prefix is a bounded run of identifier characters instead of a word boundary.
+    new RegExp(
+      `([A-Za-z0-9_-]{0,40}${CREDENTIAL_KEY})(["']?\\s*[:=]\\s*)("[^"]*"|'[^']*'|[^\\s,;&"']+)`,
+      'gi',
+    ),
+    '$1$2[redacted:assignment]',
+  ],
+  [
+    'private-key',
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----[^-]*(?:-----END [A-Z ]*PRIVATE KEY-----)?/g,
+    '[redacted:private-key]',
+  ],
+]
+
+const RUN = /[A-Za-z0-9_+/=-]{24,}/g
+
+const isSecretRun = (run: string): boolean =>
+  /\d/.test(run) && (run.length >= 40 || (/[a-z]/.test(run) && /[A-Z]/.test(run)))
+
+/** The text with anything credential-shaped taken out, strictly; bounded, normalised and linear. See the block comment above. */
+export function redactStrict(text: string): string {
+  if (text === '') return text
+  let out = text.slice(0, STRICT_MAX_CHARS).normalize('NFKC').slice(0, STRICT_MAX_CHARS)
+  out = out.replace(INVISIBLE, '')
+  for (const [, pattern, replacement] of STRICT_FAMILIES) {
+    pattern.lastIndex = 0
+    out = out.replace(pattern, replacement)
+  }
+  return out.replace(RUN, (run) => (isSecretRun(run) ? '[redacted:long-opaque]' : run))
+}
+
+/** Which strict families fired (names only, never the match). */
+export function strictFamilies(text: string): string[] {
+  const found: string[] = []
+  const probe = text.slice(0, STRICT_MAX_CHARS).normalize('NFKC').replace(INVISIBLE, '')
+  for (const [family, pattern] of STRICT_FAMILIES) {
+    pattern.lastIndex = 0
+    if (pattern.test(probe)) found.push(family)
+  }
+  if ([...probe.matchAll(RUN)].some((m) => isSecretRun(m[0]))) found.push('long-opaque')
+  return found
+}

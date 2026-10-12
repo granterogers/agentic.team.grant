@@ -10,8 +10,8 @@
  * A trigger that fills the office from the row's own parent is a legitimate alternative to naming it, so a table whose
  * insert is covered by a BEFORE INSERT trigger other than the removed bridge is listed with its triggers rather than failed.
  */
-import '../../src/safety/require-production-checks.ts'
-import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import '../../src/safety/require-production-unless-replica.ts'
+import { openCatalogue } from '../lib/catalogue-db.ts'
 
 /** The pure predicate, exported so the control below can drive it with a defect. */
 export const insertsWithoutOffice = (source: string, tables: readonly string[]): string[] => {
@@ -43,10 +43,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1)
   }
 
-  const db = new ManagementApiExecutor(
-    process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
-    process.env.SUPABASE_ACCESS_TOKEN ?? '',
-  )
+  const db = await openCatalogue()
   const tables = (
     (
       await db.execute(`
