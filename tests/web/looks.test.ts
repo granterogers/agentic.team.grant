@@ -195,11 +195,11 @@ describe('the appearance module', () => {
   ;(globalThis as Record<string, unknown>).document = { documentElement: root }
   ;(globalThis as Record<string, unknown>).window = { matchMedia: () => ({ matches: false }) }
 
-  it('defaults to today: original look, soft glass, soft depth', async () => {
+  it('defaults to Slate & Silver, soft glass, soft depth', async () => {
     const m = await loadAppearance()
     store.clear()
     const a = m.appearance()
-    expect([a.look, a.glass, a.depth]).toEqual(['original', 'soft', 'soft'])
+    expect([a.look, a.glass, a.depth]).toEqual(['silver', 'soft', 'soft'])
   })
 
   it('apply writes all three on the document and remembers them', async () => {
@@ -219,7 +219,18 @@ describe('the appearance module', () => {
     const m = await loadAppearance()
     store.set('studio.appearance', JSON.stringify({ look: 'neon', glass: 'max', depth: 9 }))
     const a = m.appearance()
-    expect([a.look, a.glass, a.depth]).toEqual(['original', 'soft', 'soft'])
+    expect([a.look, a.glass, a.depth]).toEqual(['silver', 'soft', 'soft'])
+  })
+
+  it('a saved Original look is read as Slate & Silver, and its other preferences are kept', async () => {
+    const m = await loadAppearance()
+    store.set(
+      'studio.appearance',
+      JSON.stringify({ look: 'original', palette: 'clay', glass: 'rich', depth: 'deep' }),
+    )
+    const a = m.appearance()
+    expect([a.look, a.palette, a.glass, a.depth]).toEqual(['silver', 'clay', 'rich', 'deep'])
+    expect(m.LOOKS.map((l) => l.id)).not.toContain('original')
   })
 
   it('an older saved appearance (no look keys) loads unchanged and gains only the defaults', async () => {
@@ -230,13 +241,12 @@ describe('the appearance module', () => {
     )
     const a = m.appearance()
     expect([a.palette, a.texture, a.scheme, a.density]).toEqual(['clay', 'oak', 'dark', 'compact'])
-    expect([a.look, a.glass, a.depth]).toEqual(['original', 'soft', 'soft'])
+    expect([a.look, a.glass, a.depth]).toEqual(['silver', 'soft', 'soft'])
   })
 
   it('every look offered has a CSS block in both schemes, and the picker faces match the CSS', async () => {
     const m = await loadAppearance()
     for (const l of m.LOOKS) {
-      if (l.id === 'original') continue
       for (const scheme of ['dark', 'light'] as const) {
         const b = lookBlock(l.id, scheme)
         expect(b, `${l.id} ${scheme}`).not.toBeNull()

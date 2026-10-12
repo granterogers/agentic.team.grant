@@ -94,12 +94,11 @@ export const DENSITIES = [
 
 /*
   Looks, glass and depth (aesthetic sprint, 9 October 2026). A look is what the surfaces are made of (the canvas, the
-  face of a module); the accent is the other choice and the two never touch. 'original' is the interface as it already
-  was and is the default, so nobody's screen changes until they choose.
+  face of a module); the accent is the other choice and the two never touch. 'silver' (Slate & Silver) is the default. The
+  retired 'original' look (orange and brown) is no longer offered; a saved 'original' reads as 'silver' (see appearance()).
 */
-/* `faces` is [canvas, surface] in each scheme, only so the picker can draw a small preview; the CSS is the source of truth (refine.css). */
+/* `faces` is [canvas, surface] in each scheme, only so the picker can draw a small preview; the CSS is the source of truth (bc/refine.css). */
 export const LOOKS = [
-  { id: 'original', name: 'Original', note: 'The slate and stone Team HQ already has', faces: { dark: ['#0b151b', '#1b2930'], light: ['#d6d3cc', '#f0eee9'] } },
   { id: 'silver', name: 'Slate & Silver', note: 'Cooler, neutral greys', faces: { dark: ['#0d1114', '#1c2227'], light: ['#d4d7da', '#eff1f3'] } },
   { id: 'forest', name: 'Forest & Brass', note: 'Deep green faces, brass headings', faces: { dark: ['#0a1511', '#18291f'], light: ['#d2d6cb', '#eef0e8'] } },
   { id: 'graphite', name: 'Warm Graphite', note: 'Warm charcoal and parchment', faces: { dark: ['#131110', '#262220'], light: ['#d9d4cd', '#f2efea'] } },
@@ -122,7 +121,7 @@ const DEFAULTS = {
   ownName: '',
   scheme: 'light',
   density: 'comfortable',
-  look: 'original',
+  look: 'silver',
   glass: 'soft',
   depth: 'soft',
 }
@@ -187,7 +186,8 @@ export function appearance() {
       ownName: saved.ownName ?? '',
       scheme: SCHEMES.some((x) => x.id === saved.scheme) ? saved.scheme : DEFAULTS.scheme,
       density: DENSITIES.some((d) => d.id === saved.density) ? saved.density : DEFAULTS.density,
-      look: LOOKS.some((x) => x.id === saved.look) ? saved.look : DEFAULTS.look,
+      // The retired Original look maps to its successor; every other saved preference is read as it was.
+      look: saved.look === 'original' ? 'silver' : LOOKS.some((x) => x.id === saved.look) ? saved.look : DEFAULTS.look,
       glass: GLASS.some((x) => x.id === saved.glass) ? saved.glass : DEFAULTS.glass,
       depth: DEPTHS.some((x) => x.id === saved.depth) ? saved.depth : DEFAULTS.depth,
     }
