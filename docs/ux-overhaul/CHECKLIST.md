@@ -70,6 +70,34 @@ Findings and disposition:
 5. MINOR, new menu items hard-coded role=menuitem. FIXED: they follow the same role rule as the existing items.
 6. MINOR, To-dos narrowed on the Overview (0.25 to 0.19). A TRADE-OFF, not a regression of intent: the three Overview columns must sum to 0.80 so the starter Post-it strip stays free. Recorded, not hidden.
 
+## Final state (13 October 2026, before the release candidate)
+
+Every milestone is verified in Chromium at 1440 and 390 px unless stated. Probes: scripts/verify/probe-*.ts (run each with npx tsx).
+
+| Item | Status | Evidence |
+|---|---|---|
+| M1 default look | done | tests/web/looks.test.ts (saved 'original' migrates) |
+| M1b warm base colours | done | probe-project headings3 |
+| M2 Light / Dark / Device | done | probe-scheme, desktop and phone, 12 cases, 0 errors |
+| M3 buttons | done for shared states: solid fills, pressed, danger hover, disabled and focus already shared. The Post-it's paper gradient is intentional. | probe-team, probe-axe |
+| M4 sign-in and landing | done for tabs, refusal of an invalid address with no gateway request, and colours. NOT verified: a real sign-in or create-account (see blockers). | probe-entry, probe-entry-interactions, probe-axe |
+| M5 textures and upload | done for presets, upload as pending choice, Cancel, Restore. Apply-with-upload persistence needs a signed-in writer. | probe-backdrop |
+| M6 sliders | done for keyboard, pointer and touch; Cancel; reload persistence in the unsigned prototype. Signed-in persistence blocked (see below). | probe-backdrop, probe-slider-touch |
+| M7 motion | done for open and close of the chat drawer, Global Settings and the viewer; reduced motion; the appearance sheet stays put (probe-dialog-stable). Project settings is a page route, not a sheet. | probe-motion, probe-close-motion, probe-dialog-stable |
+| M8 Back / Forward | done, including Escape (review finding) | probe-history, probe-review |
+| M9 Global Settings control | done | probe-history |
+| M10 Team Settings | partly done. Controls map to real contracts. Status: shown on the roster cards. NOT offered: a per-person model (no column by design, migration 0018) and per-person usage (usage_overview is per service, no per-agent contract). Save NOT verified (signed-in writer). | probe-team |
+| M11 canvas | done for drag, resize, repeated drags, zoom (76%), overlap, touch, reload persistence. Post-it keyboard resize keeps its left edge except at the stage edge, where the stage clamp applies (by design). | probe-drag, probe-canvas, probe-keyboard |
+| M12 Card Table | done: four columns in one row at 1440 px | probe-project |
+| M13 project menu modules | done: seven items open maximised and return; Sources on every tab (review finding) | probe-modules, probe-review |
+| M14 chat | done: avatars on the name line, full-width bodies, desktop and phone | probe-project chat |
+| M15 documents | partly done. Type-labelled fallbacks verified. Real first pages render from the repository's sample PDFs with the bundled pdf.js (3 of 3). The signed-in warm-up through the gateway is NOT verified. | probe-pdf-thumb, probe-modules |
+| M16 calendar | done at both widths | probe-calendar |
+
+Accessibility: axe-core (scripts/verify/probe-axe.ts) reports zero violations on the entry screen, overview, chat drawer, Global Settings and the appearance sheet, in light and dark. Found and fixed: the chat drawer had no landmark (now an aside).
+
+Automated: tests/web and tests/studio and tests/gateway and tests/auth: 677 pass in 46 files. check:templates and smoke: pass. npm run lint is red on files this branch does not change (src/, scripts/verify/credentials.ts and others from other workstreams); no finding is in a file changed here.
+
 ## Verification log
 
 - M1: `npx vitest run tests/web` (16 files). Result recorded in the commit message.
