@@ -593,8 +593,34 @@ const syncBehind = () => {
   document.body.classList.toggle('behind', !viewer.hidden && !viewer.classList.contains('leaving'))
 }
 
+/*
+  "Open" means shown and not on its way out. A sheet that is leaving is still not hidden for EXIT_MS, so anything that asks
+  whether it is open (history, Escape, focus, the workspace behind it) must not read `hidden` alone.
+*/
+const isOpenNow = (el) => !el.hidden && !el.classList.contains('leaving')
+
+// The workspace is put back in reach only once Settings has finished leaving, because an inert opener cannot take focus.
+const releaseWorkspace = () => {
+  for (const n of document.body.children) {
+    if (n.id === 'settings' || n.tagName === 'SCRIPT' || n.id === 'viewer') continue
+    n.removeAttribute('inert')
+  }
+}
+
+const restoreSettingsFocus = () => {
+  let target = settingsCameFrom
+  // Closing Settings redraws the shell (popstate paints), which replaces the opener's node. Its replacement carries the same
+  // marker, so focus that rather than dropping focus on the body.
+  if (target !== null && !target.isConnected && target.hasAttribute('data-bc-settings'))
+    target = document.querySelector('[data-bc-settings]')
+  if (target instanceof HTMLElement && target.isConnected) target.focus()
+  settingsCameFrom = null
+}
+
 const sheet = (el, open) => {
-  const wasOpen = !el.hidden
+  // Already on its way out: a second close changes nothing, because the exit that is running will finish it.
+  if (!open && el.classList.contains('leaving')) return
+  const wasOpen = isOpenNow(el)
   const exiting = !open && wasOpen && (el.id === 'settings' || el.id === 'viewer') && wantsMotion()
   if (open) {
     bumpExit(el)
@@ -604,6 +630,10 @@ const sheet = (el, open) => {
     hideAfterExit(el, () => {
       el.classList.remove('page')
       if (el.id === 'viewer') syncBehind()
+      if (el.id === 'settings') {
+        releaseWorkspace()
+        restoreSettingsFocus()
+      }
     })
   else el.hidden = !open
   // A background that was only being previewed goes back to the project's own when the sheet goes away (#445).
@@ -617,16 +647,22 @@ const sheet = (el, open) => {
       to a screen reader: Tab from the last section control used to walk into the shell hidden behind it.
       The page is not a trap, it has Back and Escape, and Back returns focus to where it came from.
     */
-    for (const n of document.body.children) {
-      if (n === el || n.tagName === 'SCRIPT' || n.id === 'viewer') continue
-      if (open) n.setAttribute('inert', '')
-      else n.removeAttribute('inert')
-    }
-    if (open && wasOpen === false) {
-      settingsCameFrom = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    } else if (!open && wasOpen) {
-      if (settingsCameFrom !== null && settingsCameFrom.isConnected) settingsCameFrom.focus()
-      settingsCameFrom = null
+    /*
+      While Settings LEAVES the workspace stays inert and the opener keeps focus: both are released when the exit has
+      finished (the done callback above). Otherwise the page behind is clickable and focusable for the whole fade.
+    */
+    if (open) {
+      // Capture BEFORE the workspace goes inert: making an ancestor inert blurs what has focus, so reading it afterwards
+      // records the body, and the opener is never handed focus back. A reopen during the fade keeps the first opener.
+      if (!wasOpen && settingsCameFrom === null)
+        settingsCameFrom = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      for (const n of document.body.children) {
+        if (n === el || n.tagName === 'SCRIPT' || n.id === 'viewer') continue
+        n.setAttribute('inert', '')
+      }
+    } else if (!exiting) {
+      releaseWorkspace()
+      restoreSettingsFocus()
     }
   }
   syncBehind()
@@ -651,7 +687,11 @@ const sheet = (el, open) => {
     const first = el.querySelector(FOCUSABLE)
     if (first instanceof HTMLElement) first.focus()
   } else if (!open && wasOpen) {
-    if (cameFrom !== null && cameFrom.isConnected) cameFrom.focus()
+    let target = cameFrom
+    // The appearance sheet is chosen from the project menu. That menu closes on the choice and removes its items, so the
+    // item cannot hold focus; focus goes to the menu's own button, which stays put.
+    if (target !== null && target.hasAttribute('data-bc-look')) target = document.querySelector('[data-bc-pagemenu]')
+    if (target instanceof HTMLElement && target.isConnected) target.focus()
     cameFrom = null
   }
 }
@@ -713,7 +753,7 @@ if (typeof document !== 'undefined') {
     if (e.key !== 'Escape') return
     for (const id of ['#viewer', '#settings']) {
       const el = $(id)
-      if (el && !el.hidden) {
+      if (el && isOpenNow(el)) {
         if (id === '#viewer') unwireCall()
         // Escape closes Settings the way the page's Back button does: stepping back over the entry that opened it, so no
         // stale settings entry is left for a later Back or Forward to reopen (M8 review finding).
@@ -1770,7 +1810,9 @@ function paintDock() {
   const el = $('#dock')
   if (!el) return
   const open = dockOpen()
-  if (!open && !el.hidden && !el.classList.contains('leaving') && wantsMotion()) {
+  // Already leaving: a repaint must not cut the fade short. The exit that is running calls paintDock again when it ends.
+  if (!open && el.classList.contains('leaving')) return
+  if (!open && !el.hidden && wantsMotion()) {
     // The drawer leaves on screen for its exit. Once it is hidden, this function runs again and takes the normal close path,
     // which clears the content and releases the microphone.
     el.addEventListener('exited', () => paintDock(), { once: true })
@@ -13819,7 +13861,7 @@ if (typeof window !== 'undefined') {
       Global Settings follows its own history entry (M8). Back past the entry that opened it closes the page; Forward onto
       it reopens the page where it was left. Either way the workspace underneath is drawn from the path, not reset.
     */
-    const settingsShown = !$('#settings').hidden
+    const settingsShown = isOpenNow($('#settings'))
     if (settingsShown && e.state?.settings !== true) {
       state.settingsPane = 'index'
       sheet($('#settings'), false)
@@ -14023,7 +14065,7 @@ const bcContext = {
       state.settingsPane = 'index'
     }
     // Opening Global Settings is a history entry, so browser Back returns to where the person was (M8).
-    if ($('#settings').hidden && typeof history !== 'undefined' && history.state?.settings !== true) {
+    if (!isOpenNow($('#settings')) && typeof history !== 'undefined' && history.state?.settings !== true) {
       try {
         history.pushState({ path: shownPath ?? addressNow(), settings: true }, '', location.href)
       } catch {

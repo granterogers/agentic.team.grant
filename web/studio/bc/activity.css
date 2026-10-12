@@ -110,7 +110,7 @@
 [data-experience='basecamp'] .bcact-mark--you { background: color-mix(in srgb, var(--bc-accent) 20%, transparent); color: var(--bc-accent); }
 [data-experience='basecamp'] .bcact-mark--external { background: color-mix(in srgb, var(--bc-section-accent) 18%, transparent); color: var(--bc-section-accent); }
 [data-experience='basecamp'] .bcact-mark--unknown { background: transparent; border: 1px dashed var(--bc-text-muted); }
-[data-experience='basecamp'] .bcact-mark--wait { background: color-mix(in srgb, var(--bc-section-accent) 18%, transparent); color: var(--bc-section-accent); }
+[data-experience='basecamp'] .bcact-mark--wait { background: color-mix(in srgb, var(--bc-state) 18%, transparent); color: var(--bc-state); }
 [data-experience='basecamp'] .bcact-mark--bad { background: color-mix(in srgb, var(--bc-danger) 16%, transparent); color: var(--bc-danger); }
 [data-experience='basecamp'] .bcact-main { display: grid; gap: 3px; min-width: 0; }
 [data-experience='basecamp'] .bcact-who { font: 600 13px/1.2 var(--bc-font); color: var(--bc-text-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
@@ -136,7 +136,7 @@
 [data-experience='basecamp'] .bcact-result--ok { background: color-mix(in srgb, var(--bc-success) 16%, transparent); color: color-mix(in srgb, var(--bc-success) 55%, var(--bc-text-strong)); }
 [data-experience='basecamp'] .bcact-result--bad { background: color-mix(in srgb, var(--bc-danger) 16%, transparent); color: color-mix(in srgb, var(--bc-danger) 55%, var(--bc-text-strong)); }
 [data-experience='basecamp'] .bcact-result--warn,
-[data-experience='basecamp'] .bcact-result--wait { background: color-mix(in srgb, var(--bc-section-accent) 18%, transparent); color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcact-result--wait { background: color-mix(in srgb, var(--bc-state) 18%, transparent); color: var(--bc-text-strong); }
 
 /* ----------------------------------------------------------------------------------------------- details and related activity */
 [data-experience='basecamp'] .bcact-detail { grid-column: 2 / -1; margin-top: 10px; animation: bcact-in 160ms var(--bc-ease-out, ease) both; }
@@ -170,7 +170,7 @@
 /* ----------------------------------------------------------------------------------------------- notes, paging, skeleton */
 [data-experience='basecamp'] .bcact-note { margin: 0; font: var(--bc-compact); color: var(--bc-text); }
 [data-experience='basecamp'] .bcact-note--quiet { color: var(--bc-text-muted); }
-[data-experience='basecamp'] .bcact-note--warn { padding: 8px 12px; border-radius: var(--bc-r-control); background: color-mix(in srgb, var(--bc-section-accent) 14%, transparent); }
+[data-experience='basecamp'] .bcact-note--warn { padding: 8px 12px; border-radius: var(--bc-r-control); background: color-mix(in srgb, var(--bc-state) 14%, transparent); }
 [data-experience='basecamp'] .bcact-note--bad { color: var(--bc-danger); }
 [data-experience='basecamp'] .bcact-more { display: grid; justify-items: start; gap: 8px; padding: 14px 0 4px; }
 [data-experience='basecamp'] .bcact-end { margin: 0; padding: 14px 0 4px; font: var(--bc-compact); color: var(--bc-text-muted); }
