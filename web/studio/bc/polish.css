@@ -250,6 +250,23 @@
 [data-experience='basecamp'] .bcftype--made .bcftypeword { color: #174a80; }
 [data-experience='basecamp'] .bcftype--image .bcftypeword { color: #1b5a3c; }
 
+/*
+  Opening motion for the surfaces that arrive over the workspace (M7): the Team Chat drawer slides in from the right, Global
+  Settings and the document viewer rise and fade. About 220 to 260 ms, one easing curve. Each runs once when the element is
+  shown (it is inserted or un-hidden), so nothing animates on a redraw. Reduced motion turns every one of them off, which is
+  what the preference asks for; the surface still appears at once.
+*/
+@keyframes bcDockIn { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes bcSheetIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+[data-experience='basecamp'] .dock { animation: bcDockIn 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+[data-experience='basecamp'] #settings:not([hidden]),
+[data-experience='basecamp'] #viewer:not([hidden]) { animation: bcSheetIn 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .dock,
+  [data-experience='basecamp'] #settings:not([hidden]),
+  [data-experience='basecamp'] #viewer:not([hidden]) { animation: none; }
+}
+
 /* A picker tile is as wide as its column, whatever its face is made of. */
 [data-experience='basecamp'] .bdgrid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
 [data-experience='basecamp'] .bdthumb { grid-template-columns: minmax(0, 1fr); min-width: 0; }
