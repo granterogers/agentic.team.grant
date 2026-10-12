@@ -1102,6 +1102,13 @@ const wireExpanded = (root) => {
   for (const b of root.querySelectorAll('[data-bc-expand]')) {
     b.addEventListener('click', () => {
       lastOpener = b.dataset.bcExpand ?? ''
+      /*
+        Choosing a module from the project menu closes that menu first (M13). Left open, its own pointer handler re-renders the
+        shell on the NEXT press, so the close control of the maximised module was replaced between pointer-down and pointer-up
+        and its click never arrived. Measured: the same press that closed the module through the DOM did nothing with a real
+        pointer.
+      */
+      if (menu.isOpen()) menu.setOpen(false)
       ctx.openExpanded?.(b.dataset.bcExpand)
     })
   }

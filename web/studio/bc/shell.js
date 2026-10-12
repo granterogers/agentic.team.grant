@@ -349,6 +349,17 @@ const menuPanel = () => {
           : `<button type="button" role="menuitem" class="bcmenuitem bcmenucreate" data-bc-signin-first disabled
               title="Sign in to create a project"><span class="bcmenuplus" aria-hidden="true">+</span><span class="bcmenuname">Create project (sign in first)</span></button>`
     }
+    ${
+      here === null
+        ? ''
+        : `<p class="bcmenuhead">In this project</p>
+    <div class="bcmenulist" data-bc-menu-modules>${Object.entries(compose.NAMES)
+      .map(
+        ([id, name]) =>
+          `<button type="button" role="menuitem" class="bcmenuitem" data-bc-expand="${esc(id)}"><span class="bcmenuname">${esc(name)}</span></button>`,
+      )
+      .join('')}${item(at(`/p/${here}/chat`), 'Team Chat')}</div>`
+    }
     <hr class="bcmenusep">
     ${item(at('/search'), 'Search')}
     ${item(at('/tasks'), 'My Tasks')}
