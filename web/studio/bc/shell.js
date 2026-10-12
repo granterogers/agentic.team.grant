@@ -1518,6 +1518,10 @@ const personEditor = (c) => `<form class="bcaddform bcgap-l" data-bc-personform=
     ask against these words to decide who the work reaches. Thirty is the most
     one person can usefully own.
   </p>
+  <p class="bcpmeta bcprose">
+    Which model answers is chosen by the office for each kind of work, not set for a person, and how far they may act on
+    their own is set in Autonomy and approvals. Neither is on this form, because neither is stored against a person.
+  </p>
   <label class="bclabel" for="bc-p-style">How they write</label>
   <textarea class="bcinput" id="bc-p-style" name="style" rows="2">${esc(c.communication_style ?? '')}</textarea>
   <div class="bcformacts">
