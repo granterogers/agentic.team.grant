@@ -395,7 +395,7 @@
   button gets a faint red wash on hover, so the destructive choice is recognisably different from the quiet one beside it.
   Disabled and keyboard focus were already shared (bc.css); this completes pressed and destructive hover.
 */
-[data-experience='basecamp'] .bcbtn:not([disabled]):active { transform: translateY(1px); }
+[data-experience='basecamp'] .bcbtn:not([disabled]):not([aria-disabled='true']):active { transform: translateY(1px); }
 [data-experience='basecamp'] .bcbtn--danger:not([disabled]):hover {
   background: color-mix(in srgb, var(--bc-danger) 12%, transparent);
 }

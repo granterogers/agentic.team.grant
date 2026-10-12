@@ -348,7 +348,7 @@
 .bcstatus--running { color: var(--bc-accent); }
 .bcstatus--blocked { color: var(--bc-danger); }
 .bcstatus--done { color: var(--bc-success); }
-.bcstatus--waiting { color: var(--bc-section-accent); }
+.bcstatus--waiting { color: var(--bc-state); }
 
 /* --- Empty, error, skeleton (§12) ---------------------------------------- */
 

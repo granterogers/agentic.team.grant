@@ -98,6 +98,18 @@ Accessibility: axe-core (scripts/verify/probe-axe.ts) reports zero violations on
 
 Automated: tests/web and tests/studio and tests/gateway and tests/auth: 677 pass in 46 files. check:templates and smoke: pass. npm run lint is red on files this branch does not change (src/, scripts/verify/credentials.ts and others from other workstreams); no finding is in a file changed here.
 
+## Second review (12 October 2026, read-only reviewer over deb5bf9, code reading plus unit tests; no browser)
+
+1. BLOCKER, FIXED. Closing the document viewer with motion on left the workspace blurred and unclickable. `sheet()` set `body.behind` from `!hidden` while the viewer was still fading, and the exit timer set `hidden` without recomputing it. Now `syncBehind()` (app.js) reads "open and not leaving", and the exit callback recomputes it. Verified: `scripts/verify/probe-viewer-close.ts` is red on the pre-fix app.js (behind true, shell pointer-events none, control unreachable) and green after (behind false, shell auto, control reachable).
+2. MAJOR, FIXED. `--bc-section-accent` carried the warning meaning (overdue, waiting, blocked, trouble, late agenda) and the neutral change removed it. A new `--bc-state` token holds the original warm values (light `#a2502f`, dark `#fbbda8`), and only the state uses are repointed (compose.css, bc.css, activity.css wait/warn). The section accent stays neutral. Contrast of the state colour is unchanged from main; it is not raised to 4.5:1 here.
+3. MINOR, NOT FIXED. A reopen during the 200 ms exit does not capture the opener for focus return or push a settings history entry. Recorded as a known gap; the normal open and close paths are verified.
+4. MINOR, FIXED. The focus trap ignores a viewer that is leaving, so Tab no longer pulls focus back into the fading dialog.
+5. MINOR, NOT FIXED. A repaint during the dock exit can snap the drawer shut without the fade. No state is left wrong. Recorded as a known gap.
+6. MINOR, NOT FIXED. Settings' inert attributes are removed at the start of its exit, so it is interactive for its 200 ms fade. Recorded as a known gap.
+7. MINOR, FIXED. The pressed rule for `.bcbtn` now has the `[aria-disabled='true']` guard.
+
+Re-verified after the fixes: vitest tests/web and tests/studio, 498 pass in 32 files. probe-close-motion, probe-motion, probe-dialog-stable, probe-review and probe-viewer-close exit 0 with no page errors. probe-axe: zero violations on all ten surfaces, light and dark.
+
 ## Verification log
 
 - M1: `npx vitest run tests/web` (16 files). Result recorded in the commit message.

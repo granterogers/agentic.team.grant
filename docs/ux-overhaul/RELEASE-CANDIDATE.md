@@ -29,7 +29,10 @@ the live `app.js` equals main's and references `activity_ledger` once, as main d
 - Browser: 21 probes in `scripts/verify/`. Each was recorded as exit 0 with zero page errors in its checklist row.
 - Accessibility: axe-core, zero violations on the entry screen, overview, chat drawer, Global Settings and appearance sheet, light and dark.
 - Review: the read-only review over `555ee9c..HEAD` returned two major findings (Escape history entry; Sources on non-Overview tabs),
-  both fixed and re-probed. A second review pass (M18) was not yet complete when this note was written.
+  both fixed and re-probed. A second read-only review (deb5bf9) found one blocker (viewer close left the workspace blurred and
+  unclickable; fixed and proved by probe-viewer-close, red before and green after), one major (warning colour removed with the
+  section accent; restored as `--bc-state`), and minors. Three minors are recorded as known gaps in the checklist. M18 remains open
+  until a browser pass of the review's visual and regression items is done.
 - Repository lint (`npm run lint`) is red on files this branch does not change. No finding is in a changed file. Pre-existing on main.
 
 ## 4. Open items (from the checklist's milestone list)

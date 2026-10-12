@@ -29,6 +29,8 @@
   --bc-accent: #2b6cb0;
   --bc-accent-ink: #ffffff;
   --bc-section-accent: #4d6378;
+  /* State, not decoration: overdue, waiting, blocked and trouble. Kept warm on purpose so it still reads as a warning. */
+  --bc-state: #a2502f;
 
   /* --- Module identity (§§9-10) ------------------------------------------
    *
@@ -190,6 +192,7 @@
   --bc-accent: #6ab3fd;
   --bc-accent-ink: #0e1d24;
   --bc-section-accent: #9fb4c9;
+  --bc-state: #fbbda8;
   --bc-heading: #dfe6ee;
   --bc-mod-tasks: #7fb4d8;
   --bc-mod-board: #9db98a;
@@ -226,6 +229,7 @@
     --bc-accent: #6ab3fd;
     --bc-accent-ink: #0e1d24;
     --bc-section-accent: #9fb4c9;
+    --bc-state: #fbbda8;
     --bc-heading: #dfe6ee;
     --bc-mod-tasks: #7fb4d8;
     --bc-mod-board: #9db98a;

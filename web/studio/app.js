@@ -582,6 +582,17 @@ const hideAfterExit = (el, done) => {
   }, EXIT_MS)
 }
 
+/*
+  The workspace is blurred and made inert while the document viewer is open. The viewer
+  fades out for EXIT_MS after it is told to close, so "open" has to mean "open and not
+  leaving"; and the exit must recompute this when it finishes, because the timer sets
+  hidden without going through sheet(). Read from the element rather than remembered.
+*/
+const syncBehind = () => {
+  const viewer = $('#viewer')
+  document.body.classList.toggle('behind', !viewer.hidden && !viewer.classList.contains('leaving'))
+}
+
 const sheet = (el, open) => {
   const wasOpen = !el.hidden
   const exiting = !open && wasOpen && (el.id === 'settings' || el.id === 'viewer') && wantsMotion()
@@ -589,7 +600,11 @@ const sheet = (el, open) => {
     bumpExit(el)
     el.classList.remove('leaving')
   }
-  if (exiting) hideAfterExit(el, () => el.classList.remove('page'))
+  if (exiting)
+    hideAfterExit(el, () => {
+      el.classList.remove('page')
+      if (el.id === 'viewer') syncBehind()
+    })
   else el.hidden = !open
   // A background that was only being previewed goes back to the project's own when the sheet goes away (#445).
   if (!open && el.id === 'viewer' && wasOpen) backdropUi.cancel()
@@ -614,7 +629,7 @@ const sheet = (el, open) => {
       settingsCameFrom = null
     }
   }
-  document.body.classList.toggle('behind', !$('#viewer').hidden)
+  syncBehind()
 
   /*
     The viewer is a DIALOG, and a dialog owns the keyboard while it is up
@@ -655,7 +670,7 @@ if (typeof document !== 'undefined') {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Tab') return
     const dialog = $('#viewer')
-    if (dialog === null || dialog.hidden) return
+    if (dialog === null || dialog.hidden || dialog.classList.contains('leaving')) return
     const inside = [...dialog.querySelectorAll(FOCUSABLE)].filter(
       (n) => n.offsetParent !== null || n === document.activeElement,
     )
