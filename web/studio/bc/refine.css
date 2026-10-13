@@ -1039,3 +1039,12 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   color: var(--bc-text-muted);
   opacity: 1;
 }
+
+/* Module headings: a firmer title in the strong ink, so the panel's name is the first thing read. */
+[data-experience='basecamp'] .bcmodhead h2 { font-size: 13px; font-weight: 650; letter-spacing: 0.06em; }
+[data-experience='basecamp'] .bcmodtitle { color: var(--bc-text-strong); }
+
+/* The header's lower edge is firmer, so the bar reads as a separate surface above the canvas. */
+[data-experience='basecamp'] .bctop {
+  box-shadow: 0 1px 0 var(--bc-border-control), 0 12px 24px -20px rgb(16 22 28 / 0.5);
+}

@@ -994,7 +994,7 @@ export const thumbFace = (d, i, extra = '') => {
   const tone = object === undefined ? '' : ` bcthumb--object bcthumb--${esc(object.tone)}`
   return `<span class="bcthumb${tone}${extra === '' ? '' : ` ${esc(extra)}`}"
     data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}" data-bc-thumbmod="${esc(String(d.modified ?? ''))}" data-bc-thumbext="${typeof d.external_ref === 'string' && d.external_ref !== '' ? '1' : ''}" data-bc-thumbtype="${esc(`${d.mime ?? ''} ${d.kind ?? ''} ${d.title ?? ''}`.trim())}">
-    ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9, extra === 'bcrowthumb') : (GLYPH[object.glyph] ?? '')}
+    ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9, extra === 'bcrowthumb' || extra === 'bccompact') : (GLYPH[object.glyph] ?? '')}
   </span>`
 }
 
@@ -1026,7 +1026,11 @@ export const sortControl = (slug, how, where, allProjects = false) => `<span cla
     </select>
   </span>`
 
-const thumb = (d, i) => {
+/*
+  `compact` is the dashboard's small tile (a few documents, the panel's own width): a page's first words are too small to read
+  there, so a document shows its file-type card instead, which reads at any size. The large Docs & Files grid keeps the page.
+*/
+const thumb = (d, i, compact = false) => {
   const ref = docRef(d)
   /*
     A FIGURE WITH A BUTTON IN IT, not a clickable div. The press was on the
@@ -1049,7 +1053,7 @@ const thumb = (d, i) => {
     data-bc-dochay="${esc(docsrc.hay(d))}" data-bc-docid="${esc(String(d.id ?? ''))}" data-bc-docproject="${esc(String(d.project ?? ''))}" draggable="true">
     <button type="button" class="bcdocpress" data-bc-doc-open="${esc(ref)}"
       aria-label="${esc(`Open ${d.title ?? 'document'}`)}">
-      ${thumbFace(d, i)}
+      ${thumbFace(d, i, compact ? 'bccompact' : '')}
       ${docsrc.mark(d, esc)}
       <figcaption>
         <span class="bcdoctitle">${esc(d.title)}</span>
@@ -1120,7 +1124,7 @@ export const docsMini = (p, { items = 6 } = {}) => {
   const how = docorder.mode(p.slug)
   const shown = docorder.ordered(p.slug, docs, how)
   return `<div class="bcdocs" data-bc-docdrop="${esc(p.slug)}">
-    ${shown.slice(0, items).map((d, i) => thumb(d, i)).join('')}
+    ${shown.slice(0, items).map((d, i) => thumb(d, i, true)).join('')}
     <p class="bcmore bcdocsall">
       <a href="${esc(to)}" data-bc-go="${esc(to)}">${esc(
         docs.length > items
