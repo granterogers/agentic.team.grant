@@ -444,6 +444,10 @@
 [data-experience='basecamp'] .bctop--work .bchere { flex: 0 1 auto; max-width: min(240px, 26vw); padding: 0 4px; height: 36px; }
 [data-experience='basecamp'] .bctop--work .bcworktools { flex: 1 1 620px; min-width: 0; }
 [data-experience='basecamp'] .bctop--work .bcright { flex: none; margin-left: auto; gap: 4px; }
+/* The build's version, in the top-right corner of the home board only. Quiet on purpose: muted, tabular, at the 12px type floor,
+   and no border or fill. The board is its positioning context, so the mark takes no room from anything else. */
+[data-experience='basecamp'] .bcvoid { position: relative; }
+[data-experience='basecamp'] .bcver { position: absolute; top: 10px; right: 14px; padding: 0; font-size: 12px; line-height: 1; color: var(--bc-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
 [data-experience='basecamp'] .bctop--work .bcheadrow { flex-wrap: nowrap; gap: 10px; width: 100%; margin: 0; }
 [data-experience='basecamp'] .bctop--work .bcworkbar { flex: 1 1 auto; justify-content: center; min-width: 0; margin: 0; min-height: 0; }
 [data-experience='basecamp'] .bctop--work .bcworkbar .bcdock { margin: 0; }

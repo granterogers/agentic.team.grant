@@ -873,6 +873,16 @@ const filedUnder = (p) =>
     (p.waiting ?? []).length >
   0
 const listed = () => PROJECTS.filter((p) => p.slug !== 'unnamed' || filedUnder(p))
+/*
+  The build's version, from config.js (generated from package.json). It is drawn in the top-right corner of the home board only,
+  which is the only screen with no project open. Absolutely placed, so it takes no room from the header's title.
+*/
+const buildVersionMark = () => {
+  const version = typeof window.HQ_VERSION === 'string' ? window.HQ_VERSION : ''
+  return version === ''
+    ? ''
+    : `<span class="bcver" title="Team HQ version ${esc(version)}">v${esc(version)}</span>`
+}
 
 const portfolio = () => {
   // A signed-in person whose office has nothing in it yet is shown the one next step, not an empty list.
@@ -888,6 +898,7 @@ const portfolio = () => {
   */
   return `<h1 class="bcvh">Team HQ</h1>
   <div class="bcvoid" role="region" aria-label="No project selected">
+    ${buildVersionMark()}
     <div class="bcvoidcard">
       <p class="bcvoidline">${listed().length === 0 ? 'No projects yet.' : 'Choose a project to begin.'}</p>
       <div class="bcvoidrow">

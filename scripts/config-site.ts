@@ -36,7 +36,7 @@
  * downstream -- including this -- follows.
  */
 import '../src/safety/arm.ts'
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const slug = process.env.HQ_API_SLUG ?? 'hq-api'
@@ -47,6 +47,11 @@ const slug = process.env.HQ_API_SLUG ?? 'hq-api'
 */
 const voice = process.env.HQ_VOICE_SLUG ?? ''
 const base = process.env.SUPABASE_FUNCTIONS_URL ?? `https://${ref}.supabase.co/functions/v1`
+/*
+  The build's version comes from package.json, the one place it is written. It is read here, at generation, so the
+  page shows the version of the code it was built from and nothing can hold a second copy that drifts.
+*/
+const version = String(JSON.parse(await readFile('package.json', 'utf8')).version ?? '')
 
 export const siteConfig = (): string =>
   [
@@ -66,6 +71,7 @@ export const siteConfig = (): string =>
     '*/',
     `window.HQ_API = window.HQ_API || '${base}/${slug}'`,
     ...(voice === '' ? [] : [`window.HQ_VOICE = window.HQ_VOICE || '${base}/${voice}'`]),
+    ...(version === '' ? [] : [`window.HQ_VERSION = window.HQ_VERSION || '${version}'`]),
     '',
   ].join('\n')
 
