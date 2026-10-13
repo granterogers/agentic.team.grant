@@ -947,3 +947,95 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
 /* Two classes the markup used and no rule defined (basecamp-classes): the centred button row of the empty board, and the quieter second half of the Sample bar's sentence. */
 [data-experience='basecamp'] .bcvoidrow { display: flex; justify-content: center; }
 [data-experience='basecamp'] .bcsamplemore { color: var(--bc-text-muted); }
+
+/* ===========================================================================================================
+   THE VISUAL SYSTEM, FINAL LAYER (October 2026 redesign). This is the last block in the stylesheet, so it decides the
+   shared surfaces: the header, the empty board, the module panels, the elevation and the Post-it notes. It sets tokens and a
+   few primitives; it does not restyle individual screens. The look (Slate & Silver, Forest, Graphite) still chooses the canvas
+   and the module faces above; this layer gives every look the same depth and the same quiet board.
+   It lives here, not in its own file, because the page-delta deploy refuses a change to the set of file names.
+   - Shadows are soft and realistic, not glowing outlines.
+   - No texture and no dot grid on the standard view. The grid is drawn by the board only while a module is being arranged.
+   - Semantic colour (status, warnings, overdue) is untouched here; this block never recolours a state.
+   =========================================================================================================== */
+
+:root[data-experience='basecamp'] {
+  /* Elevation: a quiet lift for panels and menus, in two steps. */
+  --bc-elev-1: 0 1px 2px rgb(16 22 28 / 0.06), 0 6px 18px -10px rgb(16 22 28 / 0.18);
+  --bc-elev-2: 0 1px 3px rgb(16 22 28 / 0.08), 0 14px 32px -14px rgb(16 22 28 / 0.28);
+  /* No dot grid on the standard view. The grid reads this strength (0 is off) when no project has saved its own look. */
+  --bc-dot-op: 0;
+  /* The recommended module opacity for a project that never chose one (the rule above falls back to this). */
+  --bc-mod-op: 0.92;
+  /* A pale note by default. Individual colours a person chooses are not stored, so every note takes this. */
+  --bc-note: #f7f6f1;
+  --bc-note-ink: #22262a;
+}
+:root[data-experience='basecamp'][data-scheme='dark'] {
+  --bc-elev-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 20px -12px rgb(0 0 0 / 0.6);
+  --bc-elev-2: 0 1px 3px rgb(0 0 0 / 0.5), 0 16px 36px -14px rgb(0 0 0 / 0.75);
+  --bc-note: #2a3237;
+  --bc-note-ink: #e6eaed;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme='light'])[data-experience='basecamp'] {
+    --bc-elev-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 20px -12px rgb(0 0 0 / 0.6);
+    --bc-elev-2: 0 1px 3px rgb(0 0 0 / 0.5), 0 16px 36px -14px rgb(0 0 0 / 0.75);
+    --bc-note: #2a3237;
+    --bc-note-ink: #e6eaed;
+  }
+}
+
+/* The header is its own surface, separated from the canvas by a hairline and a soft shadow, not by the same grey. */
+[data-experience='basecamp'] .bctop {
+  background-color: var(--bc-surface);
+  background-image: none;
+  box-shadow: 0 1px 0 var(--bc-border-subtle), 0 10px 22px -20px rgb(16 22 28 / 0.4);
+}
+
+/* The empty board: a calm canvas panel, with no dot grid and no texture. */
+[data-experience='basecamp'] .bcvoid {
+  background-color: color-mix(in srgb, var(--bc-canvas) 70%, var(--bc-surface));
+  background-image: none;
+  border-color: var(--bc-border-subtle);
+  box-shadow: none;
+}
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcpanes::before { background-image: none; }
+}
+
+/* Module panels lift off the canvas with a consistent radius and a soft shadow. */
+[data-experience='basecamp'] .bcmod {
+  border-color: color-mix(in srgb, var(--bc-border-subtle) 80%, transparent);
+  border-radius: 14px;
+  box-shadow: var(--bc-elev-1);
+}
+[data-experience='basecamp'] .bcmod:hover {
+  box-shadow: var(--bc-elev-2);
+}
+
+/* Per-module colour is gone from the chrome: a panel without a tint of its own is the same neutral face with a neutral identity
+   rule, so colour means something only when it is a state (overdue, stuck, a warning). The module type is still named in its
+   heading and its icon. A panel with a tint a person chose keeps it: its colour, its top rule and its wash are not touched here. */
+[data-experience='basecamp'] .bcmod[data-mod]:not(.bcmod--tinted) {
+  --bc-mod: var(--bc-text-muted);
+  --bc-mod-ink: var(--bc-text-muted);
+}
+
+/* While a module is being moved, the arrangement grid comes back at its original strength, so arranging keeps its guide. The
+   static board stays clean. The board adds bcpanes--moving for the drag (compose.css). */
+[data-experience='basecamp'] .bcpanes--moving .bcgridcv { --bc-dot-op: 0.6; }
+
+/* Post-it notes: a pale, quiet default with a soft edge and a shadow, and readable text on either scheme. */
+[data-experience='basecamp'] .bcpostit {
+  background: var(--bc-note);
+  border-radius: 10px;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.06), 0 10px 18px -14px rgb(0 0 0 / 0.35);
+}
+[data-experience='basecamp'] .bcpostittext {
+  color: var(--bc-note-ink);
+}
+[data-experience='basecamp'] .bcpostittext::placeholder {
+  color: var(--bc-text-muted);
+  opacity: 1;
+}
