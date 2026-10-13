@@ -16124,7 +16124,12 @@ async function startOfficeReads(token) {
     that reason — applying what was just read would send it straight out again
     on every single page load.
   */
-  hydrateAppearance(FROM_OFFICE.appearance)
+  /*
+    A visitor in the public Sample Office does not inherit the Sample owner's appearance. That record is shared by every visitor
+    and was saved with an earlier accent, so new visitors would see the old orange by default. They get the recommended
+    appearance instead (a choice they make in their own browser still applies).
+  */
+  hydrateAppearance(bcSession.isSample() ? null : FROM_OFFICE.appearance)
   /*
     THE BOARD HE ARRANGED, FROM THE OFFICE (#341, ADR-0021, 0582).
 
