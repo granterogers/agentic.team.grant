@@ -370,6 +370,8 @@ const menuPanel = () => {
       .join('')}${item(at(`/p/${here}/chat`), 'Team Chat')}<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-sources="1"><span class="bcmenuname">Sources</span></button></div>`
     }
     <hr class="bcmenusep">
+    <button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem bcmenuglobal" data-bc-global-menu="1"
+      title="Global Settings: the whole office, outside any project"><span class="bcmenuname">Global Settings</span></button>
     ${item(at('/search'), 'Search')}
     ${item(at('/tasks'), 'My Tasks')}
     ${item(at('/activity'), 'Activity')}

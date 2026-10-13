@@ -1051,3 +1051,80 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
 [data-experience='basecamp'] .bctop {
   box-shadow: 0 1px 0 var(--bc-border-control), 0 12px 24px -20px rgb(16 22 28 / 0.5);
 }
+
+/*
+  PHONE HEADER (review 3). On a phone the Global Settings three-dot sat beside the project's own overflow control and
+  the project's name lost its room. Global Settings is a menu entry on phone, so the top row keeps one overflow control
+  (the project's) and the name gets the space. Desktop and tablet keep the three-dot unchanged. The entry is hidden
+  everywhere else, so the desktop menu is what it was.
+*/
+[data-experience='basecamp'] .bcmenuglobal { display: none; }
+@media (max-width: 640px) {
+  [data-experience='basecamp'] .bcofficemenu { display: none; }
+  [data-experience='basecamp'] .bcmenuglobal { display: flex; }
+}
+
+/*
+  POST-IT FRAMING (review 8). The note read as a cut-out: a gradient across its grip bar made a second top rule, and the
+  text sat against the edge. Now it has a hairline edge that holds on both schemes, one soft lift, no gradient on the
+  grip, and room around the text. Dragging, resizing and editing are unchanged; only the surface and the padding move.
+*/
+[data-experience='basecamp'] .bcpostit {
+  box-shadow: inset 0 0 0 1px rgb(60 45 0 / 0.07), 0 1px 2px rgb(40 30 0 / 0.08), 0 12px 20px -16px rgb(40 30 0 / 0.42);
+}
+[data-experience='basecamp'][data-scheme='dark'] .bcpostit {
+  box-shadow: inset 0 0 0 1px rgb(255 240 190 / 0.08), 0 1px 2px rgb(0 0 0 / 0.4), 0 14px 22px -16px rgb(0 0 0 / 0.6);
+}
+[data-experience='basecamp'] .bcpostitbar { background: none; }
+[data-experience='basecamp'] .bcpostittext { padding: 4px 12px 12px; }
+
+/*
+  ONE TOP RULE FOR EVERY DEFAULT MODULE (review 8). Schedule, Contacts and Activity drew a heavier top line than To-dos
+  because each took its ink from its own state. A module without a person's colour now draws the same neutral 2px rule;
+  a module a person has tinted keeps its colour.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod:not(.bcmod--tinted)::before {
+  background:
+    linear-gradient(var(--bc-border-control), var(--bc-border-control)) top left / 100% 2px no-repeat,
+    var(--v2-face);
+}
+
+/*
+  ONE FRAME FOR EVERY TILE IN THE DOCS GRID (review 9). A document with a drawn page, a file with no first page and a
+  recording each sat on a different ground: cream pages beside saturated blue and sage blocks. Every object tile now takes
+  the same paper surface and hairline edge, and its glyph is the ink colour, so the grid is one family. A real preview
+  (a photograph, a first page that was read) keeps its own image; only the coloured ground is removed.
+*/
+[data-experience='basecamp'] .bcthumb--object,
+[data-experience='basecamp'] .bcthumb--object.bcthumb--a,
+[data-experience='basecamp'] .bcthumb--object.bcthumb--s,
+[data-experience='basecamp'] .bcthumb--object.bcthumb--m,
+[data-experience='basecamp'] .bcthumb--object.bcthumb--p {
+  background: var(--bc-surface);
+  box-shadow: inset 0 0 0 1px var(--bc-border-subtle);
+  color: var(--bc-text-muted);
+}
+
+/*
+  THE MENU FITS THE SCREEN (review 3). The project menu lists projects, the project's modules and the office pages, and
+  on a phone the last of them, Global Settings included, ran off the bottom with nothing to reach them. The panel is
+  capped to the viewport and scrolls inside itself, so every entry is reachable.
+*/
+[data-experience='basecamp'] .bcmenupanel {
+  max-height: calc(100dvh - 88px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/*
+  A DOCUMENT IN DARK IS A DARK SHEET (review 9 and the dark dashboard). Dark had no paper of its own, so the fallback
+  mixed the light text into the canvas and every drawn page was a bright grey slab on a dark board. The dark paper is a
+  lifted dark surface with light ink, so a drawn page reads as a card of the same family as the panels around it.
+*/
+[data-experience='basecamp'][data-scheme='dark'] { --bc-paper: #252b31; --bc-paper-ink: #d9dee4; }
+
+/* The type stamp on a dark sheet is the light tint of its hue, so PDF, DOC and IMG keep their identity and their contrast. */
+[data-experience='basecamp'][data-scheme='dark'] .bcftype--pdf .bcftypeword { color: #f2aca2; }
+[data-experience='basecamp'][data-scheme='dark'] .bcftype--doc .bcftypeword,
+[data-experience='basecamp'][data-scheme='dark'] .bcftype--made .bcftypeword { color: #9fc9f5; }
+[data-experience='basecamp'][data-scheme='dark'] .bcftype--image .bcftypeword { color: #a6dfc0; }

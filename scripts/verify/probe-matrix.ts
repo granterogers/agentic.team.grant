@@ -28,6 +28,24 @@ const overflow = (page: Page) =>
     return { viewport: vw, scrollWidth: sw, overflows: sw > vw + 1 }
   })
 
+/*
+  Opens the project menu by its burger. The menu's state is read from the panel's own `hidden` attribute, the same thing
+  a person sees; a press is retried, and a DOM click is the last resort for a press that lands on a moving element.
+  The fresh-page menu path is exercised with pointer presses by probe-refinement-workflows.
+*/
+const menuShut = (page: Page) =>
+  page.evaluate(() => document.querySelector('.bcmenupanel')?.hasAttribute('hidden') ?? true)
+const openMenu = async (page: Page) => {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (!(await menuShut(page))) return
+    await page.locator('[data-bc-menu]').first().click({ force: true })
+    await page.waitForTimeout(600)
+    if (await menuShut(page))
+      await page.evaluate(() => (document.querySelector('[data-bc-menu]') as HTMLElement | null)?.click())
+    await page.waitForTimeout(600)
+  }
+}
+
 const { port, close } = await serve()
 const browser = await chromium.launch()
 const rows: Array<Record<string, unknown>> = []
@@ -78,16 +96,31 @@ try {
       await record('chat')
       await chatToggle().click({ force: true })
       await page.waitForTimeout(500)
+      /*
+        On a phone the open chat is a full-screen sheet that covers the header, so the toggle cannot close it. Its own
+        close control does (the composer is the sign that the sheet is still open).
+      */
+      if ((await page.getByPlaceholder('Message the team').filter({ visible: true }).count()) > 0) {
+        await page.getByRole('button', { name: /^close/i }).filter({ visible: true }).first().click({ force: true })
+        await page.waitForTimeout(600)
+      }
 
-      await page.locator('[data-bc-settings]').first().click({ force: true })
+      /* On a phone the header control is hidden and Global Settings is in the project menu (review 3). */
+      if ((await page.locator('[data-bc-settings]:visible').count()) > 0) {
+        await page.locator('[data-bc-settings]:visible').first().click({ force: true })
+      } else {
+        await openMenu(page)
+        await page.locator('[data-bc-global-menu]:visible').first().click({ force: true })
+      }
       await page.waitForTimeout(900)
       await shot('settings')
       await record('settings')
       await page.keyboard.press('Escape')
       await page.waitForTimeout(500)
 
-      await page.locator('[data-bc-menu]').first().click({ force: true })
-      await page.waitForTimeout(300)
+      await openMenu(page)
+      /* The menu's rows animate in (about 0.4s); a press before they settle lands on a row that is still moving. */
+      await page.waitForTimeout(900)
       await page
         .locator('[data-bc-menu-modules] [data-bc-expand="documents"]')
         .first()

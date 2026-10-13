@@ -5709,11 +5709,13 @@ function teamTabSettings() {
     state.person === c.slug
       ? `<div class="st-editor">${personEditor(c)}</div>`
       : `<article class="st-person${c.active === false ? ' retired' : ''}">
+          <div class="st-top">
           <span class="st-face">${face(c, 52)}</span>
           <div class="st-text">
             <p class="st-name">${esc(c.name)}</p>
             <p class="st-desc" style="margin:0">${esc(c.role ?? '')}</p>
             <p class="st-meta" style="margin:0">${esc(c.active === false ? 'Retired' : (c.doing ?? 'Available'))}</p>
+          </div>
           </div>
           <div class="st-act">${config.VIEWER.operator ? ui.button({ label: 'Configure', tone: 'quiet', a: { 'data-configure': c.slug, 'aria-label': `Configure ${c.name}` } }) : ''}</div>
         </article>`

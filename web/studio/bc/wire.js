@@ -780,8 +780,20 @@ export const wire = (root) => {
     `verify:basecamp-controls` presses for and reading the code would not have
     shown. The control belongs to the shell, so the shell wires it.
   */
-  for (const b of root.querySelectorAll('[data-bc-settings]')) {
+  /*
+    Two doors onto one sheet: the header control (every width but a phone) and the project menu's entry (the phone's
+    door). They carry different attributes so the header selector stays unambiguous for every probe that uses it.
+  */
+  for (const b of root.querySelectorAll('[data-bc-settings], [data-bc-global-menu]')) {
     b.addEventListener('click', () => {
+      /*
+        The phone entry lives in the project menu, so pressing it closes that menu before the sheet opens. The menu's
+        state is the module's; the panel is drawn from it, so the state change needs a redraw to take effect.
+      */
+      if (b.hasAttribute('data-bc-global-menu')) {
+        menu.setOpen(false)
+        ctx.render()
+      }
       ctx.openGlobalSettings?.()
     })
   }
