@@ -41,7 +41,9 @@ const openMenu = async (page: Page) => {
     await page.locator('[data-bc-menu]').first().click({ force: true })
     await page.waitForTimeout(600)
     if (await menuShut(page))
-      await page.evaluate(() => (document.querySelector('[data-bc-menu]') as HTMLElement | null)?.click())
+      await page.evaluate(() =>
+        (document.querySelector('[data-bc-menu]') as HTMLElement | null)?.click(),
+      )
     await page.waitForTimeout(600)
   }
 }
@@ -101,7 +103,11 @@ try {
         close control does (the composer is the sign that the sheet is still open).
       */
       if ((await page.getByPlaceholder('Message the team').filter({ visible: true }).count()) > 0) {
-        await page.getByRole('button', { name: /^close/i }).filter({ visible: true }).first().click({ force: true })
+        await page
+          .getByRole('button', { name: /^close/i })
+          .filter({ visible: true })
+          .first()
+          .click({ force: true })
         await page.waitForTimeout(600)
       }
 
