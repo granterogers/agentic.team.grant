@@ -1152,3 +1152,21 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   :root[data-experience='basecamp']:not([data-scheme='light']) .bcftype--made .bcftypeword { color: #9fc9f5; }
   :root[data-experience='basecamp']:not([data-scheme='light']) .bcftype--image .bcftypeword { color: #a6dfc0; }
 }
+
+/*
+  THE POST-IT GRIP IS VISIBLE (second review, F5). Removing the bar's gradient left no cue for where a note is dragged,
+  and a touch user has no cursor to show it. A short centred handle marks the bar.
+*/
+[data-experience='basecamp'] .bcpostitbar { position: relative; }
+[data-experience='basecamp'] .bcpostitbar::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 3px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: rgb(60 45 0 / 0.26);
+  pointer-events: none;
+}

@@ -95,7 +95,7 @@ const RESP: Record<string, Meta> = {
   'settings-index': { area: A(11), title: 'Settings, category list', state: 'normal' },
   'settings-appearance': { area: A(11), title: 'Settings, Appearance', state: 'normal' },
 }
-const LOOKS: Record<string, string> = { silver: 'Slate & Silver', forest: 'Forest & Brass', graphite: 'Warm Graphite' }
+const LOOKS: Record<string, string> = { silver: 'Slate & Silver', forest: 'Forest', graphite: 'Warm Graphite' }
 const LOOKSURF = ['dashboard-board', 'settings-index', 'settings-appearance']
 const DEV: Record<string, { vp: string; w: number; h: number; note: string }> = {
   '1440': { vp: '1440x900', w: 1440, h: 900, note: 'desktop' }, desktop1440: { vp: '1440x900', w: 1440, h: 900, note: 'desktop' },

@@ -2248,13 +2248,16 @@ const warmNext = async () => {
 const isSmallTile = (host) => host.classList.contains('bccompact') || host.classList.contains('bcrowthumb')
 
 const paintThumb = async (host, ref) => {
-  const small = isSmallTile(host)
+  /*
+    A small tile is drawn by the render (its glyph or type card), so nothing is fetched for it: no record, no bytes.
+  */
+  if (isSmallTile(host)) return
   /*
     A THUMBNAIL KEPT ON THIS DEVICE (docthumbs.js): the viewer made it from the first page or the picture while the
     document was open, keyed to the source's modified time. It is checked first, so a tile for an external document that
     Team HQ does not hold needs no request at all, and a source that changed shows none rather than an old one.
   */
-  if (!small && ref.startsWith('id:')) {
+  if (ref.startsWith('id:')) {
     const kept = docthumbs.get(ref.slice(3), host.dataset.bcThumbmod ?? '')
     if (kept !== null) {
       const img = document.createElement('img')
@@ -2270,7 +2273,7 @@ const paintThumb = async (host, ref) => {
     }
   }
   const file = await fileFor(ref)
-  if (!small && ref.startsWith('id:') && (file === null || file.url === '')) {
+  if (ref.startsWith('id:') && (file === null || file.url === '')) {
     /* A document Team HQ reads on demand and nobody has opened yet: make its first-page picture ourselves (below). */
     void warmThumb(host, ref.slice(3))
   }
@@ -2281,7 +2284,7 @@ const paintThumb = async (host, ref) => {
     dressObject(host, face)
     return
   }
-  if (small || file.url === '') return
+  if (file.url === '') return
   const isPdf = file.mime === 'application/pdf' || /\.pdf$/i.test(file.url)
   if (isPdf) {
     await pdf.paint(host, file.url, 220)
