@@ -100,7 +100,7 @@ export const DENSITIES = [
 /* `faces` is [canvas, surface] in each scheme, only so the picker can draw a small preview; the CSS is the source of truth (bc/refine.css). */
 export const LOOKS = [
   { id: 'silver', name: 'Slate & Silver', note: 'Cooler, neutral greys', faces: { dark: ['#0d1114', '#1c2227'], light: ['#e2e5e9', '#fbfcfd'] } },
-  { id: 'forest', name: 'Forest & Brass', note: 'Deep green faces, brass headings', faces: { dark: ['#0a1511', '#18291f'], light: ['#d2d6cb', '#eef0e8'] } },
+  { id: 'forest', name: 'Forest & Brass', note: 'Deep green faces', faces: { dark: ['#0a1511', '#18291f'], light: ['#d2d6cb', '#eef0e8'] } },
   { id: 'graphite', name: 'Warm Graphite', note: 'Warm charcoal and parchment', faces: { dark: ['#131110', '#262220'], light: ['#d9d4cd', '#f2efea'] } },
 ]
 export const GLASS = [

@@ -1057,7 +1057,7 @@ const thumb = (d, i, compact = false) => {
       ${docsrc.mark(d, esc)}
       <figcaption>
         <span class="bcdoctitle">${esc(d.title)}</span>
-        <span class="bcdocmeta">${esc([kindWordOf(d), d.size].filter(Boolean).join(' · '))}</span>
+        <span class="bcdocmeta">${esc((compact ? [kindWordOf(d)] : [kindWordOf(d), d.size]).filter(Boolean).join(' · '))}</span>
         ${docsrc.versionChip(d, esc)}${docsrc.projectChip(d, esc)}
       </figcaption>
     </button>

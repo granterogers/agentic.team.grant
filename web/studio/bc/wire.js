@@ -2201,6 +2201,7 @@ const warmNext = async () => {
             /* The tile may have been redrawn while the page was read, so paint whichever tiles exist NOW. */
             for (const h of document.querySelectorAll('[data-bc-thumb]')) {
               if (h.dataset.bcThumb !== `id:${job.id}`) continue
+              if (isSmallTile(h)) continue
               const img = document.createElement('img')
               img.className = 'realpage'
               img.alt = ''
@@ -2223,13 +2224,25 @@ const warmNext = async () => {
   }
 }
 
+/*
+  ONE TREATMENT PER SURFACE, DECIDED FROM THE SURFACE RATHER THAN FROM THIS DEVICE'S STORAGE.
+
+  A dashboard tile (`bccompact`) and a list row (`bcrowthumb`) are a few dozen pixels, where a real first page is an
+  unreadable grey smudge. They keep the drawn type card, and they never fetch the bytes or warm the cache. Before this
+  the cached JPEG replaced the card only on devices that happened to hold one, so the same board looked different from
+  one browser to the next. The Docs grid keeps real first pages, and an object (a spreadsheet, a deck) keeps its glyph on
+  every surface.
+*/
+const isSmallTile = (host) => host.classList.contains('bccompact') || host.classList.contains('bcrowthumb')
+
 const paintThumb = async (host, ref) => {
+  const small = isSmallTile(host)
   /*
     A THUMBNAIL KEPT ON THIS DEVICE (docthumbs.js): the viewer made it from the first page or the picture while the
     document was open, keyed to the source's modified time. It is checked first, so a tile for an external document that
     Team HQ does not hold needs no request at all, and a source that changed shows none rather than an old one.
   */
-  if (ref.startsWith('id:')) {
+  if (!small && ref.startsWith('id:')) {
     const kept = docthumbs.get(ref.slice(3), host.dataset.bcThumbmod ?? '')
     if (kept !== null) {
       const img = document.createElement('img')
@@ -2245,9 +2258,9 @@ const paintThumb = async (host, ref) => {
     }
   }
   const file = await fileFor(ref)
-  if (file === null || file.url === '') {
+  if (!small && ref.startsWith('id:') && (file === null || file.url === '')) {
     /* A document Team HQ reads on demand and nobody has opened yet: make its first-page picture ourselves (below). */
-    if (ref.startsWith('id:')) void warmThumb(host, ref.slice(3))
+    void warmThumb(host, ref.slice(3))
   }
   if (file === null) return
   const face = bcMini.faceFor(file.mime ?? '', file.url === '' ? (file.title ?? '') : file.url)
@@ -2256,7 +2269,7 @@ const paintThumb = async (host, ref) => {
     dressObject(host, face)
     return
   }
-  if (file.url === '') return
+  if (small || file.url === '') return
   const isPdf = file.mime === 'application/pdf' || /\.pdf$/i.test(file.url)
   if (isPdf) {
     await pdf.paint(host, file.url, 220)
