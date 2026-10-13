@@ -24,7 +24,9 @@
       "version": "v903",
       "note": "10 October 01:20 UTC V1 release from 047f6f17 (before it v899). Earlier: 9 October, Team HQ release (revisioned layout saves, project backgrounds); rollback bundle v897 captured by that release into .out/rollback-release/hq-api.v897 (gitignored, may no longer exist)"
     },
-    "mcp": { "version": "v665" },
+    "mcp": {
+      "version": "v665"
+    },
     "liveReading": {
       "at": "2026-10-09T15:34Z",
       "by": "docs/audit/V1-R1B-R1C-RELEASE-VERIFICATION-2026-10-09.md (read-only R1b)",
@@ -41,10 +43,11 @@
       "report": "docs/audit/V1-RELEASE-REPORT-2026-10-09.md"
     },
     "page": {
-      "deployment": "dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2",
-      "deploymentNote": "Team HQ release, then its phone correction: dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2 is main d75b651a (the polish.css correction that stops a press falling through the fading phone chat dock to Sign out; one file uploaded, 291 files in the set, the live file set and every tracked studio file byte-identical to d75b651a after deploy, config.js byte-identical to the generated file). Rollback: dpl_FGxJYkQsYV5543Pr5zLveujwbPSD, the Team HQ page of main a5363d94 (the first Team HQ release, byte-identical to a5363d94 after its deploy). 12 October 2026 before that: the Activity Log improvement (commit 3b439236, branch feature/activity-log-details, plus the Activity UX already merged in PR #462) shipped as the page alone with deploy:hq-page from a staged tree (the branch's web/studio plus the live generated config.js, taken from the live site); 143 of 143 live files byte-identical to that tree after deploy; the previous page equalled main 5fa1fbdc plus config.js; the six new names were allowed by name; no function, migration or setting touched, ledger still off. Live check as a Sample visitor: scripts/verify/activity-live-sample.ts, 22 of 22.",
-      "previous": "dpl_FGxJYkQsYV5543Pr5zLveujwbPSD",
+      "deployment": "dpl_4RsRF3zzWjBfXebaobprehVkJDv3",
+      "deploymentNote": "Version 0.1.0 (package.json, shown top right on the home screen): main 0ee3abda, deployment dpl_4RsRF3zzWjBfXebaobprehVkJDv3, READY, gitCommitSha 0ee3abda; 142 of 142 tracked studio files and config.js byte-identical after deploy. Rollback: dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2 (the phone correction, d75b651a). Team HQ release, then its phone correction: dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2 is main d75b651a (the polish.css correction that stops a press falling through the fading phone chat dock to Sign out; one file uploaded, 291 files in the set, the live file set and every tracked studio file byte-identical to d75b651a after deploy, config.js byte-identical to the generated file). Rollback: dpl_FGxJYkQsYV5543Pr5zLveujwbPSD, the Team HQ page of main a5363d94 (the first Team HQ release, byte-identical to a5363d94 after its deploy). 12 October 2026 before that: the Activity Log improvement (commit 3b439236, branch feature/activity-log-details, plus the Activity UX already merged in PR #462) shipped as the page alone with deploy:hq-page from a staged tree (the branch's web/studio plus the live generated config.js, taken from the live site); 143 of 143 live files byte-identical to that tree after deploy; the previous page equalled main 5fa1fbdc plus config.js; the six new names were allowed by name; no function, migration or setting touched, ledger still off. Live check as a Sample visitor: scripts/verify/activity-live-sample.ts, 22 of 22.",
+      "previous": "dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2",
       "rollback": [
+        "dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2",
         "dpl_FGxJYkQsYV5543Pr5zLveujwbPSD",
         "dpl_EwZ7ghJP8uutmxVzyeruQUZvme6C",
         "dpl_3otBfKtZsGatfqgu1SgeJjVPb7Ld",
@@ -66,8 +69,13 @@
       "note": "SUPERSEDED for the numbers by liveReading (9 Oct read: signin v130, voice v659, voice-token v688, telegram-webhook v699, slack-events v677, google-oauth v647; each bundle captured and word-level identical to 9310116's source). Older note: version numbers as of the 6 October record; they advanced then only because setting the worker's secrets re-versions every function; no code changed. Not re-read since: UNKNOWN whether a later secrets write re-versioned them again, and UNKNOWN until scripts/forensics/capture-functions.ts is run that they hold 9310116's code"
     }
   },
-  "duties": { "drive-index": "off", "calendar-event-sync": "off" },
-  "integrations": { "google": "revoked" },
+  "duties": {
+    "drive-index": "off",
+    "calendar-event-sync": "off"
+  },
+  "integrations": {
+    "google": "revoked"
+  },
   "acceptedGaps": [
     "#436 Mark done leaves the Mark done button until reload",
     "authenticated MCP tools/list is unverified",

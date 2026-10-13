@@ -220,3 +220,14 @@ and no unrelated live work would be overwritten.
 
 Steps 1 to 5 were performed for the release at `a5363d94` (section 0). The phone correction went through the same steps and is recorded
 in section 0 under "Phone correction release".
+
+### Version 0.1.0 on the home screen (deployed)
+
+- `main` fast-forwarded to `0ee3abda` (`git push origin 0ee3abda:refs/heads/main`, no force). The change: `package.json` version
+  (0.1.0) written into `config.js` by `scripts/config-site.ts`, shown in the home board's top-right corner (`web/studio/bc/shell.js`,
+  `refine.css`). Rules in `docs/VERSIONING.md`.
+- Deployment `dpl_4RsRF3zzWjBfXebaobprehVkJDv3` (READY, production, `gitCommitSha` `0ee3abda`); three files uploaded, 142 of 142
+  tracked studio files and `config.js` byte-identical to `0ee3abda` afterwards.
+- Live check (Sample visitor, read-only apart from the Sample's own sign-in): `v0.1.0` at 12px, top right of the home board, title not
+  clipped, on desktop and phone. Mobile Team Chat regression re-run on this build: 11 of 11.
+- Rollback: `dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2` (the phone correction, `d75b651a`).
