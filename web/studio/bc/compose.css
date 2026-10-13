@@ -3971,7 +3971,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   flex-direction: column;
   min-width: 0;
   border-radius: 3px 3px 12px 3px;
-  background: linear-gradient(165deg, #fbea8c 0%, #f5da63 100%);
+  background: var(--bc-note, #f7f6f1);
   color: #3a3000;
   box-shadow: 0 1px 1px rgb(0 0 0 / 18%), 0 12px 20px -12px rgb(60 45 0 / 55%);
 }

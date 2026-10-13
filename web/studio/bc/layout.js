@@ -63,7 +63,7 @@ export const ALL = ['tasks', 'board', 'documents', 'schedule', 'contacts', 'acti
 
 export const MIN = { w: 240, h: 150 }
 export const POSTIT_MIN = { w: 130, h: 120 }
-export const POSTIT_DEFAULT = { w: 210, h: 190 }
+export const POSTIT_DEFAULT = { w: 176, h: 150 }
 export const ZOOM = { min: 0.2, max: 2.5, step: 0.1 }
 /** Furthest a module may sit from the origin, in logical pixels: far past anything reachable, so nothing is ever "at the edge". */
 export const REACH = 100000
@@ -106,7 +106,12 @@ export const DEFAULT_TINT = {
 }
 
 /** The CSS colour a module is drawn in: the person's choice, else the module's own. */
-export const hueFor = (id, t) => tintHue(t) || tintHue(DEFAULT_TINT[id] ?? null)
+/*
+  The colour a module panel is drawn with. Only a tint a person chose is used (October 2026 redesign): the per-module default
+  colours are no longer painted on the panels, so the board reads as one calm surface and colour means a state. DEFAULT_TINT
+  still names each module's identity elsewhere (identity.js).
+*/
+export const hueFor = (_id, t) => tintHue(t)
 
 /** The CSS colour for a stored tint. */
 export const tintHue = (t) => {
@@ -488,7 +493,12 @@ const BG_ID = /^[a-z0-9][a-z0-9-]{0,47}$/
 const num = (v, lo, hi, dflt) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt)
 /** Appearance: the range of each slider (0 to 1) and what a project that never chose gets. dots 0.6 and tex 0.4 are exactly the look before the sliders existed. */
 export const LOOK_RANGE = { dots: [0, 1], tex: [0, 1], mod: [0.2, 1] }
-export const LOOK_DEFAULT = { dots: 0.6, tex: 0.4, mod: 0.8 }
+/*
+  The recommended project look (October 2026 redesign): no dot grid on the standard view (the grid is for arranging, and the
+  board draws it while a module is moved), and module surfaces at 92% so they sit clearly on the canvas. A project that saved
+  its own look keeps it; only a project that never chose draws this.
+*/
+export const LOOK_DEFAULT = { dots: 0, tex: 0.4, mod: 0.92 }
 export const MOD_MODES = ['card', 'edge']
 export const cleanBg = (raw) => {
   if (raw === null || typeof raw !== 'object') return null

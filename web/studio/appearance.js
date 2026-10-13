@@ -99,7 +99,7 @@ export const DENSITIES = [
 */
 /* `faces` is [canvas, surface] in each scheme, only so the picker can draw a small preview; the CSS is the source of truth (bc/refine.css). */
 export const LOOKS = [
-  { id: 'silver', name: 'Slate & Silver', note: 'Cooler, neutral greys', faces: { dark: ['#0d1114', '#1c2227'], light: ['#d4d7da', '#eff1f3'] } },
+  { id: 'silver', name: 'Slate & Silver', note: 'Cooler, neutral greys', faces: { dark: ['#0d1114', '#1c2227'], light: ['#e2e5e9', '#fbfcfd'] } },
   { id: 'forest', name: 'Forest & Brass', note: 'Deep green faces, brass headings', faces: { dark: ['#0a1511', '#18291f'], light: ['#d2d6cb', '#eef0e8'] } },
   { id: 'graphite', name: 'Warm Graphite', note: 'Warm charcoal and parchment', faces: { dark: ['#131110', '#262220'], light: ['#d9d4cd', '#f2efea'] } },
 ]
@@ -114,9 +114,14 @@ export const DEPTHS = [
   { id: 'deep', name: 'Deep', note: 'A pronounced lift' },
 ]
 
+/*
+  The recommended appearance (October 2026 redesign): Slate & Silver, Light, the slate-blue accent and a clean canvas with no
+  texture. A fresh visitor gets exactly this. A browser that already stored a choice keeps it; "Reset to recommended" on the
+  Appearance tab restores it. The project's own grid and module opacity are reset in that project's appearance sheet.
+*/
 const DEFAULTS = {
   palette: 'slate',
-  texture: 'concrete',
+  texture: 'none',
   own: null,
   ownName: '',
   scheme: 'light',
@@ -174,6 +179,11 @@ export async function readTexture(file) {
 }
 
 /** What is chosen. Falls back to the defaults, never to nothing. */
+/* The recommended appearance, for the "Reset to recommended" action. Stored as a fresh choice, so a reset is never a silent no-op. */
+export function resetToRecommended() {
+  apply({ ...DEFAULTS })
+}
+
 export function appearance() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}')

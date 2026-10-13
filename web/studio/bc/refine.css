@@ -23,7 +23,7 @@
 :root:root[data-experience='basecamp'][data-look='silver'][data-scheme='dark'] { --bc-canvas: #0d1114; --bc-surface: #1c2227; --bc-border-popover: #4a5258; --bc-text-muted: #a9b0b6; }
 :root:root[data-experience='basecamp'][data-look='forest'][data-scheme='dark'] { --bc-canvas: #0a1511; --bc-surface: #18291f; --bc-border-popover: #43544a; --bc-text-muted: #a7b3ab; }
 :root:root[data-experience='basecamp'][data-look='graphite'][data-scheme='dark'] { --bc-canvas: #131110; --bc-surface: #262220; --bc-border-popover: #55504b; --bc-text-muted: #b0aaa4; }
-:root:root[data-experience='basecamp'][data-look='silver'][data-scheme='light'] { --bc-canvas: #d4d7da; --bc-surface: #eff1f3; --bc-border-popover: #b3b9be; }
+:root:root[data-experience='basecamp'][data-look='silver'][data-scheme='light'] { --bc-canvas: #e2e5e9; --bc-surface: #fbfcfd; --bc-border-popover: #c3c9cf; }
 :root:root[data-experience='basecamp'][data-look='forest'][data-scheme='light'] { --bc-canvas: #d2d6cb; --bc-surface: #eef0e8; --bc-border-popover: #b1b6a8; }
 :root:root[data-experience='basecamp'][data-look='graphite'][data-scheme='light'] { --bc-canvas: #d9d4cd; --bc-surface: #f2efea; --bc-border-popover: #bcb5ab; }
 /* A person who follows the device has no data-scheme: the same looks, chosen by the system. */
@@ -33,7 +33,7 @@
   :root:root[data-experience='basecamp'][data-look='graphite']:not([data-scheme]) { --bc-canvas: #131110; --bc-surface: #262220; --bc-border-popover: #55504b; --bc-text-muted: #b0aaa4; }
 }
 @media (prefers-color-scheme: light) {
-  :root:root[data-experience='basecamp'][data-look='silver']:not([data-scheme]) { --bc-canvas: #d4d7da; --bc-surface: #eff1f3; --bc-border-popover: #b3b9be; }
+  :root:root[data-experience='basecamp'][data-look='silver']:not([data-scheme]) { --bc-canvas: #e2e5e9; --bc-surface: #fbfcfd; --bc-border-popover: #c3c9cf; }
   :root:root[data-experience='basecamp'][data-look='forest']:not([data-scheme]) { --bc-canvas: #d2d6cb; --bc-surface: #eef0e8; --bc-border-popover: #b1b6a8; }
   :root:root[data-experience='basecamp'][data-look='graphite']:not([data-scheme]) { --bc-canvas: #d9d4cd; --bc-surface: #f2efea; --bc-border-popover: #bcb5ab; }
 }

@@ -157,7 +157,8 @@ describe('where a new note goes', () => {
     const a = L.addPostit('n', { at: { x: 12000, y: -800 } })
     const b = L.addPostit('n', { near: a.id })
     expect(a.x).toBe(12000)
-    expect(b.x).toBe(12000 + 210 + 16)
+    // The gap is measured from the note's own width, so a change to the default size does not move the test's meaning.
+    expect(b.x).toBe(12000 + L.POSTIT_DEFAULT.w + 16)
     expect(L.postits('n').map((n: { id: string }) => n.id)).toContain(b.id)
   })
 })

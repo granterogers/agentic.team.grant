@@ -45,7 +45,7 @@ import * as bcGrip from './bc/dockgrip.js'
 import * as bcDictate from './bc/dockdictate.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
-import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme, LOOKS, GLASS, DEPTHS } from './appearance.js'
+import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme, LOOKS, GLASS, DEPTHS, resetToRecommended } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as dictate from './dictate.js'
@@ -7141,6 +7141,17 @@ function appearanceTab() {
         }),
       ]),
     }),
+    ui.section({
+      title: 'Reset',
+      note: 'These choices are global: they apply to every project in this browser. Each project keeps its own grid and module opacity, which its appearance sheet resets.',
+      body: ui.card([
+        ui.row({
+          name: 'Reset to recommended',
+          desc: 'Slate & Silver, Light, the slate-blue accent, a clean canvas with no texture, soft frosted menus and soft depth.',
+          control: '<button type="button" class="btn quiet" data-appearance-reset>Reset to recommended</button>',
+        }),
+      ]),
+    }),
   ].join('')
 }
 
@@ -8469,6 +8480,14 @@ function wireAppearance(v) {
   }
   for (const b of v.querySelectorAll('[data-depth-pick]')) {
     b.addEventListener('click', () => pick('depth', b.dataset.depthPick))
+  }
+  // One press restores the recommended appearance; the redraw shows the ticks moving to it.
+  for (const b of v.querySelectorAll('[data-appearance-reset]')) {
+    b.addEventListener('click', () => {
+      resetToRecommended()
+      settingsSheet()
+      sheet(v, true)
+    })
   }
 }
 

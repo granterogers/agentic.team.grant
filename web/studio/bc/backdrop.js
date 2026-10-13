@@ -116,10 +116,12 @@ export const resolve = (bg, slug = '') => {
   --bc-tex-op the stone texture's strength (0 to 1), --bc-mod-op the minimised modules' face opacity.
 */
 export const LOOK_VARS = ['--bc-dot-op', '--bc-tex-op', '--bc-mod-op']
+/* The strength the dots were drawn at before the slider existed. A fixed base, not the default: the recommended default is now 0. */
+const DOTS_DRAWN_AT = 0.6
 export const lookStyle = (bg) => {
   const v = []
   if (bg === null || bg === undefined) return v
-  if (bg.dots !== undefined) v.push(`--bc-dot-op:${String(Math.round((bg.dots / grid.LOOK_DEFAULT.dots) * 100) / 100)}`)
+  if (bg.dots !== undefined) v.push(`--bc-dot-op:${String(Math.round((bg.dots / DOTS_DRAWN_AT) * 100) / 100)}`)
   if (bg.tex !== undefined) v.push(`--bc-tex-op:${String(bg.tex)}`)
   if (bg.mod !== undefined) v.push(`--bc-mod-op:${String(bg.mod)}`)
   return v
