@@ -203,8 +203,55 @@ try {
     const dock = page.locator('[data-bc-dock]:visible').first()
     if ((await dock.count()) > 0) await dock.click({ force: true })
     await page.waitForTimeout(900)
-    const label = page.locator('.t-label:visible', { hasText: 'Chief of Staff' }).first()
-    check(`chat (${scheme}): the speaker label is drawn`, (await label.count()) > 0)
+    const labels = await page.evaluate(() => {
+      const out: Array<{ text: string; color: string; bg: string }> = []
+      for (const el of Array.from(document.querySelectorAll('.t-label'))) {
+        if (el.getBoundingClientRect().width === 0 || !/·/.test(el.textContent ?? '')) continue
+        let bg = ''
+        for (let p: Element | null = el; p !== null && bg === ''; p = p.parentElement) {
+          const b = getComputedStyle(p).backgroundColor
+          if (b !== 'rgba(0, 0, 0, 0)' && b !== 'transparent') bg = b
+        }
+        out.push({ text: (el.textContent ?? '').trim(), color: getComputedStyle(el).color, bg })
+      }
+      return out
+    })
+    check(
+      `chat (${scheme}): every speaker label is drawn`,
+      labels.length >= 2,
+      `${String(labels.length)} label(s)`,
+    )
+    /* WCAG contrast from the computed colours (rgb() or the color(srgb …) form Chromium uses for some tokens). */
+    const parse = (c: string): [number, number, number] | null => {
+      const srgb = c.match(/color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)/)
+      if (srgb !== null)
+        return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255]
+      const rgb = c.match(/rgba?\(([\d.]+), ([\d.]+), ([\d.]+)/)
+      return rgb === null ? null : [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])]
+    }
+    const lum = ([r, g, b]: [number, number, number]) => {
+      const f = (v: number) => {
+        const x = v / 255
+        return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+      }
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+    }
+    for (const l of labels) {
+      const fg = parse(l.color)
+      const bgc = parse(l.bg)
+      if (fg === null || bgc === null) {
+        check(
+          `chat (${scheme}): "${l.text}" contrast readable`,
+          false,
+          `unparsed ${l.color} on ${l.bg}`,
+        )
+        continue
+      }
+      const hi = Math.max(lum(fg), lum(bgc))
+      const lo = Math.min(lum(fg), lum(bgc))
+      const ratio = (hi + 0.05) / (lo + 0.05)
+      check(`chat (${scheme}): "${l.text}" meets 4.5:1`, ratio >= 4.5, `${ratio.toFixed(2)}:1`)
+    }
     await page.screenshot({ path: `.out/visual/wf-chat-${scheme}.png` })
     await ctx.close()
   }

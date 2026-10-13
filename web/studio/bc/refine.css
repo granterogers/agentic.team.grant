@@ -1128,3 +1128,27 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
 [data-experience='basecamp'][data-scheme='dark'] .bcftype--doc .bcftypeword,
 [data-experience='basecamp'][data-scheme='dark'] .bcftype--made .bcftypeword { color: #9fc9f5; }
 [data-experience='basecamp'][data-scheme='dark'] .bcftype--image .bcftypeword { color: #a6dfc0; }
+
+/*
+  REVIEW MAJORS (independent review of 33cd99c2).
+
+  1. The type word wrapped letter by letter on a narrow tile ("P / D / F"). It stays on one line; a compact tile uses a
+     smaller word so it fits the tile it is drawn in.
+  2. A real preview kept its type stamp beside the picture (the stamp span is still in the tile after the image is
+     added). Once a tile has a real preview, only the picture is drawn.
+  3. Dark paper was missing under "Follow the system" with a dark OS: the dark rules keyed on data-scheme="dark" only.
+     The system-dark case gets the same paper and stamp colours, and an explicit light choice still wins.
+*/
+[data-experience='basecamp'] .bcftypeword { white-space: nowrap; overflow: hidden; text-overflow: clip; max-width: 100%; }
+[data-experience='basecamp'] .bcftype { min-width: 0; overflow: hidden; }
+[data-experience='basecamp'] .bccompact .bcftypeword { font-size: 12px; letter-spacing: 0; }
+[data-experience='basecamp'] .bccompact .bcftype { padding: 0; }
+[data-experience='basecamp'] .bcthumb.has-real > :not(img.realpage) { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root[data-experience='basecamp']:not([data-scheme='light']) { --bc-paper: #252b31; --bc-paper-ink: #d9dee4; }
+  :root[data-experience='basecamp']:not([data-scheme='light']) .bcftype--pdf .bcftypeword { color: #f2aca2; }
+  :root[data-experience='basecamp']:not([data-scheme='light']) .bcftype--doc .bcftypeword,
+  :root[data-experience='basecamp']:not([data-scheme='light']) .bcftype--made .bcftypeword { color: #9fc9f5; }
+  :root[data-experience='basecamp']:not([data-scheme='light']) .bcftype--image .bcftypeword { color: #a6dfc0; }
+}
