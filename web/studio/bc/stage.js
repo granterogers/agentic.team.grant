@@ -188,7 +188,8 @@ export const wireStage = (root, ctx) => {
       if (!board.isConnected) return watch.disconnect()
       queueGrid()
     })
-    watch.observe(board, { attributes: true, attributeFilter: ['data-bg', 'data-bg-tone', 'style'] })
+    /* `class` too: the board adds bcpanes--moving while a module is dragged, and the arrangement grid is drawn for that state. */
+    watch.observe(board, { attributes: true, attributeFilter: ['data-bg', 'data-bg-tone', 'style', 'class'] })
     watch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-scheme', 'data-palette'] })
   }
 

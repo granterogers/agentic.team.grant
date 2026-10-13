@@ -178,12 +178,12 @@ export async function readTexture(file) {
   }
 }
 
-/** What is chosen. Falls back to the defaults, never to nothing. */
 /* The recommended appearance, for the "Reset to recommended" action. Stored as a fresh choice, so a reset is never a silent no-op. */
 export function resetToRecommended() {
   apply({ ...DEFAULTS })
 }
 
+/** What is chosen. Falls back to the defaults, never to nothing. */
 export function appearance() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}')

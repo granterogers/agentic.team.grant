@@ -18,6 +18,8 @@
   --bc-elev-2: 0 1px 3px rgb(16 22 28 / 0.08), 0 14px 32px -14px rgb(16 22 28 / 0.28);
   /* No dot grid on the standard view. The grid reads this strength (0 is off) when no project has saved its own look. */
   --bc-dot-op: 0;
+  /* The recommended module opacity for a project that never chose one (refine.css falls back to this). */
+  --bc-mod-op: 0.92;
   /* A pale note by default. Individual colours a person chooses are not stored, so every note takes this. */
   --bc-note: #f7f6f1;
   --bc-note-ink: #22262a;
@@ -65,18 +67,15 @@
 /* Per-module colour is gone from the chrome: every panel is the same neutral face with a neutral identity rule, so colour means
    something only when it is a state (overdue, stuck, a warning). The module type is still named in its heading and its icon.
    Both selector weights are matched because the module hue rules in compose.css and refine.css are more specific. */
-[data-experience='basecamp'] .bcmod[data-mod],
-[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--tinted,
-[data-experience='basecamp'] .bcmod.bcmod--tinted {
+[data-experience='basecamp'] .bcmod[data-mod]:not(.bcmod--tinted) {
   --bc-mod: var(--bc-text-muted);
   --bc-mod-ink: var(--bc-text-muted);
-  --bc-tint: var(--bc-text-muted);
 }
-[data-experience='basecamp'] .bcmod.bcmod--tinted,
-[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--tinted {
-  background: var(--bc-surface);
-  border-color: color-mix(in srgb, var(--bc-border-subtle) 80%, transparent);
-}
+/* A panel with a tint a person chose keeps it: its own colour, its own top rule and its own wash. Nothing here touches it. */
+
+/* While a module is being moved, the arrangement grid comes back at its original strength, so arranging keeps its guide. The
+   static board stays clean. The board adds bcpanes--moving for the drag (compose.css). */
+[data-experience='basecamp'] .bcpanes--moving .bcgridcv { --bc-dot-op: 0.6; }
 [data-experience='basecamp'] .bcmod:hover {
   box-shadow: var(--bc-elev-2);
 }

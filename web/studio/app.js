@@ -7147,7 +7147,7 @@ function appearanceTab() {
       body: ui.card([
         ui.row({
           name: 'Reset to recommended',
-          desc: 'Slate & Silver, Light, the slate-blue accent, a clean canvas with no texture, soft frosted menus and soft depth.',
+          desc: 'Slate & Silver, Light (not following your device), the slate-blue accent, a clean canvas with no texture, soft frosted menus and soft depth.',
           control: '<button type="button" class="btn quiet" data-appearance-reset>Reset to recommended</button>',
         }),
       ]),

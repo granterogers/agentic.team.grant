@@ -40,7 +40,7 @@ export const markup = (p) => {
         <button type="button" class="bcapmode" role="radio" aria-checked="${look.modMode === 'edge' ? 'true' : 'false'}" data-ap-mode="edge">Title and border coloured</button>
       </div>
     </div>
-    ${row('mod', 'Minimised module background', 'How solid a minimised module\'s face is. 100% is opaque; lower lets the canvas show through. Default 80%.', 0.2, 1)}
+    ${row('mod', 'Minimised module background', 'How solid a minimised module\'s face is. 100% is opaque; lower lets the canvas show through. Default 92%.', 0.2, 1)}
     ${row('dots', 'Grid dot opacity', 'The dotted grid behind the modules. 0% hides it.', 0, 1)}
     ${row('tex', 'Background texture', 'The slate texture of the page. 0% is plain; 40% is the default; 100% is clearly pronounced.', 0, 1)}
     <div class="bcapsample" data-ap-sample data-modmode="${look.modMode === 'edge' ? 'edge' : 'card'}" style="${bd.lookStyle(grid.bgOf(p.slug)).join(';')}">
