@@ -231,3 +231,20 @@ in section 0 under "Phone correction release".
 - Live check (Sample visitor, read-only apart from the Sample's own sign-in): `v0.1.0` at 12px, top right of the home board, title not
   clipped, on desktop and phone. Mobile Team Chat regression re-run on this build: 11 of 11.
 - Rollback: `dpl_8Guk3knuaHbz7aWaU3WR7EWcXby2` (the phone correction, `d75b651a`).
+
+### Visual redesign (deployed, October 2026)
+
+- Deployed in three steps, each through the page-delta process and verified byte-for-byte:
+  `dpl_Cwk4h1biRMVHSgME8BQwk4TwFRgD` (main `6e88f457`: the quiet default look, neutral modules, pale notes, Reset to recommended),
+  then `dpl_9EDKjwUJrbxJeU3xYfYpo4ZVNDAK` (main `00fa0c28`: the Sample Office no longer takes the Sample owner's saved orange accent).
+- Defaults for a fresh browser: Slate & Silver, Light, the slate-blue accent, no texture, no dot grid, modules at 92%.
+- Reset to recommended is in Settings > Appearance. Per-project grid and module opacity are reset in that project's appearance sheet.
+- Independent review (one reviewer, read-only): APPROVE WITH FIXES. The fixes are in `6808460c`: the 92% opacity reaches projects
+  without a saved look; the arrangement grid returns while a module is moved; a person's own module tint is kept.
+- Automated: `vitest tests/web tests/studio` 498 of 498; probes passed: visual-regressions (5), appearance-reset (6), exit-races (8),
+  history-sequences (21), dock-fade (4, the mobile Sign-out guard), drag, canvas, modules, backdrop, calendar, viewer-close, matrix (0 overflow),
+  journeys (16), activity-state.
+- Not verified: a module with a tint a person chose (the prototype has none); the dropped Post-it placeholder on a signed-in office;
+  authenticated features (Team Settings save, appearance saved to an account, background upload).
+- Known limitations: Docs & Files tiles for the Sample's seeded documents are drawn stand-ins (their first words, or a typed label),
+  because the Sample has no file bytes; the header still shares the canvas family, so its separation is a hairline and a soft shadow.
