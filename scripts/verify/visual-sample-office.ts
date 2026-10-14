@@ -12,13 +12,16 @@ import '../../src/safety/require-production-checks.ts'
  * project's name must be on the page, and the content must differ from the home screen's. A screen that fails any of those
  * is reported as a FAIL, never as a capture.
  *
- *   ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/verify/visual-sample-office.ts <tag>
+ *   ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/verify/visual-sample-office.ts <tag> [light|dark] [screen,screen]
+ *   ALLOW_PRODUCTION_CHECKS=1 STUDIO_BASE=https://ai-team-hq.vercel.app npx tsx scripts/verify/visual-sample-office.ts <tag>
  *
+ * STUDIO_BASE points the same read-only capture at the deployed site instead of the local copy of web/studio.
  * Output: .out/redesign/<tag>/sample-<mode>-<device>-<screen>.png, a colour scan and an axe-core run per screen.
  */
 import { mkdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { chromium } from 'playwright'
 import { newPage, settle, signIn, startStudio } from '../sample/browser.ts'
 import { rows, sampleOffice, session } from '../sample/lib.ts'
 
@@ -88,7 +91,7 @@ const SCAN = `(() => {
 })()`
 
 /* Where the page actually is: the route, the main text (for the fallback comparison) and whether the project's name is on it. */
-const WHERE = `(() => { const main = document.querySelector('main') || document.body; return JSON.stringify({ path: location.pathname, text: main.innerText.trim(), hasName: document.body.innerText.includes(${JSON.stringify(PROJECT_NAME)}), backendFailed: document.body.innerText.includes('The office did not answer') }) })()`
+const WHERE = `(() => { const main = document.querySelector('main') || document.body; return JSON.stringify({ path: location.pathname, text: main.innerText.trim(), hasName: document.body.innerText.includes(${JSON.stringify(PROJECT_NAME)}), backendFailed: document.body.innerText.includes('The office did not answer'), transportFailed: document.body.innerText.includes('upstream request failed') }) })()`
 
 /* Structural checks on the rendered screen: the activity keyboard fix, the version label's place in the bar, the bar's
    touch targets, and the document-thumbnail text contrast (WCAG 2.x relative luminance, AA needs 4.5:1 for text). */
@@ -141,7 +144,10 @@ const rowBefore = readRow()
 console.log('appearance row before:', rowBefore)
 
 const s = await session()
-const studio = await startStudio(4885)
+// The deployed site when STUDIO_BASE names it; otherwise a local server over web/studio (the same bytes, served from disk).
+const studio = process.env.STUDIO_BASE
+  ? { base: process.env.STUDIO_BASE, browser: await chromium.launch(), close: async () => undefined }
+  : await startStudio(4885)
 const { ctx, page, errors } = await newPage(studio, { width: 1440, height: 900 }, false)
 await signIn(studio, page, s) // the one sign-in of this capture
 const report: string[] = []
@@ -162,12 +168,14 @@ for (const [mode, stored] of MODES.filter(([m]) => onlyMode === undefined || m =
       // An office read that does not answer is retried with a growing pause, a bounded number of times. Only a persistent
       // failure is reported, and it is reported as a BACKEND failure, never as a visual one.
       let attempts = 0
-      let where: { path: string; text: string; hasName: boolean; backendFailed: boolean }
+      let where: { path: string; text: string; hasName: boolean; backendFailed: boolean; transportFailed: boolean }
       for (;;) {
         attempts += 1
         await page.goto(`${studio.base}${path}`, { waitUntil: 'load' })
         await settle(page)
         where = JSON.parse((await page.evaluate(WHERE)) as string) as typeof where
+        // A transport failure ("upstream request failed") is the request path answering, not the screen: retried the same way.
+        where.backendFailed = where.backendFailed || where.transportFailed
         if (!where.backendFailed || attempts > BACKEND_RETRY_MS.length) break
         console.log(`  backend did not answer: ${mode} ${device} ${name} (attempt ${attempts}), waiting ${BACKEND_RETRY_MS[attempts - 1] / 1000}s`)
         await new Promise((ok) => setTimeout(ok, BACKEND_RETRY_MS[attempts - 1]))
