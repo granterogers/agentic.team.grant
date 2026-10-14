@@ -12,25 +12,14 @@
 import '../../src/safety/require-production-writes.ts'
 import { randomBytes } from 'node:crypto'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { apiKeys, SECOND_EMAIL, SECOND_KEY, SECOND_NAME } from './identity.ts'
+
+// The identity lives in identity.ts (read-only); re-exported so existing importers keep working.
+export { apiKeys, SECOND_EMAIL, SECOND_KEY, SECOND_NAME }
 
 const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN ?? ''
-export const SECOND_EMAIL = 'p4-second-person@acceptance.agentic.invalid'
-export const SECOND_KEY = 'p4-second-person'
-export const SECOND_NAME = 'P4 second person (acceptance)'
 const db = new ManagementApiExecutor(REF, TOKEN)
-
-export const apiKeys = async (): Promise<{ anon: string; service: string }> => {
-  const r = await fetch(`https://api.supabase.com/v1/projects/${REF}/api-keys`, {
-    headers: { Authorization: `Bearer ${TOKEN}` },
-  })
-  const keys = (await r.json()) as { name: string; api_key: string }[]
-  const anon = keys.find((k) => k.name === 'anon')?.api_key
-  const service = keys.find((k) => k.name === 'service_role')?.api_key
-  if (anon === undefined || service === undefined)
-    throw new Error('could not read the project keys')
-  return { anon, service }
-}
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const go = process.argv.includes('--go')

@@ -1,3 +1,4 @@
+// biome-ignore-all format: the appearance fixtures are long single-line JSON seeds, kept as written so each case reads at a glance
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 

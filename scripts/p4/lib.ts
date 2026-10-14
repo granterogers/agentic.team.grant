@@ -9,7 +9,7 @@
  * without any mail.
  */
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
-import { apiKeys, SECOND_EMAIL } from './provision-second-person.ts'
+import { apiKeys, SECOND_EMAIL } from './identity.ts'
 
 export const REF = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 export const db = new ManagementApiExecutor(REF, process.env.SUPABASE_ACCESS_TOKEN ?? '')

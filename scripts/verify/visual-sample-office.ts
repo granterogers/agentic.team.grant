@@ -1,0 +1,111 @@
+// biome-ignore-all format: dense probe strings and the colour table kept as written, as the other verification probes are
+// The read-only gate comes first: this reads the production Sample Office, and it must refuse without ALLOW_PRODUCTION_CHECKS=1.
+import '../../src/safety/require-production-checks.ts'
+/**
+ * Signed-in Sample Office, read-only: the real office as the Sample Person, at desktop and phone width, in light and dark,
+ * from ONE sign-in. It opens pages and takes screenshots. It presses no control that writes, creates nothing, and changes
+ * nothing in production. The appearance is set in this browser only (localStorage), and the Sample's stored appearance row
+ * is read before and after to prove that nothing was written to it.
+ *
+ *   ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/verify/visual-sample-office.ts <tag>
+ *
+ * Output: .out/redesign/<tag>/sample-<mode>-<device>-<screen>.png, and a colour scan of each screen.
+ */
+import { mkdirSync } from 'node:fs'
+import { newPage, settle, signIn, startStudio } from '../sample/browser.ts'
+import { session } from '../sample/lib.ts'
+
+const tag = process.argv[2] ?? 'sample'
+const dir = `.out/redesign/${tag}`
+mkdirSync(dir, { recursive: true })
+// A project slug that exists in the Sample Office now (the Sample's projects change; a slug that is gone shows the home screen).
+const SLUG = '2027-financial-plan'
+const SCREENS: [string, string][] = [
+  ['home', '/'],
+  ['overview', `/p/${SLUG}`],
+  ['tasks', `/p/${SLUG}/tasks`],
+  ['documents', `/p/${SLUG}/documents`],
+  ['chat', `/p/${SLUG}/chat`],
+  ['schedule', `/p/${SLUG}/schedule`],
+  ['team', `/p/${SLUG}/team`],
+  ['activity', `/p/${SLUG}/activity`],
+]
+const DEVICES: [string, number, number][] = [
+  ['desktop', 1440, 900],
+  ['phone', 390, 844],
+]
+const MODES: ['light' | 'dark', string][] = [
+  ['light', JSON.stringify({ v: 3, scheme: 'light', palette: 'slate', look: 'porcelain', texture: 'none', density: 'comfortable', glass: 'soft', depth: 'soft' })],
+  ['dark', JSON.stringify({ v: 3, scheme: 'dark', palette: 'slate', look: 'porcelain', texture: 'none', density: 'comfortable', glass: 'soft', depth: 'soft' })],
+]
+
+// The colours the old look painted with (charcoal faces and the burnt-orange accents), by their computed rgb value.
+const OLD_RGB = [
+  'rgb(19, 17, 16)', 'rgb(38, 34, 32)', // graphite charcoal, dark canvas and face
+  'rgb(162, 80, 47)', 'rgb(143, 66, 32)', 'rgb(251, 189, 168)', 'rgb(90, 74, 0)', // clay burnt orange, state, peach, brown
+  'rgb(13, 17, 20)', 'rgb(28, 34, 39)', // silver dark canvas and face
+  'rgb(217, 212, 205)', 'rgb(242, 239, 234)', // graphite light canvas and face
+]
+const SCAN = `(() => {
+  const OLD = ${JSON.stringify(OLD_RGB)};
+  const rgb = (c) => { const m = /rgba?\\(([^)]+)\\)/.exec(c); if (!m) return null; const p = m[1].split(',').map((v) => parseFloat(v)); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
+  const hsl = (r, g, b) => { r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); const l = (mx + mn) / 2; let h = 0, s = 0; if (mx !== mn) { const d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; } return { h, s, l }; };
+  const exact = {}; const warm = {}; let scanned = 0;
+  for (const el of document.querySelectorAll('body *')) {
+    const box = el.getBoundingClientRect(); if (box.width === 0 || box.height === 0) continue;
+    const cs = getComputedStyle(el); scanned++;
+    for (const [prop, val] of [['bg', cs.backgroundColor], ['text', cs.color]]) {
+      const c = rgb(val); if (!c || c.a === 0) continue;
+      const key = 'rgb(' + c.r + ', ' + c.g + ', ' + c.b + ')';
+      if (OLD.includes(key)) exact[prop + ' ' + key] = (exact[prop + ' ' + key] || 0) + 1;
+      const x = hsl(c.r, c.g, c.b);
+      if (x.s > 0.35 && x.l > 0.12 && x.l < 0.6 && x.h >= 8 && x.h <= 34) warm[prop + ' ' + key] = (warm[prop + ' ' + key] || 0) + 1;
+    }
+  }
+  const primary = document.querySelector('.bcbtn--primary');
+  const body = getComputedStyle(document.body);
+  return JSON.stringify({ scanned, exactOldColours: exact, warmHueColours: warm, bodyBg: body.backgroundColor, primaryBg: primary ? getComputedStyle(primary).backgroundColor : null, scheme: document.documentElement.dataset.scheme || 'system', look: document.documentElement.dataset.look || null, palette: document.documentElement.dataset.palette || null, version: (document.querySelector('.bcver') || { textContent: null }).textContent, chars: (document.querySelector('main') || document.body).innerText.trim().length });
+})()`
+
+/* Read the Sample's stored appearance row, so a write from this capture would show as a changed timestamp. Read-only. */
+const APPEARANCE_ROW = `select owner || ' updated ' || updated_at::text from public.appearance_settings where owner = 'p4-second-person'`
+const { execFileSync } = await import('node:child_process')
+const readRow = (): string => {
+  try {
+    return execFileSync('npm', ['run', '-s', 'qq', '--', APPEARANCE_ROW], { encoding: 'utf8', env: { ...process.env, ALLOW_PRODUCTION_CHECKS: '1' } }).trim().split('\n').filter((l) => l.includes('updated')).join(' ') || 'no row'
+  } catch (e) {
+    return `row read failed: ${String(e).slice(0, 120)}`
+  }
+}
+const rowBefore = readRow()
+console.log('appearance row before:', rowBefore)
+
+const s = await session()
+const studio = await startStudio(4885)
+const { ctx, page, errors } = await newPage(studio, { width: 1440, height: 900 }, false)
+await signIn(studio, page, s) // the one sign-in of this capture
+const report: string[] = []
+for (const [mode, stored] of MODES) {
+  await page.evaluate(`localStorage.setItem('studio.appearance', ${JSON.stringify(stored)})`)
+  for (const [device, width, height] of DEVICES) {
+    await page.setViewportSize({ width, height })
+    for (const [name, path] of SCREENS) {
+      await page.goto(`${studio.base}${path}`, { waitUntil: 'load' })
+      await settle(page)
+      const scan = JSON.parse((await page.evaluate(SCAN)) as string) as Record<string, unknown>
+      const exact = Object.keys((scan.exactOldColours as object) ?? {}).length
+      const warm = Object.keys((scan.warmHueColours as object) ?? {}).length
+      report.push(`${mode} ${device} ${name}: scheme=${String(scan.scheme)} look=${String(scan.look)} palette=${String(scan.palette)} body=${String(scan.bodyBg)} primary=${String(scan.primaryBg)} version=${String(scan.version)} chars=${String(scan.chars)} exactOld=${exact} warmHueKinds=${warm}`)
+      if (exact > 0) report.push(`  EXACT OLD colours: ${JSON.stringify(scan.exactOldColours)}`)
+      await page.screenshot({ path: `${dir}/sample-${mode}-${device}-${name}.png` })
+    }
+  }
+}
+const rowAfter = readRow()
+report.push(`appearance row after: ${rowAfter}`)
+report.push(`appearance row unchanged by this capture: ${rowBefore === rowAfter ? 'YES' : 'NO'}`)
+report.push(`page errors: ${errors.length === 0 ? 'none' : errors.join(' | ')}`)
+console.log(report.join('\n'))
+await ctx.close()
+await studio.close()
+process.exit(0)

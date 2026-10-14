@@ -9,6 +9,7 @@
  * from production as a signed-out visitor (a page load and the public sign-in state; nothing is created or signed in).
  * Writes only under .out/redesign/<tag>/ and prints each surface's computed colours so the change is measured, not assumed.
  */
+// biome-ignore-all format: the colour and probe tables are kept as written, as the other verification probes are
 import '../../src/safety/require-production-checks.ts'
 import { mkdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -27,7 +28,6 @@ const server = createServer(async (req, res) => {
 })
 await new Promise<void>((r) => server.listen(4871, '127.0.0.1', () => r()))
 const LOCAL = 'http://127.0.0.1:4871'
-const PROD = 'https://ai-team-hq.vercel.app'
 const PROD_API = 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
 const browser = await chromium.launch()
 const OLD = JSON.stringify({ palette: 'clay', look: 'graphite', scheme: 'dark', texture: 'none', density: 'comfortable', glass: 'soft', depth: 'flat' })
@@ -56,7 +56,8 @@ const shoot = async (name: string, url: string, vp: { width: number; height: num
   await page.goto(url, { waitUntil: 'load', timeout: 60000 }).catch(() => undefined)
   await page.waitForTimeout(2500)
   if (after) await after(page).catch(() => undefined)
-  const probe = await page.evaluate(PROBE).catch((e) => 'PROBE FAILED: ' + String(e).slice(0, 160))
+  // A probe that cannot run is reported as a failure in the output, never as an empty measurement.
+  const probe = await page.evaluate(PROBE).catch((e) => `PROBE FAILED: ${String(e).slice(0, 160)}`)
   report.push(`${name}: ${probe}`)
   await page.screenshot({ path: join(dir, `${name}.png`) })
   await ctx.close()

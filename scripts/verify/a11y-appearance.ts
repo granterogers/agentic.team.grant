@@ -6,6 +6,7 @@
  *
  * Reads only the local web/studio; contacts nothing outside this machine.
  */
+// biome-ignore-all format: the MIME table and the axe probe strings are kept as written, as the other verification probes are
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
