@@ -1838,7 +1838,15 @@
 .bcmenuprojects .bcmenuchev { width: 16px; text-align: center; color: var(--bc-text-muted); }
 .bcmenuprojects:focus-visible { outline: 2px solid var(--bc-accent, currentColor); outline-offset: 2px; }
 .bcmenuprojectlist { max-height: min(50vh, 360px); overflow-y: auto; }
-.bcmenuprojectlist[hidden] { display: none; }
+/* A collapsed list is marked with a class, not the hidden attribute: a global hidden rule (studio.css) is important and no
+   hover rule could reveal it. */
+.bcmenuprojectlist.is-collapsed { display: none; }
+/* Desktop hover (#473): with a fine pointer, moving over the Projects item shows its list without a press. A touch screen has
+   no hover, so a tap there still toggles. The list stays open while the pointer moves from the header into it, because both
+   sit in one group. A keyboard person uses the header button, which keeps its own state. */
+@media (hover: hover) and (pointer: fine) {
+  .bcmenuprojgroup:hover .bcmenuprojectlist.is-collapsed { display: grid; }
+}
 .bcmenuitem {
   display: flex;
   align-items: center;
