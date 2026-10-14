@@ -23,6 +23,8 @@ export interface ObjectStore {
   /** A short name for the provider, for messages and reports. Never a credential. */
   readonly kind: string
   put(path: string, bytes: Uint8Array, mime: string): Promise<Stored>
+  /** The bytes and content type of an object, or null when there is no such object. Used to verify a copy. */
+  read(path: string): Promise<{ bytes: Uint8Array; mime: string } | null>
   /** A link a browser can follow for `seconds`, or null when there is no such object. */
   link(path: string, seconds: number): Promise<string | null>
   /** True when the object is gone afterwards, whether or not it existed before. */
@@ -69,6 +71,22 @@ export function supabaseObjectStore(
       assertSafePath(path)
       return await putFile(projectRef, serviceKey, path, bytes, mime, fetchImpl)
     },
+    async read(path) {
+      assertSafePath(path)
+      if (serviceKey === '') return null
+      const r = await fetchImpl(
+        `https://${projectRef}.supabase.co/storage/v1/object/${bucket}/${encodeURI(path)}`,
+        {
+          headers: { Authorization: `Bearer ${serviceKey}` },
+        },
+      )
+      if (r.status === 404) return null
+      if (!r.ok) throw new Error(`storage read failed with status ${String(r.status)}`)
+      return {
+        bytes: new Uint8Array(await r.arrayBuffer()),
+        mime: r.headers.get('content-type') ?? 'application/octet-stream',
+      }
+    },
     async link(path, seconds) {
       assertSafePath(path)
       if (bucket !== BUCKET) return null
@@ -96,6 +114,12 @@ export function memoryObjectStore(now: () => number = Date.now): ObjectStore {
       }
       objects.set(path, { bytes: new Uint8Array(bytes), mime })
       return { ok: true, path, bytes: bytes.byteLength, error: null }
+    },
+    async read(path) {
+      assertSafePath(path)
+      const found = objects.get(path)
+      if (!found) return null
+      return { bytes: new Uint8Array(found.bytes), mime: found.mime }
     },
     async link(path, seconds) {
       assertSafePath(path)

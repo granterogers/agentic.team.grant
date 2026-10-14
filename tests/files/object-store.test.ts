@@ -41,6 +41,12 @@ function fakeSupabase() {
       const existed = objects.delete(path)
       return new Response('{}', { status: existed ? 200 : 404 })
     }
+    if (method === 'GET') {
+      const path = decodeURI(rest.slice('files/'.length))
+      const bytes = objects.get(path)
+      if (!bytes) return new Response('not found', { status: 404 })
+      return new Response(bytes, { status: 200, headers: { 'content-type': 'text/plain' } })
+    }
     return new Response('unexpected', { status: 500 })
   }) as typeof fetch
   return { fetchImpl, objects, calls }
@@ -82,6 +88,15 @@ describe.each(implementations)('the object store contract: %s', (_name, make) =>
       'text/plain',
     )
     expect(second.ok).toBe(true)
+  })
+
+  it('reads back the bytes it stored, and reports a missing object as absent', async () => {
+    const store = make()
+    await store.put('p1/drive/doc.txt', BYTES, 'text/plain')
+    const back = await store.read('p1/drive/doc.txt')
+    expect(back?.bytes).toEqual(BYTES)
+    expect(back?.mime).toBe('text/plain')
+    expect(await store.read('p1/drive/none.txt')).toBeNull()
   })
 
   it('gives no link for an object that is not there', async () => {
