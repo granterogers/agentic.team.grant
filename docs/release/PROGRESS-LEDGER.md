@@ -97,6 +97,28 @@ Disclosed process slips this window: `biome check --write` on two new files (the
 
 None yet. Work continues on the branch; the next item is reconciling the lint comparison, then the remaining owner-blocked items wait for Grant.
 
+## Entry: originals in the archive, and the upload policy (14 October 2026, afternoon UTC)
+
+Commits on `feature/auth-storage-portability-ui`: `6e085655` (migration 1072 and its replica proof), `01dfb163` (archive
+carries originals; restore writes them through the object store), `34673cec` (upload checked against the storage policy).
+
+- **Item 1, backups carry the binary files: implemented and tested, not deployed.** Export names each original by its SHA-256
+  under `files/`, listed in the manifest; a missing or wrong-size original refuses the archive with 409. Restore plans and checks
+  every file, writes it under `restores/<office>/<key>/`, reads it back, and removes it again if the database refuses. The path is
+  built by the server; a path the package names is ignored. Tests: 15 unit, 6 gateway, the full ZIP round trip with hashes compared,
+  and the replica proof `tests/migrations/project-originals.replica.sql` (three properties, passing).
+- **Sabotage, run on purpose:** the gateway's rollback removed, and the plan's checksum comparison removed. Each turned its named
+  test red and was restored. A third, the upload refusal, was disabled: the three refusal tests went red, the genuine upload stayed
+  green, and it was restored.
+- **Item 2, storage policy on uploads: wired for the upload path only.** The read rule is not enforced on signed links (reason in the
+  status record). Behaviour change: types outside the allowlist are now refused.
+- **Full unit suite:** 467 files, 7,267 tests, 0 failed. Type errors: 283, the baseline. Secrets scan and template check: exit 0.
+- **Process slips, disclosed:** the `1072.sql` copy initially pointed at the wrong path (the scratchpad, not the repository); no
+  repository file was affected. Symlinks for the gateway were made with `ln -s` (new links, not edits). Repository files were
+  changed with Edit or Write, and the formatter was run only for reading (`biome format` to standard output, then Edit).
+- **Not started in this window:** item 3 (Google sign-in wiring), item 4 (browser end-to-end for exports, backup and restore),
+  item 5 (drag, resize and saved-layout harness without production), item 6 (empty-list, access and auth-failure fixtures).
+
 ## Entry: feature batch finish (14 October 2026, afternoon UTC)
 
 Commits on `feature/auth-storage-portability-ui`: `c79a291f` (storage policy, reconciliation, copy-verify-switch migration; Google sign-in policy), `b2c68fd3` (the batch status record). PR #465 updated; issues #467 to #473 each have a requirement-level comment.
