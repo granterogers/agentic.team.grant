@@ -22,7 +22,7 @@ The first status report said there was no per-project export. That was wrong. `a
 |---|---|---|
 | #466 | A1 password sign-in | **Code and UI built, behind a switch.** Unit-tested; two browser journeys and two screen captures at 390 px and 1440 px. Not verified against live Supabase Auth. Username login, password reset completion and a rate limit beyond Auth's own are not built. |
 | #467 | A2 Google sign-in | Not started. Needs an OAuth client the owner creates. |
-| #468 | B1 storage audit and provider comparison | Not started. Needs measured data and dated official sources. |
+| #468 | B1 storage audit and provider comparison | **Provider comparison done** (`docs/storage/PROVIDER-COMPARISON-2026-10-14.md`, from official pricing pages fetched 14 Oct 2026). Recommendation: Cloudflare R2 primary, B2 as the alternative. Storage audit (measured database and object growth) **not done**: needs read-only production measurement and owner authorisation. |
 | #469 | B2 storage abstraction and migration | Not started. Depends on B1. |
 | #470 | C1 standard-format exports | **Built and verified** (see below). Live gateway and browser journey not run against production. |
 | #471 | C2 restore and ZIP | Not started. Restore into a new project needs an idempotency record and careful document inserts. |
