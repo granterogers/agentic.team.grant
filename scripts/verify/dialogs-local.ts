@@ -56,7 +56,11 @@ try {
       void d.dismiss()
     })
     await page.goto('http://127.0.0.1:4796/', { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('[data-bc-settings]', { timeout: 30000 })
+    /* Either door onto Global Settings: the header control, or the phone's menu entry (review 3). This waits for the app to draw. */
+    await page.waitForSelector('[data-bc-settings], [data-bc-global-menu]', {
+      state: 'attached',
+      timeout: 30000,
+    })
     // a control the dialog is opened FROM, so focus return can be observed
     await page.evaluate(
       "(() => { const b = document.createElement('button'); b.id = 'opener'; b.textContent = 'Opener'; b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:1'; document.body.append(b); b.focus(); })()",

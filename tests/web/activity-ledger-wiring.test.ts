@@ -176,11 +176,47 @@ describe('needLately, by behaviour', () => {
     await r.needLately()
     expect(asks).toBe(1)
   })
+
+  it('an "unknown section" answer keeps the list the page already had, and the ledger is not asked again', async () => {
+    let asks = 0
+    const read = async (name: string): Promise<unknown> => {
+      if (name === 'activity_ledger') {
+        asks++
+        throw new Error('unknown section: activity_ledger')
+      }
+      return existing
+    }
+    const r = rig(read)
+    await r.needLately()
+    expect(r.latest.lately?.office).toEqual(existing.office)
+    r.latest.lately = null // a refresh: the page asks again for the Lately copy
+    await r.needLately()
+    // needLately writes this through the closure; the cast says so, because the null above would narrow it to never.
+    const after = r.latest.lately as Rig['latest']['lately']
+    expect(after?.office).toEqual(existing.office)
+    expect(asks).toBe(1)
+  })
+
+  it('a failure that is not "unknown section" leaves the ledger on, so it is asked again', async () => {
+    let asks = 0
+    const read = async (name: string): Promise<unknown> => {
+      if (name === 'activity_ledger') {
+        asks++
+        throw new Error('timeout')
+      }
+      return existing
+    }
+    const r = rig(read)
+    await r.needLately()
+    r.latest.lately = null
+    await r.needLately()
+    expect(asks).toBe(2)
+  })
 })
 
 describe('needLately, by wiring (each detector can fail)', () => {
   const properties = {
-    readsTheLedgerSection: (t: string) => /settles\(read\('activity_ledger'\)\)\.catch\(\(\) => null\)/.test(t),
+    readsTheLedgerSection: (t: string) => /read\('activity_ledger'\)\.catch\(/.test(t),
     startsBeforeTheExistingReadFinishes: (t: string) =>
       t.indexOf("read('activity_ledger')") > -1 && t.indexOf("read('activity_ledger')") < t.indexOf("await settles(read('lately'))"),
     replacesOnlyTheListAndOnlyForTheCopyItHolds: (t: string) =>
@@ -191,7 +227,8 @@ describe('needLately, by wiring (each detector can fail)', () => {
   }
   const mutants: Record<keyof typeof properties, [string, string]> = {
     readsTheLedgerSection: ["read('activity_ledger')", "read('lately')"],
-    startsBeforeTheExistingReadFinishes: ["const ledgerAsked = settles(read('activity_ledger')).catch(() => null)\n  try {\n    latest.lately = await settles(read('lately'))", "try {\n    latest.lately = await settles(read('lately'))\n  } catch {}\n  const ledgerAsked = settles(read('activity_ledger')).catch(() => null)\n  try {"],
+    // Removing the ledger's start from before the existing read is the defeat: the property then finds no ledger read ahead of it.
+    startsBeforeTheExistingReadFinishes: ["read('activity_ledger').catch", "read('activity_ledger_later').catch"],
     replacesOnlyTheListAndOnlyForTheCopyItHolds: ['rows !== null && latest.lately === mine', 'rows !== null'],
     validatesThroughLedgerRows: ['ledgerRows(await ledgerAsked)', '(await ledgerAsked)?.office'],
     drawsBeforeTheLedgerAnswers: ['  const mine = latest.lately\n  render()', '  const mine = latest.lately'],

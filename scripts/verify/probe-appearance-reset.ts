@@ -13,6 +13,7 @@ const results: Array<{ check: string; ok: boolean; detail: unknown }> = []
 const record = (check: string, ok: boolean, detail: unknown) => results.push({ check, ok, detail })
 
 const CUSTOMISED = JSON.stringify({
+  v: 3,
   palette: 'clay',
   texture: 'granite',
   own: null,
@@ -52,7 +53,7 @@ const isRecommended = (s: {
   look: string | null
   scheme: string | null
   texture: string | null
-}) => s.palette === 'slate' && s.look === 'silver' && s.scheme !== 'dark' && s.texture === 'none'
+}) => s.palette === 'slate' && s.look === 'porcelain' && s.scheme !== 'dark' && s.texture === 'none'
 
 const open = async (page: Page) => {
   await page.goto(`http://127.0.0.1:${String(port)}/`, { waitUntil: 'domcontentloaded' })
@@ -127,7 +128,7 @@ try {
     await page.waitForTimeout(700)
     const after = await state(page)
     record(
-      'reset restores Slate & Silver, Light, the slate accent and no texture, and stores them',
+      'reset restores Porcelain & Teal, Light, the deep-teal accent and no texture, and stores them',
       isRecommended(after) && after.stored.palette === 'slate' && after.stored.texture === 'none',
       after,
     )

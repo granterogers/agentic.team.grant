@@ -847,11 +847,16 @@
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
 }
+/*
+  Every card in the grid is the same height and its Configure button sits on the same line in each (review 6, measured
+  on the Team pane: 154px and 173px cards put the button 16px apart). The card is a column; the face and text are one
+  block at the top, and the action takes the spare room above it.
+*/
+#settings .st-people { grid-auto-rows: 1fr; }
 #settings .st-person {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
-  gap: 4px 14px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 16px;
   border-radius: var(--st-r-card);
   border: 1px solid var(--st-line-2);
@@ -861,12 +866,17 @@
 #settings .st-person.retired {
   opacity: 0.7;
 }
+#settings .st-person .st-top {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 4px 14px;
+  align-items: start;
+}
 #settings .st-person .st-face {
   width: 52px;
   height: 52px;
   border-radius: 50%;
   overflow: hidden;
-  grid-row: span 2;
 }
 #settings .st-person .st-face .face {
   font-size: 13px;
@@ -882,8 +892,7 @@
   display: block;
 }
 #settings .st-person .st-act {
-  grid-column: 1 / -1;
-  margin-top: 10px;
+  margin-top: auto;
 }
 /* a person who may not configure the team has no button here, and the empty row must not keep its space */
 #settings .st-person .st-act:empty {

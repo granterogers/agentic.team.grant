@@ -40,7 +40,7 @@
 <link rel="stylesheet" href="/bc/stone.css">
 <link rel="stylesheet" href="/bc/polish.css">
 <link rel="stylesheet" href="/bc/refine.css">
-<link rel="stylesheet" href="/bc/module-identity.css">
+<link rel="stylesheet" href="/bc/identity.css">
 </head>
 <body>
 <div id="root" class="shell"></div>
@@ -102,6 +102,54 @@
   deferred by definition.
 -->
 <script src="/config.js"></script>
+<script>
+  /*
+    ALWAYS THE LATEST VERSION. This page was loaded from a build; the server's config.js names the newest one. When they
+    differ (a release was deployed while this tab was open, or an old copy was restored from cache), reload once so the
+    person gets the current design. The check runs on load and whenever a backgrounded tab comes back to the front. A
+    session key stops a reload loop if the server itself is out of step.
+  */
+  (function () {
+    var running = window.HQ_VERSION || ''
+    function newest() {
+      return fetch('/config.js', { cache: 'no-store' })
+        .then(function (r) { return r.text() })
+        .then(function (text) {
+          var m = /HQ_VERSION = window\.HQ_VERSION \|\| '([^']+)'/.exec(text)
+          return m ? m[1] : ''
+        })
+    }
+    /* A reload throws away anything typed and not yet sent, so the guard waits while any field holds words. */
+    function holdingWords() {
+      var el = document.activeElement
+      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && String(el.value || '').trim() !== '') return true
+      return Array.prototype.some.call(document.querySelectorAll('textarea, input[type="text"], input[type="email"]'), function (f) {
+        return String(f.value || '').trim() !== ''
+      })
+    }
+    function check() {
+      if (running === '') return
+      newest().then(function (version) {
+        if (version === '' || version === running) return
+        if (holdingWords()) return /* checked again later, when the words are sent or cleared */
+        var key = 'hq.reloaded.' + version
+        try {
+          if (sessionStorage.getItem(key)) return
+          sessionStorage.setItem(key, '1')
+        } catch (e) { /* storage blocked: at most one reload per check, which is still correct */ }
+        location.reload()
+      }).catch(function () { /* offline: keep the page you have */ })
+    }
+    check()
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') check()
+    })
+    /* A tab left open for a long time still finds a release, once every two minutes while it is in front. */
+    setInterval(function () {
+      if (document.visibilityState === 'visible') check()
+    }, 120000)
+  })()
+</script>
 <script>
   /*
     The experiment runs its own copies of the gateway and the voice function

@@ -29,6 +29,7 @@
   ],
   "scripts": {
     "scripts/sample/dock-contract.ts": "sample",
+    "scripts/verify/visual-sample-office.ts": "sample",
     "scripts/sample/labels.ts": "sample",
     "scripts/sample/lesson.ts": "sample",
     "scripts/sample/notice-link.ts": "sample",

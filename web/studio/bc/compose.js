@@ -136,11 +136,10 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
   */
   const hue = grid.hueFor(id, rect === null ? null : rect.tint)
   /*
-    THE MODULE'S OWN COLOUR (#472, D1). Every module carries it, from the one table bc/identity.js reads, so its title, icon,
-    border and glow are its identity whether or not anybody chose a tint. identity.css draws them; the body stays neutral.
-    The person's own tint (--bc-tint) is a separate, explicit choice, and it keeps its fill.
+    The module's colour is main's (grid.hueFor and identity.css). A second, per-module colour variable set (#472) was removed
+    in the merge: two colour sources for one module is the defect the identity table exists to prevent.
   */
-  const vars = [hue === '' ? '' : `--bc-tint:${hue}`, identity.cssVars(id)].filter((v) => v !== '').join(';')
+  const vars = hue === '' ? '' : `--bc-tint:${hue}`
   const style =
     rect === null
       ? vars === ''
@@ -197,7 +196,7 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
             </span>`
       }
     </header>
-    <div class="bcmodbody">${body}</div>
+    <div class="bcmodbody" tabindex="0">${body}</div>
     ${
       rect === null
         ? ''

@@ -5709,11 +5709,13 @@ function teamTabSettings() {
     state.person === c.slug
       ? `<div class="st-editor">${personEditor(c)}</div>`
       : `<article class="st-person${c.active === false ? ' retired' : ''}">
+          <div class="st-top">
           <span class="st-face">${face(c, 52)}</span>
           <div class="st-text">
             <p class="st-name">${esc(c.name)}</p>
             <p class="st-desc" style="margin:0">${esc(c.role ?? '')}</p>
             <p class="st-meta" style="margin:0">${esc(c.active === false ? 'Retired' : (c.doing ?? 'Available'))}</p>
+          </div>
           </div>
           <div class="st-act">${config.VIEWER.operator ? ui.button({ label: 'Configure', tone: 'quiet', a: { 'data-configure': c.slug, 'aria-label': `Configure ${c.name}` } }) : ''}</div>
         </article>`
@@ -7409,6 +7411,15 @@ function settingsSheet() {
     state.settingsPane = 'index'
     // Closing Settings steps back over the entry that opened it, as a maximised module's close does, so the close button and
     // the browser's Back agree. Forward then goes forward into that entry, which is what Forward means (M8).
+    if (typeof history !== 'undefined' && history.state?.settings === true) {
+      stepBackFromSettings()
+      return
+    }
+    sheet(v, false)
+  })
+  /* The close button leaves Settings from any pane, as the X in every other panel does: straight back to the workspace. */
+  $('[data-stg-close]', v)?.addEventListener('click', () => {
+    state.settingsPane = 'index'
     if (typeof history !== 'undefined' && history.state?.settings === true) {
       stepBackFromSettings()
       return
@@ -15688,11 +15699,24 @@ function ledgerLine(row) {
   return { sentence, byline, kind }
 }
 
+/*
+  The gateway a deployment runs may predate a section the page knows (the Activity ledger was shipped to the page before
+  its gateway section was deployed; production answered "unknown section" on every visit). Once the gateway says so the
+  page stops asking for the rest of the session, and the Lately list is what it was before the ledger existed. A gateway
+  that gains the section needs no page change: the flag starts true on every visit.
+*/
+let ledgerKnown = true
+
 async function needLately() {
   if (latest.lately !== null) return
   // Both reads start together and the page draws from the existing one the moment it arrives. The ledger can only improve what is
   // already there: a slow or failing ledger costs the page nothing, and one that is switched off was never waited for.
-  const ledgerAsked = settles(read('activity_ledger')).catch(() => null)
+  const ledgerAsked = ledgerKnown
+    ? read('activity_ledger').catch((e) => {
+        if (/unknown section/i.test(String(e?.message ?? ''))) ledgerKnown = false
+        return null
+      })
+    : Promise.resolve(null)
   try {
     latest.lately = await settles(read('lately'))
   } catch {

@@ -1039,3 +1039,397 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   color: var(--bc-text-muted);
   opacity: 1;
 }
+
+/* Module headings: a firmer title in the strong ink, so the panel's name is the first thing read. */
+[data-experience='basecamp'] .bcmodhead h2 { font-size: 13px; font-weight: 650; letter-spacing: 0.06em; }
+[data-experience='basecamp'] .bcmodtitle { color: var(--bc-heading); }
+
+/* Small badges on a tile are a quiet glyph, not a grey pill: the source is a fact, not a warning. */
+[data-experience='basecamp'] .bcdocpress > .bcdocsrc { background: none; box-shadow: none; backdrop-filter: none; }
+
+/* The header's lower edge is firmer, so the bar reads as a separate surface above the canvas. */
+[data-experience='basecamp'] .bctop {
+  box-shadow: 0 1px 0 var(--bc-border-control), 0 12px 24px -20px rgb(16 22 28 / 0.5);
+}
+
+/*
+  PHONE HEADER (review 3). On a phone the Global Settings three-dot sat beside the project's own overflow control and
+  the project's name lost its room. Global Settings is a menu entry on phone, so the top row keeps one overflow control
+  (the project's) and the name gets the space. Desktop and tablet keep the three-dot unchanged. The entry is hidden
+  everywhere else, so the desktop menu is what it was.
+*/
+[data-experience='basecamp'] .bcmenuglobal { display: none; }
+@media (max-width: 640px) {
+  [data-experience='basecamp'] .bcofficemenu { display: none; }
+  [data-experience='basecamp'] .bcmenuglobal { display: flex; }
+}
+
+/*
+  POST-IT FRAMING (review 8). The note read as a cut-out: a gradient across its grip bar made a second top rule, and the
+  text sat against the edge. Now it has a hairline edge that holds on both schemes, one soft lift, no gradient on the
+  grip, and room around the text. Dragging, resizing and editing are unchanged; only the surface and the padding move.
+*/
+[data-experience='basecamp'] .bcpostit {
+  box-shadow: inset 0 0 0 1px rgb(60 45 0 / 0.07), 0 1px 2px rgb(40 30 0 / 0.08), 0 12px 20px -16px rgb(40 30 0 / 0.42);
+}
+[data-experience='basecamp'][data-scheme='dark'] .bcpostit {
+  box-shadow: inset 0 0 0 1px rgb(255 240 190 / 0.08), 0 1px 2px rgb(0 0 0 / 0.4), 0 14px 22px -16px rgb(0 0 0 / 0.6);
+}
+[data-experience='basecamp'] .bcpostitbar { background: none; }
+[data-experience='basecamp'] .bcpostittext { padding: 4px 12px 12px; }
+
+/*
+  ONE TOP RULE FOR EVERY DEFAULT MODULE (review 8). Schedule, Contacts and Activity drew a heavier top line than To-dos
+  because each took its ink from its own state. A module without a person's colour now draws the same neutral 2px rule;
+  a module a person has tinted keeps its colour.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod:not(.bcmod--tinted)::before {
+  background:
+    linear-gradient(var(--bc-border-control), var(--bc-border-control)) top left / 100% 2px no-repeat,
+    var(--v2-face);
+}
+
+/*
+  ONE FRAME FOR EVERY TILE IN THE DOCS GRID (review 9). A document with a drawn page, a file with no first page and a
+  recording each sat on a different ground: cream pages beside saturated blue and sage blocks. Every object tile now takes
+  the same paper surface and hairline edge, and its glyph is the ink colour, so the grid is one family. A real preview
+  (a photograph, a first page that was read) keeps its own image; only the coloured ground is removed.
+*/
+[data-experience='basecamp'] .bcthumb--object,
+[data-experience='basecamp'] .bcthumb--object.bcthumb--a,
+[data-experience='basecamp'] .bcthumb--object.bcthumb--s,
+[data-experience='basecamp'] .bcthumb--object.bcthumb--m,
+[data-experience='basecamp'] .bcthumb--object.bcthumb--p {
+  background: var(--bc-surface);
+  box-shadow: inset 0 0 0 1px var(--bc-border-subtle);
+  color: var(--bc-text-muted);
+}
+
+/*
+  THE MENU FITS THE SCREEN (review 3). The project menu lists projects, the project's modules and the office pages, and
+  on a phone the last of them, Global Settings included, ran off the bottom with nothing to reach them. The panel is
+  capped to the viewport and scrolls inside itself, so every entry is reachable.
+*/
+[data-experience='basecamp'] .bcmenupanel {
+  max-height: calc(100dvh - 88px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/*
+  A DOCUMENT IN DARK IS A DARK SHEET (review 9 and the dark dashboard). Dark had no paper of its own, so the fallback
+  mixed the light text into the canvas and every drawn page was a bright grey slab on a dark board. The dark paper is a
+  lifted dark surface with light ink, so a drawn page reads as a card of the same family as the panels around it.
+*/
+[data-experience='basecamp'][data-scheme='dark'] { --bc-paper: #252b31; --bc-paper-ink: #d9dee4; }
+
+/* The type stamp on a dark sheet is the light tint of its hue, so PDF, DOC and IMG keep their identity and their contrast. */
+[data-experience='basecamp'][data-scheme='dark'] .bcftype--pdf .bcftypeword { color: #f2aca2; }
+[data-experience='basecamp'][data-scheme='dark'] .bcftype--doc .bcftypeword,
+[data-experience='basecamp'][data-scheme='dark'] .bcftype--made .bcftypeword { color: #9fc9f5; }
+[data-experience='basecamp'][data-scheme='dark'] .bcftype--image .bcftypeword { color: #a6dfc0; }
+
+/*
+  REVIEW MAJORS (independent review of 33cd99c2).
+
+  1. The type word wrapped letter by letter on a narrow tile ("P / D / F"). It stays on one line; a compact tile uses a
+     smaller word so it fits the tile it is drawn in.
+  2. A real preview kept its type stamp beside the picture (the stamp span is still in the tile after the image is
+     added). Once a tile has a real preview, only the picture is drawn.
+  3. Dark paper was missing under "Follow the system" with a dark OS: the dark rules keyed on data-scheme="dark" only.
+     The system-dark case gets the same paper and stamp colours, and an explicit light choice still wins.
+*/
+[data-experience='basecamp'] .bcftypeword { white-space: nowrap; overflow: hidden; text-overflow: clip; max-width: 100%; }
+[data-experience='basecamp'] .bcftype { min-width: 0; overflow: hidden; }
+[data-experience='basecamp'] .bccompact .bcftypeword { font-size: 12px; letter-spacing: 0; }
+[data-experience='basecamp'] .bccompact .bcftype { padding: 0; }
+[data-experience='basecamp'] .bcthumb.has-real > :not(img.realpage) { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root[data-experience='basecamp']:not([data-scheme='light']) { --bc-paper: #252b31; --bc-paper-ink: #d9dee4; }
+  :root[data-experience='basecamp']:not([data-scheme='light']) .bcftype--pdf .bcftypeword { color: #f2aca2; }
+  :root[data-experience='basecamp']:not([data-scheme='light']) .bcftype--doc .bcftypeword,
+  :root[data-experience='basecamp']:not([data-scheme='light']) .bcftype--made .bcftypeword { color: #9fc9f5; }
+  :root[data-experience='basecamp']:not([data-scheme='light']) .bcftype--image .bcftypeword { color: #a6dfc0; }
+}
+
+/*
+  THE POST-IT GRIP IS VISIBLE (second review, F5). Removing the bar's gradient left no cue for where a note is dragged,
+  and a touch user has no cursor to show it. A short centred handle marks the bar.
+*/
+[data-experience='basecamp'] .bcpostitbar { position: relative; }
+[data-experience='basecamp'] .bcpostitbar::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 3px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: rgb(60 45 0 / 0.26);
+  pointer-events: none;
+}
+
+/*
+  THE SOURCE MARK SITS WITH ITS FILE (completion pass, D1). It was a badge drawn over the picture's top-left corner, so on
+  a real preview it covered the page and read as a stray control. It is now the first item of the tile's meta line,
+  beside the kind and origin, which is where a person looks for what a file is.
+*/
+[data-experience='basecamp'] .bcdocmeta .bcdocsrc {
+  position: static;
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  vertical-align: -3px;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+[data-experience='basecamp'] .bcdocmeta .bcdocsrc svg { width: 12px; height: 12px; }
+
+/*
+  THE NO-PROJECT SCREEN (completion pass, D3). A heading, one explanatory sentence, the person's projects as cards, and a
+  single action. The cards use the same surface, border and elevation as the panels, so the empty state belongs to the
+  product rather than sitting on it.
+*/
+[data-experience='basecamp'] .bcnoproj {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 14px;
+  min-height: 100%;
+  padding: 48px clamp(16px, 4vw, 40px) 40px;
+  text-align: center;
+}
+[data-experience='basecamp'] .bcnoproj-title {
+  margin: 0;
+  font: 650 22px/28px var(--bc-font);
+  letter-spacing: -0.01em;
+  color: var(--bc-heading);
+}
+[data-experience='basecamp'] .bcnoproj-lede {
+  margin: 0;
+  max-width: 46ch;
+  font: 400 15px/23px var(--bc-font);
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcnoproj-grid {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  width: min(760px, 100%);
+}
+[data-experience='basecamp'] .bcnoproj-card {
+  appearance: none;
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  width: 100%;
+  min-height: 112px;
+  padding: 16px;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 14px;
+  background: var(--bc-surface);
+  box-shadow: var(--bc-sh-1);
+  color: var(--bc-text-strong);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms var(--bc-ease-out);
+}
+[data-experience='basecamp'] .bcnoproj-card:hover,
+[data-experience='basecamp'] .bcnoproj-card:focus-visible {
+  border-color: var(--bc-border-control);
+  box-shadow: var(--bc-sh-2);
+  outline: none;
+}
+[data-experience='basecamp'] .bcnoproj-card:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--bc-accent) 45%, transparent), var(--bc-sh-2); }
+[data-experience='basecamp'] .bcnoproj-name { font: 600 15px/20px var(--bc-font); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcnoproj-open { margin-top: auto; font: 600 13px/18px var(--bc-font); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcnoproj-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px; }
+[data-experience='basecamp'] .bcnoproj-actions .bcbtn { min-height: 44px; padding: 0 18px; }
+@media (max-width: 640px) {
+  [data-experience='basecamp'] .bcnoproj { padding: 32px 16px 28px; }
+  [data-experience='basecamp'] .bcnoproj-grid { grid-template-columns: 1fr; }
+  [data-experience='basecamp'] .bcnoproj-card { min-height: 64px; grid-template-columns: auto 1fr; align-items: center; justify-items: start; }
+  [data-experience='basecamp'] .bcnoproj-open { display: none; }
+}
+
+/*
+  THE HEADER COUNT SITS OUTSIDE THE BELL (completion pass, D2). On a phone the count was offset 1px inside the 18px bell
+  glyph, so the "1" sat on the bell's stroke. It now sits on the bell's top-right corner with a surface ring, so it reads
+  as a badge on the control rather than part of the drawing.
+*/
+[data-experience='basecamp'] [data-bc-attention] { position: relative; }
+[data-experience='basecamp'] .bctop [data-bc-attention] .bcstatus {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  box-shadow: 0 0 0 2px var(--bc-canvas);
+  line-height: 1;
+}
+
+/*
+  THE SAMPLE BANNER IS ONE ROW ON A PHONE (completion pass, D5). The sentence and both actions were stacked in two rows
+  with a full-width button, about 90px of a 390px screen before the work began. On a phone the sentence keeps its words
+  and wraps beside the two actions, which keep their 44px touch targets. Nothing is removed: the place, the sample's
+  "changes are not saved", create, and sign in are all still there.
+*/
+@media (max-width: 560px) {
+  [data-experience='basecamp'] .bcsamplebar { flex-wrap: nowrap; gap: 8px; padding: 6px 12px; }
+  [data-experience='basecamp'] .bcsampletext { flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 16px; }
+  [data-experience='basecamp'] .bcsampleacts { width: auto; flex: none; gap: 4px; }
+  [data-experience='basecamp'] .bcsamplecreate { min-height: 44px; padding: 0 12px; font-size: 13px; white-space: nowrap; flex: none; }
+  [data-experience='basecamp'] .bcsamplelink { min-height: 44px; padding: 0 6px; font-size: 13px; }
+}
+
+/*
+  PHONE TOUCH TARGETS AT 44PX (completion pass; verify:ui named each one). The task checkbox, the documents view
+  toggles and search, the activity filter, contact links and the Project Settings tabs were 15 to 42px on a 390px screen,
+  below the 44px floor. A checkbox keeps its 15px drawing and its footprint in the row; its hit area is the 44px box
+  around it, with negative margins that return the row to its original layout.
+*/
+@media (max-width: 640px) {
+  [data-experience='basecamp'] :is(.bctasklist, .bclists) .bccheck {
+    width: 44px;
+    height: 44px;
+    margin: -14.5px -29px -14.5px -14.5px;
+    box-shadow: none;
+    border-radius: 0;
+    background-color: transparent;
+    background-repeat: no-repeat;
+    background-image:
+      linear-gradient(var(--bc-text-muted), var(--bc-text-muted)),
+      linear-gradient(var(--bc-text-muted), var(--bc-text-muted)),
+      linear-gradient(var(--bc-text-muted), var(--bc-text-muted)),
+      linear-gradient(var(--bc-text-muted), var(--bc-text-muted));
+    background-size: 15px 1.5px, 15px 1.5px, 1.5px 15px, 1.5px 15px;
+    background-position:
+      calc(50% - 7.5px) calc(50% - 7.5px),
+      calc(50% - 7.5px) calc(50% + 6px),
+      calc(50% - 7.5px) calc(50% - 7.5px),
+      calc(50% + 6px) calc(50% - 7.5px);
+  }
+  [data-experience='basecamp'] :is(.bctasklist, .bclists) .bccheck:checked {
+    background-color: transparent;
+    background-image: linear-gradient(var(--bc-accent), var(--bc-accent));
+    background-size: 15px 15px;
+    background-position: calc(50% - 7.5px) calc(50% - 7.5px);
+    background-repeat: no-repeat;
+  }
+  [data-experience='basecamp'] :is(.bctasklist, .bclists) .bccheck:checked::after {
+    left: calc(50% - 4px);
+    top: calc(50% - 7px);
+    width: 5px;
+    height: 9px;
+  }
+  /* The records-head segment and the settings tabs set their own 38 and 40px floors with more specific selectors, so the
+     phone floor names them too. :root adds specificity, so these win on source order. */
+  :root[data-experience='basecamp'] .bcbtn,
+  :root[data-experience='basecamp'] .bcrecordhead .bcseg .bcbtn,
+  :root[data-experience='basecamp'] .subtab,
+  :root[data-experience='basecamp'] .bcdocq { min-height: 44px; }
+  [data-experience='basecamp'] .bcsrcchip { min-width: 44px; min-height: 44px; }
+  [data-experience='basecamp'] a[href^='mailto:'],
+  [data-experience='basecamp'] a[href^='tel:'] { display: inline-flex; align-items: center; min-height: 44px; }
+}
+
+/*
+  THE POST-IT CORNER CONTROLS ARE REACHABLE ON A PHONE (completion pass, D8). The add and remove corners are 20 by 18px
+  and show only on hover, which a touch screen never has. On a phone each is a 44px target that is always drawn, with
+  negative margins so the note keeps its layout.
+*/
+@media (max-width: 640px) {
+  :root[data-experience='basecamp'] .bcpostitx,
+  :root[data-experience='basecamp'] .bcpostitplus {
+    width: 44px;
+    height: 44px;
+    margin: -13px -12px -13px 0;
+    opacity: 1;
+  }
+}
+
+/* The bottom tray is the phone's chat dock. Main never drew it on a desktop, so the desktop keeps that layout. */
+@media (min-width: 761px) {
+  [data-experience='basecamp'] .bctray {
+    display: none;
+  }
+}
+
+/* The no-project screen carries the version mark, which positions against its nearest positioned ancestor, and it keeps the
+   empty board's canvas (the old .bcvoid rules, which this screen replaced). */
+[data-experience='basecamp'] .bcnoproj {
+  position: relative;
+}
+[data-experience='basecamp'] .bcmain:has(> .bcnoproj) {
+  width: 100%;
+  margin: 0;
+  padding: 0 var(--bc-3) var(--bc-3);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* The build's version, drawn in the header on every screen (it was only on the home board, so it was missing from projects and the Sample). */
+[data-experience='basecamp'] .bcver.bcver--bar {
+  position: static;
+  top: auto;
+  right: auto;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--bc-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  align-self: center;
+  pointer-events: none;
+}
+[data-experience='basecamp'] .bcver.bcver--entry {
+  position: static;
+  margin-left: 8px;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--bc-text-muted);
+  white-space: nowrap;
+}
+/* On a phone the version lives in the always-visible bottom bar, so the header keeps the room the project's name needs. */
+@media (max-width: 560px) {
+  [data-experience='basecamp'] .bcver.bcver--bar { display: none; }
+}
+[data-experience='basecamp'] .bcver.bcver--tray {
+  display: none;
+}
+@media (max-width: 560px) {
+  /* A row of the bar itself, beneath the four destinations. It was once absolutely placed above the bar, where it sat on top
+     of the list's last line while a person scrolled. The bar is opaque and the page keeps its bottom clearance, so a row in
+     the bar overlaps nothing; the four destinations keep their own width. */
+  [data-experience='basecamp'] .bctray { flex-wrap: wrap; }
+  [data-experience='basecamp'] .bcver.bcver--tray {
+    display: block;
+    position: static;
+    top: auto;
+    right: auto;
+    order: 9;
+    flex: 0 0 100%;
+    padding: 2px 0 0;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.2;
+    color: var(--bc-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+}

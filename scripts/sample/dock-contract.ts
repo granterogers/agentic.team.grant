@@ -91,11 +91,14 @@ try {
     (await head()).includes(first.name) && /\/p\//.test(new URL(page.url()).pathname),
     `${await head()} @ ${new URL(page.url()).pathname}`,
   )
+  // The property is that the composer belongs to THIS project, not the placeholder's wording: Team HQ's dock is in note mode
+  // ("Message the team…") and the form carries the project it writes to. The header above already names the project.
   check(
-    'the composer is there and names the project',
-    ((await page.locator('#dock [data-docksay]').getAttribute('placeholder')) ?? '').includes(
-      first.name,
-    ),
+    'the composer is there, and it is addressed to this project',
+    (await page.locator('#dock [data-docksay]').count()) === 1 &&
+      (await page.locator('#dock [data-dockform]').getAttribute('data-bc-noteproject')) ===
+        first.slug,
+    `project=${String(await page.locator('#dock [data-dockform]').getAttribute('data-bc-noteproject'))}`,
   )
   await page.screenshot({ path: `${out}/2-first-project.png` })
 

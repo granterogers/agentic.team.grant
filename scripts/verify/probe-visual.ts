@@ -169,12 +169,21 @@ try {
         await page.waitForTimeout(700)
       } else miss(name, `no module menu item for ${id}`)
     }
+    /*
+      The "+ Note" control is drawn only while a project has NO Post-it (compose.js). A project that already holds one
+      has the Post-it on the canvas, which is the surface this capture is for, so it is shot as it stands rather than
+      reported missing. A project with neither a Post-it nor the control is still a miss.
+    */
     const note = page.locator('[data-bc-newnote]:visible, .bcnoteempty:visible').first()
+    const hasPostit = (await page.locator('.bcpostit, [data-bc-postit]').count()) > 0
     if ((await note.count()) > 0) {
       await note.click({ force: true })
       await page.waitForTimeout(600)
       await shot(page, 'canvas-with-postit-desktop')
-    } else miss('canvas-with-postit-desktop', 'no visible + Note control')
+    } else if (hasPostit) {
+      await page.waitForTimeout(300)
+      await shot(page, 'canvas-with-postit-desktop')
+    } else miss('canvas-with-postit-desktop', 'no Post-it on the canvas and no + Note control')
     await c.close()
   }
 

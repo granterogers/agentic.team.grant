@@ -96,16 +96,11 @@ export const leaveWords = () =>
   The strip above the shell while somebody is exploring. It says where they are and offers the way out in the same
   place, so a visitor is never in the sample without knowing it and never stuck in it.
 */
-export const sampleBar = () =>
-  isSample()
-    ? `<aside class="bcsamplebar" role="region" aria-label="You are in the Sample Office">
-        <p class="bcsampletext"><b>Sample Office</b><span class="bcsamplemore"> · a made-up café, so changes are not saved</span></p>
-        <span class="bcsampleacts">
-          <button type="button" class="bcbtn bcbtn--primary bcsamplecreate" data-bc-sample-create>Create your own office</button>
-          <button type="button" class="bcsamplelink" data-bc-sample-signin>Sign in</button>
-        </span>
-      </aside>`
-    : ''
+/*
+  No banner (Grant, 14 October 2026): the Sample is played as an ordinary project, with no notice saying it is a sample. The
+  one way in from it is a quiet "Sign in" link in the header (shell.js), wired to the same handler.
+*/
+export const sampleBar = () => ''
 
 /*
   Leaving the sample is signing out of it: the same wipe a person gets, so nothing the visitor saw or asked is left in this
@@ -185,11 +180,17 @@ const createPanel = () => `<form class="bcentryform" data-bc-entry-form="create"
     <p class="bcentrysaid" data-bc-entry-said role="status" aria-live="polite"></p>
   </form>`
 
+/* The build version beside the sign-in kicker, so the signed-out page shows what it is too (the same value as the header). */
+const entryVersion = () => {
+  const version = typeof window.HQ_VERSION === 'string' ? window.HQ_VERSION : ''
+  return version === '' ? '' : `<span class="bcver bcver--entry" title="Team HQ version ${esc(version)}">v${esc(version)}</span>`
+}
+
 export const entry = () => {
   const ended = source.state === 'refused'
   return `<main class="bcentry" id="bcmain" tabindex="-1">
     <div class="bcentrycard">
-      <p class="bcentrykicker">Team HQ</p>
+      <p class="bcentrykicker">Team HQ ${entryVersion()}</p>
       <h1 class="bcentrytitle">A team that works on your projects with you</h1>
       <p class="bcentrylead">Every project gets its own tasks, documents, calendar and conversation. Claire, your chief of staff, brings in the right specialist when there is work to do, and checks with you before she acts for you.</p>
       ${ended ? '<p class="bcentrynote" role="status">Your sign-in ended, so you have been signed out. Sign in again to carry on.</p>' : ''}
@@ -258,7 +259,7 @@ export const setup = () => {
   }
   return `<main class="bcentry" id="bcmain" tabindex="-1">
     <div class="bcentrycard">
-      <p class="bcentrykicker">Team HQ</p>
+      <p class="bcentrykicker">Team HQ ${entryVersion()}</p>
       <h1 class="bcentrytitle">One last step: set up your office</h1>
       <p class="bcentrylead">${
         who === '' ? 'You are signed in.' : `You are signed in as <strong>${esc(who)}</strong>.`

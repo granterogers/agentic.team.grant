@@ -13,6 +13,7 @@
   second mechanism would be a second set of words for one thing.
 */
 
+import { apply, appearance } from '../appearance.js'
 import {
   act,
   alreadyAnswered,
@@ -835,8 +836,20 @@ export const wire = (root) => {
     `verify:basecamp-controls` presses for and reading the code would not have
     shown. The control belongs to the shell, so the shell wires it.
   */
-  for (const b of root.querySelectorAll('[data-bc-settings]')) {
+  /*
+    Two doors onto one sheet: the header control (every width but a phone) and the project menu's entry (the phone's
+    door). They carry different attributes so the header selector stays unambiguous for every probe that uses it.
+  */
+  for (const b of root.querySelectorAll('[data-bc-settings], [data-bc-global-menu]')) {
     b.addEventListener('click', () => {
+      /*
+        The phone entry lives in the project menu, so pressing it closes that menu before the sheet opens. The menu's
+        state is the module's; the panel is drawn from it, so the state change needs a redraw to take effect.
+      */
+      if (b.hasAttribute('data-bc-global-menu')) {
+        menu.setOpen(false)
+        ctx.render()
+      }
       ctx.openGlobalSettings?.()
     })
   }
@@ -845,6 +858,15 @@ export const wire = (root) => {
     b.addEventListener('click', () => {
       b.disabled = true
       signOut()
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-schemetoggle]')) {
+    b.addEventListener('click', () => {
+      // The scheme a person is looking at now, whether it was chosen or followed from the system, and the other one.
+      const now = document.documentElement.dataset.scheme
+        ?? (globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      apply({ ...appearance(), scheme: now === 'dark' ? 'light' : 'dark' })
     })
   }
 
@@ -2256,6 +2278,7 @@ const warmNext = async () => {
             /* The tile may have been redrawn while the page was read, so paint whichever tiles exist NOW. */
             for (const h of document.querySelectorAll('[data-bc-thumb]')) {
               if (h.dataset.bcThumb !== `id:${job.id}`) continue
+              if (isSmallTile(h)) continue
               const img = document.createElement('img')
               img.className = 'realpage'
               img.alt = ''
@@ -2278,7 +2301,22 @@ const warmNext = async () => {
   }
 }
 
+/*
+  ONE TREATMENT PER SURFACE, DECIDED FROM THE SURFACE RATHER THAN FROM THIS DEVICE'S STORAGE.
+
+  A dashboard tile (`bccompact`) and a list row (`bcrowthumb`) are a few dozen pixels, where a real first page is an
+  unreadable grey smudge. They keep the drawn type card, and they never fetch the bytes or warm the cache. Before this
+  the cached JPEG replaced the card only on devices that happened to hold one, so the same board looked different from
+  one browser to the next. The Docs grid keeps real first pages, and an object (a spreadsheet, a deck) keeps its glyph on
+  every surface.
+*/
+const isSmallTile = (host) => host.classList.contains('bccompact') || host.classList.contains('bcrowthumb')
+
 const paintThumb = async (host, ref) => {
+  /*
+    A small tile is drawn by the render (its glyph or type card), so nothing is fetched for it: no record, no bytes.
+  */
+  if (isSmallTile(host)) return
   /*
     A THUMBNAIL KEPT ON THIS DEVICE (docthumbs.js): the viewer made it from the first page or the picture while the
     document was open, keyed to the source's modified time. It is checked first, so a tile for an external document that
@@ -2300,9 +2338,9 @@ const paintThumb = async (host, ref) => {
     }
   }
   const file = await fileFor(ref)
-  if (file === null || file.url === '') {
+  if (ref.startsWith('id:') && (file === null || file.url === '')) {
     /* A document Team HQ reads on demand and nobody has opened yet: make its first-page picture ourselves (below). */
-    if (ref.startsWith('id:')) void warmThumb(host, ref.slice(3))
+    void warmThumb(host, ref.slice(3))
   }
   if (file === null) return
   const face = bcMini.faceFor(file.mime ?? '', file.url === '' ? (file.title ?? '') : file.url)

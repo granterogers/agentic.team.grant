@@ -381,11 +381,13 @@ const menuPanel = () => {
     <div class="bcmenulist" data-bc-menu-modules>${Object.entries(compose.NAMES)
       .map(
         ([id, name]) =>
-          `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem bcmenumod" style="${esc(identity.cssVars(id))}" data-bc-expand="${esc(id)}"><span class="bcmenumodicon">${identity.svg(id, 16)}</span><span class="bcmenuname">${esc(name)}</span></button>`,
+          `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-expand="${esc(id)}"><span class="bcmenuname">${esc(name)}</span></button>`,
       )
       .join('')}${item(at(`/p/${here}/chat`), 'Team Chat')}<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-sources="1"><span class="bcmenuname">Sources</span></button></div>`
     }
     <hr class="bcmenusep">
+    <button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem bcmenuglobal" data-bc-global-menu="1"
+      title="Global Settings: the whole office, outside any project"><span class="bcmenuname">Global Settings</span></button>
     ${item(at('/search'), 'Search')}
     ${item(at('/tasks'), 'My Tasks')}
     ${item(at('/activity'), 'Activity')}
@@ -460,6 +462,18 @@ const topRow = () => {
     </div>
     ${work}
     <div class="bcright">
+      <!-- The build's version, on every screen and in the Sample: the one place a person can always see what they are running. -->
+      ${buildVersionMark()}
+      <!--
+        Light or dark, on every screen, always at the top right (Grant, 14 October 2026). Both glyphs are drawn and the CSS
+        shows the one that switches to the OTHER scheme, so the button needs no state from the render. It writes the same
+        stored choice as the Appearance tab.
+      -->
+      <button type="button" class="bcschemebtn" data-bc-schemetoggle aria-label="Switch between light and dark" title="Switch between light and dark">
+        <svg class="bcschemeicon bcschemeicon--moon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg>
+        <svg class="bcschemeicon bcschemeicon--sun" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+      </button>
+      ${source.state === 'prototype' ? '<a class="bcsignlink" href="?welcome">Sign in</a>' : ''}
       <button type="button" class="bcbtn" data-bc-attention
         ${attentionTo === null ? 'disabled' : ''}
         aria-current="${attentionTo !== null && isHere(attentionTo) ? 'page' : 'false'}"
@@ -525,6 +539,7 @@ const topRow = () => {
 
 const tray = () =>
   `<nav class="bctray" aria-label="Your things">
+    ${buildVersionMark('tray')}
     <!--
       CHAT stays in the personal tray, renamed.
 
@@ -893,11 +908,40 @@ const listed = () => PROJECTS.filter((p) => p.slug !== 'unnamed' || filedUnder(p
   The build's version, from config.js (generated from package.json). It is drawn in the top-right corner of the home board only,
   which is the only screen with no project open. Absolutely placed, so it takes no room from the header's title.
 */
-const buildVersionMark = () => {
+const buildVersionMark = (where = 'bar') => {
   const version = typeof window.HQ_VERSION === 'string' ? window.HQ_VERSION : ''
   return version === ''
     ? ''
-    : `<span class="bcver" title="Team HQ version ${esc(version)}">v${esc(version)}</span>`
+    : `<span class="bcver bcver--${where}" title="Team HQ version ${esc(version)}">v${esc(version)}</span>`
+}
+
+/*
+  THE NO-PROJECT SCREEN (completion pass, D3). With no project open a person sees what they can do next: their projects
+  as cards to open, or, with none yet, the one step that starts their office. It is not a blank canvas with a sentence on it.
+*/
+const emptyProjects = () => {
+  const mine = listed()
+  if (mine.length === 0) {
+    return `<h2 class="bcnoproj-title" id="bcnoproj-title">No projects yet</h2>
+    <p class="bcnoproj-lede">A project holds its own documents, tasks, calendar and team. Start one, and the team can begin work on it.</p>
+    <div class="bcnoproj-actions">
+      <button type="button" class="bcbtn bcbtn--primary" data-bc-menu-open>Create a project</button>
+    </div>`
+  }
+  return `<h2 class="bcnoproj-title" id="bcnoproj-title">Choose a project</h2>
+    <p class="bcnoproj-lede">Each project has its own documents, tasks, calendar and team. Open one to carry on, or start a new one.</p>
+    <ul class="bcnoproj-grid" aria-label="Your projects">${mine
+      .map(
+        (p) => `<li><button type="button" class="bcnoproj-card" data-bc-go="${esc(at(`/p/${p.slug}`))}">
+        <span class="bcnoproj-mark" aria-hidden="true">${compose.projectMark(p, 28)}</span>
+        <span class="bcnoproj-name">${esc(p.name)}</span>
+        <span class="bcnoproj-open">Open <span aria-hidden="true">→</span></span>
+      </button></li>`,
+      )
+      .join('')}</ul>
+    <div class="bcnoproj-actions">
+      <button type="button" class="bcbtn" data-bc-menu-open>Open the project menu</button>
+    </div>`
 }
 
 const portfolio = () => {
@@ -913,15 +957,9 @@ const portfolio = () => {
     sentence inviting the person to pick or make a project.
   */
   return `<h1 class="bcvh">Team HQ</h1>
-  <div class="bcvoid" role="region" aria-label="No project selected">
-    ${buildVersionMark()}
-    <div class="bcvoidcard">
-      <p class="bcvoidline">${listed().length === 0 ? 'No projects yet.' : 'Choose a project to begin.'}</p>
-      <div class="bcvoidrow">
-        <button type="button" class="bcbtn bcbtn--primary" data-bc-menu-open>${listed().length === 0 ? 'Create a project' : 'Open the project menu'}</button>
-      </div>
-    </div>
-  </div>`
+  <section class="bcnoproj" aria-labelledby="bcnoproj-title">
+    ${emptyProjects()}
+  </section>`
 }
 
 /* ======================================================================== *
@@ -2868,8 +2906,8 @@ const scheduleSurface = (p) => {
 const chatSurface = (p) => {
   ctx?.needChat?.(p.slug)
   const said = ctx?.chatFor?.(p.slug) ?? []
-  const shown = said.length > 0 ? said : (p.chat ?? [])
-  const real = ctx?.chatIsReal?.(p.slug) === true
+  /* The room is the chief of staff's: one filter, shared with the dock preview (bcMini.roomVoices). */
+  const shown = bcMini.roomVoices(said.length > 0 ? said : (p.chat ?? []))
   return `${crumbFor(p, 'chat')}
     <div class="bcrecordhead">
       <h1>${esc(toolById('chat')?.name ?? 'Chat')}</h1>
@@ -2890,18 +2928,6 @@ const chatSurface = (p) => {
         : `<div class="bcchat bcchat--full">
             ${shown.map((m) => bcMini.said_(m)).join('')}
           </div>`
-    }
-    ${
-      real || shown.length === 0
-        ? ''
-        : /*
-            SAYING SO, because the alternative is a fiction presented as his
-            conversation. A signed-out browser has no thread to read, and the
-            prototype one stands in for the shape; §11's rule is that the page
-            says which it is rather than letting him assume.
-          */
-          `<p class="bcpmeta bcgap">This is an example conversation. Sign in and the
-            office's own record replaces it.</p>`
     }
     <form class="bcsay" data-bc-sayform>
       <label class="bcvh" for="bc-say">${esc(`Message the team about ${p.name}`)}</label>
@@ -3884,6 +3910,8 @@ const notLive = () => {
     </div>`
   }
   if (source.live === true) return ''
+  /* The prototype and the Sample are played as ordinary projects: no banner says they are not the real office (Grant, 14 Oct 2026). */
+  if (source.state === 'prototype') return ''
   if (connecting()) {
     return `<div class="bcnotlive bcnotlive--wait" role="status">
       <span class="bcspin" aria-hidden="true"></span>
@@ -3947,7 +3975,8 @@ const shell = () =>
   ${account.sampleBar()}
   ${(menu.sync(currentPath()), topRow())}
   ${notLive()}
-  <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>`
+  <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>
+  ${tray()}`
 
 /*
   The dock's voice-note control: the same button the Chat page's composer

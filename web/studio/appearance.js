@@ -13,11 +13,11 @@
 */
 
 export const PALETTES = [
-  { id: 'paper', name: 'Paper', note: 'Warm off-white, forest green' },
-  { id: 'slate', name: 'Slate', note: 'Cool grey, deep blue' },
-  { id: 'clay', name: 'Clay', note: 'Terracotta and sand' },
-  { id: 'ink', name: 'Ink', note: 'Near-black on cream' },
-  { id: 'moss', name: 'Moss', note: 'Deep green and stone' },
+  { id: 'slate', name: 'Deep teal', note: 'The recommended accent' },
+  { id: 'moss', name: 'Sage', note: 'Quiet green' },
+  { id: 'clay', name: 'Plum', note: 'A soft aubergine' },
+  { id: 'ink', name: 'Midnight', note: 'Deep indigo' },
+  { id: 'paper', name: 'Graphite', note: 'Cool slate' },
 ]
 
 /*
@@ -99,9 +99,11 @@ export const DENSITIES = [
 */
 /* `faces` is [canvas, surface] in each scheme, only so the picker can draw a small preview; the CSS is the source of truth (bc/refine.css). */
 export const LOOKS = [
-  { id: 'silver', name: 'Slate & Silver', note: 'Cooler, neutral greys', faces: { dark: ['#0d1114', '#1c2227'], light: ['#e2e5e9', '#fbfcfd'] } },
-  { id: 'forest', name: 'Forest & Brass', note: 'Deep green faces, brass headings', faces: { dark: ['#0a1511', '#18291f'], light: ['#d2d6cb', '#eef0e8'] } },
-  { id: 'graphite', name: 'Warm Graphite', note: 'Warm charcoal and parchment', faces: { dark: ['#131110', '#262220'], light: ['#d9d4cd', '#f2efea'] } },
+  { id: 'porcelain', name: 'Porcelain & Teal', note: 'Porcelain surfaces, deep teal accents', faces: { dark: ['#0a1412', '#132522'], light: ['#eef2f0', '#ffffff'] } },
+  { id: 'silver', name: 'Slate & Silver', note: 'Brushed steel, cool and quiet', faces: { dark: ['#0d1114', '#1c2227'], light: ['#e2e5e9', '#fbfcfd'] } },
+  { id: 'graphite', name: 'Graphite & Steel', note: 'Polished near-black and steel grey', faces: { dark: ['#0b0d10', '#16191e'], light: ['#e7e9ec', '#fbfcfd'] } },
+  { id: 'midnight', name: 'Midnight Slate', note: 'Deep navy-black with a blue-grey face', faces: { dark: ['#080c17', '#11182a'], light: ['#e6eaf3', '#fdfdff'] } },
+  { id: 'forest', name: 'Forest', note: 'Deep green-black and sage', faces: { dark: ['#0a1511', '#18291f'], light: ['#d2d6cb', '#eef0e8'] } },
 ]
 export const GLASS = [
   { id: 'off', name: 'Solid', note: 'Menus are opaque' },
@@ -126,7 +128,7 @@ const DEFAULTS = {
   ownName: '',
   scheme: 'light',
   density: 'comfortable',
-  look: 'silver',
+  look: 'porcelain',
   glass: 'soft',
   depth: 'soft',
 }
@@ -183,10 +185,24 @@ export function resetToRecommended() {
   apply({ ...DEFAULTS })
 }
 
+/*
+  The appearance REVISION. Every saved choice (this browser's, and the one kept for the person in the office) carries the
+  revision it was saved at. A choice saved before the current recommended look is reset ONCE for the look fields (palette,
+  look, scheme, texture and an uploaded texture), so a returning person sees the latest design rather than one saved before
+  it. Density, glass and depth are spacing and effect choices and are kept. Bump this when the recommended look changes.
+*/
+export const APPEARANCE_REVISION = 3
+const LOOK_FIELDS = ['palette', 'look', 'scheme', 'texture', 'own', 'ownName']
+export function currentRevision(saved) {
+  if (saved === null || typeof saved !== 'object') return {}
+  if (saved.v === APPEARANCE_REVISION) return saved
+  return Object.fromEntries(Object.entries(saved).filter(([key]) => !LOOK_FIELDS.includes(key)))
+}
+
 /** What is chosen. Falls back to the defaults, never to nothing. */
 export function appearance() {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}')
+    const saved = currentRevision(JSON.parse(localStorage.getItem(KEY) ?? '{}'))
     return {
       palette: PALETTES.some((p) => p.id === saved.palette) ? saved.palette : DEFAULTS.palette,
       texture: saved.texture === 'own' || TEXTURES.some((t) => t.id === saved.texture)
@@ -257,7 +273,8 @@ export function apply(next = appearance()) {
     root.style.removeProperty('--tex')
     root.style.removeProperty('--tex-size')
   }
-  try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* not fatal */ }
+  const stamped = { ...next, v: APPEARANCE_REVISION }
+  try { localStorage.setItem(KEY, JSON.stringify(stamped)) } catch { /* not fatal */ }
   /*
     And out to the office, which is where it actually lives (ADR-0021).
 
@@ -274,7 +291,7 @@ export function apply(next = appearance()) {
     change on screen and in this browser, so the failure mode is "the other
     device is behind" rather than "your choice vanished".
   */
-  if (send !== null) send(next)
+  if (send !== null) send(stamped)
   return next
 }
 
@@ -306,7 +323,7 @@ export function hydrate(fromOffice) {
   const was = send
   send = null
   try {
-    return apply({ ...appearance(), ...fromOffice })
+    return apply({ ...appearance(), ...currentRevision(fromOffice) })
   } finally {
     send = was
   }

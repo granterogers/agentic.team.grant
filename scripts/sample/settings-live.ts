@@ -80,9 +80,22 @@ const count = (page: import('playwright').Page, sel: string) => page.locator(sel
 // ============================ DESKTOP ====================================================================================
 const { ctx, page, errors } = await newPage(studio, { width: 1440, height: 900 })
 await signIn(studio, page, s)
+// A sign-in on production can take longer than signIn's own quiet period, so the check WAITS for the live page (bounded) and
+// then asserts it. Reading the marker once, immediately, failed a correct page that arrived a few seconds later.
 check(
   'signed in as the Sample Person: the page is live, not the prototype',
-  (await count(page, '.bcnotlive')) === 0,
+  await page
+    .waitForFunction("document.querySelector('.bcnotlive') === null", undefined, { timeout: 60000 })
+    .then(
+      () => true,
+      async (e: unknown) => {
+        const strip = await page
+          .evaluate("(document.querySelector('.bcnotlive')?.innerText || 'no strip').replace(/\\n/g, ' | ').slice(0, 240)")
+          .catch(() => 'strip unreadable')
+        console.log(`  live-page wait rejected (${String(e instanceof Error ? e.message : e).slice(0, 60)}); strip: ${strip}`)
+        return false
+      },
+    ),
 )
 
 // 1. every section opens and says what it is
@@ -294,7 +307,8 @@ await ctx.close()
     errors: perrs,
   } = await newPage(studio, { width: 390, height: 844 }, true)
   await signIn(studio, p, s)
-  await p.locator('[data-bc-settings]').first().click({ force: true })
+  // On a phone Global Settings is the menu's entry, not the header control: the shared helper follows the menu.
+  await openSettings(p)
   await p.waitForSelector('#settings .stg-navitem')
   check(
     'phone: Settings opens on the list of sections',

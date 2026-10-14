@@ -117,14 +117,15 @@ describe('a start that cannot fit the stage is wrapped, not piled up', () => {
     }
   })
 
-  it('CONTROL: a person who drags one module onto another still gets the overlap they asked for', () => {
+  it('CONTROL: a person who drags one module onto another makes room: the one in the way is pushed down, not covered', () => {
     L.setStage(666, 560)
     const [a, b] = L.layout('p') as Rect[] as [Rect, Rect]
     L.place('p', a.id, { x: b.x + 10, y: b.y + 10, w: a.w, h: a.h })
     const list = L.layout('p') as Rect[]
     const A = list.find((m) => m.id === a.id) as Rect
     const B = list.find((m) => m.id === b.id) as Rect
-    expect(overlaps(A, B)).toBe(true)
+    expect(overlaps(A, B)).toBe(false)
+    expect(B.y).toBeGreaterThanOrEqual(A.y + A.h)
   })
 })
 
@@ -161,14 +162,15 @@ describe('free placement', () => {
     expect([t.x, t.y, t.w, t.h]).toEqual([13, 7, 301, 177])
   })
 
-  it('permits overlap and does not move the neighbour', () => {
+  it('makes room: the module in the way is pushed below the one placed, and the placed one keeps its place', () => {
     const before = L.layout('p') as Rect[]
     const board = before.find((m) => m.id === 'board') as Rect
     const out = L.place('p', 'tasks', { x: board.x + 20, y: board.y + 20 }) as Rect[]
     const tasks = out.find((m) => m.id === 'tasks') as Rect
     const after = out.find((m) => m.id === 'board') as Rect
-    expect(overlaps(tasks, after)).toBe(true)
-    expect([after.x, after.y, after.w, after.h]).toEqual([board.x, board.y, board.w, board.h])
+    expect(overlaps(tasks, after)).toBe(false)
+    expect([after.x, after.w, after.h]).toEqual([board.x, board.w, board.h])
+    expect(after.y).toBeGreaterThanOrEqual(tasks.y + tasks.h)
   })
 
   it('raises what was just placed above everything', () => {

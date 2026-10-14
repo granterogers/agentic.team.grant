@@ -9,8 +9,8 @@
  * refuses unless the office is structurally not Grant's: it must not be the operator office, not the system or test
  * office, and its owner key must be the Sample's. Nothing here is decided by typing a name.
  */
+import { SECOND_EMAIL } from '../p4/identity.ts'
 import { act, db, ENDPOINT, read, type Session, secondSession } from '../p4/lib.ts'
-import { SECOND_EMAIL } from '../p4/provision-second-person.ts'
 import { guardOffice, SAMPLE_OWNER_KEY } from './guard.ts'
 
 export const SAMPLE_EMAIL = SECOND_EMAIL
