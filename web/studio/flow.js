@@ -39,6 +39,11 @@ export const FLOW_TTL_MS = 60 * 60 * 1000
 export const MAX_PENDING = 5
 export const NONCE_RE = /^[a-z0-9]{24,64}$/
 export const KIND_LINK = 'link'
+/** A Google sign-in this browser started (#467). Same binding as a link; a different kind so the two never adopt each other. */
+export const KIND_GOOGLE = 'google'
+/** The sentence for a Google return the person cancelled. Mirrors src/auth/google-flow.ts (the page cannot import TypeScript). */
+export const GOOGLE_CANCELLED =
+  'You cancelled signing in with Google, so nothing was changed.'
 
 export const OTHER_BROWSER =
   'This sign-in link was not requested from this browser, or it has already been used or has expired. ' +
@@ -77,6 +82,13 @@ const wellFormed = (f, now) =>
 
 /** The flows that can still be used, oldest first. Anything malformed or expired is not one. */
 export const pending = (store, now) => readList(store).filter((f) => wellFormed(f, now))
+
+/** The kind of the pending flow with this nonce, or null when there is none. Decides which kind a return is judged as. */
+export const kindOf = (store, nonce, now) => {
+  if (typeof nonce !== 'string' || !NONCE_RE.test(nonce)) return null
+  const f = pending(store, now).find((x) => x.nonce === nonce)
+  return f === undefined ? null : f.kind
+}
 
 /** A fresh nonce from random bytes (crypto.getRandomValues in the page, a fixed array in a test). */
 export const nonceFrom = (bytes) => Array.from(bytes, (b) => (b % 36).toString(36)).join('')
@@ -144,12 +156,14 @@ export const decide = ({ hash, search, store, now, kind = KIND_LINK }) => {
   consume(store, asked, now)
 
   if (failed !== '') {
-    // A token beside an error is not a success, and an error says what the provider said, clipped.
+    // A token beside an error is not a success. A Google cancellation is named as one; every other provider error is
+    // shown as the clipped words the provider sent, as before.
+    const cancelled = kind === KIND_GOOGLE && q.get('error') === 'access_denied'
     return {
       touched: true,
       search: clean,
       session: null,
-      problem: failed.replace(/\+/g, ' ').slice(0, 200),
+      problem: cancelled ? GOOGLE_CANCELLED : failed.replace(/\+/g, ' ').slice(0, 200),
     }
   }
   if (access === '') {

@@ -43,7 +43,7 @@
 */
 
 import { HQ_API as API, SIGNIN as ENDPOINT } from './backend.js'
-import { begin as beginFlow, decide, returnAddress } from './flow.js'
+import { begin as beginFlow, decide, KIND_GOOGLE, KIND_LINK, kindOf, returnAddress } from './flow.js'
 import { bounded, note, unreachable } from './net.js'
 
 const KEY = 'hq.session'
@@ -137,11 +137,14 @@ export const adopt = () => {
   } catch {
     flows = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
   }
+  // The return is judged as the kind of flow it names: a link, or a Google sign-in this browser started (#467).
+  const asked = new URLSearchParams(window.location.search).get('flow') ?? ''
   const decided = decide({
     hash: window.location.hash,
     search: window.location.search,
     store: flows,
     now: Date.now(),
+    kind: kindOf(flows, asked, Date.now()) ?? KIND_LINK,
   })
   if (!decided.touched) return false
   window.history.replaceState(null, '', `${window.location.pathname}${decided.search}`)
@@ -329,6 +332,42 @@ export async function askForLink(email) {
     throw new Error(String(body.said ?? 'The link could not be sent just now. Try again shortly.'))
   }
   return String(body.said ?? 'Check your email for a link to sign in.')
+}
+
+/**
+ * Whether this deployment offers Google (#467). Off unless the owner has switched it on; any failure reads as "no", so
+ * the other ways in are never hidden by an outage.
+ */
+export async function googleOffered() {
+  try {
+    const { body } = await post({ action: 'methods' })
+    return body.google === true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Start a Google sign-in. This browser remembers its flow (the same binding a link uses), the office gives back the
+ * provider's address, and the browser is sent there. Throws the sentence the office sent when there is no address.
+ */
+export async function googleStart() {
+  let nonce = ''
+  try {
+    nonce = beginFlow(localStorage, { kind: KIND_GOOGLE }, Date.now(), crypto.getRandomValues(new Uint8Array(24)))
+  } catch {
+    nonce = ''
+  }
+  if (nonce === '') {
+    throw new Error('This browser is blocking the storage sign-in needs. Allow site data for this page and try again.')
+  }
+  const back = returnAddress(window.location.origin, window.location.pathname, nonce)
+  const { body } = await post({ action: 'google_start', back, nonce })
+  if (body.ok !== true || typeof body.url !== 'string') {
+    throw new Error(String(body.said ?? 'Google sign-in is not reachable just now. Try again shortly.'))
+  }
+  window.location.assign(body.url)
+  return true
 }
 
 /** Who the office thinks this is, for a page that wants to say so. */

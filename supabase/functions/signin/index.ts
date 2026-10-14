@@ -54,6 +54,7 @@
  * has already proved they own the mailbox.
  */
 
+import { googleOffered, googleStartPlan } from '../../../src/auth/google-flow.ts'
 import {
   NOT_SWITCHED_ON,
   normaliseEmail,
@@ -415,9 +416,33 @@ Deno.serve(async (request: Request): Promise<Response> => {
     Every answer that could reveal whether an address has an account is the same sentence. The one exception is a 422
     from Auth for a weak password, which says nothing about the address and is passed on as a sentence of its own.
   */
+  /*
+    GOOGLE (#467). The office decides whether Google is offered and builds the provider address; the page only asks.
+    The return carries the browser's own flow nonce, so the session is adopted only in the browser that started it (the
+    same rule as a link). Off until the owner enables it, and the refusal names why.
+  */
+  if (action === 'google_start') {
+    const plan = googleStartPlan({
+      switchedOn: googleOffered(Deno.env.get('GOOGLE_SIGN_IN')),
+      authorizeBase: DB_URL,
+      back: String(body.back ?? ''),
+      allowedOrigins: ALLOWED_ORIGINS,
+      nonce: String(body.nonce ?? ''),
+    })
+    return json(
+      plan.ok ? { ok: true, url: plan.url } : { ok: false, said: plan.said },
+      200,
+      request,
+    )
+  }
+
   if (action === 'methods') {
     return json(
-      { ok: true, password: passwordSignInEnabled(Deno.env.get('PASSWORD_SIGN_IN')) },
+      {
+        ok: true,
+        password: passwordSignInEnabled(Deno.env.get('PASSWORD_SIGN_IN')),
+        google: googleOffered(Deno.env.get('GOOGLE_SIGN_IN')),
+      },
       200,
       request,
     )

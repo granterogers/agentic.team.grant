@@ -160,7 +160,13 @@ const passwordPanel = () => `<form class="bcentryform" data-bc-password-form nov
     <p class="bcentrysaid" data-bc-password-said role="status" aria-live="polite"></p>
   </form>`
 
-const signinPanel = () => `${passwordOffered === true ? passwordPanel() : ''}<form class="bcentryform" data-bc-entry-form="signin" novalidate>
+/* Shown only when the office has switched Google sign-in on (#467). Its own selector, so the link loop never takes it for a link request. */
+const googlePanel = () => `<div class="bcentrygoogle">
+    <button type="button" class="bcbtn bcbtn--outline bcentrygo" data-bc-google-start>Continue with Google</button>
+    <p class="bcentrysaid" data-bc-google-said role="status" aria-live="polite"></p>
+  </div>`
+
+const signinPanel = () => `${googleOn === true ? googlePanel() : ''}${passwordOffered === true ? passwordPanel() : ''}<form class="bcentryform" data-bc-entry-form="signin" novalidate>
     ${passwordOffered === true ? '' : emailField('bc-entry-email-in', form.email)}
     <p class="bcentrysmall">${passwordOffered === true ? 'Or, with no password, we email you a link that signs you in on this device.' : 'No password. We email you a link that signs you in on this device.'}</p>
     <button type="submit" class="bcbtn bcbtn--primary bcentrygo${passwordOffered === true ? ' bcbtn--outline' : ''}">Email me a sign-in link</button>
@@ -220,6 +226,19 @@ let whoAsking = false
 */
 let passwordOffered = null
 let passwordAsking = false
+/* Whether the office offers Google (#467). Asked the same way, and drawn only after the answer is in. */
+let googleOn = null
+let googleAsking = false
+const askGoogleOffered = (redraw) => {
+  if (googleOn !== null || googleAsking) return
+  googleAsking = true
+  void session.googleOffered().then((on) => {
+    googleOn = on
+    googleAsking = false
+    redraw()
+  })
+}
+
 const askPasswordOffered = (redraw) => {
   if (passwordOffered !== null || passwordAsking) return
   passwordAsking = true
@@ -380,6 +399,21 @@ export function wire(root) {
     })
   }
   askPasswordOffered(redraw)
+  askGoogleOffered(redraw)
+
+  // Continue with Google (#467). Shown only when the office has switched it on; the office sends the person to Google.
+  for (const b of root.querySelectorAll('[data-bc-google-start]')) {
+    const said = root.querySelector('[data-bc-google-said]')
+    b.addEventListener('click', async () => {
+      b.disabled = true
+      try {
+        await session.googleStart()
+      } catch (error) {
+        b.disabled = false
+        say(said, error instanceof Error ? error.message : 'Google sign-in is not reachable just now. Try again shortly.')
+      }
+    })
+  }
 
   for (const f of root.querySelectorAll('[data-bc-password-form]')) {
     const said = f.querySelector('[data-bc-password-said]')
