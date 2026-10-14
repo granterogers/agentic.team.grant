@@ -65,6 +65,36 @@ Status words: `done`, `in_progress`, `todo`, `blocked`. The JSON is authoritativ
   approved, the restart behaviour is verified only against a stub child process, and a live restart is recorded as
   unverified.
 
+## Integration with parallel work (documented, not performed)
+
+Another session is developing UX changes on parallel branches. Nothing here merges into `main`, rebases, or touches those
+branches. Merging is an explicit, separate authorisation from the owner.
+
+**Overlap, measured read-only against `origin/main` at `65bc7b0`:**
+
+- The continuity branch changes 25 files. Its code and tests (`scripts/agent/`, `tests/agent/`, `.claude/settings.json`)
+  share **no** files with any UX branch checked (`claude/team-hq-ux-overnight`, `claude/ux-closure-guard`,
+  `claude/ux-overnight-docs`, `integration/team-hq-ux-on-p4`, `integration/team-hq-ux-v2`).
+- Four files are changed by both sides, so a merge will conflict textually:
+  - `CLAUDE.md`: this branch replaces the file with the concise version. Any UX edit to the full file must be carried into
+    `docs/agent/history/CLAUDE-2026-10-14-full.md`, not dropped.
+  - `docs/AUTONOMOUS-RUN.md`: this branch turns it into a pointer and archives the full log. A UX edit to that log must go
+    into `docs/agent/history/AUTONOMOUS-RUN-2026-10-14-full.md`.
+  - `package.json`: this branch adds five `agent:*` scripts. Additive, so either order keeps both.
+  - `.gitignore`: this branch adds `docs/agent/STOP`. Additive.
+
+**Proposed sequence, for the owner to authorise:**
+
+1. The UX work lands on `main` first, by its own review, because it is the work already in flight.
+2. Recheck the overlap against the new `main`: `git diff --name-only origin/main origin/claude/continuity-repair-2026-10-14`.
+3. Bring this branch up to the new `main` with a merge commit. Never rebase a branch that is already pushed.
+4. Resolve the four shared files as above. Keep every UX sentence that appears in a file this branch replaces, by moving
+   it into the archive copy. Run `npm run check:deployment-state`, `npx vitest run tests/agent tests/docs`, and the full
+   suite with `npm run test`.
+5. Only then mark the draft pull request ready, and only on the owner's merge decision.
+
+Until step 1 is the owner's decision, this branch is deliberately unmerged.
+
 ## Tracking issue
 
 GitHub issue #474 holds the requirement backlog for this repair. The ledger references it and does not copy it.
