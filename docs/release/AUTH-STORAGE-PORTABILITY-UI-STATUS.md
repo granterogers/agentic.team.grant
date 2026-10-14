@@ -27,7 +27,9 @@ The first status report said there was no per-project export. That was wrong. `a
 | #470 | C1 standard-format exports | **Built and verified** (see below). Live gateway and browser journey not run against production. |
 | #471 | C2 restore and ZIP | Not started. Restore into a new project needs an idempotency record and careful document inserts. |
 | #472 | D1 module colours and glow | Not started. |
-| #473 | D2 hamburger icons and Projects submenu | Not started. |
+| #473 | D2 hamburger icons and Projects submenu | **Partly done** (`5c29613`): Projects is one top-level item that shows or hides the list (click and keyboard), expanded by default, scrolling past half the screen; verified at 1440 and 390 px. Desktop hover-to-reveal and the icon and colour consistency check are not done. |
+
+**Lint note.** `biome.json` includes only `*.ts` and `*.json`. The web JavaScript and CSS under `web/` are not linted by biome. Their checks are `npm run check:templates`, the unit suites that read the source, and the browser captures. Earlier notes that said "biome clean" for web files referred to TypeScript only.
 
 ### C1: standard-format exports (#470), verified
 
