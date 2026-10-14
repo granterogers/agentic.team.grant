@@ -1830,6 +1830,15 @@
 .bcmenuhead { margin: 6px 8px 4px; font: var(--bc-compact); color: var(--bc-text-muted); text-transform: uppercase; letter-spacing: .06em; font-size: 12px; }
 .bcmenunone { margin: 4px 8px 8px; color: var(--bc-text-muted); font: var(--bc-compact); }
 .bcmenulist { display: grid; gap: 1px; }
+/* The Projects item (#473): one row that reveals the list. The list scrolls past about half the screen, so many projects
+   do not push the rest of the menu off the bottom. */
+.bcmenuprojects { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 8px; margin: 2px 0; background: none; border: 0; border-radius: 8px; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.bcmenuprojects .bcmenuhead { margin: 0; flex: 1 1 auto; }
+.bcmenuprojects .bcmenucount { font-size: 12px; color: var(--bc-text-muted); }
+.bcmenuprojects .bcmenuchev { width: 16px; text-align: center; color: var(--bc-text-muted); }
+.bcmenuprojects:focus-visible { outline: 2px solid var(--bc-accent, currentColor); outline-offset: 2px; }
+.bcmenuprojectlist { max-height: min(50vh, 360px); overflow-y: auto; }
+.bcmenuprojectlist[hidden] { display: none; }
 .bcmenuitem {
   display: flex;
   align-items: center;

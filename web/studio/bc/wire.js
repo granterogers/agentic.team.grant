@@ -746,6 +746,14 @@ export const wire = (root) => {
       items[next].focus()
     })
   }
+  /* The Projects item reveals and hides its list (#473). A redraw keeps the choice: it lives on bc/menu.js. */
+  for (const b of root.querySelectorAll('[data-bc-menu-projects]')) {
+    b.addEventListener('click', () => {
+      menu.toggleProjects()
+      ctx.render()
+      root.ownerDocument.querySelector('[data-bc-menu-projects]')?.focus()
+    })
+  }
   for (const b of root.querySelectorAll('[data-bc-menu-new]')) {
     b.addEventListener('click', () => {
       menu.setMaking(true)

@@ -14,6 +14,18 @@ let open = false
 let making = false
 let lastPath = ''
 
+/*
+  The Projects section of the menu is one top-level item that reveals the list (#473). Expanded by default, so a
+  person who never touches it sees what they always saw; collapsed only by their own press. Kept here, not on a node,
+  for the same reason as `open`: a redraw would otherwise put the list back.
+*/
+let projectsOpen = true
+
+export const projectsExpanded = () => projectsOpen
+export const toggleProjects = () => {
+  projectsOpen = !projectsOpen
+}
+
 export const isOpen = () => open
 export const isMaking = () => making
 

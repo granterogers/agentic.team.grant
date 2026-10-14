@@ -329,7 +329,10 @@ const menuPanel = () => {
   const firstRunShown = projects.length === 0 && source.live === true && mine && state().view === 'home'
   /* Always in the page, hidden until opened: the button's aria-controls always names something that exists. */
   return `<div class="bcmenupanel" id="bc-menu" role="${menu.isMaking() ? 'dialog' : 'menu'}" aria-label="${menu.isMaking() ? 'New project' : 'Projects and navigation'}"${menu.isOpen() ? '' : ' hidden'}>
-    <p class="bcmenuhead">Projects</p>
+    <button type="button" class="bcmenuprojects" aria-expanded="${menu.projectsExpanded() ? 'true' : 'false'}" aria-controls="bc-menu-projects" data-bc-menu-projects>
+      <span class="bcmenuhead">Projects</span><span class="bcmenucount" aria-label="${projects.length} projects">${projects.length}</span><span class="bcmenuchev" aria-hidden="true">${menu.projectsExpanded() ? '−' : '+'}</span>
+    </button>
+    <div id="bc-menu-projects" class="bcmenuprojectlist"${menu.projectsExpanded() ? '' : ' hidden'}>
     ${
       projects.length === 0
         ? `<p class="bcmenunone">${source.state === 'unreachable' ? 'Your projects could not be loaded.' : 'No projects yet.'}</p>`
@@ -346,6 +349,7 @@ const menuPanel = () => {
             )
             .join('')}</div>`
     }
+    </div>
     ${
       firstRunShown
         ? ''
