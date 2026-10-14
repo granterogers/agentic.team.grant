@@ -38,6 +38,8 @@
  * rejects everything rather than waving requests through.
  */
 
+// The project archive (#471, C2): uploaded beside the entrypoint by scripts/deploy/hq.ts, from src/portability/archive.ts.
+import { ARCHIVE_LIMITS, ArchiveError, buildArchive, openArchive } from './archive.ts'
 import {
   BG_LIMITS,
   backgroundKey,
@@ -47,10 +49,10 @@ import {
   revisionFromStamp,
   vetBackground,
 } from './background.ts'
-// Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
-import { fileText } from './file-text.ts'
 // The standard-format export (#470): uploaded beside the entrypoint by scripts/deploy/hq.ts, from src/portability.
 import { isStandardFormat, kindFor, renderStandardExport } from './export-route.ts'
+// Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
+import { fileText } from './file-text.ts'
 import { authorizeUrl, revokeToken } from './oauth.ts'
 import {
   driveProvider,
@@ -2512,6 +2514,70 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   // --- configuration -------------------------------------------------------
   //
+  /*
+    RESTORE A PROJECT FROM ITS ARCHIVE (issue #471, C2). The body is a ZIP, not JSON, so this is answered before the named
+    actions below. Only a person restores: a machine token has nobody to attribute the restore to, and a Sample visitor
+    changes nothing. The archive is opened and checked here (checksums, names, sizes, format); the restore itself is one
+    database call, idempotent on the archive's SHA-256, that creates a new project and never overwrites one.
+  */
+  if (
+    request.method === 'POST' &&
+    new URL(request.url).searchParams.get('section') === 'project_restore'
+  ) {
+    if (office === null) return json({ error: 'no_office' }, 403)
+    if (kind === 'guest') {
+      return json(
+        {
+          error: 'sample_readonly',
+          message:
+            'This is a sample office, so changes are not saved. Create your own office to make it yours.',
+        },
+        403,
+      )
+    }
+    if (principal === null || principal === '') {
+      return json(
+        { error: 'a restore is attributed to a person, and this session is not one' },
+        403,
+      )
+    }
+    const declared = Number(request.headers.get('content-length') ?? '0')
+    if (declared > ARCHIVE_LIMITS.maxBytes) {
+      return json({ error: 'the archive is larger than the 8 MB this office takes' }, 413)
+    }
+    const bytes = new Uint8Array(await request.arrayBuffer())
+    if (bytes.length > ARCHIVE_LIMITS.maxBytes) {
+      return json({ error: 'the archive is larger than the 8 MB this office takes' }, 413)
+    }
+    let opened: Awaited<ReturnType<typeof openArchive>>
+    try {
+      opened = await openArchive(bytes)
+    } catch (error) {
+      return json(
+        { error: error instanceof ArchiveError ? error.message : 'the archive could not be read' },
+        400,
+      )
+    }
+    const restored = await fetch(`${DB_URL}/rest/v1/rpc/project_restore`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        p_office: office,
+        p_key: opened.key,
+        p_package: opened.pkg,
+        p_by: principal,
+      }),
+    })
+    if (!restored.ok) return json({ error: 'the restore could not be written' }, 502)
+    const out = (await restored.json()) as { ok?: boolean; error?: string; already?: boolean }
+    if (out.ok !== true) return json({ error: out.error ?? 'the restore was refused' }, 400)
+    return json({ data: out }, out.already === true ? 200 : 201)
+  }
+
   // POST, and only the named actions. Same rule as the reads: the page names an
   // ACTION from a fixed list and the projection lives in `app.hq_*` where it
   // can be reviewed. A page that could send SQL, or even a function name, is a
@@ -3577,6 +3643,52 @@ Deno.serve(async (request: Request): Promise<Response> => {
       headers: {
         'content-type': rendered.contentType,
         'content-disposition': `attachment; filename="${rendered.filename}"`,
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'authorization, content-type',
+      },
+    })
+  }
+
+  /*
+    THE PROJECT ARCHIVE (issue #471, C2). One project as a ZIP: the package, a manifest of SHA-256 checksums, and a README
+    that says what the archive does not carry. Built here from the same package `project_export` returns, so the archive
+    and the Download JSON cannot disagree. Office-scoped like every other read; not stored anywhere.
+  */
+  if (name === 'project_archive') {
+    if (office === null) return json({ error: 'no_office' }, 403)
+    const id = url.searchParams.get('id') ?? ''
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return json({ error: 'that section needs a valid project id', section: name }, 400)
+    }
+    const exported = await fetch(`${DB_URL}/rest/v1/rpc/project_export`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_office: office, p_project_id: id }),
+    })
+    if (!exported.ok) return json({ error: 'the archive could not be read', section: name }, 502)
+    const pkg = (await exported.json()) as { project?: { slug?: unknown } | null } | null
+    if (pkg === null || typeof pkg.project !== 'object' || pkg.project === null) {
+      return json({ error: 'no such project in this office', section: name }, 404)
+    }
+    const rawSlug = typeof pkg.project.slug === 'string' ? pkg.project.slug : 'project'
+    const slug =
+      rawSlug
+        .replace(/[^a-z0-9-]+/gi, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80) || 'project'
+    const { bytes } = await buildArchive(pkg, { slug, exportedAt: new Date().toISOString() })
+    return new Response(bytes as unknown as BodyInit, {
+      status: 200,
+      headers: {
+        'content-type': 'application/zip',
+        'content-length': String(bytes.byteLength),
+        'content-disposition': `attachment; filename="${slug}-archive.zip"`,
         'cache-control': 'private, no-store',
         'x-content-type-options': 'nosniff',
         'access-control-allow-origin': '*',

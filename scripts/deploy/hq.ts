@@ -112,6 +112,13 @@ form.append(
     type: 'application/typescript',
   }),
 )
+// The project archive (#471, C2): the ZIP reader and writer, uploaded beside the entrypoint as ./archive.ts.
+form.append(
+  'file',
+  new File([await readFile('src/portability/archive.ts', 'utf8')], 'archive.ts', {
+    type: 'application/typescript',
+  }),
+)
 
 const deployed = await fetch(`${api}/functions/deploy?slug=hq-api`, {
   method: 'POST',

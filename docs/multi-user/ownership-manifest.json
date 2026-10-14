@@ -34,6 +34,17 @@
         }
       ]
     },
+    "project_restores": {
+      "class": "OFFICE_CARRIER",
+      "why": "One row per archive restored into an office (1071), keyed by the archive's SHA-256, so a repeat of the same archive returns the first project and writes nothing. It names its office; project_id is the project the restore created, and the composite key to projects keeps it in that office.",
+      "cross": [
+        {
+          "columns": ["project_id"],
+          "parent": "projects",
+          "constraint": "project_restores_project_same_office"
+        }
+      ]
+    },
     "activity_write_failures": {
       "class": "OFFICE_CARRIER",
       "why": "A bounded counter of native activity writes that were refused or failed (1060). It names an office and nothing else; it holds no content and records no event about itself."
