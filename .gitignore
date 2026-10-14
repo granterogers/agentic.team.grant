@@ -137,6 +137,9 @@ Thumbs.db
 # name, which is why these had been sitting untracked.
 .out/
 
+# The owner's stop file for an autonomous run is local, not a record to commit (docs/agent/CONTINUITY.md).
+docs/agent/STOP
+
 # ---------------------------------------------------------------------------
 # Logs / scratch
 # ---------------------------------------------------------------------------
