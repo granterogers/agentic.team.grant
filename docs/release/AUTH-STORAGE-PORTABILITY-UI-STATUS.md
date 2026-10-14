@@ -1,74 +1,74 @@
 # Auth, storage, portability and UI: status and checkpoint
 
-Branch: `feature/auth-storage-portability-ui`
-Baseline: `origin/main` at `6958ed3200d2e5e9d44c1cef77952586d335a20a` (local `main` is behind at `3caaebfe`; the branch was cut from `origin/main`).
-Production: **not touched.** No merge into `main`, no deploy, no live auth or Supabase configuration change, no migration.
+Branch: `feature/auth-storage-portability-ui` · Draft PR: #465 · Issues: #466–#473
+Baseline: `origin/main` at `6958ed3200d2e5e9d44c1cef77952586d335a20a`.
+Production: **not touched.** No merge into `main`, no deploy, no live auth or Supabase configuration change, no production migration, no production read.
 
-## What this session did
+## Checkpoint log
 
-1. **Discovery.** Read the repository, not the brief's assumptions. Several parts of the brief already have partial
-   implementations here, and some have none (below).
-2. **Baseline test run before any change.** `npx vitest run`: 453 test files passed, 1 skipped; 7,059 tests passed,
-   21 skipped, 0 failed. Output saved at `.out/baseline-vitest.txt` (ignored by git).
-3. **One workstream slice built and verified:** standard-format serialisers for contacts (vCard 4.0), calendar
-   (iCalendar 2.0) and tasks (CSV and a JSON envelope). See `docs/portability/INDIVIDUAL-EXPORT-FORMATS.md`.
-   31 new tests, all passing; a sabotage control proved the detector can fail.
-
-## Gap analysis against the brief
-
-| Workstream | What the repository has | What is missing | Status |
-|---|---|---|---|
-| **A. Password and username login** | Magic-link sign-in only, in `supabase/functions/signin/index.ts` (`type: 'magiclink'` at three call sites). Session handling in `src/auth/`. | Password sign-up and sign-in, username, password reset, password-strength and rate-limit policy. | **Not started.** Needs Supabase Auth email/password enabled, which is a live configuration change and needs owner approval. |
-| **A. Google sign-in** | Google OAuth exists for connectors (Drive, Mail, Calendar) in `src/google/auth.ts`. It is not a sign-in provider. | Google as a login provider, identity linking and collision rules, a separate preview OAuth client. | **Not started.** Needs an OAuth client in the Google Cloud console and redirect configuration that only the owner can create. |
-| **B. Hybrid storage** | `src/files/store.ts` and `src/backup/offsite.ts` exist. Not reviewed in depth this session. | Provider comparison with verified current pricing, storage audit by table, object migration, reconciliation. | **Not started.** The provider research needs live web sources and was not done. |
-| **C. Standard-format export** | `src/backup/portable.ts` writes a whole-database JSON archive with a manifest; `src/backup/restore.ts` is a typed restore into an isolated replica only. | Per-project export; vCard, iCalendar and CSV output; ZIP archive; export UI; project-level restore. | **Serialisers done and tested. Read path, UI, ZIP and project restore not started.** |
-| **C. Archive lifecycle** | Backup retention policy exists (`src/backup/retention.ts`, `docs/ops/backup-retention-policy.md`). | Project-level ACTIVE → ARCHIVING → ARCHIVED → RESTORING states. | **Not started.** |
-| **D. Module colours, icons, glow** | Module colour and icon styling lives in `web/studio/bc/` (`refine.css`, `bc.css`, `compose.css`, `polish.css`). The projects menu is in `web/studio/bc/menu.js`. | Not audited this session. | **Not started.** Needs a visual pass with real browser screenshots at desktop and 390 px. |
-
-## Owner decisions and configuration needed
-
-These cannot be made safely by the engineering agent and are not requested as routine questions.
-
-1. **Password sign-in.** Enable the Email provider with password sign-in in the Supabase project's Auth settings for
-   a staging project first. Production auth changes are blocked until approved.
-2. **Google sign-in.** Create an OAuth 2.0 client in Google Cloud Console with one authorised redirect per environment
-   (production and preview separately), then provide the client ID through the existing vault mechanism. Do not paste
-   the secret into chat.
-3. **Storage provider.** Choose between the researched options once the comparison exists. The current hypothesis is
-   Supabase PostgreSQL with Cloudflare R2 and optional Google Drive backup. Supabase Storage is the zero-new-vendor
-   option, and R2 has no egress charge. Confirm there is no paid tier to avoid.
-4. **Staging preview.** A preview deployment has not been attempted. It needs a staging Supabase project separate from
-   production, as CLAUDE.md requires (`TARGET_ENVIRONMENT=staging` with `npm run staging:preflight`).
-
-## Verification record
-
-| Check | Result |
+| Commit | What |
 |---|---|
-| `npx vitest run` before changes (baseline) | 7,059 passed, 0 failed, 21 skipped |
-| `npx vitest run tests/portability` | 31 passed |
-| Sabotage: `escapeText` without the `;` escape | 2 tests fail, restored, green |
-| `npx biome ci src/portability tests/portability` | exit 0 |
-| `npm run lint` (whole repo) | exit 1, **pre-existing**: 2 errors in `scripts/audit/credentials.ts`, `scripts/isolated/*`, `scripts/leak-witness.ts`, none in files this branch touches |
-| `npx tsc --noEmit` | no errors in new files; 283 pre-existing errors in `scripts/verify`, unchanged |
-| `npm run check:secrets` | clean, 4,210 files |
-| `npm run check:templates` | clean |
+| `e908b0d` | Standard-format serialisers for contacts (vCard 4.0), events (iCalendar 2.0) and tasks (CSV, JSON). 31 tests. |
+| `b07be56` | Project Settings buttons and the gateway route that serve those formats, backed by migration 1070 (`app.project_records`). |
+| (next) | Password sign-in (#466): decisions in `src/auth/password.ts`, four actions in `supabase/functions/signin`, a password form on the sign-in screen. Closed until `PASSWORD_SIGN_IN` is set. |
 
-Not run this session, and therefore not claimed: `verify:*` browser suites, `verify:critical`, `gate:safe`, any
-production check, and any Telegram, Slack, voice or team-chat regression.
+## Correction to the earlier analysis
+
+The first status report said there was no per-project export. That was wrong. `app.project_export` (migrations 0325, 0326, 0720) already packages a project as one neutral JSON document (about fourteen tables; documents as text by relative path), reached by the Download button in Project Settings. The gap is narrower than first stated: the existing export is JSON only, does not carry original document bytes, and has no restore path.
+
+## Workstreams
+
+| Issue | Workstream | State |
+|---|---|---|
+| #466 | A1 password sign-in | **Code and UI built, behind a switch.** Unit-tested; two browser journeys and two screen captures at 390 px and 1440 px. Not verified against live Supabase Auth. Username login, password reset completion and a rate limit beyond Auth's own are not built. |
+| #467 | A2 Google sign-in | Not started. Needs an OAuth client the owner creates. |
+| #468 | B1 storage audit and provider comparison | Not started. Needs measured data and dated official sources. |
+| #469 | B2 storage abstraction and migration | Not started. Depends on B1. |
+| #470 | C1 standard-format exports | **Built and verified** (see below). Live gateway and browser journey not run against production. |
+| #471 | C2 restore and ZIP | Not started. Restore into a new project needs an idempotency record and careful document inserts. |
+| #472 | D1 module colours and glow | Not started. |
+| #473 | D2 hamburger icons and Projects submenu | Not started. |
+
+### C1: standard-format exports (#470), verified
+
+What a person can do: in Project Settings → Standard formats, press **Contacts · vCard**, **Calendar · iCalendar**, **Tasks · CSV** or **Tasks · JSON**. The file downloads; a refusal shows the office's words.
+
+Verification:
+- `npx vitest run tests/portability`: 46 passed. Includes a sabotage (a wrong file name turns the wiring test red; restored).
+- Migration 1070 applied to the local schema replica (`bash scripts/isolated/replica.sh`, built from the repository's migrations). `tests/migrations/project-records.replica.sql` runs inside a rollback and passes: contacts only from the project, tasks only from the office, a native event that was synced to Google counted once, cross-office and cross-project reads return null, an unknown kind is refused.
+- Full unit suite green. Lint of new files clean. `check:templates` and `check:secrets` clean.
+
+Not verified: the gateway route against the live deployment; the browser journey against a real office (the button needs a token); `check:gateway-wrappers`, which reads the production database and was refused without an authorised flag (the new wrapper was exercised directly on the replica instead); the SQL proof is not registered in `verify:critical` (it is a manual replica run, documented here).
+
+Limits, by design: attendee names and recurrence are not exported (the cache does not hold them). Calendar all-day dates are cut in the office zone. Spreadsheet formula text is apostrophe-prefixed.
+
+### A1: password sign-in (#466)
+
+What a person can do: on the sign-in tab, enter an email and a password and press **Sign in with password**, or press **Forgot the password?**. The link option stays below, and it reuses the same address field. Nothing appears unless the office switches it on.
+
+Server (`supabase/functions/signin`): `methods`, `password_sign_in`, `password_sign_up`, `password_reset`. Every password action answers "not switched on" until `PASSWORD_SIGN_IN` is `1` or `true`. Refusals that could reveal whether an address has an account return one sentence. Auth does the hashing and the checking; nothing here stores a password.
+
+Verification:
+- `npx vitest run tests/auth/password.test.ts`: 14 passed, covering the policy boundaries (length, bytes, the address inside a password), the session mapping and bounds, the closed-by-default switch, and wiring of the switch in the function source.
+- Sabotage: making the gate ignore the setting turns the wiring test red; restored and green.
+- Browser (Playwright, local, sign-in function stubbed): a good password stores the session under `hq.session` exactly as the link path does; a refused password shows the office's sentence and stores nothing; no page errors; no horizontal scroll at 390 px or 1440 px. Captures in `.out/entry-*.png` (not committed).
+- Full unit suite green.
+
+Not verified: a real Supabase Auth call. A real email round trip. The password-reset completion page (the link Auth emails goes to the existing magic-link return path, which is not changed here). Rate limiting beyond what Auth provides.
+
+## Owner configuration needed (nothing here has been changed)
+
+1. **Password sign-in.** In the Supabase project used for staging first: Auth → Providers → Email → enable *Email* with password sign-in; decide whether email confirmation is required. Then set the secret `PASSWORD_SIGN_IN=1` on the `signin` function, and only then on production, after approval.
+2. **Google sign-in (#467).** Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID (Web application). One authorised redirect per environment. Provide the client ID through the existing vault. Do not paste the secret into chat.
+3. **Storage provider (#468).** Confirm which provider you want to evaluate first, and whether any paid tier is off limits.
 
 ## Remaining work, in order
 
-1. Per-project read path for contacts, calendar and tasks, through the gateway, with a project-scoped predicate and
-   a test that another project's rows cannot appear.
-2. Download control in project settings, with a browser check at 390 × 844.
-3. Module colour and glow audit (Workstream D), which is independent and can run in parallel.
-4. Password sign-in in code behind a disabled flag, with rate limiting and enumeration-safe errors, verified against a
-   staging project only.
-5. Storage provider research with dated, official sources, then the abstraction.
-6. ZIP archive with manifest and checksums, then project restore into a new project, with a round-trip test.
+1. C2 restore into a new project (#471), with a round-trip test on the replica.
+2. D1 and D2 module colours and the Projects submenu (#472, #473), verified at 390 px and desktop with captures.
+3. B1 storage audit and research (#468), using dated official sources.
+4. Register the SQL replica proof in the gate, or convert it to a counted TypeScript proof.
 
 ## Continuity
 
-Next action: step 1 above. Start from `src/portability/formats.ts`. The read function should take a project id and
-return the rows already shaped for the serialisers. Do not add a gateway section until the read is covered by a test
-that proves another project's rows are excluded.
+Next action: C2 (#471). Start from `src/portability/export-route.ts` and `migrations/1070_…`. The restore reads the shape `app.project_export` writes; do not change that shape without a version bump. Restore into a new project only, refuse an existing slug, and record an idempotency key before writing.

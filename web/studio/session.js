@@ -272,6 +272,36 @@ export async function startSample() {
   return true
 }
 
+/*
+  PASSWORD SIGN-IN (#466, A1). The office decides whether it is switched on; the page only asks. A sign-in that
+  succeeds stores the same session a link sign-in does, so everything after it is unchanged. Every refusal is the
+  sentence the office sent, and the office sends the same sentence for an unknown address and a wrong password.
+*/
+
+/** Whether this deployment offers a password. Any failure reads as "no", so the link path is never hidden by an outage. */
+export async function passwordOffered() {
+  try {
+    const { body } = await post({ action: 'methods' })
+    return body.password === true
+  } catch {
+    return false
+  }
+}
+
+/** Sign in with an address and a password. Resolves when the session is held; throws the office's sentence otherwise. */
+export async function passwordSignIn(email, password) {
+  const { body } = await post({ action: 'password_sign_in', email, password })
+  if (body.ok === true && body.session !== undefined && write(body.session)) return true
+  throw new Error(String(body.said ?? 'Sign-in is not reachable just now. Try again shortly.'))
+}
+
+/** Ask for a link to choose a new password. It answers the same way for any address. */
+export async function passwordReset(email) {
+  const { body } = await post({ action: 'password_reset', email })
+  if (body.ok !== true) throw new Error(String(body.said ?? 'The reset could not be asked just now. Try again shortly.'))
+  return String(body.said)
+}
+
 /** Ask the office to email a link. It answers the same way for any address. */
 export async function askForLink(email) {
   /*

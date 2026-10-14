@@ -142,10 +142,28 @@ const sentCard = () => `<div class="bcentrysent" role="status">
     </div>
   </div>`
 
-const signinPanel = () => `<form class="bcentryform" data-bc-entry-form="signin" novalidate>
-    ${emailField('bc-entry-email-in', form.email)}
-    <p class="bcentrysmall">No password. We email you a link that signs you in on this device.</p>
-    <button type="submit" class="bcbtn bcbtn--primary bcentrygo">Email me a sign-in link</button>
+/* Shown only when the office has switched password sign-in on (passwordOffered). Its own selector: the link loop must not take it for a link request. */
+const passwordPanel = () => `<form class="bcentryform" data-bc-password-form novalidate>
+    ${emailField('bc-entry-email-pw', form.email)}
+    <div class="bcfield">
+      <label class="bclabel" for="bc-entry-password">Password</label>
+      <div class="bcpwrow">
+        <input class="bcinput" id="bc-entry-password" type="password" name="password"
+          autocomplete="current-password" autocapitalize="off" spellcheck="false" required>
+        <button type="button" class="bcbtn bcbtn--outline" data-bc-password-toggle aria-controls="bc-entry-password" aria-pressed="false">Show</button>
+      </div>
+    </div>
+    <button type="submit" class="bcbtn bcbtn--primary bcentrygo">Sign in with password</button>
+    <div class="bcentryrow">
+      <button type="button" class="bcbtn bcbtn--outline" data-bc-password-reset>Forgot the password?</button>
+    </div>
+    <p class="bcentrysaid" data-bc-password-said role="status" aria-live="polite"></p>
+  </form>`
+
+const signinPanel = () => `${passwordOffered === true ? passwordPanel() : ''}<form class="bcentryform" data-bc-entry-form="signin" novalidate>
+    ${passwordOffered === true ? '' : emailField('bc-entry-email-in', form.email)}
+    <p class="bcentrysmall">${passwordOffered === true ? 'Or, with no password, we email you a link that signs you in on this device.' : 'No password. We email you a link that signs you in on this device.'}</p>
+    <button type="submit" class="bcbtn bcbtn--primary bcentrygo${passwordOffered === true ? ' bcbtn--outline' : ''}">Email me a sign-in link</button>
     <p class="bcentrysaid" data-bc-entry-said role="status" aria-live="polite"></p>
   </form>`
 
@@ -195,6 +213,22 @@ export const entry = () => {
 let who = ''
 /** Whether the address is being asked for right now (see the set-up screen). */
 let whoAsking = false
+
+/*
+  Whether the office offers a password (#466). Asked once, when the entry screen is wired; null until the answer is in,
+  so the screen draws the link path alone rather than waiting for a question that may never come back.
+*/
+let passwordOffered = null
+let passwordAsking = false
+const askPasswordOffered = (redraw) => {
+  if (passwordOffered !== null || passwordAsking) return
+  passwordAsking = true
+  void session.passwordOffered().then((on) => {
+    passwordOffered = on
+    passwordAsking = false
+    redraw()
+  })
+}
 
 export const setup = () => {
   let remembered = form.name
@@ -345,12 +379,75 @@ export function wire(root) {
       root.querySelector('.bcentryform input')?.focus()
     })
   }
+  askPasswordOffered(redraw)
+
+  for (const f of root.querySelectorAll('[data-bc-password-form]')) {
+    const said = f.querySelector('[data-bc-password-said]')
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const email = String(f.querySelector('[name=email]')?.value ?? '').trim()
+      const password = String(f.querySelector('[name=password]')?.value ?? '')
+      form.email = email
+      if (!looksLikeEmail(email)) {
+        say(said, 'That does not look like an email address.')
+        f.querySelector('[name=email]')?.focus()
+        return
+      }
+      if (password === '') {
+        say(said, 'Enter your password.')
+        f.querySelector('[name=password]')?.focus()
+        return
+      }
+      const go = f.querySelector('button[type=submit]')
+      if (go !== null) go.disabled = true
+      say(said, 'Signing you in…')
+      try {
+        await session.passwordSignIn(email, password)
+        // A fresh start reads the new session the way any page load does, as the Sample sign-in does.
+        globalThis.location.replace(String(globalThis.location?.pathname ?? '/'))
+      } catch (error) {
+        if (go !== null) go.disabled = false
+        say(said, error instanceof Error ? error.message : String(error))
+      }
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-password-reset]')) {
+    b.addEventListener('click', async () => {
+      const f = b.closest('[data-bc-password-form]')
+      const said = f?.querySelector('[data-bc-password-said]')
+      const email = String(f?.querySelector('[name=email]')?.value ?? '').trim()
+      if (!looksLikeEmail(email)) {
+        say(said, 'Type your email address first, then ask again.')
+        f?.querySelector('[name=email]')?.focus()
+        return
+      }
+      try {
+        say(said, await session.passwordReset(email))
+      } catch (error) {
+        say(said, error instanceof Error ? error.message : String(error))
+      }
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-password-toggle]')) {
+    b.addEventListener('click', () => {
+      const input = b.closest('.bcfield')?.querySelector('input')
+      if (!input) return
+      const shown = input.type === 'text'
+      input.type = shown ? 'password' : 'text'
+      b.textContent = shown ? 'Show' : 'Hide'
+      b.setAttribute('aria-pressed', String(!shown))
+    })
+  }
+
   for (const f of root.querySelectorAll('[data-bc-entry-form]')) {
     const said = f.querySelector('[data-bc-entry-said]')
     f.addEventListener('submit', async (e) => {
       e.preventDefault()
       const create = f.dataset.bcEntryForm === 'create'
-      const email = String(f.querySelector('[name=email]')?.value ?? '').trim()
+      // With password sign-in on, the one address field is the password form's: the link path reads it from there.
+      const email = String(
+        (f.querySelector('[name=email]') ?? root.querySelector('[data-bc-password-form] [name=email]'))?.value ?? '',
+      ).trim()
       const name = create ? String(f.querySelector('[name=name]')?.value ?? '').trim() : ''
       form.email = email
       form.name = name
