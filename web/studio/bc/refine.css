@@ -1412,17 +1412,21 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   display: none;
 }
 @media (max-width: 560px) {
-  /* Out of the flow: the bar's four items keep their room, and the version sits in the corner of the bar. */
+  /* A row of the bar itself, beneath the four destinations. It was once absolutely placed above the bar, where it sat on top
+     of the list's last line while a person scrolled. The bar is opaque and the page keeps its bottom clearance, so a row in
+     the bar overlaps nothing; the four destinations keep their own width. */
+  [data-experience='basecamp'] .bctray { flex-wrap: wrap; }
   [data-experience='basecamp'] .bcver.bcver--tray {
     display: block;
-    position: absolute;
-    top: -22px;
-    right: 10px;
-    padding: 2px 7px;
-    border-radius: 8px;
-    background: var(--bc-surface);
-    box-shadow: var(--bc-sh-weak);
+    position: static;
+    top: auto;
+    right: auto;
+    order: 9;
+    flex: 0 0 100%;
+    padding: 2px 0 0;
+    text-align: center;
     font-size: 12px;
+    line-height: 1.2;
     color: var(--bc-text-muted);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
