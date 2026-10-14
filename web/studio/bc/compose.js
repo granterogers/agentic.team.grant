@@ -282,6 +282,17 @@ export const setPageMenuOpen = (want) => {
 }
 
 /*
+  The sentence a restore leaves beside its control (#471). It is state, not text poked into a node: a redraw replaces every
+  node, so a sentence written straight into the menu was lost the moment the menu redrew, and a restore that failed inside a
+  closed menu told the person nothing. The menu opens to show it.
+*/
+let restoreWords = ''
+export const restoreSaid = () => restoreWords
+export const setRestoreSaid = (words) => {
+  restoreWords = String(words ?? '')
+}
+
+/*
   THE HEADER SAYS WHAT IS HAPPENING, NOT WHAT THE PROJECT IS CALLED.
 
   Grant, 23 September: remove the redundant legacy project title area, the

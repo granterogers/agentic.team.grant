@@ -775,9 +775,9 @@ export const wire = (root) => {
   for (const f of root.querySelectorAll('[data-bc-restore-file]')) {
     f.addEventListener('change', async () => {
       const file = f.files?.[0]
-      const said = root.querySelector('[data-bc-restore-said]')
       if (!file) return
-      if (said) said.textContent = 'Checking the archive and restoring it…'
+      compose.setRestoreSaid('Checking the archive and restoring it…')
+      ctx.render()
       try {
         const done = await restoreArchive(file)
         const c = done?.report?.counts ?? {}
@@ -789,10 +789,13 @@ export const wire = (root) => {
           0,
         )
         const words = `Restored as “${done.report?.name ?? done.slug}”: ${docs} document${docs === 1 ? '' : 's'}, ${tasks} task${tasks === 1 ? '' : 's'}, ${contacts} contact${contacts === 1 ? '' : 's'}.${notRestored > 0 ? ` ${notRestored} item${notRestored === 1 ? ' is' : 's are'} listed in the report as not restored.` : ''}`
-        if (said) said.textContent = words
+        compose.setRestoreSaid(words)
         globalThis.location.assign(`/p/${encodeURIComponent(String(done.slug))}`)
       } catch (error) {
-        if (said) said.textContent = error instanceof Error ? error.message : String(error)
+        // The menu opens to show the office's sentence: a failed restore must not be told inside a closed menu.
+        compose.setRestoreSaid(error instanceof Error ? error.message : String(error))
+        menu.setOpen(true)
+        ctx.render()
       } finally {
         f.value = ''
       }

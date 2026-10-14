@@ -371,7 +371,7 @@ const menuPanel = () => {
              <span class="bcmenuplus" aria-hidden="true">↑</span><span class="bcmenuname">Restore a project from an archive</span>
            </button>
            <input type="file" accept=".zip,application/zip" hidden data-bc-restore-file aria-label="Archive to restore">
-           <p class="bcmenunone" role="status" aria-live="polite" data-bc-restore-said></p>`
+           <p class="bcmenunone" role="status" aria-live="polite" data-bc-restore-said>${esc(compose.restoreSaid())}</p>`
         : ''
     }
     ${

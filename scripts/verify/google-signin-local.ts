@@ -1,3 +1,5 @@
+// @ts-nocheck: the code the page runs is written against the browser's DOM, which this project's type setup does not load
+// (the tsconfig has no DOM library, on purpose). The file is checked by running it, which is what the verifier is for.
 /*
  * Continue with Google, in a real Chromium, against a mocked office. Nothing from production.
  *   npm run verify:google-signin
