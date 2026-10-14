@@ -39,7 +39,7 @@ export const README_FILE = 'README.txt'
 
 export const ARCHIVE_LIMITS = {
   maxBytes: 8 * 1024 * 1024,
-  maxEntries: 16,
+  maxEntries: 256,
   maxTotalBytes: 32 * 1024 * 1024,
 } as const
 
@@ -291,21 +291,36 @@ export function readmeText(slug: string, exportedAt: string): string {
     '',
     `${PACKAGE_FILE} holds the project as JSON: its brief, documents (with their text), collections, tasks, contacts and`,
     'the team and automation settings. It holds no database identifiers, so it can be read anywhere.',
+    `files/ holds the original file of each document the office has one for (a PDF, image or spreadsheet), named by its`,
+    'SHA-256. A document with text only has no file here. Each file is listed in the manifest.',
     `${MANIFEST_FILE} lists every other file here with its size and SHA-256. Check a file with: sha256sum ${PACKAGE_FILE}`,
     '',
     'NOT in this archive:',
-    '- the original binary files (PDFs, images, spreadsheets). The office holds the text of a document, not always the file.',
     '- answers the team wrote, the team roster, automations and sources: they are listed in the restore report, not restored.',
     '- credentials of any kind. Connections are re-made by the person restoring the archive.',
     '',
   ].join('\n')
 }
 
-/** Build the archive for one project package. The key is the SHA-256 of the whole archive. */
+/** A file carried beside the package: an original document, named under files/. */
+export interface ArchiveFile {
+  readonly name: string
+  readonly data: Uint8Array
+}
+
+/**
+ * Build the archive for one project package, with any original files beside it. The key is the SHA-256 of the whole
+ * archive. Each file is listed in the manifest, so a tampered file is refused on open exactly as the package is.
+ */
 export async function buildArchive(
   pkg: unknown,
   opts: { slug: string; exportedAt: string },
+  files: readonly ArchiveFile[] = [],
 ): Promise<{ bytes: Uint8Array; key: string }> {
+  for (const f of files) {
+    if (!isSafeName(f.name) || !f.name.startsWith('files/'))
+      throw new ArchiveError(`${f.name} is not a name an archive can carry`)
+  }
   const packageBytes = encoder.encode(`${JSON.stringify(pkg, null, 2)}\n`)
   const readme = encoder.encode(readmeText(opts.slug, opts.exportedAt))
   const manifest: Manifest = {
@@ -316,6 +331,13 @@ export async function buildArchive(
     files: [
       { name: PACKAGE_FILE, bytes: packageBytes.length, sha256: await sha256Hex(packageBytes) },
       { name: README_FILE, bytes: readme.length, sha256: await sha256Hex(readme) },
+      ...(await Promise.all(
+        files.map(async (f) => ({
+          name: f.name,
+          bytes: f.data.length,
+          sha256: await sha256Hex(f.data),
+        })),
+      )),
     ],
   }
   const manifestBytes = encoder.encode(`${JSON.stringify(manifest, null, 2)}\n`)
@@ -324,6 +346,7 @@ export async function buildArchive(
       { name: PACKAGE_FILE, data: packageBytes },
       { name: MANIFEST_FILE, data: manifestBytes },
       { name: README_FILE, data: readme },
+      ...files.map((f) => ({ name: f.name, data: f.data })),
     ],
     opts.exportedAt,
   )
@@ -334,9 +357,13 @@ export async function buildArchive(
  * Open an archive for restore: check it is an archive, that every file it holds is listed in the manifest with the
  * right size and SHA-256, and that nothing is listed that it does not hold. Returns the package and the key.
  */
-export async function openArchive(
-  bytes: Uint8Array,
-): Promise<{ pkg: unknown; key: string; manifest: Manifest }> {
+export async function openArchive(bytes: Uint8Array): Promise<{
+  pkg: unknown
+  key: string
+  manifest: Manifest
+  /** The original files, by archive name, each already checked against the manifest. */
+  files: Map<string, Uint8Array>
+}> {
   const files = readZip(bytes)
   const manifestBytes = files.get(MANIFEST_FILE)
   if (manifestBytes === undefined)
@@ -381,5 +408,10 @@ export async function openArchive(
   } catch {
     throw new ArchiveError('project.json is not readable JSON')
   }
-  return { pkg, key: await sha256Hex(bytes), manifest }
+  const extra = new Map<string, Uint8Array>()
+  for (const [name, data] of files) {
+    if (name !== PACKAGE_FILE && name !== MANIFEST_FILE && name !== README_FILE)
+      extra.set(name, data)
+  }
+  return { pkg, key: await sha256Hex(bytes), manifest, files: extra }
 }

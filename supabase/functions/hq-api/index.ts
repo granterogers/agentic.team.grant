@@ -54,6 +54,9 @@ import { isStandardFormat, kindFor, renderStandardExport } from './export-route.
 // Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
 import { fileText } from './file-text.ts'
 import { authorizeUrl, revokeToken } from './oauth.ts'
+// The original files of archived documents (#471, migration 1072): uploaded beside the entrypoint by scripts/deploy/hq.ts.
+import { supabaseObjectStore } from './object-store.ts'
+import { discardOriginals, gatherOriginals, planOriginals, writeOriginals } from './originals.ts'
 import {
   driveProvider,
   type Failure,
@@ -61,10 +64,17 @@ import {
   previewDocument,
   streamDocument,
 } from './preview.ts'
+import { extensionFor } from './store.ts'
 
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+
+/** The object store the originals live in: the Supabase project this gateway talks to, found from its URL. */
+function originalStore() {
+  const ref = new URL(DB_URL).hostname.split('.')[0] ?? ''
+  return supabaseObjectStore(ref, SERVICE_KEY)
+}
 /** How long an Activity read may wait on the database before the gateway answers for it. The database's own budget is 8 s and arrives first. */
 const ACTIVITY_READ_DEADLINE_MS = ((): number => {
   const asked = Number(Deno.env.get('HQ_ACTIVITY_DEADLINE_MS') ?? '')
@@ -2558,6 +2568,22 @@ Deno.serve(async (request: Request): Promise<Response> => {
         400,
       )
     }
+    /*
+      The originals first, then the database. The stored path comes from the plan, built here under this office and this
+      archive's key; a path the package names is never used. If the database refuses after the files were written, the
+      files this run wrote are removed, so a refused restore leaves no file behind.
+    */
+    const plan = await planOriginals({
+      pkg: opened.pkg,
+      files: opened.files,
+      key: opened.key,
+      office,
+      extension: extensionFor,
+    })
+    if (!plan.ok) return json({ error: plan.reason }, 400)
+    const store = originalStore()
+    const written = await writeOriginals({ writes: plan.writes, store })
+    if (!written.ok) return json({ error: written.reason }, 502)
     const restored = await fetch(`${DB_URL}/rest/v1/rpc/project_restore`, {
       method: 'POST',
       headers: {
@@ -2568,13 +2594,19 @@ Deno.serve(async (request: Request): Promise<Response> => {
       body: JSON.stringify({
         p_office: office,
         p_key: opened.key,
-        p_package: opened.pkg,
+        p_package: plan.pkg,
         p_by: principal,
       }),
     })
-    if (!restored.ok) return json({ error: 'the restore could not be written' }, 502)
+    if (!restored.ok) {
+      await discardOriginals({ store, written: written.written })
+      return json({ error: 'the restore could not be written' }, 502)
+    }
     const out = (await restored.json()) as { ok?: boolean; error?: string; already?: boolean }
-    if (out.ok !== true) return json({ error: out.error ?? 'the restore was refused' }, 400)
+    if (out.ok !== true) {
+      await discardOriginals({ store, written: written.written })
+      return json({ error: out.error ?? 'the restore was refused' }, 400)
+    }
     return json({ data: out }, out.already === true ? 200 : 201)
   }
 
@@ -3682,7 +3714,18 @@ Deno.serve(async (request: Request): Promise<Response> => {
         .replace(/[^a-z0-9-]+/gi, '-')
         .replace(/^-+|-+$/g, '')
         .slice(0, 80) || 'project'
-    const { bytes } = await buildArchive(pkg, { slug, exportedAt: new Date().toISOString() })
+    const gathered = await gatherOriginals({
+      pkg,
+      store: originalStore(),
+      extension: extensionFor,
+      maxBytes: ARCHIVE_LIMITS.maxBytes,
+    })
+    if (!gathered.ok) return json({ error: gathered.error, section: name }, gathered.status)
+    const { bytes } = await buildArchive(
+      gathered.pkg,
+      { slug, exportedAt: new Date().toISOString() },
+      gathered.files,
+    )
     return new Response(bytes as unknown as BodyInit, {
       status: 200,
       headers: {

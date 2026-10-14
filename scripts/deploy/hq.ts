@@ -119,6 +119,18 @@ form.append(
     type: 'application/typescript',
   }),
 )
+// The original files of archived documents (#471, migration 1072): the object store and its helpers, beside the entrypoint.
+// object-store.ts imports ./store.ts, so both travel together.
+for (const [src, name] of [
+  ['src/files/object-store.ts', 'object-store.ts'],
+  ['src/files/store.ts', 'store.ts'],
+  ['src/portability/originals.ts', 'originals.ts'],
+] as const) {
+  form.append(
+    'file',
+    new File([await readFile(src, 'utf8')], name, { type: 'application/typescript' }),
+  )
+}
 
 const deployed = await fetch(`${api}/functions/deploy?slug=hq-api`, {
   method: 'POST',

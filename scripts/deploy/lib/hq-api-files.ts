@@ -19,4 +19,7 @@ export const HQ_API_FILES: readonly { name: string; from: string }[] = [
   { name: 'formats.ts', from: 'src/portability/formats.ts' },
   { name: 'export-route.ts', from: 'src/portability/export-route.ts' },
   { name: 'archive.ts', from: 'src/portability/archive.ts' },
+  { name: 'object-store.ts', from: 'src/files/object-store.ts' },
+  { name: 'store.ts', from: 'src/files/store.ts' },
+  { name: 'originals.ts', from: 'src/portability/originals.ts' },
 ]

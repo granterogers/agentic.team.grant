@@ -37,9 +37,41 @@ let restoreReply: Record<string, unknown> = {
   report: {},
 }
 const rpc: { fn: string; body: Record<string, unknown> }[] = []
+/** The fake storage bucket, by object path: the same paths the document rows record. */
+const bucket = new Map<string, { bytes: Uint8Array; mime: string }>()
+/** A package to export instead of the default, for the originals tests. */
+let exportOverride: unknown = null
+/** When set, a storage write is refused the way the Supabase helper reports it: as a response, not a throw. */
+let refuseWrites = false
 
 const fake = vi.fn(async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
   const u = String(url)
+  const stored = /\/storage\/v1\/object\/files\/(.+)$/.exec(u)
+  if (stored) {
+    const path = decodeURIComponent(stored[1] ?? '')
+    const method = init?.method ?? 'GET'
+    if (method === 'GET') {
+      const hit = bucket.get(path)
+      if (hit === undefined) return new Response('{}', { status: 404 })
+      return new Response(hit.bytes as unknown as NonNullable<RequestInit['body']>, {
+        status: 200,
+        headers: { 'content-type': hit.mime },
+      })
+    }
+    if (method === 'POST') {
+      if (refuseWrites) return new Response('{"error":"refused"}', { status: 400 })
+      const body = init?.body
+      const bytes =
+        body instanceof Uint8Array ? new Uint8Array(body) : new TextEncoder().encode(String(body))
+      const mime = new Headers(init?.headers).get('content-type') ?? 'application/octet-stream'
+      bucket.set(path, { bytes, mime })
+      return new Response(`{"Key":"files/${path}"}`, { status: 200 })
+    }
+    if (method === 'DELETE') {
+      const had = bucket.delete(path)
+      return new Response('{}', { status: had ? 200 : 404 })
+    }
+  }
   if (u.endsWith('/auth/v1/user'))
     return new Response(JSON.stringify({ id: 'auth-1', email: 'sam@example.com' }), { status: 200 })
   if (u.endsWith('/rpc/office_member'))
@@ -55,7 +87,8 @@ const fake = vi.fn(async (url: string | URL | Request, init?: RequestInit): Prom
     if (m[1] === 'project_export') {
       return new Response(
         JSON.stringify(
-          body.p_project_id === PROJECT ? pkg : { format: 'ai-team-hq/project-package' },
+          exportOverride ??
+            (body.p_project_id === PROJECT ? pkg : { format: 'ai-team-hq/project-package' }),
         ),
         {
           status: 200,
@@ -91,6 +124,9 @@ beforeAll(async () => {
 
 afterEach(() => {
   rpc.length = 0
+  bucket.clear()
+  exportOverride = null
+  refuseWrites = false
   kind = 'person'
   restoreReply = { ok: true, already: false, project_id: 'new', slug: 'wellness', report: {} }
 })
@@ -224,5 +260,163 @@ describe('downloading a project as an archive, through the gateway', () => {
     const res = await download(`${jwt}d4`, 'not-a-uuid')
     expect(res.status).toBe(400)
     expect(rpc.filter((c) => c.fn === 'project_export')).toHaveLength(0)
+  })
+})
+
+describe('originals travel with the archive, through the gateway', () => {
+  const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+  const withPlan = (storagePath: string) => ({
+    ...pkg,
+    documents: [
+      {
+        title: 'Floor plan',
+        original: { mime_type: 'image/png', bytes: PNG.length, storage_path: storagePath },
+      },
+    ],
+  })
+  const download = (token: string): Promise<Response> =>
+    handler(
+      new Request(`https://gw.test/?section=project_archive&id=${PROJECT}`, {
+        method: 'GET',
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    )
+
+  it('the download carries the stored original under files/, named by its SHA-256 and listed in the manifest', async () => {
+    bucket.set('files/a/plan.png', { bytes: PNG, mime: 'image/png' })
+    exportOverride = withPlan('files/a/plan.png')
+    const res = await download(`${jwt}o1`)
+    expect(res.status).toBe(200)
+    const files = readZip(new Uint8Array(await res.arrayBuffer()))
+    const name = `files/${await sha256Hex(PNG)}.png`
+    expect(files.get(name)).toEqual(PNG)
+    const carried = JSON.parse(new TextDecoder().decode(files.get('project.json')))
+    expect(carried.documents[0].original.archive_name).toBe(name)
+  })
+
+  it('a download is refused with 409, naming the document, when its stored original is missing', async () => {
+    exportOverride = withPlan('files/a/gone.png')
+    const res = await download(`${jwt}o2`)
+    expect(res.status).toBe(409)
+    expect(res.headers.get('content-type')).not.toBe('application/zip')
+    expect(((await res.json()) as { error: string }).error).toContain('"Floor plan"')
+  })
+
+  it('a restore writes the original under this office and this archive key, and ignores the path the package names', async () => {
+    const sha = await sha256Hex(PNG)
+    const name = `files/${sha}.png`
+    const { bytes, key } = await buildArchive(
+      {
+        ...pkg,
+        documents: [
+          {
+            title: 'Floor plan',
+            original: {
+              mime_type: 'image/png',
+              bytes: PNG.length,
+              storage_path: 'files/someone-elses-office/plan.png',
+              sha256: sha,
+              archive_name: name,
+            },
+          },
+        ],
+      },
+      { slug: 'wellness', exportedAt: EXPORTED_AT },
+      [{ name, data: PNG }],
+    )
+    const res = await restoreRequest(`${jwt}o3`, bytes)
+    expect(res.status).toBe(201)
+    const call = rpc.find((c) => c.fn === 'project_restore')
+    const path = `restores/${OFFICE}/${key}/${sha}.png`
+    const sent = call?.body.p_package as { documents: { original: Record<string, unknown> }[] }
+    expect(sent.documents[0]?.original).toEqual({
+      mime_type: 'image/png',
+      bytes: PNG.length,
+      storage_path: path,
+    })
+    expect(bucket.get(path)?.bytes).toEqual(PNG)
+  })
+
+  it('a database refusal after the files were written removes them, so a refused restore leaves no file', async () => {
+    const sha = await sha256Hex(PNG)
+    const name = `files/${sha}.png`
+    const { bytes } = await buildArchive(
+      {
+        ...pkg,
+        documents: [
+          {
+            title: 'Floor plan',
+            original: {
+              mime_type: 'image/png',
+              bytes: PNG.length,
+              sha256: sha,
+              archive_name: name,
+            },
+          },
+        ],
+      },
+      { slug: 'wellness', exportedAt: EXPORTED_AT },
+      [{ name, data: PNG }],
+    )
+    restoreReply = { ok: false, error: 'refused for the test' }
+    const res = await restoreRequest(`${jwt}o4`, bytes)
+    expect(res.status).toBe(400)
+    expect([...bucket.keys()].filter((k) => k.startsWith('restores/'))).toEqual([])
+  })
+
+  it('a storage write refused by the provider is a 502, and the database is never asked', async () => {
+    const sha = await sha256Hex(PNG)
+    const name = `files/${sha}.png`
+    const { bytes } = await buildArchive(
+      {
+        ...pkg,
+        documents: [
+          {
+            title: 'Floor plan',
+            original: {
+              mime_type: 'image/png',
+              bytes: PNG.length,
+              sha256: sha,
+              archive_name: name,
+            },
+          },
+        ],
+      },
+      { slug: 'wellness', exportedAt: EXPORTED_AT },
+      [{ name, data: PNG }],
+    )
+    refuseWrites = true
+    const res = await restoreRequest(`${jwt}o5`, bytes)
+    expect(res.status).toBe(502)
+    expect(rpc.filter((c) => c.fn === 'project_restore')).toHaveLength(0)
+    expect(bucket.size).toBe(0)
+  })
+
+  it('a file that differs from the checksum its document records is refused before any write', async () => {
+    const sha = await sha256Hex(PNG)
+    const name = `files/${sha}.png`
+    const other = Uint8Array.from([9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9])
+    const { bytes } = await buildArchive(
+      {
+        ...pkg,
+        documents: [
+          {
+            title: 'Floor plan',
+            original: {
+              mime_type: 'image/png',
+              bytes: PNG.length,
+              sha256: sha,
+              archive_name: name,
+            },
+          },
+        ],
+      },
+      { slug: 'wellness', exportedAt: EXPORTED_AT },
+      [{ name, data: other }],
+    )
+    const res = await restoreRequest(`${jwt}o6`, bytes)
+    expect(res.status).toBe(400)
+    expect(rpc.filter((c) => c.fn === 'project_restore')).toHaveLength(0)
+    expect(bucket.size).toBe(0)
   })
 })
