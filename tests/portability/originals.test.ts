@@ -154,6 +154,65 @@ describe('export gathers each stored original', () => {
   })
 })
 
+describe('the size cap is checked before any stored file is read', () => {
+  /** A store that counts every read, so a test can prove none happened. */
+  function countingStore(inner: OriginalStore) {
+    const reads: string[] = []
+    const store: OriginalStore = {
+      read: async (path) => {
+        reads.push(path)
+        return inner.read(path)
+      },
+      put: (path, bytes, mime) => inner.put(path, bytes, mime),
+      remove: (path) => inner.remove(path),
+    }
+    return { store, reads }
+  }
+
+  it('refuses a project whose recorded originals exceed the cap without reading a single file', async () => {
+    const { store, reads } = countingStore(memoryObjectStore())
+    const big = 5 * 1024 * 1024
+    const pkg = pkgWith([
+      {
+        title: 'One',
+        original: { mime_type: 'image/png', bytes: big, storage_path: 'files/a/one.png' },
+      },
+      {
+        title: 'Two',
+        original: { mime_type: 'image/png', bytes: big, storage_path: 'files/a/two.png' },
+      },
+    ])
+    const out = await gatherOriginals({ pkg, store, extension: extensionFor, maxBytes: MAX })
+    expect(out).toMatchObject({ ok: false, status: 413 })
+    expect(reads).toEqual([])
+  })
+
+  it('refuses a document with no recorded size before reading anything', async () => {
+    const { store, reads } = countingStore(memoryObjectStore())
+    const pkg = pkgWith([
+      { title: 'Odd', original: { mime_type: 'image/png', storage_path: 'files/a/odd.png' } },
+    ])
+    const out = await gatherOriginals({ pkg, store, extension: extensionFor, maxBytes: MAX })
+    expect(out).toMatchObject({ ok: false, status: 409 })
+    expect(reads).toEqual([])
+  })
+
+  it('a project within the cap is still read and carried', async () => {
+    const { store, reads } = countingStore(
+      storeWith({ 'files/a/plan.png': { bytes: PNG, mime: 'image/png' } }),
+    )
+    const pkg = pkgWith([
+      {
+        title: 'Plan',
+        original: { mime_type: 'image/png', bytes: PNG.length, storage_path: 'files/a/plan.png' },
+      },
+    ])
+    const out = await gatherOriginals({ pkg, store, extension: extensionFor, maxBytes: MAX })
+    expect(out.ok).toBe(true)
+    expect(reads).toEqual(['files/a/plan.png'])
+  })
+})
+
 describe('restore plans each file before anything is written', () => {
   async function exported() {
     const store = storeWith({ 'files/a/plan.png': { bytes: PNG, mime: 'image/png' } })

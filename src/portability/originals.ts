@@ -73,6 +73,33 @@ export async function gatherOriginals(input: {
   extension: ExtensionFor
   maxBytes: number
 }): Promise<GatherResult> {
+  /*
+    THE CAP IS CHECKED BEFORE ANY FILE IS READ. Each original's size is recorded on its document row, so the total the
+    archive would hold is known without loading anything. Checking after the reads (as this did until 14 October 2026)
+    loaded every stored file into memory first and only then refused, so the memory a refusal cost was the project's
+    size rather than the cap's. The sum is the naive total, which can only overstate what the archive would hold, so a
+    project refused here is refused for a reason that is true.
+  */
+  let declared = 0
+  for (const doc of documentsOf(input.pkg)) {
+    const orig = originalOf(doc)
+    if (orig === null) continue
+    if (!Number.isInteger(orig.bytes) || (orig.bytes as number) < 0) {
+      return {
+        ok: false,
+        status: 409,
+        error: `the original of "${titleOf(doc)}" has no recorded size`,
+      }
+    }
+    declared += orig.bytes as number
+  }
+  if (declared > input.maxBytes) {
+    return {
+      ok: false,
+      status: 413,
+      error: 'the original files of this project are larger than the 8 MB one archive can hold',
+    }
+  }
   const pkg = structuredClone(input.pkg)
   const files = new Map<string, ArchiveFile>()
   const missing: string[] = []
