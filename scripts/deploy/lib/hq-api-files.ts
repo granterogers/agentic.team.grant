@@ -16,4 +16,6 @@ export const HQ_API_FILES: readonly { name: string; from: string }[] = [
   { name: 'oauth.ts', from: 'src/slack/oauth.ts' },
   { name: 'preview.ts', from: 'src/documents/preview.ts' },
   { name: 'background.ts', from: 'src/backgrounds/project-background.ts' },
+  { name: 'formats.ts', from: 'src/portability/formats.ts' },
+  { name: 'export-route.ts', from: 'src/portability/export-route.ts' },
 ]

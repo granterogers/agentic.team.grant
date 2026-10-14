@@ -5425,6 +5425,8 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   background: color-mix(in srgb, var(--sunken) 45%, transparent);
 }
 .setblock p { margin: 0; max-width: 56ch; }
+/* The standard-format download buttons (#470). Wrapping, so four buttons stay inside a 390px phone. */
+.pset-stdexport { display: flex; flex-wrap: wrap; gap: 8px; }
 /*
   The one block with a consequence. A warm edge rather than a red button: the
   action is reversible and colouring it as danger would say otherwise, which is

@@ -42,7 +42,7 @@
 
 import { markup as appearanceMarkup, wire as appearanceWire } from './bc/appearance-pane.js'
 import { CREW } from './data.js'
-import { act, attempt, canWrite, read, say, sure } from './office.js'
+import { act, attempt, canWrite, read, readFile, say, sure } from './office.js'
 
 /*
   The panes. 8 October 2026, Grant: remove the Team tab (the main Team section stays) and the Project tab; keep
@@ -504,6 +504,23 @@ function projectPane(p) {
         <span class="t-meta" data-said></span>
       </div>
 
+      <div class="setblock" data-saidwrap>
+        <span class="t-label">Standard formats</span>
+        <p class="t-meta">One kind of record at a time, in a file other apps open: contacts as vCard, the calendar
+          as iCalendar (calendar days are cut in the office's time zone), and the tasks as CSV or JSON.</p>
+        ${
+          canWrite()
+            ? `<div class="pset-stdexport">
+                 <button class="btn" data-stdexport="vcard">Contacts · vCard</button>
+                 <button class="btn" data-stdexport="ics">Calendar · iCalendar</button>
+                 <button class="btn" data-stdexport="csv">Tasks · CSV</button>
+                 <button class="btn" data-stdexport="json">Tasks · JSON</button>
+               </div>`
+            : `<span class="t-meta">Read-only — no token in this browser.</span>`
+        }
+        <span class="t-meta" data-said></span>
+      </div>
+
       <!--
         Archive, and it is reversible. Nothing is detached and nothing is
         deleted — status changes and the automations stop — which is what
@@ -590,6 +607,29 @@ function projectFold(p) {
  * in every address bar. Revoked immediately after the click, because an object
  * URL holds the whole thing in memory until it is.
  */
+/**
+ * The standard-format file names, by format. The stems and extensions MUST match `exportFilename` in
+ * src/portability/export-route.ts; tests/portability/settings-export.test.ts reads this table and proves it.
+ */
+export const STANDARD_EXPORT_FILES = {
+  vcard: 'contacts.vcf',
+  ics: 'calendar.ics',
+  csv: 'tasks.csv',
+  json: 'tasks.json',
+}
+
+/** Save a Blob under a name, the way a download link does. Nothing is kept after the click. */
+function saveBlob(filename, blob) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.append(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 function download(name, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -767,6 +807,29 @@ export function wire(root, p, people, redraw, openLook, reload) {
         download(p.slug, pkg)
         const n = (pkg?.documents ?? []).length
         say(b, `${n} document${n === 1 ? '' : 's'} and everything else — check your downloads.`)
+      } catch (error) {
+        say(b, error instanceof Error ? error.message : String(error), 'warn')
+      } finally {
+        b.disabled = was
+      }
+    })
+  }
+
+  /*
+    STANDARD FORMATS. One kind of record at a time, in a file other apps open: contacts as vCard, the calendar as
+    iCalendar, tasks as CSV or JSON. The file is fetched and saved in one step; the gateway answers no-store and the
+    page keeps nothing. A refusal is shown as the words the server sent.
+  */
+  for (const b of root.querySelectorAll('[data-stdexport]')) {
+    b.addEventListener('click', async () => {
+      const format = b.dataset.stdexport
+      const was = b.disabled
+      b.disabled = true
+      say(b, 'Preparing the file…')
+      try {
+        const blob = await readFile('project_standard_export', p.id, { format })
+        saveBlob(`${p.slug}-${STANDARD_EXPORT_FILES[format]}`, blob)
+        say(b, 'Downloaded — check your downloads.')
       } catch (error) {
         say(b, error instanceof Error ? error.message : String(error), 'warn')
       } finally {

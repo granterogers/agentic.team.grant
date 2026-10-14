@@ -49,6 +49,8 @@ import {
 } from './background.ts'
 // Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
 import { fileText } from './file-text.ts'
+// The standard-format export (#470): uploaded beside the entrypoint by scripts/deploy/hq.ts, from src/portability.
+import { isStandardFormat, kindFor, renderStandardExport } from './export-route.ts'
 import { authorizeUrl, revokeToken } from './oauth.ts'
 import {
   driveProvider,
@@ -3515,6 +3517,68 @@ Deno.serve(async (request: Request): Promise<Response> => {
         'cache-control': 'private, no-store',
         'x-content-type-options': 'nosniff',
         'content-security-policy': "default-src 'none'; sandbox",
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'authorization, content-type',
+      },
+    })
+  }
+
+  /*
+    STANDARD-FORMAT EXPORT (issue #470, C1). One project's contacts as vCard, its calendar as iCalendar, or its tasks as
+    CSV or JSON. The office is the verified session's, never a caller-named one, and the project must belong to it
+    (`public.project_records` returns null otherwise, reported as not found). The bytes are rendered by
+    src/portability/export-route.ts, which also chooses the file name and content type, so this route is only plumbing.
+    Nothing is stored: the response is the file, marked no-store.
+  */
+  if (name === 'project_standard_export') {
+    if (office === null) return json({ error: 'no_office' }, 403)
+    const id = url.searchParams.get('id') ?? ''
+    const format = (url.searchParams.get('format') ?? '').trim()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return json({ error: 'that section needs a valid project id', section: name }, 400)
+    }
+    if (!isStandardFormat(format)) {
+      return json({ error: 'format must be vcard, ics, csv or json', section: name }, 400)
+    }
+    const kind = kindFor(format)
+    if (kind === null)
+      return json({ error: 'format must be vcard, ics, csv or json', section: name }, 400)
+    const r = await fetch(`${DB_URL}/rest/v1/rpc/project_records`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_office: office, p_project_id: id, p_kind: kind }),
+    })
+    if (!r.ok) return json({ error: 'the export could not be read', section: name }, 502)
+    const payload = (await r.json()) as unknown
+    if (payload === null)
+      return json({ error: 'no such project in this office', section: name }, 404)
+    let rendered: ReturnType<typeof renderStandardExport>
+    try {
+      rendered = renderStandardExport(
+        format,
+        payload as Parameters<typeof renderStandardExport>[1],
+        { exportedAt: new Date().toISOString() },
+      )
+    } catch (error) {
+      return json(
+        {
+          error: error instanceof Error ? error.message : 'the export could not be built',
+          section: name,
+        },
+        500,
+      )
+    }
+    return new Response(rendered.body, {
+      status: 200,
+      headers: {
+        'content-type': rendered.contentType,
+        'content-disposition': `attachment; filename="${rendered.filename}"`,
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
         'access-control-allow-origin': '*',
         'access-control-allow-headers': 'authorization, content-type',
       },

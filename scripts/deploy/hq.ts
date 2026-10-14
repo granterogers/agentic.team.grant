@@ -98,6 +98,21 @@ form.append(
   }),
 )
 
+// The standard-format export (#470): the serialisers and the route's choices, uploaded beside the entrypoint as
+// ./formats.ts and ./export-route.ts. export-route.ts imports ./formats.ts, so both travel together.
+form.append(
+  'file',
+  new File([await readFile('src/portability/formats.ts', 'utf8')], 'formats.ts', {
+    type: 'application/typescript',
+  }),
+)
+form.append(
+  'file',
+  new File([await readFile('src/portability/export-route.ts', 'utf8')], 'export-route.ts', {
+    type: 'application/typescript',
+  }),
+)
+
 const deployed = await fetch(`${api}/functions/deploy?slug=hq-api`, {
   method: 'POST',
   headers: { Authorization: `Bearer ${supabaseToken}` },
