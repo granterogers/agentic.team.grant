@@ -498,7 +498,9 @@ function projectPane(p) {
         ${
           canWrite()
             ? `<button class="btn" data-export="${esc(p.id ?? '')}"
-                 data-name="${esc(p.name)}">Export ${esc(p.name)}</button>`
+                 data-name="${esc(p.name)}">Export ${esc(p.name)}</button>
+               <button class="btn" data-archive="${esc(p.id ?? '')}">Download archive (ZIP)</button>
+               <span class="t-meta">The archive adds a manifest of checksums, so a restore can prove each file is whole.</span>`
             : `<span class="t-meta">Read-only — no token in this browser.</span>`
         }
         <span class="t-meta" data-said></span>
@@ -807,6 +809,26 @@ export function wire(root, p, people, redraw, openLook, reload) {
         download(p.slug, pkg)
         const n = (pkg?.documents ?? []).length
         say(b, `${n} document${n === 1 ? '' : 's'} and everything else — check your downloads.`)
+      } catch (error) {
+        say(b, error instanceof Error ? error.message : String(error), 'warn')
+      } finally {
+        b.disabled = was
+      }
+    })
+  }
+
+  /*
+    THE ARCHIVE (#471, C2). One project as a ZIP, fetched and saved in one step. Nothing is kept by the page.
+  */
+  for (const b of root.querySelectorAll('[data-archive]')) {
+    b.addEventListener('click', async () => {
+      const was = b.disabled
+      b.disabled = true
+      say(b, 'Packing the archive…')
+      try {
+        const blob = await readFile('project_archive', p.id)
+        saveBlob(`${p.slug}-archive.zip`, blob)
+        say(b, 'Downloaded — check your downloads.')
       } catch (error) {
         say(b, error instanceof Error ? error.message : String(error), 'warn')
       } finally {

@@ -321,6 +321,38 @@ export async function readFile(section, id, extra) {
   return await r.blob()
 }
 
+/*
+  RESTORE A PROJECT FROM ITS ARCHIVE (#471, C2). The file is sent as the body, not as JSON, so the office can open and
+  check it before anything is written. The office answers with the new project and a report of what was restored and
+  what the archive does not carry. A repeat of the same file answers with the first result and writes nothing.
+*/
+export async function restoreArchive(file) {
+  refuseUnconfigured()
+  const began = session.epoch()
+  const r = await bounded(
+    'office:restore',
+    `${API}?section=project_restore`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${await toPresent()}`, 'content-type': 'application/zip' },
+      body: file,
+    },
+    120_000,
+  )
+  if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
+  if (r.status === 401) {
+    session.forget()
+    token.clear()
+    throw new Error('You are not signed in any more.')
+  }
+  const answered = await r.json().catch(() => ({}))
+  if (!r.ok) {
+    const said = typeof answered?.error === 'string' ? answered.error.trim() : ''
+    throw new Error(said === '' ? `The server returned ${r.status}` : said)
+  }
+  return answered.data
+}
+
 /**
  * Say what happened, next to the thing that caused it.
  *

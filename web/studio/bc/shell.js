@@ -363,6 +363,15 @@ const menuPanel = () => {
               title="Sign in to create a project"><span class="bcmenuplus" aria-hidden="true">+</span><span class="bcmenuname">Create project (sign in first)</span></button>`
     }
     ${
+      mine
+        ? `<button type="button" role="menuitem" class="bcmenuitem bcmenurestore" data-bc-menu-restore>
+             <span class="bcmenuplus" aria-hidden="true">↑</span><span class="bcmenuname">Restore a project from an archive</span>
+           </button>
+           <input type="file" accept=".zip,application/zip" hidden data-bc-restore-file aria-label="Archive to restore">
+           <p class="bcmenunone" role="status" aria-live="polite" data-bc-restore-said></p>`
+        : ''
+    }
+    ${
       here === null
         ? ''
         : `<p class="bcmenuhead">In this project</p>

@@ -13,7 +13,17 @@
   second mechanism would be a second set of words for one thing.
 */
 
-import { act, alreadyAnswered, attempt, canWrite, read, readFile, say, token } from '../office.js'
+import {
+  act,
+  alreadyAnswered,
+  attempt,
+  canWrite,
+  read,
+  readFile,
+  restoreArchive,
+  say,
+  token,
+} from '../office.js'
 import * as session from '../session.js'
 import { signOut } from '../signout.js'
 import { esc } from './parts.js'
@@ -752,6 +762,40 @@ export const wire = (root) => {
       menu.toggleProjects()
       ctx.render()
       root.ownerDocument.querySelector('[data-bc-menu-projects]')?.focus()
+    })
+  }
+  /*
+    RESTORE FROM AN ARCHIVE (#471, C2). The button opens the file picker; a chosen file is sent to the office, which checks
+    it before writing anything. On success the page goes to the new project and says what was restored and what was not.
+    The archive's own sentence is shown when it is refused.
+  */
+  for (const b of root.querySelectorAll('[data-bc-menu-restore]')) {
+    b.addEventListener('click', () => root.querySelector('[data-bc-restore-file]')?.click())
+  }
+  for (const f of root.querySelectorAll('[data-bc-restore-file]')) {
+    f.addEventListener('change', async () => {
+      const file = f.files?.[0]
+      const said = root.querySelector('[data-bc-restore-said]')
+      if (!file) return
+      if (said) said.textContent = 'Checking the archive and restoring it…'
+      try {
+        const done = await restoreArchive(file)
+        const c = done?.report?.counts ?? {}
+        const docs = c.documents?.restored ?? 0
+        const tasks = c.tasks?.restored ?? 0
+        const contacts = c.contacts?.restored ?? 0
+        const notRestored = Object.values(done?.report?.not_restored ?? {}).reduce(
+          (n, v) => n + (typeof v === 'number' ? v : 0),
+          0,
+        )
+        const words = `Restored as “${done.report?.name ?? done.slug}”: ${docs} document${docs === 1 ? '' : 's'}, ${tasks} task${tasks === 1 ? '' : 's'}, ${contacts} contact${contacts === 1 ? '' : 's'}.${notRestored > 0 ? ` ${notRestored} item${notRestored === 1 ? ' is' : 's are'} listed in the report as not restored.` : ''}`
+        if (said) said.textContent = words
+        globalThis.location.assign(`/p/${encodeURIComponent(String(done.slug))}`)
+      } catch (error) {
+        if (said) said.textContent = error instanceof Error ? error.message : String(error)
+      } finally {
+        f.value = ''
+      }
     })
   }
   for (const b of root.querySelectorAll('[data-bc-menu-new]')) {
