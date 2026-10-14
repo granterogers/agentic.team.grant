@@ -23,4 +23,5 @@ export const HQ_API_FILES: readonly { name: string; from: string }[] = [
   { name: 'store.ts', from: 'src/files/store.ts' },
   { name: 'originals.ts', from: 'src/portability/originals.ts' },
   { name: 'policy.ts', from: 'src/files/policy.ts' },
+  { name: 'links.ts', from: 'src/files/links.ts' },
 ]

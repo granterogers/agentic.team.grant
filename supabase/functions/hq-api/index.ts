@@ -53,6 +53,8 @@ import {
 import { isStandardFormat, kindFor, renderStandardExport } from './export-route.ts'
 // Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
 import { fileText } from './file-text.ts'
+// Who may be given a signed link (#468): judged from the owner the database records, never from the path alone.
+import { type LinkLookup, mayLinkDocument, mayLinkPhoto, mayLinkProjectFile } from './links.ts'
 import { authorizeUrl, revokeToken } from './oauth.ts'
 // The original files of archived documents (#471, migration 1072): uploaded beside the entrypoint by scripts/deploy/hq.ts.
 import { supabaseObjectStore } from './object-store.ts'
@@ -71,6 +73,50 @@ import { extensionFor } from './store.ts'
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+
+/**
+ * The database lookups the signed-link rule needs (links.ts). Service-key reads, every one filtered by office, and a
+ * failed read returns no rows, so a link is refused when the database cannot be asked. The rule re-checks each answer.
+ */
+function linkLookup(): LinkLookup {
+  const rowsOf = async (query: string): Promise<Record<string, unknown>[]> => {
+    const r = await fetch(`${DB_URL}/rest/v1/${query}`, {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    }).catch(() => null)
+    if (r === null || !r.ok) return []
+    const rows: unknown = await r.json().catch(() => [])
+    return Array.isArray(rows) ? (rows as Record<string, unknown>[]) : []
+  }
+  const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
+  return {
+    documentOwner: async (path, office) => {
+      const rows = await rowsOf(
+        `documents?storage_path=eq.${encodeURIComponent(path)}&office_id=eq.${encodeURIComponent(office)}&select=office_id,project_id&limit=1`,
+      )
+      const office_id = text(rows[0]?.office_id)
+      const project = text(rows[0]?.project_id)
+      return office_id !== null && project !== null ? { office: office_id, project } : null
+    },
+    photoProject: async (path) => {
+      const rows = await rowsOf(
+        `contacts?photo_path=eq.${encodeURIComponent(path)}&select=project_id&limit=1`,
+      )
+      return text(rows[0]?.project_id)
+    },
+    projectOffice: async (project) => {
+      const rows = await rowsOf(
+        `projects?project_id=eq.${encodeURIComponent(project)}&select=office_id&limit=1`,
+      )
+      return text(rows[0]?.office_id)
+    },
+    officeProjects: async (office) => {
+      const rows = await rowsOf(
+        `projects?office_id=eq.${encodeURIComponent(office)}&select=project_id`,
+      )
+      return rows.map((r) => text(r.project_id)).filter((p): p is string => p !== null)
+    },
+  }
+}
 
 /** The object store the originals live in: the Supabase project this gateway talks to, found from its URL. */
 function originalStore() {
@@ -4213,7 +4259,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   if (name === 'document' && typeof data?.path === 'string' && data.path !== '') {
-    const url = await signPath(data.path)
+    // The link is minted only when the owner of the file is this office and project (#468). Otherwise the text stays.
+    const allowed = office !== null && (await mayLinkDocument(linkLookup(), office, data.path))
+    const url = allowed ? await signPath(data.path) : null
     // Not fatal: the reader falls back to the text, which is usually there.
     if (url !== null) data.url = url
     data.path = undefined
@@ -4239,7 +4287,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
       for (const person of people as Record<string, unknown>[]) {
         const path = person.photo
         if (typeof path !== 'string' || path === '') continue
-        const url = await signPath(path)
+        const allowed = office !== null && (await mayLinkPhoto(linkLookup(), office, path))
+        const url = allowed ? await signPath(path) : null
         person.photo = url === null ? undefined : url
       }
     }
@@ -4263,7 +4312,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (name === 'browser_lately' && Array.isArray(data)) {
     for (const row of data as { shot_path?: unknown; shot_url?: string | null }[]) {
       if (typeof row.shot_path === 'string' && row.shot_path !== '') {
-        row.shot_url = await signPath(row.shot_path)
+        const allowed =
+          office !== null && (await mayLinkProjectFile(linkLookup(), office, row.shot_path))
+        row.shot_url = allowed ? await signPath(row.shot_path) : null
       }
       row.shot_path = undefined
     }
