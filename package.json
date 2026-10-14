@@ -312,6 +312,7 @@
     "verify:slack-link": "tsx scripts/verify/slack-link.ts",
     "verify:phone-header": "tsx scripts/verify/phone-header-local.ts",
     "verify:google-signin": "tsx scripts/verify/google-signin-local.ts",
+    "verify:archive-browser": "tsx scripts/verify/archive-browser-local.ts",
     "verify:canvas": "tsx scripts/verify/canvas-local.ts",
     "verify:chat-dock": "tsx scripts/verify/chat-local.ts",
     "verify:sample-look": "tsx scripts/verify/sample-look.ts",

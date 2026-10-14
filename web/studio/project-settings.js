@@ -499,7 +499,7 @@ function projectPane(p) {
           canWrite()
             ? `<button class="btn" data-export="${esc(p.id ?? '')}"
                  data-name="${esc(p.name)}">Export ${esc(p.name)}</button>
-               <button class="btn" data-archive="${esc(p.id ?? '')}">Download archive (ZIP)</button>
+               <button class="btn" data-archive-download="${esc(p.id ?? '')}">Download archive (ZIP)</button>
                <span class="t-meta">The archive adds a manifest of checksums, so a restore can prove each file is whole.</span>`
             : `<span class="t-meta">Read-only — no token in this browser.</span>`
         }
@@ -820,7 +820,7 @@ export function wire(root, p, people, redraw, openLook, reload) {
   /*
     THE ARCHIVE (#471, C2). One project as a ZIP, fetched and saved in one step. Nothing is kept by the page.
   */
-  for (const b of root.querySelectorAll('[data-archive]')) {
+  for (const b of root.querySelectorAll('[data-archive-download]')) {
     b.addEventListener('click', async () => {
       const was = b.disabled
       b.disabled = true
