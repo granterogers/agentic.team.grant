@@ -2,7 +2,7 @@
 
 **Status:** the evidence record for P0-CONTINUITY-2026-10-14, requirement R1. Facts are from the session transcript on the machine that ran the work, and from the hook and launcher configuration on that machine. Hypotheses are marked as such.
 
-**Transcript:** `/root/.claude/projects/-home-user-agentic-team-grant/b2af92ff-1369-5fb2-b233-077bdfdea46f.jsonl` (3,005 events, 13 October 22:31 UTC to 14 October 08:14 UTC). Only this one session's transcript was on the machine; no other sessions' records were available.
+**Transcript:** `/root/.claude/projects/-home-user-agentic-team-grant/<session-id>.jsonl` (the session identifier is withheld from committed records; the secret scan treats it as a credential) (3,005 events, 13 October 22:31 UTC to 14 October 08:14 UTC). Only this one session's transcript was on the machine; no other sessions' records were available.
 
 ## 1. What the transcript shows
 

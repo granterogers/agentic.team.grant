@@ -92,7 +92,7 @@
   },
   "sessions": [
     {
-      "id": "b2af92ff-1369-5fb2-b233-077bdfdea46f",
+      "id": "owner-session-1",
       "parent": null,
       "startedAt": "2026-10-14T08:14:02.000Z",
       "endedAt": null,
