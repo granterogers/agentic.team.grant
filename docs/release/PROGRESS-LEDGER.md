@@ -96,3 +96,15 @@ Disclosed process slips this window: `biome check --write` on two new files (the
 ## Termination
 
 None yet. Work continues on the branch; the next item is reconciling the lint comparison, then the remaining owner-blocked items wait for Grant.
+
+## Entry: feature batch finish (14 October 2026, afternoon UTC)
+
+Commits on `feature/auth-storage-portability-ui`: `c79a291f` (storage policy, reconciliation, copy-verify-switch migration; Google sign-in policy), `b2c68fd3` (the batch status record). PR #465 updated; issues #467 to #473 each have a requirement-level comment.
+
+- **Done and tested:** 51 storage tests and 26 Google sign-in tests; both replica round trips pass today; full unit suite 465 files, 7,242 tests, 0 failed; type-check at the 283 baseline.
+- **Verified in a browser this session:** module identity on desktop and 390 × 844 phone, in both themes; the Projects menu on desktop by hover and on the phone, with the current project marked and the panel scrolling. Captures are in `.out/ux-final/`.
+- **Found and fixed:** the migration's rollback could delete a file a correct earlier run had written. Now covered by a test. A rollback sabotage turned the migration tests red, and was restored.
+- **Blocked, owner-only:** Google OAuth client and Supabase provider (#467); the production storage audit (#468); `verify:arrangement`, refused by the production guard (#472).
+- **Pre-existing, not from this batch:** `verify:layouts` fails on `main` (it requests `/classic/`, which is absent).
+- **Process slip, disclosed:** a `sed -i` edit to a test-target file, reverted from a copy. Repository edits otherwise went through Edit or Write.
+- **Next:** the status record `docs/release/FEATURE-BATCH-STATUS-2026-10-14.md` lists the integration sequence, rollback, production prerequisites, and owner actions.
