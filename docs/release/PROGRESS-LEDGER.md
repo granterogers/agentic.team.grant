@@ -32,7 +32,33 @@ Production: not touched. No merge, no deploy, no charges, no external account co
 | 062213a | earlier | storage provider comparison |
 | 5c29613 | earlier | Projects menu toggle |
 | 5359a79 | earlier | status report update |
-| (next) | 07:45 | C2 backend: migration 1071, ZIP archive, gateway routes, ownership entry, proofs |
+| 06ab352 | 07:45 | C2 backend: migration 1071, ZIP archive, gateway routes, ownership entry, proofs |
+| b944e93 | ~07:55 | C2 UI: archive download in project settings, restore from the project menu, Chromium journey |
+| d55976f | ~07:58 | D1: per-module identity colour on title, icon and border; body neutral (#472) |
+| 69c8a06 | 08:03 | D2: desktop hover reveals the Projects list; keyboard and touch toggling kept (#473) |
+
+## Verification evidence (D1, D2)
+
+- D1 contrast, measured in Chromium against the rendered module surfaces: light theme minimum 4.68 to 1 (title inks are deep shades per module), dark theme minimum 9.89 to 1. `tests/web/module-identity.test.ts`: 7 passed, including ink contrast against reference surfaces #f6f7f9 and #1d2127 at 4.5 or more.
+- D2 in Chromium (`.out/verify-hover.mjs`, `.out/debug-keys.mjs`): desktop with a fine pointer, hover reveals the list, moving into the list keeps it open, leaving closes it; touch does not reveal on hover, a tap toggles it; keyboard Enter toggles with one click event per press and focus stays on the header. The first keyboard run in verify-hover.mjs was a script timing fault (no wait for the re-render); debug-keys.mjs with a wait shows the expected states.
+- `npm run check:templates`: exit 0.
+- Full unit suite `npx vitest run`: 460 files passed (1 skipped), 7,165 tests passed, 21 skipped, exit 0.
+
+## Corrections
+
+- **The commit message of d55976f overstated the D1 contrast baseline.** It says the first attempt measured "2.9 to 4.4 in light". Those were two different measurements: the first title mix (72% of the hue) measured 2.96 to 4.01 in light, and the menu-label figure was produced by a measurement bug (colour(srgb ...) not parsed, menu alpha forced to 1) that was fixed before any figure was recorded. The commit cannot be rewritten (pushed); this entry is the correction.
+- **The keyboard step in the first D2 verification was reported as inconsistent.** It was a timing fault in the script, not in the product. Recorded so the earlier wording is not repeated.
+
+## Process slips (disclosed)
+
+- Several `sed -i` and `python3 -c` commands were typed as no-ops (or against /dev/null) earlier in the run; none changed a repository file. Repository edits were made with Edit or Write, except the three new TypeScript files formatted with `biome format --write`.
+- A commit attribution: the session's trailer includes the Claude-Session link. The model-name co-author line was left out of commit messages, because the system prompt forbids model identifiers in commits.
+
+## Open items at this entry
+
+- B2 storage portability (#469): provider interface and local-compatible implementation not started.
+- JavaScript and CSS verification (Biome gap): not started. Web JS and CSS are outside Biome's include list in biome.json.
+- Owner-blocked, not attempted: Google OAuth client (#467); production storage audit (#468).
 
 ## Verification evidence (C2 backend)
 
@@ -54,7 +80,7 @@ Production: not touched. No merge, no deploy, no charges, no external account co
 
 ## Elapsed time
 
-- Session start 07:33:16 UTC. At this entry: 07:45 UTC (about 12 minutes of continuation work so far).
+- Session start 07:33:16 UTC. At the D2 entry: 08:03:31 UTC (about 30 minutes of working time since session start, including the pre-compaction work).
 
 ## Termination
 
