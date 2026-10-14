@@ -183,10 +183,24 @@ export function resetToRecommended() {
   apply({ ...DEFAULTS })
 }
 
+/*
+  The appearance REVISION. Every saved choice (this browser's, and the one kept for the person in the office) carries the
+  revision it was saved at. A choice saved before the current recommended look is reset ONCE for the look fields (palette,
+  look, scheme, texture and an uploaded texture), so a returning person sees the latest design rather than one saved before
+  it. Density, glass and depth are spacing and effect choices and are kept. Bump this when the recommended look changes.
+*/
+export const APPEARANCE_REVISION = 2
+const LOOK_FIELDS = ['palette', 'look', 'scheme', 'texture', 'own', 'ownName']
+export function currentRevision(saved) {
+  if (saved === null || typeof saved !== 'object') return {}
+  if (saved.v === APPEARANCE_REVISION) return saved
+  return Object.fromEntries(Object.entries(saved).filter(([key]) => !LOOK_FIELDS.includes(key)))
+}
+
 /** What is chosen. Falls back to the defaults, never to nothing. */
 export function appearance() {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}')
+    const saved = currentRevision(JSON.parse(localStorage.getItem(KEY) ?? '{}'))
     return {
       palette: PALETTES.some((p) => p.id === saved.palette) ? saved.palette : DEFAULTS.palette,
       texture: saved.texture === 'own' || TEXTURES.some((t) => t.id === saved.texture)
@@ -257,7 +271,8 @@ export function apply(next = appearance()) {
     root.style.removeProperty('--tex')
     root.style.removeProperty('--tex-size')
   }
-  try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* not fatal */ }
+  const stamped = { ...next, v: APPEARANCE_REVISION }
+  try { localStorage.setItem(KEY, JSON.stringify(stamped)) } catch { /* not fatal */ }
   /*
     And out to the office, which is where it actually lives (ADR-0021).
 
@@ -274,7 +289,7 @@ export function apply(next = appearance()) {
     change on screen and in this browser, so the failure mode is "the other
     device is behind" rather than "your choice vanished".
   */
-  if (send !== null) send(next)
+  if (send !== null) send(stamped)
   return next
 }
 
@@ -306,7 +321,7 @@ export function hydrate(fromOffice) {
   const was = send
   send = null
   try {
-    return apply({ ...appearance(), ...fromOffice })
+    return apply({ ...appearance(), ...currentRevision(fromOffice) })
   } finally {
     send = was
   }

@@ -220,26 +220,46 @@ describe('the appearance module', () => {
     expect([a.look, a.glass, a.depth]).toEqual(['silver', 'soft', 'soft'])
   })
 
-  it('a saved Original look is read as Slate & Silver, and its other preferences are kept', async () => {
+  it('a saved Original look is read as Slate & Silver, and its spacing and effect choices are kept', async () => {
     const m = await loadAppearance()
     store.set(
       'studio.appearance',
       JSON.stringify({ look: 'original', palette: 'clay', glass: 'rich', depth: 'deep' }),
     )
     const a = m.appearance()
-    expect([a.look, a.palette, a.glass, a.depth]).toEqual(['silver', 'clay', 'rich', 'deep'])
+    // No revision stamp: the look fields are the retired choice, so they reset; glass and depth are the person's own.
+    expect([a.look, a.palette, a.glass, a.depth]).toEqual(['silver', 'slate', 'rich', 'deep'])
     expect(m.LOOKS.map((l) => l.id)).not.toContain('original')
   })
 
-  it('an older saved appearance (no look keys) loads unchanged and gains only the defaults', async () => {
+  it('a choice saved before the current revision resets its look fields once, and keeps density, glass and depth', async () => {
     const m = await loadAppearance()
     store.set(
       'studio.appearance',
-      JSON.stringify({ palette: 'clay', texture: 'oak', scheme: 'dark', density: 'compact' }),
+      JSON.stringify({ palette: 'clay', texture: 'oak', scheme: 'dark', look: 'graphite', density: 'compact', glass: 'rich', depth: 'deep' }),
     )
     const a = m.appearance()
-    expect([a.palette, a.texture, a.scheme, a.density]).toEqual(['clay', 'oak', 'dark', 'compact'])
-    expect([a.look, a.glass, a.depth]).toEqual(['silver', 'soft', 'soft'])
+    // An unstamped choice is from before the recommended look, so palette, scheme, texture and look come back to the defaults.
+    expect([a.palette, a.texture, a.scheme, a.look]).toEqual(['slate', 'none', 'light', 'silver'])
+    expect([a.density, a.glass, a.depth]).toEqual(['compact', 'rich', 'deep'])
+  })
+
+  it('a choice saved at the current revision is read exactly as it was saved', async () => {
+    const m = await loadAppearance()
+    store.set(
+      'studio.appearance',
+      JSON.stringify({ v: m.APPEARANCE_REVISION, palette: 'clay', texture: 'oak', scheme: 'dark', look: 'graphite', density: 'compact' }),
+    )
+    const a = m.appearance()
+    expect([a.palette, a.texture, a.scheme, a.look, a.density]).toEqual(['clay', 'oak', 'dark', 'graphite', 'compact'])
+  })
+
+  it('saving stamps the current revision, so the next load keeps the choice', async () => {
+    const m = await loadAppearance()
+    m.apply({ ...m.appearance(), scheme: 'dark', palette: 'ink' })
+    const saved = JSON.parse(store.get('studio.appearance') ?? '{}')
+    expect(saved.v).toBe(m.APPEARANCE_REVISION)
+    expect(m.appearance().scheme).toBe('dark')
   })
 
   it('every look offered has a CSS block in both schemes, and the picker faces match the CSS', async () => {

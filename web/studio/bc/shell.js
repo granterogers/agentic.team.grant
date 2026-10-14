@@ -446,6 +446,8 @@ const topRow = () => {
     </div>
     ${work}
     <div class="bcright">
+      <!-- The build's version, on every screen and in the Sample: the one place a person can always see what they are running. -->
+      ${buildVersionMark()}
       <button type="button" class="bcbtn" data-bc-attention
         ${attentionTo === null ? 'disabled' : ''}
         aria-current="${attentionTo !== null && isHere(attentionTo) ? 'page' : 'false'}"
@@ -511,6 +513,7 @@ const topRow = () => {
 
 const tray = () =>
   `<nav class="bctray" aria-label="Your things">
+    ${buildVersionMark('tray')}
     <!--
       CHAT stays in the personal tray, renamed.
 
@@ -879,11 +882,11 @@ const listed = () => PROJECTS.filter((p) => p.slug !== 'unnamed' || filedUnder(p
   The build's version, from config.js (generated from package.json). It is drawn in the top-right corner of the home board only,
   which is the only screen with no project open. Absolutely placed, so it takes no room from the header's title.
 */
-const buildVersionMark = () => {
+const buildVersionMark = (where = 'bar') => {
   const version = typeof window.HQ_VERSION === 'string' ? window.HQ_VERSION : ''
   return version === ''
     ? ''
-    : `<span class="bcver" title="Team HQ version ${esc(version)}">v${esc(version)}</span>`
+    : `<span class="bcver bcver--${where}" title="Team HQ version ${esc(version)}">v${esc(version)}</span>`
 }
 
 /*
@@ -929,7 +932,6 @@ const portfolio = () => {
   */
   return `<h1 class="bcvh">Team HQ</h1>
   <section class="bcnoproj" aria-labelledby="bcnoproj-title">
-    ${buildVersionMark()}
     ${emptyProjects()}
   </section>`
 }

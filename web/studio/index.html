@@ -103,6 +103,41 @@
 <script src="/config.js"></script>
 <script>
   /*
+    ALWAYS THE LATEST VERSION. This page was loaded from a build; the server's config.js names the newest one. When they
+    differ (a release was deployed while this tab was open, or an old copy was restored from cache), reload once so the
+    person gets the current design. The check runs on load and whenever a backgrounded tab comes back to the front. A
+    session key stops a reload loop if the server itself is out of step.
+  */
+  (function () {
+    var running = window.HQ_VERSION || ''
+    function newest() {
+      return fetch('/config.js', { cache: 'no-store' })
+        .then(function (r) { return r.text() })
+        .then(function (text) {
+          var m = /HQ_VERSION = window\.HQ_VERSION \|\| '([^']+)'/.exec(text)
+          return m ? m[1] : ''
+        })
+    }
+    function check() {
+      if (running === '') return
+      newest().then(function (version) {
+        if (version === '' || version === running) return
+        var key = 'hq.reloaded.' + version
+        try {
+          if (sessionStorage.getItem(key)) return
+          sessionStorage.setItem(key, '1')
+        } catch (e) { /* storage blocked: at most one reload per check, which is still correct */ }
+        location.reload()
+      }).catch(function () { /* offline: keep the page you have */ })
+    }
+    check()
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') check()
+    })
+  })()
+</script>
+<script>
+  /*
     The experiment runs its own copies of the gateway and the voice function
     under different slugs, so that the default Team HQ cannot be affected by
     anything this branch deploys (ADR-0043). Derived from whatever `config.js`

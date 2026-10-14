@@ -161,11 +161,14 @@ const createPanel = () => `<form class="bcentryform" data-bc-entry-form="create"
     <p class="bcentrysaid" data-bc-entry-said role="status" aria-live="polite"></p>
   </form>`
 
+/* The build version beside the sign-in kicker, so the signed-out page shows what it is too. */
+const entryVersion = () => (typeof window.HQ_VERSION === "string" && window.HQ_VERSION !== "" ? `<span class="bcver bcver--entry" title="Team HQ version ${window.HQ_VERSION}">v${window.HQ_VERSION}</span>` : "");
+
 export const entry = () => {
   const ended = source.state === 'refused'
   return `<main class="bcentry" id="bcmain" tabindex="-1">
     <div class="bcentrycard">
-      <p class="bcentrykicker">Team HQ</p>
+      <p class="bcentrykicker">Team HQ ${entryVersion()}</p>
       <h1 class="bcentrytitle">A team that works on your projects with you</h1>
       <p class="bcentrylead">Every project gets its own tasks, documents, calendar and conversation. Claire, your chief of staff, brings in the right specialist when there is work to do, and checks with you before she acts for you.</p>
       ${ended ? '<p class="bcentrynote" role="status">Your sign-in ended, so you have been signed out. Sign in again to carry on.</p>' : ''}
@@ -205,7 +208,7 @@ export const setup = () => {
   }
   return `<main class="bcentry" id="bcmain" tabindex="-1">
     <div class="bcentrycard">
-      <p class="bcentrykicker">Team HQ</p>
+      <p class="bcentrykicker">Team HQ ${entryVersion()}</p>
       <h1 class="bcentrytitle">One last step: set up your office</h1>
       <p class="bcentrylead">${
         who === '' ? 'You are signed in.' : `You are signed in as <strong>${esc(who)}</strong>.`
