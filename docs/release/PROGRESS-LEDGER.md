@@ -82,6 +82,17 @@ Production: not touched. No merge, no deploy, no charges, no external account co
 
 - Session start 07:33:16 UTC. At the D2 entry: 08:03:31 UTC (about 30 minutes of working time since session start, including the pre-compaction work).
 
+## Later entry: B2 interface and the lint baseline (14 October, about 08:20 UTC)
+
+Commits: ada8ccd (object store interface, #469); the lint baseline commit follows this entry.
+
+- **B2 (#469), done without credentials or production:** `src/files/object-store.ts` defines one interface (put, link, remove) with a Supabase implementation that delegates to the existing functions in `src/files/store.ts`, and an in-memory implementation. Paths are refused before any provider sees them. No production call site changed and no provider is chosen. `tests/files/object-store.test.ts`: 18 passed; the same contract runs against both implementations. `biome ci` on the two new files: exit 0 after `biome check --write` on those two files only (disclosed). `tsc`: no errors in the new files.
+- **JavaScript and CSS verification gap:** `biome.json` lints only ts and json, so web studio files are unlinted ("no files were processed"). `docs/testing/web-lint-baseline.md` records the measured baseline: 22 errors, 257 warnings, 21 infos across 72 JS and 17 CSS files, with a scratch config outside the repository. Against an exported copy of origin/main the errors are identical (22) and warnings are 251. The +6 warnings are provisionally attributed to `fit()` calls the focused-test rule misreads. **That attribution is not reconciled**: a single-file lint of the main copy printed nothing, and bc/stage.js is byte-identical on both sides. Recorded as not settled rather than as fact.
+- **Not done:** the repository gate still does not lint web JS or CSS. Enforcing the baseline needs the 22 errors fixed or suppressed with reasons, and the harness reconciled first.
+- **Owner-blocked, not attempted:** Google OAuth client (#467) and the production storage audit (#468).
+
+Disclosed process slips this window: `biome check --write` on two new files (the disclosed exception above); one `git worktree` attempt inside the repository was refused by Biome's nested-config rule and removed; the worktree was then recreated outside the repository and removed again; no repository file was changed by that.
+
 ## Termination
 
-None yet.
+None yet. Work continues on the branch; the next item is reconciling the lint comparison, then the remaining owner-blocked items wait for Grant.
