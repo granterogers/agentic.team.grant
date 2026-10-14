@@ -125,6 +125,7 @@ for (const [src, name] of [
   ['src/files/object-store.ts', 'object-store.ts'],
   ['src/files/store.ts', 'store.ts'],
   ['src/portability/originals.ts', 'originals.ts'],
+  ['src/files/policy.ts', 'policy.ts'],
 ] as const) {
   form.append(
     'file',

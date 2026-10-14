@@ -57,6 +57,8 @@ import { authorizeUrl, revokeToken } from './oauth.ts'
 // The original files of archived documents (#471, migration 1072): uploaded beside the entrypoint by scripts/deploy/hq.ts.
 import { supabaseObjectStore } from './object-store.ts'
 import { discardOriginals, gatherOriginals, planOriginals, writeOriginals } from './originals.ts'
+// The storage policy (#468): the type, extension and contents of an upload, checked before it is stored. Uploaded beside this file.
+import { checkUpload } from './policy.ts'
 import {
   driveProvider,
   type Failure,
@@ -3091,6 +3093,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
           },
           400,
         )
+      }
+      /*
+        The storage policy (#468). The type the browser declares is a claim: the name's extension must agree with it, the
+        bytes must start the way that type starts, and the type must be one this office takes. A file refused here is
+        never stored, so nothing is left in the bucket that no record points at.
+      */
+      const verdict = checkUpload({ name, mime, bytes })
+      if (!verdict.ok) {
+        return json({ error: `that file cannot be stored: ${verdict.reason}.` }, 400)
       }
 
       /*
