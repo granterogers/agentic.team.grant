@@ -6,6 +6,7 @@
  * No credential is printed. The page is the working tree's, so an unreleased change can be tested against the real office
  * with a real login before it is deployed. Every write lands in the Sample office and nowhere else.
  */
+import { randomBytes } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { extname, join } from 'node:path'
@@ -81,10 +82,37 @@ export const settle = async (page: Page): Promise<void> => {
 }
 
 /** Open the page the way a magic link does: a navigation carrying the session in the fragment. */
+/*
+  SIGNING IN AS THE SAMPLE PERSON, the way this browser does it (B-05, web/studio/flow.js). The page adopts a sign-in only
+  when this browser asked for one: it stores a pending flow under `hq.signin.flow` and the link back carries its nonce as
+  `?flow=`. The harness records that pending flow in the same storage with a fresh nonce, then returns with the token in
+  the fragment. The page's own decision code runs unchanged. A token placed in the fragment with no pending flow is refused
+  by design (login CSRF), which is what the earlier harness did and what the product now correctly refuses.
+*/
 export const signIn = async (studio: Studio, page: Page, s: Session): Promise<void> => {
   await page.goto('about:blank')
+  const nonce = randomBytes(32).reduce((out, b) => out + (b % 36).toString(36), '')
+  await page.goto(`${studio.base}/`, { waitUntil: 'domcontentloaded', timeout: 45000 })
+  await page.evaluate(
+    ([key, value]) => {
+      try {
+        localStorage.setItem(key, value)
+      } catch {
+        /* storage refused: the sign-in cannot be recognised, and the test will say so */
+      }
+    },
+    [
+      'hq.signin.flow',
+      JSON.stringify([
+        { nonce, kind: 'link', email: '', at: Date.now(), exp: Date.now() + 60 * 60 * 1000 },
+      ]),
+    ],
+  )
   const frag = `access_token=${encodeURIComponent(s.access_token)}&refresh_token=${encodeURIComponent(s.refresh_token)}&expires_in=3000`
-  await page.goto(`${studio.base}/#${frag}`, { waitUntil: 'domcontentloaded', timeout: 45000 })
+  await page.goto(`${studio.base}/?flow=${nonce}#${frag}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 45000,
+  })
   await settle(page)
 }
 

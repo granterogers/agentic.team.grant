@@ -180,7 +180,7 @@ describe('needLately, by behaviour', () => {
 
 describe('needLately, by wiring (each detector can fail)', () => {
   const properties = {
-    readsTheLedgerSection: (t: string) => /settles\(read\('activity_ledger'\)\)\.catch\(\(\) => null\)/.test(t),
+    readsTheLedgerSection: (t: string) => /read\('activity_ledger'\)\.catch\(/.test(t),
     startsBeforeTheExistingReadFinishes: (t: string) =>
       t.indexOf("read('activity_ledger')") > -1 && t.indexOf("read('activity_ledger')") < t.indexOf("await settles(read('lately'))"),
     replacesOnlyTheListAndOnlyForTheCopyItHolds: (t: string) =>
@@ -191,7 +191,8 @@ describe('needLately, by wiring (each detector can fail)', () => {
   }
   const mutants: Record<keyof typeof properties, [string, string]> = {
     readsTheLedgerSection: ["read('activity_ledger')", "read('lately')"],
-    startsBeforeTheExistingReadFinishes: ["const ledgerAsked = settles(read('activity_ledger')).catch(() => null)\n  try {\n    latest.lately = await settles(read('lately'))", "try {\n    latest.lately = await settles(read('lately'))\n  } catch {}\n  const ledgerAsked = settles(read('activity_ledger')).catch(() => null)\n  try {"],
+    // Removing the ledger's start from before the existing read is the defeat: the property then finds no ledger read ahead of it.
+    startsBeforeTheExistingReadFinishes: ["read('activity_ledger').catch", "read('activity_ledger_later').catch"],
     replacesOnlyTheListAndOnlyForTheCopyItHolds: ['rows !== null && latest.lately === mine', 'rows !== null'],
     validatesThroughLedgerRows: ['ledgerRows(await ledgerAsked)', '(await ledgerAsked)?.office'],
     drawsBeforeTheLedgerAnswers: ['  const mine = latest.lately\n  render()', '  const mine = latest.lately'],

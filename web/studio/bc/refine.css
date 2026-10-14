@@ -1170,3 +1170,192 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   background: rgb(60 45 0 / 0.26);
   pointer-events: none;
 }
+
+/*
+  THE SOURCE MARK SITS WITH ITS FILE (completion pass, D1). It was a badge drawn over the picture's top-left corner, so on
+  a real preview it covered the page and read as a stray control. It is now the first item of the tile's meta line,
+  beside the kind and origin, which is where a person looks for what a file is.
+*/
+[data-experience='basecamp'] .bcdocmeta .bcdocsrc {
+  position: static;
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  vertical-align: -3px;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+[data-experience='basecamp'] .bcdocmeta .bcdocsrc svg { width: 12px; height: 12px; }
+
+/*
+  THE NO-PROJECT SCREEN (completion pass, D3). A heading, one explanatory sentence, the person's projects as cards, and a
+  single action. The cards use the same surface, border and elevation as the panels, so the empty state belongs to the
+  product rather than sitting on it.
+*/
+[data-experience='basecamp'] .bcnoproj {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 14px;
+  min-height: 100%;
+  padding: 48px clamp(16px, 4vw, 40px) 40px;
+  text-align: center;
+}
+[data-experience='basecamp'] .bcnoproj-title {
+  margin: 0;
+  font: 650 22px/28px var(--bc-font);
+  letter-spacing: -0.01em;
+  color: var(--bc-heading);
+}
+[data-experience='basecamp'] .bcnoproj-lede {
+  margin: 0;
+  max-width: 46ch;
+  font: 400 15px/23px var(--bc-font);
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcnoproj-grid {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  width: min(760px, 100%);
+}
+[data-experience='basecamp'] .bcnoproj-card {
+  appearance: none;
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  width: 100%;
+  min-height: 112px;
+  padding: 16px;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 14px;
+  background: var(--bc-surface);
+  box-shadow: var(--bc-sh-1);
+  color: var(--bc-text-strong);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms var(--bc-ease-out);
+}
+[data-experience='basecamp'] .bcnoproj-card:hover,
+[data-experience='basecamp'] .bcnoproj-card:focus-visible {
+  border-color: var(--bc-border-control);
+  box-shadow: var(--bc-sh-2);
+  outline: none;
+}
+[data-experience='basecamp'] .bcnoproj-card:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--bc-accent) 45%, transparent), var(--bc-sh-2); }
+[data-experience='basecamp'] .bcnoproj-name { font: 600 15px/20px var(--bc-font); overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcnoproj-open { margin-top: auto; font: 600 13px/18px var(--bc-font); color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcnoproj-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px; }
+[data-experience='basecamp'] .bcnoproj-actions .bcbtn { min-height: 44px; padding: 0 18px; }
+@media (max-width: 640px) {
+  [data-experience='basecamp'] .bcnoproj { padding: 32px 16px 28px; }
+  [data-experience='basecamp'] .bcnoproj-grid { grid-template-columns: 1fr; }
+  [data-experience='basecamp'] .bcnoproj-card { min-height: 64px; grid-template-columns: auto 1fr; align-items: center; justify-items: start; }
+  [data-experience='basecamp'] .bcnoproj-open { display: none; }
+}
+
+/*
+  THE HEADER COUNT SITS OUTSIDE THE BELL (completion pass, D2). On a phone the count was offset 1px inside the 18px bell
+  glyph, so the "1" sat on the bell's stroke. It now sits on the bell's top-right corner with a surface ring, so it reads
+  as a badge on the control rather than part of the drawing.
+*/
+[data-experience='basecamp'] [data-bc-attention] { position: relative; }
+[data-experience='basecamp'] .bctop [data-bc-attention] .bcstatus {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  box-shadow: 0 0 0 2px var(--bc-canvas);
+  line-height: 1;
+}
+
+/*
+  THE SAMPLE BANNER IS ONE ROW ON A PHONE (completion pass, D5). The sentence and both actions were stacked in two rows
+  with a full-width button, about 90px of a 390px screen before the work began. On a phone the sentence keeps its words
+  and wraps beside the two actions, which keep their 44px touch targets. Nothing is removed: the place, the sample's
+  "changes are not saved", create, and sign in are all still there.
+*/
+@media (max-width: 560px) {
+  [data-experience='basecamp'] .bcsamplebar { flex-wrap: nowrap; gap: 8px; padding: 6px 12px; }
+  [data-experience='basecamp'] .bcsampletext { flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 16px; }
+  [data-experience='basecamp'] .bcsampleacts { width: auto; flex: none; gap: 4px; }
+  [data-experience='basecamp'] .bcsamplecreate { min-height: 44px; padding: 0 12px; font-size: 13px; white-space: nowrap; flex: none; }
+  [data-experience='basecamp'] .bcsamplelink { min-height: 44px; padding: 0 6px; font-size: 13px; }
+}
+
+/*
+  PHONE TOUCH TARGETS AT 44PX (completion pass; verify:ui named each one). The task checkbox, the documents view
+  toggles and search, the activity filter, contact links and the Project Settings tabs were 15 to 42px on a 390px screen,
+  below the 44px floor. A checkbox keeps its 15px drawing and its footprint in the row; its hit area is the 44px box
+  around it, with negative margins that return the row to its original layout.
+*/
+@media (max-width: 640px) {
+  [data-experience='basecamp'] :is(.bctasklist, .bclists) .bccheck {
+    width: 44px;
+    height: 44px;
+    margin: -14.5px -29px -14.5px -14.5px;
+    box-shadow: none;
+    border-radius: 0;
+    background-color: transparent;
+    background-repeat: no-repeat;
+    background-image:
+      linear-gradient(var(--bc-text-muted), var(--bc-text-muted)),
+      linear-gradient(var(--bc-text-muted), var(--bc-text-muted)),
+      linear-gradient(var(--bc-text-muted), var(--bc-text-muted)),
+      linear-gradient(var(--bc-text-muted), var(--bc-text-muted));
+    background-size: 15px 1.5px, 15px 1.5px, 1.5px 15px, 1.5px 15px;
+    background-position:
+      calc(50% - 7.5px) calc(50% - 7.5px),
+      calc(50% - 7.5px) calc(50% + 6px),
+      calc(50% - 7.5px) calc(50% - 7.5px),
+      calc(50% + 6px) calc(50% - 7.5px);
+  }
+  [data-experience='basecamp'] :is(.bctasklist, .bclists) .bccheck:checked {
+    background-color: transparent;
+    background-image: linear-gradient(var(--bc-accent), var(--bc-accent));
+    background-size: 15px 15px;
+    background-position: calc(50% - 7.5px) calc(50% - 7.5px);
+    background-repeat: no-repeat;
+  }
+  [data-experience='basecamp'] :is(.bctasklist, .bclists) .bccheck:checked::after {
+    left: calc(50% - 4px);
+    top: calc(50% - 7px);
+    width: 5px;
+    height: 9px;
+  }
+  /* The records-head segment and the settings tabs set their own 38 and 40px floors with more specific selectors, so the
+     phone floor names them too. :root adds specificity, so these win on source order. */
+  :root[data-experience='basecamp'] .bcbtn,
+  :root[data-experience='basecamp'] .bcrecordhead .bcseg .bcbtn,
+  :root[data-experience='basecamp'] .subtab,
+  :root[data-experience='basecamp'] .bcdocq { min-height: 44px; }
+  [data-experience='basecamp'] .bcsrcchip { min-width: 44px; min-height: 44px; }
+  [data-experience='basecamp'] a[href^='mailto:'],
+  [data-experience='basecamp'] a[href^='tel:'] { display: inline-flex; align-items: center; min-height: 44px; }
+}
+
+/*
+  THE POST-IT CORNER CONTROLS ARE REACHABLE ON A PHONE (completion pass, D8). The add and remove corners are 20 by 18px
+  and show only on hover, which a touch screen never has. On a phone each is a 44px target that is always drawn, with
+  negative margins so the note keeps its layout.
+*/
+@media (max-width: 640px) {
+  :root[data-experience='basecamp'] .bcpostitx,
+  :root[data-experience='basecamp'] .bcpostitplus {
+    width: 44px;
+    height: 44px;
+    margin: -13px -12px -13px 0;
+    opacity: 1;
+  }
+}

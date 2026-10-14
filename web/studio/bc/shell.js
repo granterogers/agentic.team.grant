@@ -886,6 +886,35 @@ const buildVersionMark = () => {
     : `<span class="bcver" title="Team HQ version ${esc(version)}">v${esc(version)}</span>`
 }
 
+/*
+  THE NO-PROJECT SCREEN (completion pass, D3). With no project open a person sees what they can do next: their projects
+  as cards to open, or, with none yet, the one step that starts their office. It is not a blank canvas with a sentence on it.
+*/
+const emptyProjects = () => {
+  const mine = listed()
+  if (mine.length === 0) {
+    return `<h2 class="bcnoproj-title" id="bcnoproj-title">No projects yet</h2>
+    <p class="bcnoproj-lede">A project holds its own documents, tasks, calendar and team. Start one, and the team can begin work on it.</p>
+    <div class="bcnoproj-actions">
+      <button type="button" class="bcbtn bcbtn--primary" data-bc-menu-open>Create a project</button>
+    </div>`
+  }
+  return `<h2 class="bcnoproj-title" id="bcnoproj-title">Choose a project</h2>
+    <p class="bcnoproj-lede">Each project has its own documents, tasks, calendar and team. Open one to carry on, or start a new one.</p>
+    <ul class="bcnoproj-grid" aria-label="Your projects">${mine
+      .map(
+        (p) => `<li><button type="button" class="bcnoproj-card" data-bc-go="${esc(at(`/p/${p.slug}`))}">
+        <span class="bcnoproj-mark" aria-hidden="true">${compose.projectMark(p, 28)}</span>
+        <span class="bcnoproj-name">${esc(p.name)}</span>
+        <span class="bcnoproj-open">Open <span aria-hidden="true">→</span></span>
+      </button></li>`,
+      )
+      .join('')}</ul>
+    <div class="bcnoproj-actions">
+      <button type="button" class="bcbtn" data-bc-menu-open>Open the project menu</button>
+    </div>`
+}
+
 const portfolio = () => {
   // A signed-in person whose office has nothing in it yet is shown the one next step, not an empty list.
   if (listed().length === 0 && source.live === true && canWrite()) return account.firstRun()
@@ -899,15 +928,10 @@ const portfolio = () => {
     sentence inviting the person to pick or make a project.
   */
   return `<h1 class="bcvh">Team HQ</h1>
-  <div class="bcvoid" role="region" aria-label="No project selected">
+  <section class="bcnoproj" aria-labelledby="bcnoproj-title">
     ${buildVersionMark()}
-    <div class="bcvoidcard">
-      <p class="bcvoidline">${listed().length === 0 ? 'No projects yet.' : 'Choose a project to begin.'}</p>
-      <div class="bcvoidrow">
-        <button type="button" class="bcbtn bcbtn--primary" data-bc-menu-open>${listed().length === 0 ? 'Create a project' : 'Open the project menu'}</button>
-      </div>
-    </div>
-  </div>`
+    ${emptyProjects()}
+  </section>`
 }
 
 /* ======================================================================== *
@@ -3933,7 +3957,8 @@ const shell = () =>
   ${account.sampleBar()}
   ${(menu.sync(currentPath()), topRow())}
   ${notLive()}
-  <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>`
+  <main class="bcmain" id="bcmain" tabindex="-1">${connecting() ? connectingOutline() : body()}</main>
+  ${tray()}`
 
 /*
   The dock's voice-note control: the same button the Chat page's composer

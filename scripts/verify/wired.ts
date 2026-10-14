@@ -77,7 +77,25 @@ const walk = (dir: string): string[] =>
     e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith('.js') ? [join(dir, e.name)] : [],
   )
 
-const src = [...walk('web/studio'), join('web/studio', 'skins.css')]
+/*
+  Stylesheets count as a lookup. A state attribute the script sets and the stylesheet styles (`data-quiet`, `data-bc-mic`)
+  is not a control that nothing wires; it was reported as one because only the scripts were read. A control that exists
+  only in markup, with no script and no style that names it, is still reported.
+*/
+const walkCss = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory()
+      ? walkCss(join(dir, e.name))
+      : e.name.endsWith('.css')
+        ? [join(dir, e.name)]
+        : [],
+  )
+
+const src = [
+  ...walk('web/studio'),
+  ...walkCss(join('web/studio', 'bc')),
+  join('web/studio', 'skins.css'),
+]
   .map((f) => {
     try {
       return readFileSync(f, 'utf8')
@@ -88,6 +106,10 @@ const src = [...walk('web/studio'), join('web/studio', 'skins.css')]
   .join('\n')
 const queried = new Set<string>()
 for (const m of src.matchAll(/\[data-([a-z-]+)[\]=]/g)) {
+  if (m[1] !== undefined) queried.add(m[1])
+}
+// A script that sets a state attribute names it in a quoted string (`setAttribute('data-quiet', …)`).
+for (const m of src.matchAll(/['"]data-([a-z-]+)['"]/g)) {
   if (m[1] !== undefined) queried.add(m[1])
 }
 // `dataset.hireGo` and `data-hire-go` are the same attribute spelled two ways,
@@ -101,9 +123,13 @@ const b = await chromium.launch()
 const ctx = await b.newContext({ viewport: { width: 1440, height: 1000 } })
 const pg = await ctx.newPage()
 pg.on('pageerror', (e) => console.log('PAGEERROR:', e.message))
-await pg.addInitScript(`try{localStorage.setItem('hq.token','audit')}catch(e){}`)
-await pg.goto('http://127.0.0.1:4418/classic/', { waitUntil: 'domcontentloaded' })
-await pg.waitForTimeout(1000)
+/*
+  Team HQ (`/`) is the product; `/classic/` is the retired studio kept unlinked (ADR-0019, ADR-0051). This walk visits the
+  product by its own addresses. It runs signed out, so the controls a writer alone is shown are not in the DOM; they are
+  covered by the Sample Person runs, not by this check.
+*/
+await pg.goto('http://127.0.0.1:4418/', { waitUntil: 'domcontentloaded' })
+await pg.waitForTimeout(1200)
 
 const found = new Map<string, string>()
 /*
@@ -126,7 +152,9 @@ const found = new Map<string, string>()
   sat on it. Being inside a `<form>` is the real test.
 */
 const bare = new Map<string, string>()
+let screensWalked = 0
 const scan = async (where: string) => {
+  screensWalked++
   const rows = (await pg.evaluate(`
     [...document.querySelectorAll('button, a, [role="button"]')]
       .filter(b => b.offsetParent !== null)
@@ -163,13 +191,27 @@ const scan = async (where: string) => {
     if (!bare.has(x.label)) bare.set(x.label, where)
   }
 }
-await scan('portfolio')
-await pg.locator('.project[data-open="legacy-coaching-course"]').click()
-await pg.waitForTimeout(700)
-for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'settings']) {
-  await pg.locator(`[data-tab="${tab}"]`).first().click()
-  await pg.waitForTimeout(450)
-  await scan(`project/${tab}`)
+await scan('home')
+/* The project's own screens, by the addresses the product routes to (shell.js TOOLS). Overview is the project's address. */
+const PROJECT = '/p/legacy-coaching-course'
+for (const tool of [
+  '',
+  'tasks',
+  'board',
+  'chat',
+  'schedule',
+  'team',
+  'documents',
+  'activity',
+  'contacts',
+  'sources',
+  'settings',
+]) {
+  await pg.goto(`http://127.0.0.1:4418${PROJECT}${tool === '' ? '' : `/${tool}`}`, {
+    waitUntil: 'domcontentloaded',
+  })
+  await pg.waitForTimeout(900)
+  await scan(`project/${tool === '' ? 'overview' : tool}`)
 }
 /*
   Project Settings, all four panes (#36).
@@ -184,35 +226,47 @@ for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'source
   either, until it did and found `data-hire` — the other half of a roster
   feature whose `staff_retire` had existed alone since 0079.
 */
-await pg.locator('[data-tab="settings"]').first().click()
-await pg.waitForTimeout(1200)
-for (const pane of ['people', 'automations', 'labels', 'project']) {
-  await pg.locator(`[data-setpane="${pane}"]`).click()
-  await pg.waitForTimeout(450)
-  await scan(`project/settings/${pane}`)
-}
-await pg.locator('[data-settings]').first().click()
-await pg.waitForTimeout(500)
-for (const t of [
-  'team',
-  'behaviour',
-  'requests',
-  'memory',
-  'connections',
-  'channels',
-  'models',
-  'appearance',
-  'help',
+/*
+  Global Settings, the sheet opened by its own control (#158: a page you can leave). Each tab is pressed by its visible
+  name. A walk that reached fewer than three tabs has checked nothing, so it is a failure, not a pass.
+*/
+await pg.goto(`http://127.0.0.1:4418${PROJECT}`, { waitUntil: 'domcontentloaded' })
+await pg.waitForTimeout(900)
+await pg.locator('[data-bc-settings]:visible').first().click({ force: true })
+await pg.waitForTimeout(900)
+await scan('settings/open')
+let settingsTabs = 0
+for (const name of [
+  'Team',
+  'Autonomy and approvals',
+  'Requests',
+  'What it has learned',
+  'Services',
+  'Messaging',
+  'Appearance',
+  'Usage and health',
+  'Help',
 ]) {
-  await pg.locator(`[data-setting="${t}"]`).click()
+  const tab = pg.locator('#settings button', { hasText: new RegExp(`^\\s*${name}\\b`) }).first()
+  if ((await tab.count()) === 0) continue
+  await tab.click({ force: true }).catch(() => undefined)
   await pg.waitForTimeout(450)
-  await scan(`settings/${t}`)
+  settingsTabs++
+  await scan(`settings/${name.toLowerCase()}`)
+}
+if (settingsTabs < 3) {
+  console.log(
+    `verify:wired — the Settings walk reached ${String(settingsTabs)} tab(s); at least three are required, so nothing was checked there.`,
+  )
+  process.exit(1)
 }
 const orphans = [...found].filter(([k]) => !queried.has(k))
 await b.close()
 srv.close()
 
-console.log(`\nverify:wired — ${String(found.size)} control attributes across 21 screens`)
+console.log(
+  `\nverify:wired — ${String(found.size)} control attributes across the screens walked (${String(screensWalked)} scans)`,
+)
 let bad = 0
 if (orphans.length > 0) {
   bad += orphans.length

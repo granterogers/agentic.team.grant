@@ -255,7 +255,7 @@ const dock = async (page: Page, text: string): Promise<void> => {
   const before = turns.length
   await go(page, '/basecamp/p/provenance-b', '.bcmain')
   await dock(page, 'From the dock on B')
-  await go(page, '/basecamp', '[data-bc-go^="/p/"]')
+  await go(page, '/basecamp', '.bcnoproj-card')
   /*
     What the open dock SHOWS on the portfolio (#416). No project is loaded there, so the dock does not pick one for the
     person (it used to keep B's thread, and before that fall to Unnamed): it offers a choice and has nothing to type into.
@@ -509,7 +509,7 @@ const mineCount = (v: DockView, text: string): number =>
   await dock(page, 'Opened on B (dock-376)')
 
   // Away from any project and back through the picker (#416): the dock asks which project, and choosing OPENS it.
-  await go(page, '/basecamp', '[data-bc-go^="/p/"]')
+  await go(page, '/basecamp', '.bcnoproj-card')
   const before = await view(page)
   check(
     'on the portfolio the dock asks which project and has no composer',

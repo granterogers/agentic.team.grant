@@ -1054,10 +1054,9 @@ const thumb = (d, i, compact = false) => {
     <button type="button" class="bcdocpress" data-bc-doc-open="${esc(ref)}"
       aria-label="${esc(`Open ${d.title ?? 'document'}`)}">
       ${thumbFace(d, i, compact ? 'bccompact' : '')}
-      ${docsrc.mark(d, esc)}
       <figcaption>
         <span class="bcdoctitle">${esc(d.title)}</span>
-        <span class="bcdocmeta">${esc((compact ? [kindWordOf(d)] : [kindWordOf(d), d.size]).filter(Boolean).join(' · '))}</span>
+        <span class="bcdocmeta">${docsrc.mark(d, esc)}${esc((compact ? [kindWordOf(d)] : [kindWordOf(d), d.size]).filter(Boolean).join(' · '))}</span>
         ${docsrc.versionChip(d, esc)}${docsrc.projectChip(d, esc)}
       </figcaption>
     </button>

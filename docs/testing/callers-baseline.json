@@ -7,7 +7,6 @@
     "app.mail_recent",
     "app.notebook_chat_allowed",
     "app.notification_patterns",
-    "app.record_external_activity",
     "app.release_test_origins",
     "app.suppress_delivery",
     "app.teach_expertise",
@@ -19,7 +18,6 @@
     "public.skill_effect"
   ],
   "why": {
-    "app.record_external_activity": "THE DOOR FOR WHAT AN EXTERNAL WORKER REPORTS (migration 1060, docs/activity-ledger/EXTERNAL-AGENT-CONTRACT.md), built ahead of any caller on purpose: no external worker is installed, deployed or given database access in this change, and a future authenticated application boundary (not a browser, not the worker) is the only thing that may call it. Proved by scripts/isolated/activity-ledger.ts (the type, severity, status, actor, provenance and office limits, each with a refusal and a positive control). Remove this entry the day that boundary calls it.",
     "app.create_temporary_specialist": "FOR THE OFFICE, not for Grant. It is the only route by which the application role may add staff, and #128's hand-off is what uses it when a job needs a specialist the roster has not got. Only `verify:agents` names it today because no real job has yet needed one — the absence is a fact about traffic, not a missing caller, and a button for it would be Grant hiring somebody to answer a question he has not asked.",
     "app.notification_patterns": "THE FEEDBACK LOOP'S LAST LINK, and this entry's previous reason was FALSE. It claimed `npm run levels` and the learning page answer the question a person asks. Neither names this function or public.notification_events: checked 2026-09-23 by grepping scripts/ and by asking pg_proc for any function whose definition mentions notification_patterns -- the only row returned is the function itself. It is the ONLY reader of notification_events.outcome, which is what a thumbs up or down on Telegram and Slack writes, so the reaction buttons terminate here. public.feedback, the other half of the same press, has no reader at all. Recorded rather than wired: public.feedback holds seven rows, every one positive, none since 6 September, and building learning over a table with no signal in it is the public.contacts trap. 0580 and 0581 removed the Settings cards' claims that a press is read. What a reaction should DO is filed as #353, not guessed at here.",
     "app.suppress_delivery": "THE ARCHITECTURE DOES NOT HAVE THE WINDOW IT NEEDS. It stops a QUEUED message going out when an undo lands first. `public.deliveries` has only ever held `sent` and `failed` — the notifier writes the row at the moment it sends, so there is no interval in which a pending delivery exists to be suppressed. Reachable the day delivery becomes a queue; inventing a caller before then would be a control for a state that cannot occur.",

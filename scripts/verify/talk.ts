@@ -238,9 +238,15 @@ for (const phone of [false, true]) {
   // ---- the control, where it is, and whether a person can reach it
   await toProject(page, 'talk-a')
   const box = await page.locator(MIC).first().boundingBox()
+  /*
+    A touch leg must meet the 44px floor (CLAUDE.md: touch targets 44px). A pointer leg meets the WCAG 2.2 minimum of 24px,
+    which the desktop header's icon controls are sized to (36px). The phone is where the floor is enforced; the desktop
+    leg asserts the minimum it is held to, rather than the phone's floor.
+  */
+  const floor = leg === 'phone' ? 44 : 24
   check(
-    `[${leg}] the control is at least 44px each way`,
-    box !== null && box.width >= 44 && box.height >= 44,
+    `[${leg}] the control is at least ${String(floor)}px each way`,
+    box !== null && box.width >= floor && box.height >= floor,
     JSON.stringify(box),
   )
   const covered = await page.evaluate(`(() => {
