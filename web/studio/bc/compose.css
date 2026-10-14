@@ -4171,7 +4171,9 @@ html.bc-dragging, html.bc-dragging * { user-select: none !important; -webkit-use
   overflow: hidden;
   font-size: 12px;
   line-height: 1.35;
-  color: var(--bc-canvas);
+  /* Ink on the paper the tile is drawn on. The canvas colour was the ink in the dark theme and was nearly white on
+     the light paper, so the excerpts failed contrast in light mode. --bc-paper-ink is defined per scheme beside --bc-paper. */
+  color: var(--bc-paper-ink, var(--bc-text-strong));
   overflow-wrap: anywhere;
   text-align: left;
 }

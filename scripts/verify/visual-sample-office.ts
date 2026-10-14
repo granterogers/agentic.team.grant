@@ -7,19 +7,37 @@ import '../../src/safety/require-production-checks.ts'
  * nothing in production. The appearance is set in this browser only (localStorage), and the Sample's stored appearance row
  * is read before and after to prove that nothing was written to it.
  *
+ * The project is discovered from the database at run time (the most recently updated active project of the Sample office),
+ * never hard-coded. Every project screen is checked to be the screen it claims: the route must be the one requested, the
+ * project's name must be on the page, and the content must differ from the home screen's. A screen that fails any of those
+ * is reported as a FAIL, never as a capture.
+ *
  *   ALLOW_PRODUCTION_CHECKS=1 npx tsx scripts/verify/visual-sample-office.ts <tag>
  *
- * Output: .out/redesign/<tag>/sample-<mode>-<device>-<screen>.png, and a colour scan of each screen.
+ * Output: .out/redesign/<tag>/sample-<mode>-<device>-<screen>.png, a colour scan and an axe-core run per screen.
  */
 import { mkdirSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { newPage, settle, signIn, startStudio } from '../sample/browser.ts'
-import { session } from '../sample/lib.ts'
+import { rows, sampleOffice, session } from '../sample/lib.ts'
 
 const tag = process.argv[2] ?? 'sample'
 const dir = `.out/redesign/${tag}`
 mkdirSync(dir, { recursive: true })
-// A project slug that exists in the Sample Office now (the Sample's projects change; a slug that is gone shows the home screen).
-const SLUG = '2027-financial-plan'
+const AXE = await readFile(join('node_modules', 'axe-core', 'axe.min.js'), 'utf8')
+
+/* The project is read from the Sample office now, never typed in: the most recently updated active project that is not a fixture. */
+const office = await sampleOffice()
+const found = await rows(
+  `select slug, name from public.projects where office_id = '${office.officeId}' and status = 'active' and not is_fixture order by updated_at desc nulls last limit 1`,
+)
+const project = found[0]
+if (project === undefined) throw new Error('the Sample Office has no active project to capture')
+const SLUG = String(project.slug)
+const PROJECT_NAME = String(project.name)
+console.log(`discovered project: ${PROJECT_NAME} (route /p/${SLUG})`)
+
 const SCREENS: [string, string][] = [
   ['home', '/'],
   ['overview', `/p/${SLUG}`],
@@ -67,6 +85,12 @@ const SCAN = `(() => {
   return JSON.stringify({ scanned, exactOldColours: exact, warmHueColours: warm, bodyBg: body.backgroundColor, primaryBg: primary ? getComputedStyle(primary).backgroundColor : null, scheme: document.documentElement.dataset.scheme || 'system', look: document.documentElement.dataset.look || null, palette: document.documentElement.dataset.palette || null, version: (document.querySelector('.bcver') || { textContent: null }).textContent, chars: (document.querySelector('main') || document.body).innerText.trim().length });
 })()`
 
+/* Where the page actually is: the route, the main text (for the fallback comparison) and whether the project's name is on it. */
+const WHERE = `(() => { const main = document.querySelector('main') || document.body; return JSON.stringify({ path: location.pathname, text: main.innerText.trim(), hasName: document.body.innerText.includes(${JSON.stringify(PROJECT_NAME)}) }) })()`
+
+/* axe-core, WCAG 2.0/2.1/2.2 A and AA, on the rendered signed-in page. Read-only: it inspects the DOM and changes nothing. */
+const AXE_RUN = `(async () => { const r = await axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'] }); return JSON.stringify(r.violations.map((v) => ({ id: v.id, impact: v.impact, n: v.nodes.length, target: (v.nodes[0] && v.nodes[0].target.join(' ')) || '', help: v.help }))) })()`
+
 /* Read the Sample's stored appearance row, so a write from this capture would show as a changed timestamp. Read-only. */
 const APPEARANCE_ROW = `select owner || ' updated ' || updated_at::text from public.appearance_settings where owner = 'p4-second-person'`
 const { execFileSync } = await import('node:child_process')
@@ -85,23 +109,41 @@ const studio = await startStudio(4885)
 const { ctx, page, errors } = await newPage(studio, { width: 1440, height: 900 }, false)
 await signIn(studio, page, s) // the one sign-in of this capture
 const report: string[] = []
+const failures: string[] = []
+const axeTotals: Record<string, number> = {}
 for (const [mode, stored] of MODES) {
   await page.evaluate(`localStorage.setItem('studio.appearance', ${JSON.stringify(stored)})`)
+  const homeText: Record<string, string> = {}
   for (const [device, width, height] of DEVICES) {
     await page.setViewportSize({ width, height })
     for (const [name, path] of SCREENS) {
       await page.goto(`${studio.base}${path}`, { waitUntil: 'load' })
       await settle(page)
+      const key = `${mode}-${device}`
       const scan = JSON.parse((await page.evaluate(SCAN)) as string) as Record<string, unknown>
+      const where = JSON.parse((await page.evaluate(WHERE)) as string) as { path: string; text: string; hasName: boolean }
+      if (name === 'home') homeText[key] = where.text
+      // The screen is the one it claims: on its route, named after the project, and not the home screen's content.
+      const sameAsHome = name !== 'home' && where.text === homeText[key]
+      const verdict = name === 'home'
+        ? where.path === '/' ? 'PASS' : 'FAIL'
+        : where.path === path && where.hasName && !sameAsHome ? 'PASS' : 'FAIL'
       const exact = Object.keys((scan.exactOldColours as object) ?? {}).length
       const warm = Object.keys((scan.warmHueColours as object) ?? {}).length
-      report.push(`${mode} ${device} ${name}: scheme=${String(scan.scheme)} look=${String(scan.look)} palette=${String(scan.palette)} body=${String(scan.bodyBg)} primary=${String(scan.primaryBg)} version=${String(scan.version)} chars=${String(scan.chars)} exactOld=${exact} warmHueKinds=${warm}`)
-      if (exact > 0) report.push(`  EXACT OLD colours: ${JSON.stringify(scan.exactOldColours)}`)
       await page.screenshot({ path: `${dir}/sample-${mode}-${device}-${name}.png` })
+      await page.addScriptTag({ content: AXE })
+      const violations = JSON.parse((await page.evaluate(AXE_RUN)) as string) as { id: string; impact: string; n: number; target: string; help: string }[]
+      for (const v of violations) axeTotals[v.impact ?? 'none'] = (axeTotals[v.impact ?? 'none'] ?? 0) + v.n
+      report.push(`${verdict} ${mode} ${device} ${name}: route=${where.path} named=${where.hasName} sameAsHome=${sameAsHome} scheme=${String(scan.scheme)} look=${String(scan.look)} palette=${String(scan.palette)} body=${String(scan.bodyBg)} primary=${String(scan.primaryBg)} version=${String(scan.version)} chars=${String(scan.chars)} exactOld=${exact} warmHueKinds=${warm} axe=${violations.length}`)
+      if (verdict === 'FAIL') failures.push(`${mode} ${device} ${name}`)
+      if (exact > 0) report.push(`  EXACT OLD colours: ${JSON.stringify(scan.exactOldColours)}`)
+      for (const v of violations) report.push(`  axe ${v.impact} ${v.id} x${v.n} (${v.help}) at ${v.target.slice(0, 90)}`)
     }
   }
 }
 const rowAfter = readRow()
+report.push(`screen verdicts: ${failures.length === 0 ? 'all screens are the intended screen' : `FAILED ${failures.length}: ${failures.join('; ')}`}`)
+report.push(`axe affected nodes by impact: ${JSON.stringify(axeTotals)}`)
 report.push(`appearance row after: ${rowAfter}`)
 report.push(`appearance row unchanged by this capture: ${rowBefore === rowAfter ? 'YES' : 'NO'}`)
 report.push(`page errors: ${errors.length === 0 ? 'none' : errors.join(' | ')}`)

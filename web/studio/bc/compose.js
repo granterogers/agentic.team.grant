@@ -191,7 +191,7 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
             </span>`
       }
     </header>
-    <div class="bcmodbody">${body}</div>
+    <div class="bcmodbody" tabindex="0">${body}</div>
     ${
       rect === null
         ? ''
