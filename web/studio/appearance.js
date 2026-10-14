@@ -100,6 +100,10 @@ export const DENSITIES = [
 /* `faces` is [canvas, surface] in each scheme, only so the picker can draw a small preview; the CSS is the source of truth (bc/refine.css). */
 export const LOOKS = [
   { id: 'porcelain', name: 'Porcelain & Teal', note: 'Porcelain surfaces, deep teal accents', faces: { dark: ['#0a1412', '#132522'], light: ['#eef2f0', '#ffffff'] } },
+  { id: 'silver', name: 'Slate & Silver', note: 'Brushed steel, cool and quiet', faces: { dark: ['#0d1114', '#1c2227'], light: ['#e2e5e9', '#fbfcfd'] } },
+  { id: 'graphite', name: 'Graphite & Steel', note: 'Polished near-black and steel grey', faces: { dark: ['#0b0d10', '#16191e'], light: ['#e7e9ec', '#fbfcfd'] } },
+  { id: 'midnight', name: 'Midnight Slate', note: 'Deep navy-black with a blue-grey face', faces: { dark: ['#080c17', '#11182a'], light: ['#e6eaf3', '#fdfdff'] } },
+  { id: 'forest', name: 'Forest', note: 'Deep green-black and sage', faces: { dark: ['#0a1511', '#18291f'], light: ['#d2d6cb', '#eef0e8'] } },
 ]
 export const GLASS = [
   { id: 'off', name: 'Solid', note: 'Menus are opaque' },

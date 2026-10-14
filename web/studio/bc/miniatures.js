@@ -502,6 +502,15 @@ export const calendarMini = (p) => cal.block(p)
   not a translation table on each caller: the renderer takes either and the
   callers stop knowing about it.
 */
+/*
+  THE ROOM IS THE CHIEF OF STAFF'S (Grant, 14 October 2026). Every conversation surface (the Chat screen, the dock preview)
+  passes its messages through this one filter: the person's own words and the office's plain notices, and Claire. The
+  specialists work in the background and their findings reach the project as documents, tasks and the activity list.
+*/
+const ROOM_VOICES = new Set(['', 'grant', 'you', 'office', 'chief-of-staff', 'claire'])
+export const roomVoices = (list) =>
+  list.filter((m) => ROOM_VOICES.has(String(m.who ?? m.from ?? '').toLowerCase()))
+
 export const said_ = (m) => {
   const who = m.who ?? m.from ?? ''
   const mine = who === 'grant'
@@ -621,7 +630,7 @@ export const chatMini = (p, { lines = 3 } = {}) => {
     own conversation, which is why the real one wins whenever it has anything.
   */
   const real = ctx?.chatFor?.(p.slug) ?? []
-  const said = (real.length > 0 ? real : (p.chat ?? [])).slice(-lines)
+  const said = roomVoices(real.length > 0 ? real : (p.chat ?? [])).slice(-lines)
   if (said.length === 0) {
     return `<p class="bcmpty">Nothing has been said on this project yet. Ask the team a
       question and it starts here.</p>`

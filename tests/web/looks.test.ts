@@ -10,6 +10,8 @@ import { describe, expect, it } from 'vitest'
 */
 const read = (p: string): string => readFileSync(new URL(`../../web/studio/${p}`, import.meta.url), 'utf8')
 const identity = read('bc/identity.css')
+// The Silver and Forest looks predate the identity sheet and keep their tokens in refine.css (14 October 2026).
+const everyLook = identity + read('bc/refine.css')
 const refine = read('bc/refine.css')
 const tokens = read('bc/tokens.css')
 
@@ -35,14 +37,14 @@ const ratio = (a: string, b: string): number => {
 */
 const lookBlock = (look: string, scheme: 'dark' | 'light') => {
   const re = new RegExp(`\\[data-look='${look}'\\]\\[data-scheme='${scheme}'\\][^{]*\\{([^}]*)\\}`)
-  const m = re.exec(identity)
+  const m = re.exec(everyLook)
   if (m === null) return null
   const body = m[1] ?? ''
   const get = (n: string): string | null => new RegExp(`${n}:\\s*(#[0-9a-fA-F]{6})`).exec(body)?.[1] ?? null
   return { canvas: get('--bc-canvas'), surface: get('--bc-surface'), muted: get('--bc-text-muted'), text: get('--bc-text'), strong: get('--bc-text-strong') }
 }
 
-const LOOKS = ['porcelain'] as const
+const LOOKS = ['porcelain', 'silver', 'graphite', 'midnight', 'forest'] as const
 const PALETTES = ['slate', 'moss', 'clay', 'ink', 'paper'] as const
 
 describe('the porcelain look keeps text readable', () => {
@@ -90,7 +92,7 @@ describe('every accent is readable on the porcelain look', () => {
   /* [accent, ink on it] per palette and scheme, read from the identity stylesheet. */
   const accentOf = (palette: string, scheme: 'dark' | 'light'): [string, string] => {
     const re = new RegExp(`data-palette='${palette}'\\]\\[data-scheme='${scheme}'\\][^{]*\\{\\s*--bc-accent:\\s*(#[0-9a-fA-F]{6});\\s*--bc-accent-ink:\\s*(#[0-9a-fA-F]{6})`)
-    const m = re.exec(identity)
+    const m = re.exec(everyLook)
     return [m?.[1] ?? '', m?.[2] ?? '']
   }
   for (const scheme of ['dark', 'light'] as const)
@@ -192,7 +194,7 @@ describe('the appearance module', () => {
     store.set('studio.appearance', JSON.stringify({ look: 'original', palette: 'clay', glass: 'rich', depth: 'deep' }))
     const a = m.appearance()
     expect([a.look, a.palette, a.glass, a.depth]).toEqual(['porcelain', 'slate', 'rich', 'deep'])
-    expect(m.LOOKS.map((l) => l.id)).toEqual(['porcelain'])
+    expect(m.LOOKS.map((l) => l.id)).toEqual(['porcelain', 'silver', 'graphite', 'midnight', 'forest'])
   })
 
   it('a choice saved before the current revision resets its look fields once, and keeps density, glass and depth', async () => {

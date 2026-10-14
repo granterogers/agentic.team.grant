@@ -208,7 +208,7 @@ export async function act(action, args = {}) {
   */
   if (r.status === 403 && (body.error === 'sample_readonly' || body.error === 'guest_only')) {
     throw new Error(
-      body.message ?? 'This is a sample office, so changes are not saved. Create your own office to make it yours.',
+      body.message ?? 'Sign in to keep this change.',
     )
   }
   if (!r.ok) throw new Error(body.error ?? `The server returned ${r.status}`)

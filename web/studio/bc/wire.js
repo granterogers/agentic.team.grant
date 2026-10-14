@@ -13,6 +13,7 @@
   second mechanism would be a second set of words for one thing.
 */
 
+import { apply, appearance } from '../appearance.js'
 import { act, alreadyAnswered, attempt, canWrite, read, readFile, say, token } from '../office.js'
 import * as session from '../session.js'
 import { signOut } from '../signout.js'
@@ -802,6 +803,15 @@ export const wire = (root) => {
     b.addEventListener('click', () => {
       b.disabled = true
       signOut()
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-schemetoggle]')) {
+    b.addEventListener('click', () => {
+      // The scheme a person is looking at now, whether it was chosen or followed from the system, and the other one.
+      const now = document.documentElement.dataset.scheme
+        ?? (globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      apply({ ...appearance(), scheme: now === 'dark' ? 'light' : 'dark' })
     })
   }
 

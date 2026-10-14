@@ -107,11 +107,23 @@ export const DEFAULT_TINT = {
 
 /** The CSS colour a module is drawn in: the person's choice, else the module's own. */
 /*
-  The colour a module panel is drawn with. Only a tint a person chose is used (October 2026 redesign): the per-module default
-  colours are no longer painted on the panels, so the board reads as one calm surface and colour means a state. DEFAULT_TINT
-  still names each module's identity elsewhere (identity.js).
+  Each module is drawn in its own colour, given in advance (Grant, 14 October 2026): no module needs a colour picked for it,
+  and the ten modules have ten different tints. A tint the person chose still wins. The colour is the module's border and
+  glow, so a module is recognisable at a glance without a heavy fill.
 */
-export const hueFor = (_id, t) => tintHue(t)
+export const MODULE_TINT = {
+  board: 'teal',
+  tasks: 'mint',
+  contacts: 'violet',
+  documents: 'sky',
+  schedule: 'sand',
+  activity: 'slate',
+  team: 'rose',
+  chat: 'indigo',
+  sources: 'amber',
+  crew: 'coral',
+}
+export const hueFor = (id, t) => tintHue(t) || tintHue(MODULE_TINT[String(id)] ?? '')
 
 /** The CSS colour for a stored tint. */
 export const tintHue = (t) => {
@@ -1185,12 +1197,34 @@ const materialised = (slug, ownIt = false) => {
 const topZ = (d) =>
   Math.max(0, ...(d.mods ?? []).map((m) => m.z ?? 0), ...d.postits.map((n) => n.z ?? 0))
 
-/** Move or resize one module. Neighbours are left alone: overlap is permitted. */
+/*
+  MAKE ROOM (Grant, 14 October 2026). A module that is moved or resized into another pushes that one down below it, and the
+  push carries on through anything it now touches, so the others move to make room rather than being covered. Only the
+  modules that are in the way move; the rest keep their places.
+*/
+const meets = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+export const makeRoom = (mods, id) => {
+  const moved = new Set([id])
+  const queue = [mods.find((m) => m.id === id)].filter((m) => m !== undefined)
+  while (queue.length > 0) {
+    const a = queue.shift()
+    for (const m of mods) {
+      if (moved.has(m.id) || !meets(a, m)) continue
+      const down = clampRect({ ...m, y: a.y + a.h + GAP })  // GAP: the stage's own gutter, shared with the tidy layout
+      Object.assign(m, { y: down.y })
+      moved.add(m.id)
+      queue.push(m)
+    }
+  }
+  return mods
+}
+
+/** Move or resize one module. Any module it lands on is pushed down to make room (makeRoom). */
 export const place = (slug, id, rect) => {
   /* A move or a resize IS an arrangement: every rectangle is written down as the person's from here on. */
   const d = materialised(slug, true)
   const z = topZ(d) + 1
-  d.mods = d.mods.map((m) => (m.id === id ? clampRect({ ...m, ...rect, id, z }) : m))
+  d.mods = makeRoom(d.mods.map((m) => (m.id === id ? clampRect({ ...m, ...rect, id, z }) : { ...m })), id)
   commit(slug, d)
   return layout(slug)
 }

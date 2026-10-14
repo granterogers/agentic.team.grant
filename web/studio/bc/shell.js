@@ -448,6 +448,16 @@ const topRow = () => {
     <div class="bcright">
       <!-- The build's version, on every screen and in the Sample: the one place a person can always see what they are running. -->
       ${buildVersionMark()}
+      <!--
+        Light or dark, on every screen, always at the top right (Grant, 14 October 2026). Both glyphs are drawn and the CSS
+        shows the one that switches to the OTHER scheme, so the button needs no state from the render. It writes the same
+        stored choice as the Appearance tab.
+      -->
+      <button type="button" class="bcschemebtn" data-bc-schemetoggle aria-label="Switch between light and dark" title="Switch between light and dark">
+        <svg class="bcschemeicon bcschemeicon--moon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg>
+        <svg class="bcschemeicon bcschemeicon--sun" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+      </button>
+      ${source.state === 'prototype' ? '<a class="bcsignlink" href="?welcome">Sign in</a>' : ''}
       <button type="button" class="bcbtn" data-bc-attention
         ${attentionTo === null ? 'disabled' : ''}
         aria-current="${attentionTo !== null && isHere(attentionTo) ? 'page' : 'false'}"
@@ -2880,8 +2890,8 @@ const scheduleSurface = (p) => {
 const chatSurface = (p) => {
   ctx?.needChat?.(p.slug)
   const said = ctx?.chatFor?.(p.slug) ?? []
-  const shown = said.length > 0 ? said : (p.chat ?? [])
-  const real = ctx?.chatIsReal?.(p.slug) === true
+  /* The room is the chief of staff's: one filter, shared with the dock preview (bcMini.roomVoices). */
+  const shown = bcMini.roomVoices(said.length > 0 ? said : (p.chat ?? []))
   return `${crumbFor(p, 'chat')}
     <div class="bcrecordhead">
       <h1>${esc(toolById('chat')?.name ?? 'Chat')}</h1>
@@ -2902,18 +2912,6 @@ const chatSurface = (p) => {
         : `<div class="bcchat bcchat--full">
             ${shown.map((m) => bcMini.said_(m)).join('')}
           </div>`
-    }
-    ${
-      real || shown.length === 0
-        ? ''
-        : /*
-            SAYING SO, because the alternative is a fiction presented as his
-            conversation. A signed-out browser has no thread to read, and the
-            prototype one stands in for the shape; §11's rule is that the page
-            says which it is rather than letting him assume.
-          */
-          `<p class="bcpmeta bcgap">This is an example conversation. Sign in and the
-            office's own record replaces it.</p>`
     }
     <form class="bcsay" data-bc-sayform>
       <label class="bcvh" for="bc-say">${esc(`Message the team about ${p.name}`)}</label>
@@ -3896,6 +3894,8 @@ const notLive = () => {
     </div>`
   }
   if (source.live === true) return ''
+  /* The prototype and the Sample are played as ordinary projects: no banner says they are not the real office (Grant, 14 Oct 2026). */
+  if (source.state === 'prototype') return ''
   if (connecting()) {
     return `<div class="bcnotlive bcnotlive--wait" role="status">
       <span class="bcspin" aria-hidden="true"></span>

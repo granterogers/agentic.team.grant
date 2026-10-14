@@ -139,28 +139,29 @@
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* THE FIVE ACCENTS: the palette the person picks is the accent, re-tuned for porcelain. Same ids, new meaning.         */
 /* ------------------------------------------------------------------------------------------------------------------ */
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='slate'][data-scheme='light'],
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='slate']:not([data-scheme]) { --bc-accent: #0f766e; --bc-accent-ink: #ffffff; }
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='moss'][data-scheme='light'],
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='moss']:not([data-scheme]) { --bc-accent: #3f6e4f; --bc-accent-ink: #ffffff; }
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='clay'][data-scheme='light'],
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='clay']:not([data-scheme]) { --bc-accent: #7a3b6e; --bc-accent-ink: #ffffff; }
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='ink'][data-scheme='light'],
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='ink']:not([data-scheme]) { --bc-accent: #1e3a8a; --bc-accent-ink: #ffffff; }
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='paper'][data-scheme='light'],
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='paper']:not([data-scheme]) { --bc-accent: #334155; --bc-accent-ink: #ffffff; }
+/* The accent belongs to the PALETTE, not the look: the same five accents apply on every look, in both schemes. */
+:root:root[data-experience='basecamp'][data-palette='slate'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-palette='slate']:not([data-scheme]) { --bc-accent: #0b5e57; --bc-accent-ink: #ffffff; }
+:root:root[data-experience='basecamp'][data-palette='moss'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-palette='moss']:not([data-scheme]) { --bc-accent: #3f6e4f; --bc-accent-ink: #ffffff; }
+:root:root[data-experience='basecamp'][data-palette='clay'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-palette='clay']:not([data-scheme]) { --bc-accent: #7a3b6e; --bc-accent-ink: #ffffff; }
+:root:root[data-experience='basecamp'][data-palette='ink'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-palette='ink']:not([data-scheme]) { --bc-accent: #1e3a8a; --bc-accent-ink: #ffffff; }
+:root:root[data-experience='basecamp'][data-palette='paper'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-palette='paper']:not([data-scheme]) { --bc-accent: #334155; --bc-accent-ink: #ffffff; }
 
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='slate'][data-scheme='dark'] { --bc-accent: #2dd4bf; --bc-accent-ink: #042320; }
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='moss'][data-scheme='dark'] { --bc-accent: #86c59a; --bc-accent-ink: #0b2415; }
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='clay'][data-scheme='dark'] { --bc-accent: #d9a3d0; --bc-accent-ink: #2a0f25; }
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='ink'][data-scheme='dark'] { --bc-accent: #93c5fd; --bc-accent-ink: #0b1d44; }
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='paper'][data-scheme='dark'] { --bc-accent: #cbd5e1; --bc-accent-ink: #111827; }
+:root:root[data-experience='basecamp'][data-palette='slate'][data-scheme='dark'] { --bc-accent: #2dd4bf; --bc-accent-ink: #042320; }
+:root:root[data-experience='basecamp'][data-palette='moss'][data-scheme='dark'] { --bc-accent: #86c59a; --bc-accent-ink: #0b2415; }
+:root:root[data-experience='basecamp'][data-palette='clay'][data-scheme='dark'] { --bc-accent: #d9a3d0; --bc-accent-ink: #2a0f25; }
+:root:root[data-experience='basecamp'][data-palette='ink'][data-scheme='dark'] { --bc-accent: #93c5fd; --bc-accent-ink: #0b1d44; }
+:root:root[data-experience='basecamp'][data-palette='paper'][data-scheme='dark'] { --bc-accent: #cbd5e1; --bc-accent-ink: #111827; }
 @media (prefers-color-scheme: dark) {
-  :root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='slate']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #2dd4bf; --bc-accent-ink: #042320; }
-  :root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='moss']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #86c59a; --bc-accent-ink: #0b2415; }
-  :root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='clay']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #d9a3d0; --bc-accent-ink: #2a0f25; }
-  :root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='ink']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #93c5fd; --bc-accent-ink: #0b1d44; }
-  :root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='paper']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #cbd5e1; --bc-accent-ink: #111827; }
+  :root:root[data-experience='basecamp'][data-palette='slate']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #2dd4bf; --bc-accent-ink: #042320; }
+  :root:root[data-experience='basecamp'][data-palette='moss']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #86c59a; --bc-accent-ink: #0b2415; }
+  :root:root[data-experience='basecamp'][data-palette='clay']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #d9a3d0; --bc-accent-ink: #2a0f25; }
+  :root:root[data-experience='basecamp'][data-palette='ink']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #93c5fd; --bc-accent-ink: #0b1d44; }
+  :root:root[data-experience='basecamp'][data-palette='paper']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #cbd5e1; --bc-accent-ink: #111827; }
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -208,13 +209,9 @@
   a flat colour. They are gradients, not images: no download, no texture to fight the content, and they sit under every
   face because the faces are opaque.
 */
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-scheme='light'] body,
-:root:root[data-experience='basecamp'][data-look='porcelain']:not([data-scheme]) body {
-  background-image:
-    radial-gradient(1100px 620px at 10% -14%, color-mix(in srgb, var(--bc-accent) 13%, transparent), transparent 62%),
-    radial-gradient(900px 520px at 104% -8%, rgba(14, 116, 144, 0.09), transparent 58%);
-  background-attachment: fixed;
-}
+/* One ground: the canvas colour, with no glow. The glows were fixed to the viewport, so the header, the banner and the board
+   each sat on a different tint of the same page (Grant, 14 October 2026). */
+[data-experience='basecamp'] body { background-image: none; }
 /* Done work is shown by the strike-through and the muted ink, not by dimming it: a faded row fails 4.5:1 for its own title. */
 [data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem--done { opacity: 1; }
 /* The bottom bar's labels read as text, on the active item too. */
@@ -227,9 +224,174 @@
   min-height: 24px;
 }
 
-:root:root[data-experience='basecamp'][data-look='porcelain'][data-scheme='dark'] body {
-  background-image:
-    radial-gradient(1100px 620px at 10% -14%, color-mix(in srgb, var(--bc-accent) 16%, transparent), transparent 62%),
-    radial-gradient(900px 520px at 104% -8%, rgba(56, 189, 248, 0.1), transparent 58%);
-  background-attachment: fixed;
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* MORE LOOKS (14 October 2026). Each is the same set of tokens as Porcelain, so every control that is customised    */
+/* (accent, texture, glass, depth, density) works on every look. Contrast is held to WCAG AA in both schemes.         */
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* Graphite & Steel: cool steel greys, polished near-black. Not warm charcoal. */
+:root:root[data-experience='basecamp'][data-look='graphite'][data-scheme='dark'] {
+  --bc-canvas: #0b0d10; --bc-surface: #16191e; --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 14%, #16191e);
+  --bc-hover: rgba(200, 212, 228, 0.07); --bc-focus-fill: rgba(200, 212, 228, 0.12);
+  --bc-text: #e2e7ee; --bc-text-strong: #f5f7fa; --bc-text-muted: #9aa4b1; --bc-heading: #f5f7fa;
+  --bc-section-accent: #aab4c2; --bc-section-title: #f5f7fa;
+  --bc-border-subtle: rgba(208, 218, 232, 0.1); --bc-border-control: rgba(208, 218, 232, 0.18); --bc-border-popover: rgba(208, 218, 232, 0.16);
+  --bc-scrim: rgba(0, 0, 0, 0.6); --bc-note: #1f242b; --bc-note-ink: #e6ebf2;
+  --bc-sh-weak: 0 1px 0 rgba(220, 230, 245, 0.05) inset, 0 1px 2px rgba(0, 0, 0, 0.4);
+  --bc-sh-1: 0 1px 0 rgba(220, 230, 245, 0.06) inset, 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
+  --bc-sh-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 26px -12px rgba(0, 0, 0, 0.7);
+  --bc-sh-pop: 0 6px 16px -6px rgba(0, 0, 0, 0.6), 0 28px 56px -20px rgba(0, 0, 0, 0.85);
+  --bc-sh-deep: 0 34px 70px -22px rgba(0, 0, 0, 0.9);
+  --bc-shadow-surface: var(--bc-sh-2); --bc-shadow-menu: var(--bc-sh-pop); --bc-shadow-sheet: var(--bc-sh-deep);
+  --bc-elev-1: var(--bc-sh-1); --bc-elev-2: var(--bc-sh-2);
+}
+:root:root[data-experience='basecamp'][data-look='graphite'][data-scheme='light'] {
+  --bc-canvas: #e7e9ec; --bc-surface: #fbfcfd; --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 9%, #fbfcfd);
+  --bc-hover: rgba(30, 40, 56, 0.06); --bc-focus-fill: rgba(30, 40, 56, 0.1);
+  --bc-text: #1c2128; --bc-text-strong: #0c1015; --bc-text-muted: #556070; --bc-heading: #0c1015;
+  --bc-section-accent: #4a5566; --bc-section-title: #0c1015;
+  --bc-border-subtle: rgba(20, 30, 44, 0.1); --bc-border-control: rgba(20, 30, 44, 0.2); --bc-border-popover: rgba(20, 30, 44, 0.16);
+  --bc-scrim: rgba(10, 14, 20, 0.4); --bc-note: #eef1f5; --bc-note-ink: #1c2128;
+  --bc-sh-weak: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(20, 30, 44, 0.06);
+  --bc-sh-1: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(20, 30, 44, 0.07), 0 1px 1px rgba(20, 30, 44, 0.04);
+  --bc-sh-2: 0 1px 2px rgba(20, 30, 44, 0.07), 0 8px 20px -10px rgba(20, 30, 44, 0.22);
+  --bc-sh-pop: 0 6px 16px -6px rgba(20, 30, 44, 0.18), 0 26px 50px -20px rgba(20, 30, 44, 0.32);
+  --bc-sh-deep: 0 30px 60px -22px rgba(20, 30, 44, 0.38);
+  --bc-shadow-surface: var(--bc-sh-2); --bc-shadow-menu: var(--bc-sh-pop); --bc-shadow-sheet: var(--bc-sh-deep);
+  --bc-elev-1: var(--bc-sh-1); --bc-elev-2: var(--bc-sh-2);
+}
+/* Midnight Slate: a deep navy-black with a cool blue-grey face. */
+:root:root[data-experience='basecamp'][data-look='midnight'][data-scheme='dark'] {
+  --bc-canvas: #080c17; --bc-surface: #11182a; --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 14%, #11182a);
+  --bc-hover: rgba(147, 170, 220, 0.09); --bc-focus-fill: rgba(147, 170, 220, 0.14);
+  --bc-text: #dde4f2; --bc-text-strong: #f3f6fc; --bc-text-muted: #94a1ba; --bc-heading: #f3f6fc;
+  --bc-section-accent: #a3b0c9; --bc-section-title: #f3f6fc;
+  --bc-border-subtle: rgba(160, 180, 220, 0.11); --bc-border-control: rgba(160, 180, 220, 0.2); --bc-border-popover: rgba(160, 180, 220, 0.17);
+  --bc-scrim: rgba(0, 0, 8, 0.6); --bc-note: #1a2440; --bc-note-ink: #dfe7f7;
+  --bc-sh-weak: 0 1px 0 rgba(170, 190, 235, 0.06) inset, 0 1px 2px rgba(0, 0, 0, 0.4);
+  --bc-sh-1: 0 1px 0 rgba(170, 190, 235, 0.07) inset, 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
+  --bc-sh-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 26px -12px rgba(0, 0, 0, 0.7);
+  --bc-sh-pop: 0 6px 16px -6px rgba(0, 0, 0, 0.6), 0 28px 56px -20px rgba(0, 0, 0, 0.85);
+  --bc-sh-deep: 0 34px 70px -22px rgba(0, 0, 0, 0.9);
+  --bc-shadow-surface: var(--bc-sh-2); --bc-shadow-menu: var(--bc-sh-pop); --bc-shadow-sheet: var(--bc-sh-deep);
+  --bc-elev-1: var(--bc-sh-1); --bc-elev-2: var(--bc-sh-2);
+}
+:root:root[data-experience='basecamp'][data-look='midnight'][data-scheme='light'] {
+  --bc-canvas: #e6eaf3; --bc-surface: #fdfdff; --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 9%, #fdfdff);
+  --bc-hover: rgba(30, 50, 100, 0.06); --bc-focus-fill: rgba(30, 50, 100, 0.1);
+  --bc-text: #1a2233; --bc-text-strong: #0b1020; --bc-text-muted: #52607a; --bc-heading: #0b1020;
+  --bc-section-accent: #47567a; --bc-section-title: #0b1020;
+  --bc-border-subtle: rgba(20, 34, 70, 0.1); --bc-border-control: rgba(20, 34, 70, 0.2); --bc-border-popover: rgba(20, 34, 70, 0.16);
+  --bc-scrim: rgba(8, 14, 30, 0.4); --bc-note: #eaf0fb; --bc-note-ink: #1a2233;
+  --bc-sh-weak: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(20, 34, 70, 0.06);
+  --bc-sh-1: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(20, 34, 70, 0.07), 0 1px 1px rgba(20, 34, 70, 0.04);
+  --bc-sh-2: 0 1px 2px rgba(20, 34, 70, 0.07), 0 8px 20px -10px rgba(20, 34, 70, 0.22);
+  --bc-sh-pop: 0 6px 16px -6px rgba(20, 34, 70, 0.18), 0 26px 50px -20px rgba(20, 34, 70, 0.32);
+  --bc-sh-deep: 0 30px 60px -22px rgba(20, 34, 70, 0.38);
+  --bc-shadow-surface: var(--bc-sh-2); --bc-shadow-menu: var(--bc-sh-pop); --bc-shadow-sheet: var(--bc-sh-deep);
+  --bc-elev-1: var(--bc-sh-1); --bc-elev-2: var(--bc-sh-2);
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* THE SESSION OF 14 OCTOBER: one ground, coloured modules, yellow notes, quieter buttons.                             */
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* Every band of the shell takes the canvas, so the header, the banner and the board are the same surface. */
+[data-experience='basecamp'] .bctop,
+[data-experience='basecamp'] .bcprototype,
+[data-experience='basecamp'] .bcprotostrip,
+[data-experience='basecamp'] .bcmain,
+[data-experience='basecamp'] .bcboard,
+[data-experience='basecamp'] .bcstage {
+  background-color: var(--bc-canvas);
+  background-image: none;
+}
+/* Modules: each has its own colour, drawn as a thicker border with a soft glow in that colour. */
+[data-experience='basecamp'] .bcmod.bcmod--tinted {
+  border: 2px solid color-mix(in srgb, var(--bc-tint) 78%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--bc-tint) 22%, transparent) inset,
+    0 0 26px -6px color-mix(in srgb, var(--bc-tint) 55%, transparent),
+    var(--bc-sh-2);
+}
+/* Post-it notes are always yellow, in either scheme. */
+[data-experience='basecamp'] .bcpostit {
+  background: #f6e27a;
+  background-image: none;
+  color: #2a2410;
+  border-color: rgba(92, 70, 0, 0.28);
+}
+[data-experience='basecamp'] .bcpostit .bcpostittext,
+[data-experience='basecamp'] .bcpostittext {
+  color: #2a2410;
+}
+/* Buttons: a flat accent or a quiet raised face. No line along the top edge. */
+[data-experience='basecamp'] .bcbtn--primary {
+  background-image: none;
+  background: var(--bc-accent);
+  box-shadow: 0 1px 2px rgba(10, 36, 33, 0.14), 0 6px 16px -10px var(--bc-accent);
+}
+[data-experience='basecamp'] .bcbtn--primary:hover {
+  background: color-mix(in srgb, var(--bc-accent) 88%, #000000);
+  background-image: none;
+}
+[data-experience='basecamp'] .bcbtn:not(.bcbtn--primary):not(.bcicon) {
+  box-shadow: 0 1px 2px rgba(10, 36, 33, 0.08);
+}
+/* Light or dark, top right: a quiet round control. The moon shows in light (it switches to dark); the sun in dark. */
+[data-experience='basecamp'] .bcschemebtn {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--bc-border-subtle);
+  background: transparent;
+  color: var(--bc-text-muted);
+  cursor: pointer;
+  flex: none;
+}
+[data-experience='basecamp'] .bcschemebtn:hover,
+[data-experience='basecamp'] .bcschemebtn:focus-visible { color: var(--bc-text); background: var(--bc-hover); }
+[data-experience='basecamp'] .bcschemeicon--sun { display: none; }
+[data-experience='basecamp'][data-scheme='dark'] .bcschemeicon--moon { display: none; }
+[data-experience='basecamp'][data-scheme='dark'] .bcschemeicon--sun { display: block; }
+@media (prefers-color-scheme: dark) {
+  [data-experience='basecamp']:not([data-scheme]) .bcschemeicon--moon { display: none; }
+  [data-experience='basecamp']:not([data-scheme]) .bcschemeicon--sun { display: block; }
+}
+[data-experience='basecamp'] .bcsignlink {
+  font: 600 13px/1 var(--bc-font);
+  color: var(--bc-accent);
+  text-decoration: none;
+  padding: 10px 6px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+/* Settings: a close X at the top right of the header, the same as the other panels. */
+[data-experience='basecamp'] .stg-close,
+.stg-close {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--bc-border-control);
+  background: var(--bc-surface);
+  color: var(--bc-text);
+  cursor: pointer;
+  flex: none;
+  align-self: flex-start;
+}
+.stg-close:hover, .stg-close:focus-visible { background: var(--bc-hover); }
+.stg-bar { position: relative; }
+.stg-bar > .stg-close { position: absolute; top: 14px; right: 18px; align-self: auto; }
+
+/* A phone header has room for the project's name and the bell. The theme switch stays, smaller; the sign-in text link goes
+   from the phone header (the entry screen, ?welcome, is still the way in). Phone rules are last in this file on purpose. */
+@media (max-width: 560px) {
+  [data-experience='basecamp'] .bcsignlink { display: none; }
+  /* The tap target stays 44px; the margin gives back its edge, so the project's name keeps the room it needs. */
+  [data-experience='basecamp'] .bcschemebtn { margin: -4px -3px; }
 }

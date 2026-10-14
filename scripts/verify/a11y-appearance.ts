@@ -34,6 +34,8 @@ const SCREENS: [string, string][] = [
   ['activity', '/p/legacy-coaching-course/activity'],
 ]
 const SCHEMES = [['light', 'light'], ['dark', 'dark']] as const
+// The look to judge (default Porcelain): LOOK=graphite npx tsx scripts/verify/a11y-appearance.ts
+const LOOK = process.env.LOOK ?? 'porcelain'
 const WIDTHS = [['desktop', { width: 1440, height: 900 }], ['phone', { width: 390, height: 844 }]] as const
 const total: Record<string, number> = {}
 const rows: string[] = []
@@ -41,7 +43,7 @@ for (const [sname, scheme] of SCHEMES)
   for (const [wname, vp] of WIDTHS)
     for (const [name, path] of SCREENS) {
       const ctx = await browser.newContext({ viewport: vp, colorScheme: scheme })
-      await ctx.addInitScript(`localStorage.setItem('studio.appearance', JSON.stringify({ v: 3, scheme: '${scheme}', palette: 'slate', look: 'porcelain' }))`)
+      await ctx.addInitScript(`localStorage.setItem('studio.appearance', JSON.stringify({ v: 3, scheme: '${scheme}', palette: 'slate', look: '${LOOK}' }))`)
       const page = await ctx.newPage()
       await page.goto(BASE + path, { waitUntil: 'load' })
       await page.waitForTimeout(1500)

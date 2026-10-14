@@ -7417,6 +7417,15 @@ function settingsSheet() {
     }
     sheet(v, false)
   })
+  /* The close button leaves Settings from any pane, as the X in every other panel does: straight back to the workspace. */
+  $('[data-stg-close]', v)?.addEventListener('click', () => {
+    state.settingsPane = 'index'
+    if (typeof history !== 'undefined' && history.state?.settings === true) {
+      stepBackFromSettings()
+      return
+    }
+    sheet(v, false)
+  })
   /*
     What a section reads is fetched when it is opened, never before (#54, #265).
 
