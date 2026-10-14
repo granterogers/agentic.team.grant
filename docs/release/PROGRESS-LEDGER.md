@@ -130,3 +130,29 @@ Commits on `feature/auth-storage-portability-ui`: `c79a291f` (storage policy, re
 - **Pre-existing, not from this batch:** `verify:layouts` fails on `main` (it requests `/classic/`, which is absent).
 - **Process slip, disclosed:** a `sed -i` edit to a test-target file, reverted from a copy. Repository edits otherwise went through Edit or Write.
 - **Next:** the status record `docs/release/FEATURE-BATCH-STATUS-2026-10-14.md` lists the integration sequence, rollback, production prerequisites, and owner actions.
+
+## Entry: items 1 to 7 of PR #465, verified locally (14 October 2026, evening UTC)
+
+Everything below ran on the local replica and in a local browser against mocks. No production contact, no production flag, no deploy, no production migration.
+
+- **Gate:** `npm run verify:critical` is **68 green, 0 red, 3,681 assertions** on the final tree. The tree was DIRTY when run (uncommitted changes), so this run did not test the commit alone.
+- **Why eleven proofs were red before this window:** the edge emulator copied only the entry file's direct `./x.ts` imports. `export-route.ts` (added by this PR, not on `main`) imports `./formats.ts`, so every proof that boots `hq-api` failed with `ERR_MODULE_NOT_FOUND`. Fixed in `scripts/isolated/edge-emulator.ts` by copying the full import closure, not one level. The same class as the earlier "one level of imports" defects.
+- **A real defect found and fixed:** `public.project_restores` had no `a1_office_write_once` trigger, so its office could be changed after a restore was recorded. Added to migration `1071` (still PENDING: not in `docs/ops/deployment-state.json` and not in the applied ledger, so it is editable). `check:office-edges` was red on it before any sabotage ran.
+- **A deliberate compatibility break, for the owner to decide:** HTML uploads were accepted before this PR (the parent commit had no type check). They are now refused with `type not allowed`, because a stored page is served from the storage origin with its own content type and no forced download. This is NOT a demonstrated exploit against real storage; it is the fail-safe default. `scripts/isolated/e2e-documents.ts` now asserts the refusal and that no document row exists for it.
+- **Test-harness defect, recorded:** a sabotage run left the shared candidate database `gate_cand` damaged. The candidate stamp (based on `post`'s holdings and the migration files) did not detect it, so later runs reported a false red. Dropping `gate_cand` and rebuilding cleared it. Follow-up needed: the stamp should also cover the candidate's own catalogue, or the sabotage should restore the candidate it changed.
+- **Unit suite:** 470 files passed, 1 skipped; 7,316 tests passed, 21 skipped. `check:migrations` (820 files), `check:secrets` and `check:templates`: exit 0. Type errors: 283, the baseline. Lint (`npx biome ci .`): exit 1. The error-level findings are two formatting failures, `scripts/verify/probe-axe.ts` and `scripts/verify/probe-keyboard.ts`, which predate this batch and are not in its diff (verified with `--reporter=github`). The batch's own files pass the formatter. 66 warnings, none blocking.
+- **Browser verifiers, all run on the final tree:**
+  - `verify:google-signin`: 24 checks passed, 0 failed (desktop and 390 × 844). Real Google OAuth is NOT exercised; the provider is a mock.
+  - `verify:archive-browser`: 28 checks passed, 0 failed (standard exports, ZIP backup and restore, desktop and phone).
+  - `verify:arrangement-local`: 4 checks passed, 0 failed. This is a narrow check; it does not cover the full drag and resize matrix.
+  - `verify:access-browser`: every check passed, 0 failed (empty office, visitor and refused-session states, desktop and phone).
+- **Item status against the request:**
+  1. Signed-link authorisation: implemented (`src/files/links.ts`, 8 unit tests; gateway tests for cross-office and cross-project denial). The Google-session `decideLink` is still not enforced in the gateway (owner-dependent, see below).
+  2. Google sign-in button, callback, errors and flag: implemented and browser-verified with a mock provider. Activation is blocked on the owner's OAuth client.
+  3. Standard export, ZIP backup and restore, desktop and phone: browser-verified as above.
+  4. Drag, resize and saved-layout harness without production: `verify:arrangement-local` is green but covers only 4 checks.
+  5. Empty project, permission boundary and authentication failure: `verify:access-browser` green; the refused-session sentence on restore is still not shown (known gap).
+  6. Archive size: the 8 MiB limit is kept and the pre-read cap is fixed (`docs/release/ARCHIVE-SIZE-DESIGN-2026-10-14.md`). The scalable multi-part backup is DESIGNED, not built.
+  7. Upload allowlist: widened to every format the product accepted before this list (CSV under every declared type, TSV, JSON, Markdown, legacy Word, Excel and PowerPoint, OpenDocument text, RTF), with HTML, XHTML, SVG, JavaScript and Windows executables refused by reason. The HTML refusal is the one break described above.
+- **Open:** the Google-session read rule is not enforced in the gateway (needs owner Supabase configuration); the refused-session sentence is not shown; `verify:wired` and `verify:layouts` still target the obsolete `/classic/` route; the multi-part archive is not built.
+- **Process slips, disclosed:** one `verify:*` chain was started as a single foreground call and ran past the ten-minute ceiling; it was moved to the background, finished (exit 0), and was read from its output file rather than re-run. One `sed -i` was used in an earlier window on a UI file and reverted from a backup (already recorded above). Repository edits in this window went through Edit or Write; the formatter was used for reading only.

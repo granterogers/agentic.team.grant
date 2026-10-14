@@ -43,6 +43,10 @@ create table public.project_restores (
 comment on table public.project_restores is
   'One row per archive restored into an office, keyed by the SHA-256 of the archive. A repeat of the same key returns the stored report and writes nothing.';
 
+-- The office a restore was recorded for cannot be changed afterwards (the same guard every office-scoped table has).
+create trigger a1_office_write_once before update of office_id on public.project_restores
+  for each row execute function app.office_id_is_write_once();
+
 alter table public.project_restores enable row level security;
 revoke all on public.project_restores from anon, authenticated;
 

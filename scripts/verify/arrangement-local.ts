@@ -47,8 +47,8 @@ const server = createServer(async (req, res) => {
 await new Promise<void>((r) => server.listen(4795, '127.0.0.1', () => r()))
 
 const ORIGIN = 'http://127.0.0.1:4795'
-const SIGNIN = 'https://signin.test/functions/v1/signin'
-const GATEWAY = 'https://gw.test/functions/v1/hq-api'
+const SIGNIN = 'https://signin.test/mock/signin'
+const GATEWAY = 'https://gw.test/mock/hq-api'
 const SLUG = 'legacy-coaching-course'
 const PLANTED = { x: 40, y: 40, w: 420, h: 300 }
 const session = JSON.stringify({

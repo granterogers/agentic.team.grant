@@ -41,9 +41,9 @@ const server = createServer(async (req, res) => {
 })
 await new Promise<void>((r) => server.listen(4798, '127.0.0.1', () => r()))
 
-const SIGNIN = 'https://signin.test/functions/v1/signin'
+const SIGNIN = 'https://signin.test/mock/signin'
 const PROVIDER = 'https://provider.test/auth/v1/authorize'
-const GATEWAY = 'https://gw.test/functions/v1/hq-api'
+const GATEWAY = 'https://gw.test/mock/hq-api'
 const ORIGIN = 'http://127.0.0.1:4798'
 const NONCE = 'g'.repeat(30)
 const CANCELLED = 'You cancelled signing in with Google, so nothing was changed.'

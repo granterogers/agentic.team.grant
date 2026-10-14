@@ -302,13 +302,25 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
       not fail because a later import was added and nobody listed it. A file the proof named itself wins.
     */
     const folder = o.edgeFile.slice(0, o.edgeFile.lastIndexOf('/'))
-    for (const m of sourceText.matchAll(/from '\.\/([A-Za-z0-9_-]+\.ts)'/g)) {
-      const name = m[1]
-      if (name === undefined || laid.has(name) || name === 'index.ts') continue
+    /*
+      The closure, not one level of it: export-route.ts is itself a symlink whose own './formats.ts' import must also be
+      laid down, or hq-api fails to load with ERR_MODULE_NOT_FOUND (three proofs crashed on exactly that).
+    */
+    const pending: string[] = [...sourceText.matchAll(/from '\.\/([A-Za-z0-9_-]+\.ts)'/g)].map(
+      (m) => m[1] ?? '',
+    )
+    while (pending.length > 0) {
+      const name = pending.shift() ?? ''
+      if (name === '' || laid.has(name) || name === 'index.ts') continue
       await copyFile(new URL(`../../${folder}/${name}`, import.meta.url), new URL(name, dir)).catch(
         () => undefined,
       )
       laid.add(name)
+      const text = await readFile(
+        new URL(`../../${folder}/${name}`, import.meta.url),
+        'utf8',
+      ).catch(() => '')
+      for (const m of text.matchAll(/from '\.\/([A-Za-z0-9_-]+\.ts)'/g)) pending.push(m[1] ?? '')
     }
     await import(new URL(`index.ts?run=${Date.now()}`, dir).href)
   }

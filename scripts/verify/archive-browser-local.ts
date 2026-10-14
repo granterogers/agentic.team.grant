@@ -46,8 +46,8 @@ const server = createServer(async (req, res) => {
 await new Promise<void>((r) => server.listen(4796, '127.0.0.1', () => r()))
 
 const ORIGIN = 'http://127.0.0.1:4796'
-const SIGNIN = 'https://signin.test/functions/v1/signin'
-const GATEWAY = 'https://gw.test/functions/v1/hq-api'
+const SIGNIN = 'https://signin.test/mock/signin'
+const GATEWAY = 'https://gw.test/mock/hq-api'
 const PROJECT_ID = '6f1c2b8e-0000-4000-8000-0000000000aa'
 const SLUG = 'harbour-plan'
 const RESTORED_SLUG = 'harbour-plan-restored'

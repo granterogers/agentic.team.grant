@@ -154,15 +154,6 @@ try {
       word: W.md,
     },
     {
-      label: 'html',
-      name: 'page.html',
-      mime: 'text/html',
-      bytes: enc(
-        `<html><script>var x="${W.secret}"</script><body><p>Visible ${W.html} text</p></body></html>`,
-      ),
-      word: W.html,
-    },
-    {
       label: 'docx',
       name: 'report.docx',
       mime: DOCX_MIME,
@@ -191,6 +182,34 @@ try {
     },
     { label: 'long', name: 'long.txt', mime: 'text/plain', bytes: enc(long), word: W.tail },
   ]
+  /*
+    HTML is REFUSED, not stored: a stored page is served from the storage origin with its own content type and runs its
+    script there when opened from a signed link. This is the one format the product took before the allowlist (#471) that
+    is now refused; it is a deliberate break, recorded for the owner, and asserted by its reason, with the refused row
+    checked as absent so a refusal that still wrote a document cannot pass.
+  */
+  const page = await upload(
+    SA,
+    pA,
+    'page.html',
+    'text/html',
+    enc(
+      `<html><script>var x="${W.secret}"</script><body><p>Visible ${W.html} text</p></body></html>`,
+    ),
+  )
+  check(
+    'html: refused by its reason, not stored (a deliberate break of an earlier accepted format)',
+    page.status === 400 && String(page.error ?? '').includes('type not allowed') && page.id === '',
+    `http ${String(page.status)} error=${String(page.error ?? '')}`,
+  )
+  const pageRows = await one(
+    `select count(*)::int as n from public.documents where title = 'page.html'`,
+  )
+  check(
+    'html: no document row exists for the refused file',
+    Number(pageRows.n) === 0,
+    `rows=${String(pageRows.n)}`,
+  )
   const idOf: Record<string, string> = {}
   for (const f of files) {
     const r = await upload(SA, pA, f.name, f.mime, f.bytes)
@@ -286,14 +305,6 @@ try {
       tx.fetched === true &&
       tx.has_search === true,
     String(tx.content).slice(0, 60),
-  )
-  const htmlRow = await one(
-    `select content from public.documents where document_id = ${lit(idOf.html ?? '')}::uuid`,
-  )
-  check(
-    'html: <script> content is not indexed, visible text is',
-    !String(htmlRow.content).includes(W.secret) && String(htmlRow.content).includes(W.html),
-    String(htmlRow.content).slice(0, 60),
   )
   const chunks = await one(
     `select count(*)::int as n, count(*) filter (where state = 'active')::int as active from public.document_chunks where document_id = ${lit(idOf.long ?? '')}::uuid`,
