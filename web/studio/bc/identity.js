@@ -52,6 +52,35 @@ const HUES = {
   found: grid.tintHue('slate'),
 }
 
+/*
+  THE INK EACH MODULE IS WRITTEN IN (#472, D1). The pastel hue above is for a border and a glow, which need no contrast; a
+  title needs 4.5 to 1 against its surface, and a pastel cannot reach that on a light surface. So each id carries a deep
+  ink for the light theme and a light ink for the dark theme, in the same hue family, measured in the capture (light 4.5 or
+  more, dark 4.5 or more). Adding a module means adding its two inks here, next to its hue, and nowhere else.
+*/
+const INKS = {
+  tasks: { light: '#1b5e9a', dark: '#8fc8f5' },
+  board: { light: '#5b3fa6', dark: '#c3b1f7' },
+  documents: { light: '#4a5a6b', dark: '#b6c4d4' },
+  schedule: { light: '#13706a', dark: '#86d9cb' },
+  contacts: { light: '#9e3360', dark: '#f4a9c8' },
+  activity: { light: '#266b40', dark: '#9fe0b4' },
+}
+
+/** The two inks for an id: one for the light theme, one for the dark. Empty strings for an unknown id. */
+export const inks = (id) => {
+  if (!Object.hasOwn(INKS, id)) return { light: '', dark: '' }
+  return INKS[id]
+}
+
+/** The identity as inline custom properties, for a style attribute: the hue, and the ink for each theme. */
+export const cssVars = (id) => {
+  const ink = inks(id)
+  const parts = [`--bc-id-hue:${hue(id)}`]
+  if (ink.light !== '') parts.push(`--bc-id-ink-l:${ink.light}`, `--bc-id-ink-d:${ink.dark}`)
+  return parts.join(';')
+}
+
 export const known = (id) => ICONS[id] !== undefined
 /** The colour for an id; the slate hue when the id is not known. */
 export const hue = (id) => HUES[id] ?? grid.tintHue('slate')

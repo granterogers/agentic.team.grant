@@ -135,12 +135,18 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
     optional tint hue. Nothing about the grid survives here.
   */
   const hue = grid.hueFor(id, rect === null ? null : rect.tint)
+  /*
+    THE MODULE'S OWN COLOUR (#472, D1). Every module carries it, from the one table bc/identity.js reads, so its title, icon,
+    border and glow are its identity whether or not anybody chose a tint. identity.css draws them; the body stays neutral.
+    The person's own tint (--bc-tint) is a separate, explicit choice, and it keeps its fill.
+  */
+  const vars = [hue === '' ? '' : `--bc-tint:${hue}`, identity.cssVars(id)].filter((v) => v !== '').join(';')
   const style =
     rect === null
-      ? hue === ''
+      ? vars === ''
         ? ''
-        : ` style="--bc-tint:${hue}"`
-      : ` style="left:${String(rect.x)}px;top:${String(rect.y)}px;width:${String(rect.w)}px;height:${String(rect.h)}px;z-index:${String(rect.z ?? 1)}${hue === '' ? '' : `;--bc-tint:${hue}`}"`
+        : ` style="${vars}"`
+      : ` style="left:${String(rect.x)}px;top:${String(rect.y)}px;width:${String(rect.w)}px;height:${String(rect.h)}px;z-index:${String(rect.z ?? 1)}${vars === '' ? '' : `;${vars}`}"`
   return `<section class="bcmod${wide ? ' bcmod--wide' : ''}${rect === null ? '' : ' bcmod--placed'}${hue === '' ? '' : ' bcmod--tinted'}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}"${style}>
     <!--
       THE HEADER IS STILL THE WHOLE POINTER TARGET (Grant, 22 September), but

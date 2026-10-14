@@ -1,0 +1,66 @@
+/*
+  THE MODULE'S OWN LOOK (#472, D1).
+
+  Each module's border and a soft glow take its identity hue (--bc-id-hue). Its title and icon take its identity ink, which
+  is a deep shade for the light theme (--bc-id-ink-l) and a light shade for the dark theme (--bc-id-ink-d). compose.js sets all
+  of these on each module from bc/identity.js, the one place a module's colour is defined. The body stays neutral and nothing
+  is filled with the colour: a fill is what the person's own tint does, and that keeps its own rules.
+
+  A title needs 4.5 to 1 against its surface. The inks are chosen for that and measured in the capture, not assumed.
+
+  Plain words in this file's comments; no backticks, because this file is read by the template check.
+*/
+
+[data-experience='basecamp'] .bcmod[style*='--bc-id-hue'] {
+  border-color: color-mix(in srgb, var(--bc-id-hue) 42%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--bc-id-hue) 10%, transparent),
+    0 12px 30px -14px color-mix(in srgb, var(--bc-id-hue) 60%, transparent);
+}
+
+/* The light theme is the default. */
+[data-experience='basecamp'] .bcmod[style*='--bc-id-ink-l'] .bcmodtitle,
+[data-experience='basecamp'] .bcmod[style*='--bc-id-ink-l'] .bcmodtitle .bcmodicon {
+  color: var(--bc-id-ink-l);
+}
+
+/* The dark theme, when the person chose it. */
+:root[data-scheme='dark'] .bcmod[style*='--bc-id-ink-d'] .bcmodtitle,
+:root[data-scheme='dark'] .bcmod[style*='--bc-id-ink-d'] .bcmodtitle .bcmodicon {
+  color: var(--bc-id-ink-d);
+}
+
+/* The dark theme, when the system asks for it and the person has not chosen the light one. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme='light']) .bcmod[style*='--bc-id-ink-d'] .bcmodtitle,
+  :root:not([data-scheme='light']) .bcmod[style*='--bc-id-ink-d'] .bcmodtitle .bcmodicon {
+    color: var(--bc-id-ink-d);
+  }
+}
+
+/* The same identity in the project menu: the icon a module is known by, in its ink. The label stays the menu's own ink. */
+[data-experience='basecamp'] .bcmenumod .bcmenumodicon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  color: var(--bc-id-ink-l);
+}
+
+:root[data-scheme='dark'] .bcmenumod .bcmenumodicon {
+  color: var(--bc-id-ink-d);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme='light']) .bcmenumod .bcmenumodicon {
+    color: var(--bc-id-ink-d);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcmod[style*='--bc-id-hue'] {
+    transition: none;
+  }
+}

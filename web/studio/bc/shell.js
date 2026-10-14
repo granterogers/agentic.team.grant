@@ -34,6 +34,7 @@ import * as menu from './menu.js'
 import { PROJECTS, SOURCE_STATE, source } from '../data.js'
 import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
+import * as identity from './identity.js'
 import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
 import * as cal from './calendar.js'
@@ -378,7 +379,7 @@ const menuPanel = () => {
     <div class="bcmenulist" data-bc-menu-modules>${Object.entries(compose.NAMES)
       .map(
         ([id, name]) =>
-          `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-expand="${esc(id)}"><span class="bcmenuname">${esc(name)}</span></button>`,
+          `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem bcmenumod" style="${esc(identity.cssVars(id))}" data-bc-expand="${esc(id)}"><span class="bcmenumodicon">${identity.svg(id, 16)}</span><span class="bcmenuname">${esc(name)}</span></button>`,
       )
       .join('')}${item(at(`/p/${here}/chat`), 'Team Chat')}<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-sources="1"><span class="bcmenuname">Sources</span></button></div>`
     }
