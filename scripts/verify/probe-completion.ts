@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * Completion-pass checks for the visual defects named in docs/ux-overhaul/COMPLETION-INVENTORY-2026-10-14.md, in real
  * Chromium against the local prototype. Each check is a measurement with a stated threshold, not a screenshot judgement.
@@ -110,7 +111,7 @@ try {
 
     /* D4: contrast of every meta line's text against the tile's visible surface. */
     const meta = await page.evaluate(() => {
-      const out: Array<{ text: string; color: string; bg: string }> = []
+      const out: Array<{ text: string; color: string; bg: string; opacity: number }> = []
       for (const el of Array.from(document.querySelectorAll('.bcdocmeta'))) {
         if (el.getBoundingClientRect().width === 0) continue
         let bg = ''

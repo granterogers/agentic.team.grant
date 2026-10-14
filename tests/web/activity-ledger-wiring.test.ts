@@ -176,6 +176,42 @@ describe('needLately, by behaviour', () => {
     await r.needLately()
     expect(asks).toBe(1)
   })
+
+  it('an "unknown section" answer keeps the list the page already had, and the ledger is not asked again', async () => {
+    let asks = 0
+    const read = async (name: string): Promise<unknown> => {
+      if (name === 'activity_ledger') {
+        asks++
+        throw new Error('unknown section: activity_ledger')
+      }
+      return existing
+    }
+    const r = rig(read)
+    await r.needLately()
+    expect(r.latest.lately?.office).toEqual(existing.office)
+    r.latest.lately = null // a refresh: the page asks again for the Lately copy
+    await r.needLately()
+    // needLately writes this through the closure; the cast says so, because the null above would narrow it to never.
+    const after = r.latest.lately as Rig['latest']['lately']
+    expect(after?.office).toEqual(existing.office)
+    expect(asks).toBe(1)
+  })
+
+  it('a failure that is not "unknown section" leaves the ledger on, so it is asked again', async () => {
+    let asks = 0
+    const read = async (name: string): Promise<unknown> => {
+      if (name === 'activity_ledger') {
+        asks++
+        throw new Error('timeout')
+      }
+      return existing
+    }
+    const r = rig(read)
+    await r.needLately()
+    r.latest.lately = null
+    await r.needLately()
+    expect(asks).toBe(2)
+  })
 })
 
 describe('needLately, by wiring (each detector can fail)', () => {

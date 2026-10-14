@@ -77,25 +77,8 @@ const walk = (dir: string): string[] =>
     e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith('.js') ? [join(dir, e.name)] : [],
   )
 
-/*
-  Stylesheets count as a lookup. A state attribute the script sets and the stylesheet styles (`data-quiet`, `data-bc-mic`)
-  is not a control that nothing wires; it was reported as one because only the scripts were read. A control that exists
-  only in markup, with no script and no style that names it, is still reported.
-*/
-const walkCss = (dir: string): string[] =>
-  readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory()
-      ? walkCss(join(dir, e.name))
-      : e.name.endsWith('.css')
-        ? [join(dir, e.name)]
-        : [],
-  )
-
-const src = [
-  ...walk('web/studio'),
-  ...walkCss(join('web/studio', 'bc')),
-  join('web/studio', 'skins.css'),
-]
+// Stylesheets are NOT a lookup (review: a control that is styled but never wired must still be reported).
+const src = [...walk('web/studio')]
   .map((f) => {
     try {
       return readFileSync(f, 'utf8')
@@ -248,8 +231,14 @@ for (const name of [
   'Help',
 ]) {
   const tab = pg.locator('#settings button', { hasText: new RegExp(`^\\s*${name}\\b`) }).first()
-  if ((await tab.count()) === 0) continue
-  await tab.click({ force: true }).catch(() => undefined)
+  // A renamed or missing tab is a failure of this walk, not a tab that was skipped (review: silent continue hid it).
+  if ((await tab.count()) === 0) {
+    console.log(
+      `verify:wired — the Settings tab "${name}" is not on the page; the walk cannot skip it.`,
+    )
+    process.exit(1)
+  }
+  await tab.click({ force: true })
   await pg.waitForTimeout(450)
   settingsTabs++
   await scan(`settings/${name.toLowerCase()}`)

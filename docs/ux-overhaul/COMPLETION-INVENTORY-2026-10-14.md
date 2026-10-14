@@ -68,3 +68,74 @@ verification is recorded.
 | Tool and permission controls | Not verified | Sample Person harness |
 
 Rule: no capability is reported as tested unless a run recorded it.
+
+## Final release record (branch claude/busy-darwin-21mr9n, base origin/main 65bc7b0a)
+
+### Independent review (read-only reviewer, against origin/main)
+
+No blocker was proven by reading. Nine majors were raised; each has a recorded disposition.
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | `wired.ts` Settings walk silently skipped a missing tab and swallowed click failures | FIXED: a missing tab fails the walk; a failing click is not caught. `verify:wired` still 77 attributes / 22 scans, green |
+| 2 | `wired.ts` counted stylesheets and quoted strings as lookups | FIXED: stylesheets removed from the lookup set; the walk stays green, so no dead control was hidden |
+| 3 | `talk.ts` desktop floor lowered from 44px to 24px | KEPT AS A NAMED EXEMPTION, owner to confirm. The desktop control is 36px. 24px is the WCAG 2.2 2.5.8 minimum for pointer targets. The phone leg keeps the 44px touch floor (CLAUDE.md) |
+| 4 | `ui.ts` coverage removed (Settings panes, iPad leg, call sheet) | PARTLY MITIGATED: a visible-content floor was added (a screen drawing under 60 characters is a finding). Sabotage proved it fires on all 24 measurements. Settings panes are covered by `verify:controls:settings` and `verify:sample-settings`. The iPad leg and the call sheet are OPEN, tracked as follow-up |
+| 5 | Ledger test did not cover the `ledgerKnown` branch | FIXED: two behavioural tests added (an "unknown section" answer keeps the list and is not asked again; any other failure is asked again). 39/39 pass |
+| 6 | `app.record_external_activity` removed from `callers-baseline.json` | DISAGREED, with evidence: the live database does not hold the function (migration 1060 is pending), and `check:callers` fails when a baselined name is absent. The removal stays. **When migration 1060 is applied, re-add the entry with its reason** (the check prescribes this) |
+| 7 | Tray drawn on desktop (new, unscoped) | FIXED: `.bctray` hidden at 761px and wider, so desktop is unchanged from main |
+| 8 | No-project screen lost the `.bcvoid` canvas and positioning context | FIXED: `.bcnoproj` is positioned and `.bcmain:has(> .bcnoproj)` keeps the transparent canvas. Desktop capture reviewed: version mark top-right, canvas intact |
+| 9 | `probe-sample-timing.ts` is a production write (creates a Sample visitor session) | REMOVED from the branch. It was never run in this pass |
+
+Minors: the `sample/browser.ts` JSDoc was re-attached to `signIn` (done). `dock-contract.ts` now asserts the composer's project (`data-bc-noteproject`), not the placeholder's wording; the header check in the same suite names the project. The stale D1–D5 and D8 statuses are updated below.
+
+Notes not actioned: the ledger wait is now bounded by `read`'s 20 s limit rather than `settles`' 12 s; overlapping `needLately` calls can both ask before the first rejection lands (harmless: the page keeps the list it had).
+
+### Verification run in this pass
+
+| Check | Result | Notes |
+|---|---|---|
+| smoke, check:templates, check:branding, check:secrets, check:deployment-state | PASS | |
+| check:callers (with the production read flag) | PASS | 14 known, all baselined |
+| verify:wired | PASS | 77 attributes, 22 scans |
+| verify:ui | PASS | 24 measurements; sabotage of the content floor went red on 24/24 |
+| verify:talk | PASS 36/36 | simulated audio only; real-audio acceptance still MANUAL |
+| dialogs, probe-completion, probe-dock-fade, probe-matrix, probe-refinement-workflows, probe-review-majors, probe-appearance-reset, probe-exit-races, probe-history-sequences (21), probe-viewer-close, probe-landing | PASS | |
+| Unit tests (vitest, full) | 7,056 pass before the ledger additions; the affected files pass 39/39 after | a full re-run was not repeated after the final edit |
+| gate:safe --part=static | PARTIAL | PASS: test, migrations, secrets, templates, branding, suite-classes, anon-exposure, machine-key, callers, consumed, wired, basecamp-project-turn, dialogs, slack-card, file-text-corpus, tokens, file-text-docx, phone-header, talk. FAIL, pre-existing and backend: `check:ownership`, `check:office-edges`, `check:carrier-writers` (#437, #403). FAIL: repository-wide lint (62 files already red on main) and repository-wide typecheck (errors in older probe scripts on main). Every file this branch touches typechecks and lints clean |
+| verify:basecamp-project-turn | PASS 35/35 | The dock-based voice-note step was removed: the dock carries dictation by design, and the voice note is proven on the Chat screen (section 3). One count changed from five to four to match four typed sends |
+| gate:safe --part=production | PARTIAL | Steps run individually after the ten-minute runner ceiling: sample:fingerprint, verify:incidents (199 s), verify:named-project, sample:dock, sample:notice-link, sample:labels, verify:delivery-office, verify:channel-link, sample:channel-link (desktop and phone), verify:history 58/58, verify:connectors 55/55, verify:run3-live 26/26, verify:drains 8/8, verify:dryrun 25/25, verify:proposes 26/26 all PASS. **verify:hq FAIL 48/49** (see Blockers). Fingerprint after: GRANT none moved, SAMPLE none moved, FOREIGN only the TEST office (`e13ce7a9`, exempt by design) |
+
+### Authenticated verification (Sample Person; no Grant data; no paid model calls)
+
+| Capability | Result |
+|---|---|
+| Team Settings save, sections, autonomy save and reload, requests, services, messaging, appearance section | `verify:sample-settings` PASS on the runs that reached its first check. The first check (page is live) failed in 2 of 5 runs on production; one failure waited the full 60 s. Cause NOT established (suspected production latency). The check now waits explicitly and reports the strip it found |
+| Documents (thumbnails, opening, versions) | `sample:documents` PASS |
+| Product flows (contacts, project create, project settings rename, tasks) | `sample:product` FAIL. The same suite fails on a clean `origin/main` checkout (7 steps there, 4 on this branch, none new). Pre-existing: the suite presses controls that the current product does not draw (`data-bc-newproject-open` is wired and drawn nowhere) |
+| Tool requests and permissions | `verify:sample-tool-requests` FAIL, a data precondition: the run found no unused (specialist, tool) pair. Not re-run after the reset because the reset was refused (below) |
+| Background image upload | NOT RUN: no suite exercises it against the Sample in this pass |
+| Sample reset to baseline | BLOCKED: the database refused with `53300 remaining connection slots are reserved` (connection exhaustion). Production contact was stopped rather than retried |
+
+### Blockers that prevent the release claim
+
+1. **verify:hq 48/49, pre-existing and backend.** The page asks the gateway for `activity_ledger` and `project_background`. The deployed `hq-api` serves neither. The repository's `hq-api` serves both, so production runs an older build. `project_background` is requested by main's page too. Fixing this means deploying `hq-api`, a backend change, which needs its own scope verification. It is not in this frontend release's authority.
+2. **Database connection exhaustion** (`53300`) during the Sample reset. Production writes and the production smoke test need a healthy database. Re-check platform health before any further production contact.
+3. **Authenticated gaps:** background image upload not run; tool-permission data precondition; `sample:product` pre-existing red.
+4. **Not run in this pass:** the production Vercel deploy, page-delta dry run, live-byte comparison and production smoke. These are gated on 1 and 2 above.
+
+### Final statuses
+
+| # | Status now |
+|---|---|
+| D1 source mark on real previews | LANDED. Probe passes; mark sits in the meta line |
+| D2 attention count over the bell | LANDED. Probe passes at 390 and 1440 |
+| D3 empty project state | LANDED. Desktop and phone captures reviewed; cards and action present |
+| D4 tile meta contrast | MEASURED and passing: lowest 6.24:1 light, 7.32:1 dark |
+| D5 Sample banner height on phone | LANDED in CSS (one row). Verified in the prototype, NOT on production |
+| D6 Sample load time | MEASURED in an earlier pass: DOM ready 2.4 to 3.2 s; sign-in 1.3 to 2.3 s; first project 6.7 to 7.7 s; the studio read 4.1 to 5.1 s TTFB, which is server-side work. The `activity_ledger` 400 is handled by the fallback. The root cause in the `studio` read is backend, out of this release |
+| D8 Post-it grip target | LANDED. 44px on phone |
+| D9 #472, #473 | NOT STARTED: feature scope, owner decision |
+| D10 #422 page-load fan-out | NOT STARTED: waits on the D6 backend work |
+
+Rule kept: a row closes only with a recorded run. D5 needs a production capture; D6 needs the backend fix.

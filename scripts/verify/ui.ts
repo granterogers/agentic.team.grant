@@ -75,8 +75,10 @@ const MEASURE = `(() => {
     const s = getComputedStyle(el);
     return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0;
   };
-  const out = { overflow: 0, smallText: [], smallTargets: [] };
+  const out = { overflow: 0, smallText: [], smallTargets: [], chars: 0 };
   out.overflow = Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  // A blank screen raises no page error and no overflow, so the audit must say how much text the screen actually drew.
+  out.chars = ((document.querySelector('main') || document.body).innerText || '').trim().length;
   for (const el of Array.from(document.querySelectorAll('body *'))) {
     if (!visible(el)) continue;
     const own = Array.from(el.childNodes).some((n) => n.nodeType === Node.TEXT_NODE && (n.textContent || '').trim() !== '');
@@ -122,7 +124,16 @@ const measure = async (
     overflow: number
     smallText: string[]
     smallTargets: string[]
+    chars: number
   }
+  // The floor is a control as well as a check: a screen that draws only its chrome is reported, not passed.
+  if (result.chars < 60)
+    findings.push({
+      screen,
+      device,
+      kind: 'drew almost nothing',
+      detail: `${String(result.chars)} visible characters in main`,
+    })
   if (result.overflow > 1)
     findings.push({
       screen,

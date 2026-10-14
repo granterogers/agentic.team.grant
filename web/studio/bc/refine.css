@@ -1359,3 +1359,24 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
     opacity: 1;
   }
 }
+
+/* The bottom tray is the phone's chat dock. Main never drew it on a desktop, so the desktop keeps that layout. */
+@media (min-width: 761px) {
+  [data-experience='basecamp'] .bctray {
+    display: none;
+  }
+}
+
+/* The no-project screen carries the version mark, which positions against its nearest positioned ancestor, and it keeps the
+   empty board's canvas (the old .bcvoid rules, which this screen replaced). */
+[data-experience='basecamp'] .bcnoproj {
+  position: relative;
+}
+[data-experience='basecamp'] .bcmain:has(> .bcnoproj) {
+  width: 100%;
+  margin: 0;
+  padding: 0 var(--bc-3) var(--bc-3);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}

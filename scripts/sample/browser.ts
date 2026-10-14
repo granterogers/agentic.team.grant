@@ -81,7 +81,6 @@ export const settle = async (page: Page): Promise<void> => {
   await page.waitForTimeout(2000)
 }
 
-/** Open the page the way a magic link does: a navigation carrying the session in the fragment. */
 /*
   SIGNING IN AS THE SAMPLE PERSON, the way this browser does it (B-05, web/studio/flow.js). The page adopts a sign-in only
   when this browser asked for one: it stores a pending flow under `hq.signin.flow` and the link back carries its nonce as
@@ -89,6 +88,7 @@ export const settle = async (page: Page): Promise<void> => {
   the fragment. The page's own decision code runs unchanged. A token placed in the fragment with no pending flow is refused
   by design (login CSRF), which is what the earlier harness did and what the product now correctly refuses.
 */
+/** Open the page the way a magic link does: a navigation carrying the session in the fragment. */
 export const signIn = async (studio: Studio, page: Page, s: Session): Promise<void> => {
   await page.goto('about:blank')
   const nonce = randomBytes(32).reduce((out, b) => out + (b % 36).toString(36), '')
@@ -96,7 +96,7 @@ export const signIn = async (studio: Studio, page: Page, s: Session): Promise<vo
   await page.evaluate(
     ([key, value]) => {
       try {
-        localStorage.setItem(key, value)
+        localStorage.setItem(String(key), String(value))
       } catch {
         /* storage refused: the sign-in cannot be recognised, and the test will say so */
       }
@@ -135,7 +135,17 @@ export const openSettings = async (page: Page, tab?: string): Promise<void> => {
       .catch(() => null)
     await page.waitForTimeout(400)
   } else if (!open) {
-    await page.locator('[data-bc-settings]').first().click({ force: true })
+    // The header control on a desktop; on a phone it is hidden and Global Settings is the menu's entry (wire.js).
+    if ((await page.locator('[data-bc-settings]:visible').count()) > 0) {
+      await page.locator('[data-bc-settings]:visible').first().click({ force: true })
+    } else {
+      await page
+        .locator('[data-bc-menu-open]:visible, [data-bc-menu]:visible')
+        .first()
+        .click({ force: true })
+      await page.waitForTimeout(400)
+      await page.locator('[data-bc-global-menu]:visible').first().click({ force: true })
+    }
   }
   await page.waitForSelector('#settings .stg-navitem', { timeout: 20000 })
   if (tab !== undefined) {

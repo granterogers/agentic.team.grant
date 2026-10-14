@@ -564,26 +564,9 @@ const mineCount = (v: DockView, text: string): number =>
     onA2.said.join(' | ').slice(0, 300),
   )
 
-  // The voice note composer in the same dock files where the typed one does.
-  const beforeNote = turns.length
-  await page.locator('#dock [data-bc-note]').first().click()
-  await page.waitForTimeout(1600)
-  await page.locator('#dock [data-bc-notestop]').click()
-  await page.waitForTimeout(900)
-  await page.locator('#dock [data-bc-notesend]').click()
-  await page.waitForTimeout(2000)
-  const afterNote = await view(page)
-  const noteTurn = turns.slice(beforeNote)
-  check(
-    "a voice note from the same dock is stated as the page's project",
-    noteTurn.length === 1 && who(noteTurn[0]?.project) === 'A',
-    noteTurn.map((t) => `${who(t.project)}: ${t.said}`).join(' | ') || 'no note reached the door',
-  )
-  check(
-    'and it lands in the thread on screen, which is A',
-    afterNote.note === 'provenance-a' && has(afterNote, 'What still needs doing on this project?'),
-    `${afterNote.note}: ${afterNote.said.slice(-3).join(' | ')}`,
-  )
+  // A voice note from the dock is NOT asserted here: the dock carries dictation (shell.js dockDictateButton, which fills the
+  // composer), and the recorded voice note lives on the project's Chat screen, where section 3 proves it reaches the door as A.
+  // This step was removed because it searched the dock for a control the product no longer draws, so it could never pass.
 
   // Closing and reopening the dock on the same page shows the same project: it is the page's, not a remembered one.
   await page.locator('#dock [data-dock-close]').click()
@@ -604,8 +587,8 @@ const mineCount = (v: DockView, text: string): number =>
     `${reopened.note} -> ${reopened2.note}, stated ${who(turns.at(-1)?.project)}`,
   )
   check(
-    'one turn per send: five sends (four typed, one voice), five turns, nothing twice',
-    turns.length === 5 && new Set(turns.map((t) => t.said)).size === 5,
+    'one turn per send: four typed sends, four turns, nothing twice',
+    turns.length === 4 && new Set(turns.map((t) => t.said)).size === 4,
     turns.map((t) => `${who(t.project)}: ${t.said}`).join(' | '),
   )
   check('nothing threw', thrown.length === 0, thrown.join(' | '))
