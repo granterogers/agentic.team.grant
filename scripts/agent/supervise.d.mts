@@ -33,6 +33,16 @@ export interface SuperviseOptions {
   policy?: Partial<typeof POLICY>
   clock?: () => Date
   log?: (line: string) => void
+  branch?: string
+  expectMission?: string | null
+  budget?: { totalUsd: number; perSessionUsd: number } | null
+  maxWallClockMs?: number | null
+  captureDir?: string | null
+  sessionIds?: boolean
+  sessionInstructions?: string[]
+  readFirst?: string[]
+  pollMs?: number
+  killGraceMs?: number
 }
 
 export interface SuperviseResult {
@@ -40,6 +50,17 @@ export interface SuperviseResult {
   reason?: string
   prompt?: string
   pid?: number | null
+  sessionsStarted?: number
+  spentUsd?: number
 }
 
 export function supervise(options?: SuperviseOptions): Promise<SuperviseResult>
+
+export function gitBranch(root: string): string | undefined
+export function costFromResult(
+  text: string,
+): { costUsd: number | null; claudeSessionId: string | null; subtype: string | null; isError: boolean } | null
+export function abortFor(
+  state: Ledger | null,
+  input: { now: Date; stopRequested: boolean; startedAt: number; maxWallClockMs: number | null },
+): { reason: string; status: string } | null

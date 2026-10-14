@@ -54,16 +54,15 @@ Status words: `done`, `in_progress`, `todo`, `blocked`. The JSON is authoritativ
 | R4 | Stop gate registered as a project Stop hook, branch-scoped | done | `.claude/settings.json`; `scripts/agent/stop-gate.mjs`; `tests/agent/gate.test.ts` (26) |
 | R5 | Supervisor: restart, backoff, crash loop, budgets, duplicate prevention, graceful stop | done | `scripts/agent/supervise.mjs`; `tests/agent/supervisor.test.ts` (real child process) |
 | R6 | Regression tests against real processes and sabotage checks | done | the three suites above; `tests/agent/mission.test.ts` (8); sabotage checks recorded in the ledger |
-| R7 | Live continuity trial across real session restarts | **blocked** | needs Grant's approval, because it starts model-consuming sessions |
+| R7 | Live continuity trial across real session restarts | done, for one controlled trial | `docs/agent/history/LIVE-RESTART-TRIAL-2026-10-14.md`: two sessions, one restart, PASS; not an eight-hour run |
 | R8 | Operator runbook: start, monitor, stop and resume an eight-hour run | done | `docs/agent/CONTINUITY.md`; `scripts/agent/mission.mjs` |
 | R9 | Push branch, open or update the draft pull request, record verification | todo | the final report |
 | R9 | Push branch, open or update the draft pull request, record verification | todo | the final report |
 
 ## Blocked
 
-- **R7, live trial.** Owner decision required. A trial starts real Claude Code sessions, which use model usage. Until
-  approved, the restart behaviour is verified only against a stub child process, and a live restart is recorded as
-  unverified.
+- None. R7 was run once under explicit authorisation (see the history record). A longer or realistic live run needs a
+  separate authorisation, because it uses model usage.
 
 ## Integration with parallel work (documented, not performed)
 

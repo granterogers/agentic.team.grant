@@ -67,8 +67,8 @@
       {
         "id": "R7",
         "title": "Live continuity trial across real session restarts",
-        "status": "blocked",
-        "evidence": "needs Grant's approval: a live trial starts model-consuming sessions"
+        "status": "done",
+        "evidence": "docs/agent/history/LIVE-RESTART-TRIAL-2026-10-14.md: one controlled trial, two sessions, one restart, PASS for that trial only"
       },
       {
         "id": "R8",

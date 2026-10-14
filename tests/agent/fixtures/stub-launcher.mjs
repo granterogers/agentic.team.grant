@@ -22,12 +22,36 @@ const lockPath = process.env.STUB_LOCK
 const prompt = process.argv[process.argv.length - 1] ?? ''
 
 if (process.env.STUB_LOG) {
-  appendFileSync(process.env.STUB_LOG, `${JSON.stringify({ pid: process.pid, mode, prompt })}\n`)
+  appendFileSync(process.env.STUB_LOG, `${JSON.stringify({ pid: process.pid, mode, prompt, argv: process.argv.slice(2, -1) })}\n`)
 }
+
+// A session whose supervisor died without cleanup (SIGKILL cannot be caught) must not run on as an orphan. It ends when its
+// parent is gone. Real sessions cannot be taught this; the supervisor's own cleanup handles every other exit.
+const parent = process.ppid
+setInterval(() => {
+  if (process.ppid !== parent || process.ppid === 1) process.exit(0)
+}, 200).unref()
 
 async function main() {
   if (mode === 'hang') {
     setInterval(() => {}, 1_000)
+    return
+  }
+  if (mode === 'stubborn') {
+    // Ignores the polite signal, so only the supervisor's escalation to SIGKILL can end it.
+    process.on('SIGTERM', () => {})
+    setInterval(() => {}, 1_000)
+    return
+  }
+  if (mode === 'costly') {
+    // Completes one requirement, then reports a result in the same JSON shape the real CLI prints with --output-format json.
+    await updateState(statePath, lockPath, undefined, (s) => {
+      const [first] = classify(s.mission).actionable
+      if (first) first.status = 'done'
+      return s
+    })
+    process.stdout.write(`${JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: `stub-${process.pid}`, total_cost_usd: 0.3 })}\n`)
+    process.exitCode = 0
     return
   }
   if (mode === 'crash') {

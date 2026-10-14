@@ -102,6 +102,15 @@ work.
   stub child process (restarts, backoff, crash loop, budgets, deadline, STOP file, duplicate supervisor, SIGTERM, resume
   after interruption, branch guard); the owner controls. Sabotage checks showed each suite turns red when its rule is
   broken.
-- **Not verified:** a live restart of a Claude Code session. A session costs model usage, and the owner has not approved
-  one. The Stop hook's behaviour in a cloud session follows the documentation (a committed `.claude/settings.json`
-  applies to a single-repository cloud session), which was not tested live.
+- **Verified live, once:** one controlled trial (14 October 2026, `docs/agent/history/LIVE-RESTART-TRIAL-2026-10-14.md`).
+  Two real Claude Code sessions, one automatic restart, the resumed session finished the remaining work, the supervisor
+  recognised completion, no child process remained, spend was US$0.018 by the CLI's own report. Three trivial file
+  writes, about 43 seconds.
+- **Not verified live:** recovery from a real interruption, a crash, a signal or a deadline during a session (covered by
+  local tests); a longer or realistic run; the cost on the provider's invoice; the Stop hook in a cloud session.
+- **Launcher used for that trial,** for reference (it needs a separate authorisation before anyone runs it again):
+
+      claude -p --model claude-haiku-5-5 --output-format json --permission-mode acceptEdits --permission-prompts none --max-budget-usd 0.40 --allowedTools=Read,Write,Edit --disallowedTools=Bash,WebFetch,WebSearch --strict-mcp-config --mcp-config=<empty mcp file>
+
+  The supervisor's `--budget-total-usd`, `--budget-per-session-usd`, `--max-wall-clock-ms`, `--expect-mission`,
+  `--session-ids` and `--capture-dir` options bound the run around that launcher.

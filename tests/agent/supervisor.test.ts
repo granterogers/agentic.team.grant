@@ -82,6 +82,15 @@ function runs(): { pid: number; mode: string; prompt: string }[] {
 
 const quiet = () => undefined
 
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'supervisor-'))
   logPath = join(root, 'stub.log')
@@ -258,21 +267,25 @@ describe('running a real child process', () => {
   it('a crashing session is restarted with growing backoff, then the run stops as a crash loop instead of retrying for ever', async () => {
     writeLedger(mission([{ id: 'R1', title: 'a', status: 'todo' }]))
     setEnv('crash')
+    const lines: string[] = []
     const result = await supervise({
       root,
       launch: true,
       launcher: LAUNCHER,
       policy: FAST,
-      log: quiet,
+      log: (line) => lines.push(line),
     })
     const final = readState(join(root, 'docs/agent/EXECUTION-STATE.json'))
     expect(result.reason).toMatch(/crash loop: 3 failures/)
     expect(final.mission.status).toBe('paused')
     expect(final.sessions.map((s) => s.terminationReason)).toEqual(['exit 1', 'exit 1', 'exit 1'])
-    const starts = final.sessions.map((s) => Date.parse(s.startedAt ?? ''))
-    const gaps = starts.slice(1).map((t, i) => t - (starts[i] ?? 0))
-    expect(gaps).toHaveLength(2)
-    expect(gaps[1]).toBeGreaterThanOrEqual(gaps[0] ?? 0)
+    // The backoff values the supervisor chose, read from its own log. Wall-clock gaps between starts include child start-up
+    // time and are too noisy to compare.
+    const waits = lines.flatMap((l) => {
+      const hit = /resuming in (\d+) ms/.exec(l)
+      return hit ? [Number(hit[1])] : []
+    })
+    expect(waits).toEqual([20, 40])
   })
 
   it('stops at the restart budget and pauses the mission, rather than starting a session it is not allowed to', async () => {
@@ -292,9 +305,10 @@ describe('running a real child process', () => {
       log: quiet,
     })
     const final = readState(join(root, 'docs/agent/EXECUTION-STATE.json'))
+    // maxRestarts 1 allows exactly one restart: two sessions in all, then the budget stops the run.
     expect(result.reason).toMatch(/restart budget/)
     expect(final.mission.status).toBe('paused')
-    expect(final.sessions).toHaveLength(1)
+    expect(final.sessions).toHaveLength(2)
   })
 
   it('stops at the session budget and pauses the mission', async () => {
@@ -408,8 +422,12 @@ describe('more than one supervisor, and interruption, as real processes', () => 
     const outcome = await second.done
     expect(outcome.code).toBe(3)
     expect(JSON.parse(outcome.stdout.trim()).outcome).toBe('duplicate')
-    first.child.kill('SIGKILL')
+    // SIGTERM, not SIGKILL: a supervisor killed with SIGKILL cannot clean up its child, and that is what this test must not leave behind.
+    first.child.kill('SIGTERM')
     await first.done
+    // The supervisor's cleanup must have ended its child too, not left it running.
+    await waitFor(() => !alive(runs()[0]?.pid ?? 0), 5_000)
+    expect(alive(runs()[0]?.pid ?? 0)).toBe(false)
   }, 30_000)
 
   it('a SIGTERM stops the running session, records the pause, and leaves the mission resumable', async () => {
