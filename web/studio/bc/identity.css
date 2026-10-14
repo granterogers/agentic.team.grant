@@ -1,0 +1,235 @@
+/*
+  THE PORCELAIN & TEAL IDENTITY (October 2026).
+
+  The one visual system for Team HQ. It is loaded LAST (index.html), so every token here wins over the older looks in
+  tokens.css and refine.css by source order at equal specificity, and every selector below is written at the same
+  specificity as the look blocks it replaces. Nothing in this file is a per-screen patch: a screen gets the identity by
+  reading the tokens, and a component that paints a fixed colour is named in the component section at the end.
+
+  Three rules this file keeps:
+    1. Porcelain surfaces (a cool, slightly teal-grey canvas with white faces) and deep teal accents. Never the warm
+       charcoal-and-burnt-orange of the retired looks.
+    2. Depth comes from layered shadows that carry a hint of the accent, a one-pixel highlight on the top edge of raised
+       faces, and a subtle gradient on the primary action. Flat is an option in the Appearance tab, not the default.
+    3. Status colours are restrained: a warning reads as a warning and a danger as a danger, and neither is decoration.
+       Every text colour is chosen to reach WCAG AA (4.5:1) on the surface it sits on, and tested in the verification.
+
+  Scheme: explicit `data-scheme` wins; with none, the system preference decides (the same rule as skins.css).
+*/
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* LIGHT: porcelain                                                                                                  */
+/* ------------------------------------------------------------------------------------------------------------------ */
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-look='porcelain']:not([data-scheme]) {
+  --bc-canvas: #eef2f0;
+  --bc-surface: #ffffff;
+  --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 9%, #ffffff);
+  --bc-hover: rgba(15, 118, 110, 0.08);
+  --bc-focus-fill: rgba(15, 118, 110, 0.12);
+  --bc-text: #17221f;
+  --bc-text-strong: #0b1513;
+  --bc-text-muted: #4b5e5a;
+  --bc-heading: #0b1513;
+  --bc-section-accent: #3d5d59;
+  --bc-section-title: #0b1513;
+  --bc-border-subtle: rgba(16, 48, 44, 0.1);
+  --bc-border-control: rgba(16, 48, 44, 0.2);
+  --bc-border-popover: rgba(16, 48, 44, 0.16);
+  --bc-scrim: rgba(8, 22, 20, 0.36);
+  --bc-state: #9a3d12;
+  --bc-warn: #8a5a06;
+  --bc-danger: #b42318;
+  --bc-success: #15703d;
+  --bc-info: #1d4ed8;
+  --bc-activity-accent: #0f766e;
+  --bc-note: #e6f4f0;
+  --bc-note-ink: #123d37;
+  --bc-mod-board: #0f766e;
+  --bc-mod-tasks: #3d6b4f;
+  --bc-mod-contacts: #6b4f8a;
+  --bc-mod-documents: #2f5d8c;
+  --bc-mod-schedule: #7a5a1f;
+  --bc-mod-activity: #4b5e5a;
+  --bc-mod-other: #4b5e5a;
+  --bc-r-control: 10px;
+  --bc-r-row: 10px;
+  --bc-r-menu: 14px;
+  --bc-r-sheet: 18px;
+  /* Layered depth: a top highlight, a tight contact shadow and a soft ambient lift, each a touch of the accent. */
+  --bc-sh-weak: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(10, 36, 33, 0.05);
+  --bc-sh-1: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(10, 36, 33, 0.06), 0 1px 1px rgba(10, 36, 33, 0.04);
+  --bc-sh-2: 0 1px 2px rgba(10, 36, 33, 0.06), 0 8px 20px -10px rgba(10, 36, 33, 0.2);
+  --bc-sh-3: 0 2px 4px rgba(10, 36, 33, 0.06), 0 18px 40px -16px rgba(10, 36, 33, 0.26);
+  --bc-sh-mid: 0 4px 10px -4px rgba(10, 36, 33, 0.14), 0 14px 30px -14px rgba(10, 36, 33, 0.24);
+  --bc-sh-pop: 0 6px 16px -6px rgba(10, 36, 33, 0.16), 0 26px 50px -20px rgba(10, 36, 33, 0.3);
+  --bc-sh-deep: 0 30px 60px -22px rgba(10, 36, 33, 0.36);
+  --bc-shadow-surface: var(--bc-sh-2);
+  --bc-shadow-menu: var(--bc-sh-pop);
+  --bc-shadow-sheet: var(--bc-sh-deep);
+  --bc-shadow-ink: rgba(10, 36, 33, 0.3);
+  --bc-elev-1: var(--bc-sh-1);
+  --bc-elev-2: var(--bc-sh-2);
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* DARK: midnight porcelain (the same identity, lit from the other side)                                              */
+/* ------------------------------------------------------------------------------------------------------------------ */
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-scheme='dark'] {
+  --bc-canvas: #0a1412;
+  --bc-surface: #132522;
+  --bc-surface-selected: color-mix(in srgb, var(--bc-accent) 16%, #132522);
+  --bc-hover: rgba(94, 234, 212, 0.09);
+  --bc-focus-fill: rgba(45, 212, 191, 0.16);
+  --bc-text: #dfeeea;
+  --bc-text-strong: #f4fbf9;
+  --bc-text-muted: #9ab7b1;
+  --bc-heading: #f4fbf9;
+  --bc-section-accent: #8fb5ae;
+  --bc-section-title: #f4fbf9;
+  --bc-border-subtle: rgba(190, 235, 225, 0.11);
+  --bc-border-control: rgba(190, 235, 225, 0.2);
+  --bc-border-popover: rgba(190, 235, 225, 0.17);
+  --bc-scrim: rgba(0, 0, 0, 0.55);
+  --bc-state: #fdba74;
+  --bc-warn: #fcd34d;
+  --bc-danger: #f87171;
+  --bc-success: #4ade80;
+  --bc-info: #7dd3fc;
+  --bc-activity-accent: #5eead4;
+  --bc-note: #1b3a35;
+  --bc-note-ink: #d6f5ee;
+  --bc-mod-board: #5eead4;
+  --bc-mod-tasks: #a7e3b6;
+  --bc-mod-contacts: #d9b8ef;
+  --bc-mod-documents: #9cc8f5;
+  --bc-mod-schedule: #f1d28a;
+  --bc-mod-activity: #b6c9c4;
+  --bc-mod-other: #b6c9c4;
+  --bc-sh-weak: 0 1px 0 rgba(190, 235, 225, 0.06) inset, 0 1px 2px rgba(0, 0, 0, 0.3);
+  --bc-sh-1: 0 1px 0 rgba(190, 235, 225, 0.07) inset, 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.25);
+  --bc-sh-2: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 24px -12px rgba(0, 0, 0, 0.6);
+  --bc-sh-3: 0 2px 4px rgba(0, 0, 0, 0.35), 0 20px 44px -16px rgba(0, 0, 0, 0.7);
+  --bc-sh-mid: 0 4px 10px -4px rgba(0, 0, 0, 0.5), 0 16px 34px -14px rgba(0, 0, 0, 0.7);
+  --bc-sh-pop: 0 6px 16px -6px rgba(0, 0, 0, 0.55), 0 28px 56px -20px rgba(0, 0, 0, 0.8);
+  --bc-sh-deep: 0 34px 70px -22px rgba(0, 0, 0, 0.85);
+  --bc-shadow-surface: var(--bc-sh-2);
+  --bc-shadow-menu: var(--bc-sh-pop);
+  --bc-shadow-sheet: var(--bc-sh-deep);
+  --bc-shadow-ink: rgba(0, 0, 0, 0.6);
+  --bc-elev-1: var(--bc-sh-1);
+  --bc-elev-2: var(--bc-sh-2);
+}
+/* The system preference, when nothing is chosen: dark where the browser asks for dark. */
+@media (prefers-color-scheme: dark) {
+  :root:root[data-experience='basecamp'][data-look='porcelain']:not([data-scheme='light']):not([data-scheme]) {
+    --bc-canvas: #0a1412;
+    --bc-surface: #132522;
+    --bc-text: #dfeeea;
+    --bc-text-strong: #f4fbf9;
+    --bc-text-muted: #9ab7b1;
+    --bc-heading: #f4fbf9;
+    --bc-border-subtle: rgba(190, 235, 225, 0.11);
+    --bc-border-control: rgba(190, 235, 225, 0.2);
+    --bc-note: #1b3a35;
+    --bc-note-ink: #d6f5ee;
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* THE FIVE ACCENTS: the palette the person picks is the accent, re-tuned for porcelain. Same ids, new meaning.         */
+/* ------------------------------------------------------------------------------------------------------------------ */
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='slate'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='slate']:not([data-scheme]) { --bc-accent: #0f766e; --bc-accent-ink: #ffffff; }
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='moss'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='moss']:not([data-scheme]) { --bc-accent: #3f6e4f; --bc-accent-ink: #ffffff; }
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='clay'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='clay']:not([data-scheme]) { --bc-accent: #7a3b6e; --bc-accent-ink: #ffffff; }
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='ink'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='ink']:not([data-scheme]) { --bc-accent: #1e3a8a; --bc-accent-ink: #ffffff; }
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='paper'][data-scheme='light'],
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='paper']:not([data-scheme]) { --bc-accent: #334155; --bc-accent-ink: #ffffff; }
+
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='slate'][data-scheme='dark'] { --bc-accent: #2dd4bf; --bc-accent-ink: #042320; }
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='moss'][data-scheme='dark'] { --bc-accent: #86c59a; --bc-accent-ink: #0b2415; }
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='clay'][data-scheme='dark'] { --bc-accent: #d9a3d0; --bc-accent-ink: #2a0f25; }
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='ink'][data-scheme='dark'] { --bc-accent: #93c5fd; --bc-accent-ink: #0b1d44; }
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='paper'][data-scheme='dark'] { --bc-accent: #cbd5e1; --bc-accent-ink: #111827; }
+@media (prefers-color-scheme: dark) {
+  :root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='slate']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #2dd4bf; --bc-accent-ink: #042320; }
+  :root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='moss']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #86c59a; --bc-accent-ink: #0b2415; }
+  :root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='clay']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #d9a3d0; --bc-accent-ink: #2a0f25; }
+  :root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='ink']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #93c5fd; --bc-accent-ink: #0b1d44; }
+  :root:root[data-experience='basecamp'][data-look='porcelain'][data-palette='paper']:not([data-scheme='light']):not([data-scheme]) { --bc-accent: #cbd5e1; --bc-accent-ink: #111827; }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* COMPONENTS: the few surfaces that carry a gradient or a fixed colour instead of a token.                            */
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* The primary action: a gentle gradient, a top highlight and an accent-tinted lift. */
+[data-experience='basecamp'] .bcbtn--primary {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--bc-accent) 84%, #ffffff) 0%, var(--bc-accent) 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 0 1px 2px rgba(10, 36, 33, 0.18), 0 6px 14px -8px var(--bc-accent);
+}
+[data-experience='basecamp'] .bcbtn--primary:hover {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--bc-accent) 92%, #ffffff) 0%, color-mix(in srgb, var(--bc-accent) 94%, #000000) 100%);
+}
+/* Raised faces: a hairline top highlight and the ambient shadow. */
+[data-experience='basecamp'] .bcbtn:not(.bcbtn--primary):not(.bcicon) {
+  box-shadow: var(--bc-sh-weak);
+}
+/* Inputs sit IN the surface: a faint inset, a focus ring in the accent. */
+[data-experience='basecamp'] .bcinput,
+[data-experience='basecamp'] .bcsayinput {
+  box-shadow: inset 0 1px 2px rgba(10, 36, 33, 0.06);
+}
+[data-experience='basecamp'] .bcinput:focus-visible,
+[data-experience='basecamp'] .bcsayinput:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 1px;
+}
+/* The header and the bottom bar sit on the canvas with a hairline, not a heavy shadow. */
+[data-experience='basecamp'] .bctop {
+  box-shadow: 0 1px 0 var(--bc-border-subtle);
+}
+/* The fixed colours of the note and focus rings were warm; they now follow the accent and the note tokens. */
+[data-experience='basecamp'] .bcpostitx:focus-visible,
+[data-experience='basecamp'] .bcpostitbar:focus-visible,
+[data-experience='basecamp'] .bcpostitplus:focus-visible {
+  outline-color: var(--bc-accent);
+}
+[data-experience='basecamp'] .bcpostittext,
+[data-experience='basecamp'] .bcpostit {
+  color: var(--bc-note-ink);
+}
+
+/*
+  THE GROUND. Two faint accent glows lie over the canvas, top left and top right, so the page has a light source and not
+  a flat colour. They are gradients, not images: no download, no texture to fight the content, and they sit under every
+  face because the faces are opaque.
+*/
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-scheme='light'] body,
+:root:root[data-experience='basecamp'][data-look='porcelain']:not([data-scheme]) body {
+  background-image:
+    radial-gradient(1100px 620px at 10% -14%, color-mix(in srgb, var(--bc-accent) 13%, transparent), transparent 62%),
+    radial-gradient(900px 520px at 104% -8%, rgba(14, 116, 144, 0.09), transparent 58%);
+  background-attachment: fixed;
+}
+/* Done work is shown by the strike-through and the muted ink, not by dimming it: a faded row fails 4.5:1 for its own title. */
+[data-experience='basecamp'] .bcrecordhead ~ .bctasklist .bcitem--done { opacity: 1; }
+/* The bottom bar's labels read as text, on the active item too. */
+[data-experience='basecamp'] .bctray button > span:not([aria-hidden]),
+[data-experience='basecamp'] .bctray button > span:nth-child(2) { color: var(--bc-text); }
+/* A calendar day is a target of at least 24px (WCAG 2.2, 2.5.8), however small its figure. */
+/* :where() gives these zero specificity, so they raise a control that is too small and never shrink one a touch rule enlarged. */
+:where([data-experience='basecamp'] [data-cal-pick], [data-experience='basecamp'] [data-cal-ev], [data-experience='basecamp'] [data-bc-task-open]) {
+  min-width: 24px;
+  min-height: 24px;
+}
+
+:root:root[data-experience='basecamp'][data-look='porcelain'][data-scheme='dark'] body {
+  background-image:
+    radial-gradient(1100px 620px at 10% -14%, color-mix(in srgb, var(--bc-accent) 16%, transparent), transparent 62%),
+    radial-gradient(900px 520px at 104% -8%, rgba(56, 189, 248, 0.1), transparent 58%);
+  background-attachment: fixed;
+}

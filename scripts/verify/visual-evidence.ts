@@ -32,8 +32,21 @@ const PROD_API = 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
 const browser = await chromium.launch()
 const OLD = JSON.stringify({ palette: 'clay', look: 'graphite', scheme: 'dark', texture: 'none', density: 'comfortable', glass: 'soft', depth: 'flat' })
 const VIEWPORTS = [['desktop', { width: 1440, height: 900 }, false], ['phone', { width: 390, height: 844 }, true]] as const
-const STATES = [['fresh', null], ['saved-earlier-choice', OLD]] as const
-const PROBE = `JSON.stringify((() => { const b = getComputedStyle(document.body); const m = document.querySelector('main') || document.body; const c = getComputedStyle(m); return { scheme: document.documentElement.dataset.scheme ?? 'system', look: document.documentElement.dataset.look ?? null, palette: document.documentElement.dataset.palette ?? null, bodyBg: b.backgroundColor, mainBg: c.backgroundColor, font: b.fontFamily.slice(0, 22), chars: m.innerText.trim().length } })()`
+// A person's own dark choice, saved at the current revision: it must survive a reload untouched.
+const CHOSEN_DARK = JSON.stringify({ v: 3, palette: 'slate', scheme: 'dark', look: 'porcelain', texture: 'none', density: 'comfortable', glass: 'soft', depth: 'soft' })
+const STATES = [['fresh', null], ['saved-earlier-choice', OLD], ['chosen-dark', CHOSEN_DARK]] as const
+/* A probe that says what it measured, and says so when it cannot measure (an empty result is never a pass). */
+const PROBE = `(() => {
+  try {
+    const b = getComputedStyle(document.body)
+    const m = document.querySelector('main') || document.body
+    const root = document.documentElement.dataset
+    const ver = document.querySelector('.bcver')
+    return JSON.stringify({ scheme: root.scheme || 'system', look: root.look || null, palette: root.palette || null, bodyBg: b.backgroundColor, font: b.fontFamily.slice(0, 22), chars: m.innerText.trim().length, version: ver ? ver.textContent : null })
+  } catch (e) {
+    return 'PROBE ERROR: ' + String(e && e.message || e)
+  }
+})()`
 const report: string[] = []
 const shoot = async (name: string, url: string, vp: { width: number; height: number }, touch: boolean, stored: string | null, prodApi: boolean, after?: (p: import('playwright').Page) => Promise<void>) => {
   const ctx = await browser.newContext({ viewport: vp, hasTouch: touch, isMobile: touch })
@@ -43,7 +56,7 @@ const shoot = async (name: string, url: string, vp: { width: number; height: num
   await page.goto(url, { waitUntil: 'load', timeout: 60000 }).catch(() => undefined)
   await page.waitForTimeout(2500)
   if (after) await after(page).catch(() => undefined)
-  const probe = await page.evaluate(PROBE).catch(() => '{}')
+  const probe = await page.evaluate(PROBE).catch((e) => 'PROBE FAILED: ' + String(e).slice(0, 160))
   report.push(`${name}: ${probe}`)
   await page.screenshot({ path: join(dir, `${name}.png`) })
   await ctx.close()
@@ -51,7 +64,8 @@ const shoot = async (name: string, url: string, vp: { width: number; height: num
 for (const [vname, vp, touch] of VIEWPORTS) {
   for (const [sname, stored] of STATES) {
     const tag2 = `${vname}-${sname}`
-    await shoot(`landing-${tag2}`, `${PROD}/`, vp, touch, stored, true)
+    // The signed-out entry screen, from the local build: ?welcome is the page's own route to it off production.
+    await shoot(`landing-${tag2}`, `${LOCAL}/?welcome`, vp, touch, stored, true)
     await shoot(`home-${tag2}`, `${LOCAL}/`, vp, touch, stored, false)
     await shoot(`project-${tag2}`, `${LOCAL}/p/legacy-coaching-course`, vp, touch, stored, false)
     await shoot(`tasks-${tag2}`, `${LOCAL}/p/legacy-coaching-course/tasks`, vp, touch, stored, false)

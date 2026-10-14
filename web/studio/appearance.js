@@ -13,11 +13,11 @@
 */
 
 export const PALETTES = [
-  { id: 'paper', name: 'Paper', note: 'Warm off-white, forest green' },
-  { id: 'slate', name: 'Slate', note: 'Cool grey, deep blue' },
-  { id: 'clay', name: 'Clay', note: 'Terracotta and sand' },
-  { id: 'ink', name: 'Ink', note: 'Near-black on cream' },
-  { id: 'moss', name: 'Moss', note: 'Deep green and stone' },
+  { id: 'slate', name: 'Deep teal', note: 'The recommended accent' },
+  { id: 'moss', name: 'Sage', note: 'Quiet green' },
+  { id: 'clay', name: 'Plum', note: 'A soft aubergine' },
+  { id: 'ink', name: 'Midnight', note: 'Deep indigo' },
+  { id: 'paper', name: 'Graphite', note: 'Cool slate' },
 ]
 
 /*
@@ -99,9 +99,7 @@ export const DENSITIES = [
 */
 /* `faces` is [canvas, surface] in each scheme, only so the picker can draw a small preview; the CSS is the source of truth (bc/refine.css). */
 export const LOOKS = [
-  { id: 'silver', name: 'Slate & Silver', note: 'Cooler, neutral greys', faces: { dark: ['#0d1114', '#1c2227'], light: ['#e2e5e9', '#fbfcfd'] } },
-  { id: 'forest', name: 'Forest', note: 'Deep green faces', faces: { dark: ['#0a1511', '#18291f'], light: ['#d2d6cb', '#eef0e8'] } },
-  { id: 'graphite', name: 'Warm Graphite', note: 'Warm charcoal and parchment', faces: { dark: ['#131110', '#262220'], light: ['#d9d4cd', '#f2efea'] } },
+  { id: 'porcelain', name: 'Porcelain & Teal', note: 'Porcelain surfaces, deep teal accents', faces: { dark: ['#0a1412', '#132522'], light: ['#eef2f0', '#ffffff'] } },
 ]
 export const GLASS = [
   { id: 'off', name: 'Solid', note: 'Menus are opaque' },
@@ -126,7 +124,7 @@ const DEFAULTS = {
   ownName: '',
   scheme: 'light',
   density: 'comfortable',
-  look: 'silver',
+  look: 'porcelain',
   glass: 'soft',
   depth: 'soft',
 }
@@ -189,7 +187,7 @@ export function resetToRecommended() {
   look, scheme, texture and an uploaded texture), so a returning person sees the latest design rather than one saved before
   it. Density, glass and depth are spacing and effect choices and are kept. Bump this when the recommended look changes.
 */
-export const APPEARANCE_REVISION = 2
+export const APPEARANCE_REVISION = 3
 const LOOK_FIELDS = ['palette', 'look', 'scheme', 'texture', 'own', 'ownName']
 export function currentRevision(saved) {
   if (saved === null || typeof saved !== 'object') return {}

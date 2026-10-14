@@ -161,8 +161,11 @@ const createPanel = () => `<form class="bcentryform" data-bc-entry-form="create"
     <p class="bcentrysaid" data-bc-entry-said role="status" aria-live="polite"></p>
   </form>`
 
-/* The build version beside the sign-in kicker, so the signed-out page shows what it is too. */
-const entryVersion = () => (typeof window.HQ_VERSION === "string" && window.HQ_VERSION !== "" ? `<span class="bcver bcver--entry" title="Team HQ version ${window.HQ_VERSION}">v${window.HQ_VERSION}</span>` : "");
+/* The build version beside the sign-in kicker, so the signed-out page shows what it is too (the same value as the header). */
+const entryVersion = () => {
+  const version = typeof window.HQ_VERSION === 'string' ? window.HQ_VERSION : ''
+  return version === '' ? '' : `<span class="bcver bcver--entry" title="Team HQ version ${esc(version)}">v${esc(version)}</span>`
+}
 
 export const entry = () => {
   const ended = source.state === 'refused'

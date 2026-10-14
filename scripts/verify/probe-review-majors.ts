@@ -101,13 +101,14 @@ try {
     localStorage.setItem(
       'studio.appearance',
       JSON.stringify({
+        v: 3,
         palette: 'slate',
         texture: 'none',
         own: null,
         ownName: '',
         scheme: 'system',
         density: 'comfortable',
-        look: 'silver',
+        look: 'porcelain',
         glass: 'soft',
         depth: 'soft',
       }),
@@ -138,13 +139,14 @@ try {
     localStorage.setItem(
       'studio.appearance',
       JSON.stringify({
+        v: 3,
         palette: 'slate',
         texture: 'none',
         own: null,
         ownName: '',
         scheme: 'light',
         density: 'comfortable',
-        look: 'silver',
+        look: 'porcelain',
         glass: 'soft',
         depth: 'soft',
       }),

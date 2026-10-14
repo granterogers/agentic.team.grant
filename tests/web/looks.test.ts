@@ -2,14 +2,13 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /*
-  Looks, glass and depth (aesthetic sprint, 9 October 2026).
-
-  A look is only allowed to exist if text on it is readable, so the contrast of every look in every scheme is computed from
-  the stylesheet itself, not asserted by name. Persistence and validation of the three new appearance keys are driven
-  through the real module with a stand-in for the browser's storage.
+  Looks, glass and depth. The Porcelain & Teal identity (October 2026) is the only look; its values live in
+  web/studio/bc/identity.css, which is loaded last. Every contrast figure is computed from that stylesheet, so a change that
+  makes text unreadable fails here rather than in a person's browser. Persistence (including the one-time reset of choices
+  saved before the current revision) is driven through the real module with a stand-in for the browser's storage.
 */
-const read = (p: string): string =>
-  readFileSync(new URL(`../../web/studio/${p}`, import.meta.url), 'utf8')
+const read = (p: string): string => readFileSync(new URL(`../../web/studio/${p}`, import.meta.url), 'utf8')
+const identity = read('bc/identity.css')
 const refine = read('bc/refine.css')
 const tokens = read('bc/tokens.css')
 
@@ -29,109 +28,80 @@ const ratio = (a: string, b: string): number => {
   return (x + 0.05) / (y + 0.05)
 }
 
-/** The first rule for a look in a scheme: its canvas, surface and (when it sets one) muted text. */
+/*
+  The rule block for a look in a scheme. The light look is one rule whose selector list ends in the `:not([data-scheme])`
+  case, so the block is the text from the look's selector up to the opening brace of the rule it belongs to.
+*/
 const lookBlock = (look: string, scheme: 'dark' | 'light') => {
-  const re = new RegExp(`\\[data-look='${look}'\\]\\[data-scheme='${scheme}'\\]\\s*\\{([^}]*)\\}`)
-  const m = re.exec(refine)
+  const re = new RegExp(`\\[data-look='${look}'\\]\\[data-scheme='${scheme}'\\][^{]*\\{([^}]*)\\}`)
+  const m = re.exec(identity)
   if (m === null) return null
   const body = m[1] ?? ''
-  const get = (n: string): string | null =>
-    new RegExp(`${n}:\\s*(#[0-9a-fA-F]{6})`).exec(body)?.[1] ?? null
-  return { canvas: get('--bc-canvas'), surface: get('--bc-surface'), muted: get('--bc-text-muted') }
-}
-const base = (scheme: 'dark' | 'light') => {
-  const block =
-    scheme === 'dark'
-      ? tokens.slice(tokens.indexOf(":root[data-experience='basecamp'][data-scheme='dark']"))
-      : tokens
-  const get = (n: string): string => new RegExp(`${n}:\\s*(#[0-9a-fA-F]{6})`).exec(block)?.[1] ?? ''
-  return { text: get('--bc-text'), strong: get('--bc-text-strong'), muted: get('--bc-text-muted') }
+  const get = (n: string): string | null => new RegExp(`${n}:\\s*(#[0-9a-fA-F]{6})`).exec(body)?.[1] ?? null
+  return { canvas: get('--bc-canvas'), surface: get('--bc-surface'), muted: get('--bc-text-muted'), text: get('--bc-text'), strong: get('--bc-text-strong') }
 }
 
-const LOOKS = ['silver', 'forest', 'graphite'] as const
+const LOOKS = ['porcelain'] as const
+const PALETTES = ['slate', 'moss', 'clay', 'ink', 'paper'] as const
 
-describe('every look keeps text readable', () => {
+describe('the porcelain look keeps text readable', () => {
   for (const scheme of ['dark', 'light'] as const) {
-    for (const look of LOOKS) {
-      it(`${look} in ${scheme}: body, strong and muted text clear 4.5:1 on both its canvas and its surface`, () => {
-        const b = lookBlock(look, scheme)
-        expect(b, `${look} ${scheme} block`).not.toBeNull()
-        const t = base(scheme)
-        const muted = b?.muted ?? t.muted
-        for (const [face, colour] of [
-          ['surface', b?.surface],
-          ['canvas', b?.canvas],
-        ] as const) {
-          expect(colour, `${look} ${scheme} ${face}`).toBeTruthy()
-          for (const [name, ink] of [
-            ['text', t.text],
-            ['strong', t.strong],
-            ['muted', muted],
-          ] as const) {
-            expect(
-              ratio(ink, colour as string),
-              `${look} ${scheme} ${name} on ${face}`,
-            ).toBeGreaterThanOrEqual(4.5)
-          }
+    it(`${scheme}: body, strong and muted text clear 4.5:1 on both its canvas and its surface`, () => {
+      const b = lookBlock('porcelain', scheme)
+      expect(b, `porcelain ${scheme} block`).not.toBeNull()
+      for (const face of [b?.surface, b?.canvas] as const) {
+        expect(face, `${scheme} face`).toBeTruthy()
+        for (const ink of [b?.text, b?.strong, b?.muted] as const) {
+          expect(ratio(ink as string, face as string), `${scheme} ink on face`).toBeGreaterThanOrEqual(4.5)
         }
-      })
-    }
+      }
+    })
   }
 
-  it('the surface is distinguishable from the canvas in every look (a module must read as a face on a ground)', () => {
-    for (const scheme of ['dark', 'light'] as const)
-      for (const look of LOOKS) {
-        const b = lookBlock(look, scheme)
-        expect(
-          ratio(b?.surface as string, b?.canvas as string),
-          `${look} ${scheme}`,
-        ).toBeGreaterThanOrEqual(1.08)
-      }
+  it('the surface is distinguishable from the canvas (a module must read as a face on a ground)', () => {
+    for (const scheme of ['dark', 'light'] as const) {
+      const b = lookBlock('porcelain', scheme)
+      expect(ratio(b?.surface as string, b?.canvas as string), scheme).toBeGreaterThanOrEqual(1.08)
+    }
   })
 
-  it('the device-following looks carry the same values as the explicit ones', () => {
-    for (const look of LOOKS)
-      for (const scheme of ['dark', 'light'] as const) {
-        const explicit = lookBlock(look, scheme)
-        const mq = scheme === 'dark' ? 'dark' : 'light'
-        const at = refine.indexOf(`@media (prefers-color-scheme: ${mq})`)
-        const seg = refine.slice(at, at + 2400)
-        expect(seg, `${look} ${scheme}`).toContain(explicit?.surface as string)
-        expect(seg, `${look} ${scheme}`).toContain(explicit?.canvas as string)
-      }
+  it('the system-preference dark block carries the same values as the explicit dark block', () => {
+    const explicit = lookBlock('porcelain', 'dark')
+    const at = identity.indexOf('@media (prefers-color-scheme: dark)')
+    expect(at, 'a system dark block exists').toBeGreaterThan(-1)
+    const seg = identity.slice(at, at + 1400)
+    expect(seg).toContain(explicit?.surface as string)
+    expect(seg).toContain(explicit?.canvas as string)
+  })
+
+  it('the picker faces the module offers are the canvas and surface the CSS draws', async () => {
+    const src = read('appearance.js')
+    for (const scheme of ['dark', 'light'] as const) {
+      const b = lookBlock('porcelain', scheme)
+      const faces = new RegExp(`porcelain[^]*?${scheme}: \\['(#[0-9a-fA-F]{6})', '(#[0-9a-fA-F]{6})'\\]`).exec(src)
+      expect(faces?.[1]?.toLowerCase(), `${scheme} canvas`).toBe(b?.canvas?.toLowerCase())
+      expect(faces?.[2]?.toLowerCase(), `${scheme} surface`).toBe(b?.surface?.toLowerCase())
+    }
   })
 })
 
-describe('every accent is readable on every look', () => {
-  /* Accent pairs, read from the stylesheet: [accent, ink on it] per palette and scheme. */
+describe('every accent is readable on the porcelain look', () => {
+  /* [accent, ink on it] per palette and scheme, read from the identity stylesheet. */
   const accentOf = (palette: string, scheme: 'dark' | 'light'): [string, string] => {
-    if (palette === 'slate')
-      return scheme === 'dark' ? ['#6ab3fd', '#0e1d24'] : ['#2b6cb0', '#ffffff']
-    const re =
-      scheme === 'light'
-        ? new RegExp(
-            `data-palette='${palette}'\\]\\[data-scheme='light'\\]\\s*\\{\\s*--bc-accent:\\s*(#[0-9a-f]{6});\\s*--bc-accent-ink:\\s*(#[0-9a-f]{6})`,
-          )
-        : new RegExp(
-            `data-palette='${palette}'\\]\\s*\\{\\s*--bc-accent:\\s*(#[0-9a-f]{6});\\s*--bc-accent-ink:\\s*(#[0-9a-f]{6})`,
-          )
-    const m = re.exec(tokens)
+    const re = new RegExp(`data-palette='${palette}'\\]\\[data-scheme='${scheme}'\\][^{]*\\{\\s*--bc-accent:\\s*(#[0-9a-fA-F]{6});\\s*--bc-accent-ink:\\s*(#[0-9a-fA-F]{6})`)
+    const m = re.exec(identity)
     return [m?.[1] ?? '', m?.[2] ?? '']
   }
-  const surfaces = (look: string, scheme: 'dark' | 'light'): [string, string] => {
-    const b = lookBlock(look, scheme)
-    return [b?.canvas as string, b?.surface as string]
-  }
   for (const scheme of ['dark', 'light'] as const)
-    for (const look of ['silver', 'forest', 'graphite'])
-      for (const palette of ['slate', 'moss', 'clay', 'ink', 'paper']) {
-        it(`${palette} accent on ${look} (${scheme}): the ink on it is 4.5:1 and the accent stands off the surface 3:1`, () => {
+    for (const look of LOOKS)
+      for (const palette of PALETTES) {
+        it(`${palette} accent on ${look} (${scheme}): the ink on it is 4.5:1 and the accent stands off the surfaces 3:1`, () => {
           const [accent, ink] = accentOf(palette, scheme)
-          expect(accent, `${palette} ${scheme} accent found`).toMatch(/^#[0-9a-f]{6}$/)
-          const [canvas, surface] = surfaces(look, scheme)
+          expect(accent, `${palette} ${scheme} accent found`).toMatch(/^#[0-9a-fA-F]{6}$/)
+          const b = lookBlock(look, scheme)
           expect(ratio(ink, accent), 'ink on accent').toBeGreaterThanOrEqual(4.5)
-          expect(ratio(accent, surface), 'accent against the module face').toBeGreaterThanOrEqual(3)
-          expect(ratio(accent, canvas), 'accent against the canvas').toBeGreaterThanOrEqual(3)
+          expect(ratio(accent, b?.surface as string), 'accent against the module face').toBeGreaterThanOrEqual(3)
+          expect(ratio(accent, b?.canvas as string), 'accent against the canvas').toBeGreaterThanOrEqual(3)
         })
       }
 })
@@ -158,8 +128,7 @@ describe('glass and depth', () => {
   })
 
   it('glass never leaves less than 70% of the surface, so text over the board stays legible', () => {
-    for (const m of refine.matchAll(/--bc-glass-keep:\s*(\d+)%/g))
-      expect(Number(m[1])).toBeGreaterThanOrEqual(70)
+    for (const m of refine.matchAll(/--bc-glass-keep:\s*(\d+)%/g)) expect(Number(m[1])).toBeGreaterThanOrEqual(70)
   })
 })
 
@@ -175,6 +144,7 @@ type Appearance = {
 type AppearanceModule = {
   appearance: () => Appearance
   apply: (a: Appearance) => Appearance
+  APPEARANCE_REVISION: number
   LOOKS: { id: string; faces: Record<'dark' | 'light', [string, string]> }[]
 }
 // @ts-expect-error - a browser module with no types; ADR-0002, no build step.
@@ -193,43 +163,35 @@ describe('the appearance module', () => {
   ;(globalThis as Record<string, unknown>).document = { documentElement: root }
   ;(globalThis as Record<string, unknown>).window = { matchMedia: () => ({ matches: false }) }
 
-  it('defaults to Slate & Silver, soft glass, soft depth', async () => {
+  it('defaults to Porcelain & Teal, soft glass, soft depth, the deep-teal accent', async () => {
     const m = await loadAppearance()
     store.clear()
     const a = m.appearance()
-    expect([a.look, a.glass, a.depth]).toEqual(['silver', 'soft', 'soft'])
+    expect([a.look, a.palette, a.glass, a.depth]).toEqual(['porcelain', 'slate', 'soft', 'soft'])
   })
 
   it('apply writes all three on the document and remembers them', async () => {
     const m = await loadAppearance()
     store.clear()
-    m.apply({ ...m.appearance(), look: 'forest', glass: 'rich', depth: 'deep' })
-    expect([root.dataset.look, root.dataset.glass, root.dataset.depth]).toEqual([
-      'forest',
-      'rich',
-      'deep',
-    ])
+    m.apply({ ...m.appearance(), glass: 'rich', depth: 'deep' })
+    expect([root.dataset.look, root.dataset.glass, root.dataset.depth]).toEqual(['porcelain', 'rich', 'deep'])
     const again = m.appearance()
-    expect([again.look, again.glass, again.depth]).toEqual(['forest', 'rich', 'deep'])
+    expect([again.look, again.glass, again.depth]).toEqual(['porcelain', 'rich', 'deep'])
   })
 
   it('a value nobody offers falls back to the default rather than to nothing', async () => {
     const m = await loadAppearance()
-    store.set('studio.appearance', JSON.stringify({ look: 'neon', glass: 'max', depth: 9 }))
+    store.set('studio.appearance', JSON.stringify({ v: m.APPEARANCE_REVISION, look: 'neon', glass: 'max', depth: 9 }))
     const a = m.appearance()
-    expect([a.look, a.glass, a.depth]).toEqual(['silver', 'soft', 'soft'])
+    expect([a.look, a.glass, a.depth]).toEqual(['porcelain', 'soft', 'soft'])
   })
 
-  it('a saved Original look is read as Slate & Silver, and its spacing and effect choices are kept', async () => {
+  it('a saved look from an earlier design is read as Porcelain & Teal, and its spacing and effect choices are kept', async () => {
     const m = await loadAppearance()
-    store.set(
-      'studio.appearance',
-      JSON.stringify({ look: 'original', palette: 'clay', glass: 'rich', depth: 'deep' }),
-    )
+    store.set('studio.appearance', JSON.stringify({ look: 'original', palette: 'clay', glass: 'rich', depth: 'deep' }))
     const a = m.appearance()
-    // No revision stamp: the look fields are the retired choice, so they reset; glass and depth are the person's own.
-    expect([a.look, a.palette, a.glass, a.depth]).toEqual(['silver', 'slate', 'rich', 'deep'])
-    expect(m.LOOKS.map((l) => l.id)).not.toContain('original')
+    expect([a.look, a.palette, a.glass, a.depth]).toEqual(['porcelain', 'slate', 'rich', 'deep'])
+    expect(m.LOOKS.map((l) => l.id)).toEqual(['porcelain'])
   })
 
   it('a choice saved before the current revision resets its look fields once, and keeps density, glass and depth', async () => {
@@ -239,19 +201,26 @@ describe('the appearance module', () => {
       JSON.stringify({ palette: 'clay', texture: 'oak', scheme: 'dark', look: 'graphite', density: 'compact', glass: 'rich', depth: 'deep' }),
     )
     const a = m.appearance()
-    // An unstamped choice is from before the recommended look, so palette, scheme, texture and look come back to the defaults.
-    expect([a.palette, a.texture, a.scheme, a.look]).toEqual(['slate', 'none', 'light', 'silver'])
+    expect([a.palette, a.texture, a.scheme, a.look]).toEqual(['slate', 'none', 'light', 'porcelain'])
     expect([a.density, a.glass, a.depth]).toEqual(['compact', 'rich', 'deep'])
+  })
+
+  it('a choice saved at an older revision (2, the charcoal era) is reset too, so nothing stale survives an identity change', async () => {
+    const m = await loadAppearance()
+    store.set('studio.appearance', JSON.stringify({ v: 2, palette: 'clay', scheme: 'dark', look: 'graphite', density: 'compact' }))
+    const a = m.appearance()
+    expect([a.palette, a.scheme, a.look]).toEqual(['slate', 'light', 'porcelain'])
+    expect(a.density).toBe('compact')
   })
 
   it('a choice saved at the current revision is read exactly as it was saved', async () => {
     const m = await loadAppearance()
     store.set(
       'studio.appearance',
-      JSON.stringify({ v: m.APPEARANCE_REVISION, palette: 'clay', texture: 'oak', scheme: 'dark', look: 'graphite', density: 'compact' }),
+      JSON.stringify({ v: m.APPEARANCE_REVISION, palette: 'ink', texture: 'oak', scheme: 'dark', look: 'porcelain', density: 'compact' }),
     )
     const a = m.appearance()
-    expect([a.palette, a.texture, a.scheme, a.look, a.density]).toEqual(['clay', 'oak', 'dark', 'graphite', 'compact'])
+    expect([a.palette, a.texture, a.scheme, a.look, a.density]).toEqual(['ink', 'oak', 'dark', 'porcelain', 'compact'])
   })
 
   it('saving stamps the current revision, so the next load keeps the choice', async () => {
@@ -260,9 +229,10 @@ describe('the appearance module', () => {
     const saved = JSON.parse(store.get('studio.appearance') ?? '{}')
     expect(saved.v).toBe(m.APPEARANCE_REVISION)
     expect(m.appearance().scheme).toBe('dark')
+    expect(m.appearance().palette).toBe('ink')
   })
 
-  it('every look offered has a CSS block in both schemes, and the picker faces match the CSS', async () => {
+  it('the one look offered has a CSS block in both schemes, and its picker faces match the CSS', async () => {
     const m = await loadAppearance()
     for (const l of m.LOOKS) {
       for (const scheme of ['dark', 'light'] as const) {

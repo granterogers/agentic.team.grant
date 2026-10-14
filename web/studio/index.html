@@ -40,6 +40,7 @@
 <link rel="stylesheet" href="/bc/stone.css">
 <link rel="stylesheet" href="/bc/polish.css">
 <link rel="stylesheet" href="/bc/refine.css">
+<link rel="stylesheet" href="/bc/identity.css">
 </head>
 <body>
 <div id="root" class="shell"></div>
@@ -118,10 +119,19 @@
           return m ? m[1] : ''
         })
     }
+    /* A reload throws away anything typed and not yet sent, so the guard waits while any field holds words. */
+    function holdingWords() {
+      var el = document.activeElement
+      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && String(el.value || '').trim() !== '') return true
+      return Array.prototype.some.call(document.querySelectorAll('textarea, input[type="text"], input[type="email"]'), function (f) {
+        return String(f.value || '').trim() !== ''
+      })
+    }
     function check() {
       if (running === '') return
       newest().then(function (version) {
         if (version === '' || version === running) return
+        if (holdingWords()) return /* checked again later, when the words are sent or cleared */
         var key = 'hq.reloaded.' + version
         try {
           if (sessionStorage.getItem(key)) return
@@ -134,6 +144,10 @@
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible') check()
     })
+    /* A tab left open for a long time still finds a release, once every two minutes while it is in front. */
+    setInterval(function () {
+      if (document.visibilityState === 'visible') check()
+    }, 120000)
   })()
 </script>
 <script>
