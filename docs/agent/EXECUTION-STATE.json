@@ -79,11 +79,13 @@
       {
         "id": "R9",
         "title": "Push branch, open or update draft PR, record verification in the ledger",
-        "status": "todo"
+        "status": "done",
+        "evidence": "draft pull request #475; verification in its body"
       }
     ],
-    "nextAction": "Run the verification gates (full vitest, biome, check:templates, check:deployment-state), commit, push the branch, open the draft pull request, and record the results here (R9).",
+    "nextAction": "Owner decision on R7 (live trial). Nothing else is actionable; the mission ends as blocked on that decision.",
     "issues": ["#474"],
+    "pullRequest": "#475 (draft)",
     "lastCheckpoint": {
       "at": "2026-10-14T09:20:00.000Z",
       "commit": null,
