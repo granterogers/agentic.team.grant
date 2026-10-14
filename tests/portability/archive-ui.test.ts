@@ -47,8 +47,11 @@ describe('the restore control in the project menu', () => {
     expect(shell).toContain('data-bc-restore-said')
   })
 
-  it('choosing a file hands it to restoreArchive, and the button opens the picker', () => {
-    expect(wire).toContain('const done = await restoreArchive(file)')
+  it('choosing one file hands it to restoreArchive; several files go to the set path; the button opens the picker', () => {
+    // The property, not the expression: a single archive that is not a set part still reaches restoreArchive, and every
+    // other choice goes through the set path, which refuses an incomplete or mixed selection before any byte is sent.
+    expect(wire).toContain('restoreArchive(picked[0])')
+    expect(wire).toContain('restoreArchiveSet(orderedSetParts(picked)')
     expect(wire).toContain("root.querySelector('[data-bc-restore-file]')?.click()")
   })
 

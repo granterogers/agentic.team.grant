@@ -246,11 +246,16 @@ for (const [label, width, mobile] of [
   {
     const { context, page } = await open({ projects: [project], withSession: false }, width, mobile)
     await page.goto(`${ORIGIN}/p/${SLUG}/settings`, { waitUntil: 'domcontentloaded' })
-    const visitorScreen = await page
-      .getByText('Sign in to see your office', { exact: false })
-      .first()
-      .isVisible({ timeout: 8000 })
-      .catch(() => false)
+    /*
+      The prototype banner that said "Sign in to see your office" was removed on main (14 October 2026: the Sample and the
+      prototype play as ordinary projects, with no banner). What remains of the requirement is that a visitor is OFFERED a
+      way to sign in, and that is what is asserted, by the sign-in control or its words, rather than by a banner's text.
+    */
+    await page.waitForTimeout(1200)
+    const visitorScreen =
+      (await page
+        .locator('[data-bc-signin-first], [data-bc-signin], [data-bc-google-start]')
+        .count()) > 0 || (await bodyText(page)).toLowerCase().includes('sign in')
     const writes = await page
       .locator(
         '[data-export], [data-archive-download], [data-stdexport], [data-archive], [data-bc-restore-file]',
@@ -324,12 +329,11 @@ for (const [label, width, mobile] of [
       buffer: Buffer.from(archiveBytes),
     })
     await page.waitForTimeout(1200)
-    // KNOWN GAP, recorded in the ledger: once the session is cleared, "You are not signed in any more" is not drawn
-    // anywhere. The person is shown the read-only state (sign-in first, no restore control) and not the words.
     const restoreControls = await page
       .locator('[data-bc-menu-restore], [data-bc-restore-file]')
       .count()
-    const signedOutMark = (await bodyText(page)).includes('sign in first')
+    // The sign-in cue is the strip's own sentence ("Sign in again"); the menu's "sign in first" wording is inside a closed menu now.
+    const signedOutMark = (await bodyText(page)).toLowerCase().includes('sign in again')
     check(
       `${label}: A3. a refused session on restore leaves the page read-only: sign-in-first shown, no restore control`,
       signedOutMark && restoreControls === 0,
@@ -338,6 +342,36 @@ for (const [label, width, mobile] of [
     check(
       `${label}: A3b. the refused session is cleared from this browser`,
       !(await sessionHeld(page)),
+    )
+    /*
+      The sentence itself, drawn in the strip above the shell and asserted in the element's own text. A visible-text search
+      would also match a word the page already shows, so the element is the thing measured. Its box is checked too: an
+      element with no box is in the DOM and nowhere to a person.
+    */
+    await page.screenshot({ path: `.out/access-refused-${label}.png` })
+    const refused = page.locator('[data-bc-restore-refused]')
+    const refusedText = (await refused.count()) === 1 ? await refused.first().innerText() : ''
+    const refusedBox = (await refused.count()) === 1 ? await refused.first().boundingBox() : null
+    /*
+      Not covered: the element at the strip's left edge is the strip itself. The first draft opened the project menu over
+      this strip and hid the start of the sentence; the screenshot showed it and this assertion now measures it.
+    */
+    // Only measured when the strip is there: asking an absent element for its box waits out the timeout and ends the run.
+    const uncovered =
+      refusedBox === null
+        ? false
+        : await refused.first().evaluate((el) => {
+            const r = el.getBoundingClientRect()
+            const hit = document.elementFromPoint(r.left + 24, r.top + r.height / 2)
+            return hit !== null && (hit === el || el.contains(hit))
+          })
+    check(
+      `${label}: A3c. the refusal is said in words, drawn, and not covered: "no longer signed in"`,
+      refusedText.includes('no longer signed in') &&
+        refusedBox !== null &&
+        refusedBox.height > 0 &&
+        uncovered,
+      `text=${JSON.stringify(refusedText.slice(0, 90))} box=${refusedBox === null ? 'none' : String(Math.round(refusedBox.height))} uncovered=${String(uncovered)}`,
     )
     await context.close()
   }

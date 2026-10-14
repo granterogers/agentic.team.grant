@@ -59,6 +59,7 @@ import { authorizeUrl, revokeToken } from './oauth.ts'
 // The original files of archived documents (#471, migration 1072): uploaded beside the entrypoint by scripts/deploy/hq.ts.
 import { supabaseObjectStore } from './object-store.ts'
 import { discardOriginals, gatherOriginals, planOriginals, writeOriginals } from './originals.ts'
+import { SET_LIMITS } from './parts.ts'
 // The storage policy (#468): the type, extension and contents of an upload, checked before it is stored. Uploaded beside this file.
 import { checkUpload } from './policy.ts'
 import {
@@ -68,6 +69,14 @@ import {
   previewDocument,
   streamDocument,
 } from './preview.ts'
+import {
+  abandonSet,
+  buildSetPart,
+  commitSet,
+  prepareSet,
+  restorePart,
+  storeExportCache,
+} from './set-store.ts'
 import { extensionFor } from './store.ts'
 
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
@@ -2607,6 +2616,79 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (bytes.length > ARCHIVE_LIMITS.maxBytes) {
       return json({ error: 'the archive is larger than the 8 MB this office takes' }, 413)
     }
+    /*
+      A PROJECT SET (#471, item 5). Each part is sent alone (its originals are written under this set's key), then the commit
+      creates the project once, if every part is present. An abandon discards an uncommitted set. Each request holds one part.
+    */
+    const search = new URL(request.url).searchParams
+    const setKey = search.get('set')
+    if (setKey !== null) {
+      if (!/^[0-9a-f]{64}$/.test(setKey)) {
+        return json({ error: 'that set key is not one this office issued' }, 400)
+      }
+      const store = originalStore()
+      if (search.get('abandon') === '1') {
+        const out = await abandonSet({ office, setKey, store })
+        return out.ok
+          ? json({ data: { removed: out.removed } })
+          : json({ error: out.error }, out.status)
+      }
+      if (search.get('commit') === '1') {
+        const out = await commitSet({
+          office,
+          setKey,
+          store,
+          extension: extensionFor,
+          restore: async (pkg) => {
+            const r = await fetch(`${DB_URL}/rest/v1/rpc/project_restore`, {
+              method: 'POST',
+              headers: {
+                apikey: SERVICE_KEY,
+                Authorization: `Bearer ${SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                p_office: office,
+                p_key: setKey,
+                p_package: pkg,
+                p_by: principal,
+              }),
+            })
+            const body = (await r.json().catch(() => ({}))) as {
+              ok?: boolean
+              error?: string
+              already?: boolean
+            }
+            if (!r.ok || body.ok !== true) {
+              return { ok: false, error: body.error ?? 'the restore was refused' }
+            }
+            // The database's own answer, as the single-archive restore returns it.
+            return { ...body, ok: true }
+          },
+        })
+        if (!out.ok) return json({ error: out.error }, out.status)
+        return json({ data: out.out }, out.already ? 200 : 201)
+      }
+      const number = Number(search.get('part'))
+      if (!Number.isInteger(number) || number < 1) {
+        return json({ error: 'a set part needs its part number' }, 400)
+      }
+      const out = await restorePart({
+        bytes,
+        office,
+        setKey,
+        number,
+        store,
+        extension: extensionFor,
+      })
+      if (!out.ok) return json({ error: out.error }, out.status)
+      return json(
+        {
+          data: { part: out.number, of: out.partCount, written: out.written, already: out.already },
+        },
+        out.already ? 200 : 201,
+      )
+    }
     let opened: Awaited<ReturnType<typeof openArchive>>
     try {
       opened = await openArchive(bytes)
@@ -3771,13 +3853,89 @@ Deno.serve(async (request: Request): Promise<Response> => {
         .replace(/[^a-z0-9-]+/gi, '-')
         .replace(/^-+|-+$/g, '')
         .slice(0, 80) || 'project'
+    /*
+      A PROJECT LARGER THAN ONE ARCHIVE (#471, item 5). `set=index` reads each original once, keeps its checksum, and holds the
+      index, the package and the plan under a cache id; `set=<key>&cache=<id>&part=N` then builds ONE part of at most 8 MB,
+      reading only that part's files. A project that fits one archive still gets the single ZIP below, unchanged.
+    */
+    const setMode = url.searchParams.get('set')
+    if (setMode !== null) {
+      const store = originalStore()
+      if (setMode === 'index') {
+        const prepared = await prepareSet({ pkg, slug, store, extension: extensionFor })
+        if (!prepared.ok) return json({ error: prepared.error, section: name }, prepared.status)
+        const cache = crypto.randomUUID()
+        if (!(await storeExportCache(store, office, cache, prepared))) {
+          return json({ error: 'the set could not be prepared', section: name }, 502)
+        }
+        const parts = Array.from({ length: prepared.partCount }, (_, i) => {
+          const files = prepared.plan.filter((f) => f.part === i + 1)
+          return {
+            number: i + 1,
+            files: files.length,
+            bytes: files.reduce((sum, f) => sum + f.bytes, 0),
+          }
+        })
+        return json({
+          data: {
+            set: prepared.setKey,
+            cache,
+            slug,
+            part_count: prepared.partCount,
+            parts,
+            limits: {
+              part_bytes: ARCHIVE_LIMITS.maxBytes,
+              file_bytes_per_part: SET_LIMITS.fileBytesPerPart,
+            },
+          },
+        })
+      }
+      const setKey = setMode
+      const cache = url.searchParams.get('cache') ?? ''
+      const number = Number(url.searchParams.get('part'))
+      if (
+        !/^[0-9a-f]{64}$/.test(setKey) ||
+        !/^[0-9a-f-]{36}$/.test(cache) ||
+        !Number.isInteger(number) ||
+        number < 1
+      ) {
+        return json({ error: 'that part is not one this set holds', section: name }, 400)
+      }
+      const built = await buildSetPart({
+        office,
+        cacheId: cache,
+        setKey,
+        number,
+        store,
+        exportedAt: new Date().toISOString(),
+      })
+      if (!built.ok) return json({ error: built.error, section: name }, built.status)
+      return new Response(built.bytes as unknown as BodyInit, {
+        status: 200,
+        headers: {
+          'content-type': 'application/zip',
+          'content-length': String(built.bytes.byteLength),
+          'content-disposition': `attachment; filename="${slug}-set-${setKey}-part-${String(number)}-of-${String(built.partCount)}.zip"`,
+          'cache-control': 'private, no-store',
+          'x-content-type-options': 'nosniff',
+          'access-control-allow-origin': '*',
+          'access-control-allow-headers': 'authorization, content-type',
+        },
+      })
+    }
     const gathered = await gatherOriginals({
       pkg,
       store: originalStore(),
       extension: extensionFor,
       maxBytes: ARCHIVE_LIMITS.maxBytes,
     })
-    if (!gathered.ok) return json({ error: gathered.error, section: name }, gathered.status)
+    if (!gathered.ok) {
+      // A 413 here means the project is larger than one archive: the page asks for the set instead.
+      return json(
+        { error: gathered.error, section: name, use_set: gathered.status === 413 },
+        gathered.status,
+      )
+    }
     const { bytes } = await buildArchive(
       gathered.pkg,
       { slug, exportedAt: new Date().toISOString() },

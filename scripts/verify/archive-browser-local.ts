@@ -23,6 +23,7 @@ import { extname, join } from 'node:path'
 import { chromium, type Page } from 'playwright'
 import { buildArchive, readZip } from '../../src/portability/archive.ts'
 import { renderStandardExport } from '../../src/portability/export-route.ts'
+import { buildPart } from '../../src/portability/parts.ts'
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html',
@@ -166,12 +167,36 @@ const studio = {
   },
 }
 
+/*
+  A project set (#471, item 5): two parts, built by the module the gateway uses. The index is named by its key; the page
+  learns the key from the index and names each part with it, and the mock does not re-check the bytes (the gateway does, and
+  its own tests prove that), so the parts only need to be real ZIPs of the right names.
+*/
+const SET_KEY = sha(Buffer.from('set-index-for-the-browser-check'))
+const SET_CACHE = '0b1e2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+const SET_PARTS = [
+  buildPart({
+    index: Buffer.from(JSON.stringify({ set: SET_KEY })),
+    number: 1,
+    files: [],
+    pkg: Buffer.from(JSON.stringify(pkgWithOriginal)),
+    exportedAt: '2026-10-14T12:00:00.000Z',
+  }),
+  buildPart({
+    index: Buffer.from(JSON.stringify({ set: SET_KEY })),
+    number: 2,
+    files: [],
+    pkg: null,
+    exportedAt: '2026-10-14T12:00:00.000Z',
+  }),
+]
+
 const browser = await chromium.launch()
 
 async function openWriter(
   width: number,
   mobile: boolean,
-  options: { tamperedDownload?: boolean } = {},
+  options: { tamperedDownload?: boolean; setMode?: boolean } = {},
 ) {
   const context = await browser.newContext({
     viewport: { width, height: mobile ? 844 : 900 },
@@ -220,6 +245,32 @@ async function openWriter(
     if (section === 'project_export') {
       return json(200, { data: pkgWithOriginal })
     }
+    if (section === 'project_archive' && options.setMode === true) {
+      // A project larger than one archive: the single download says so, the office describes the set, and each part is
+      // served as the gateway serves it (a real ZIP, built by the same module the gateway uses).
+      const set = url.searchParams.get('set')
+      if (set === null)
+        return json(413, {
+          error: 'the original files of this project are larger than one archive can hold',
+          use_set: true,
+        })
+      if (set === 'index')
+        return json(200, {
+          data: { set: SET_KEY, cache: SET_CACHE, slug: SLUG, part_count: SET_PARTS.length },
+        })
+      const n = Number(url.searchParams.get('part'))
+      const bytes = SET_PARTS[n - 1]
+      if (bytes === undefined)
+        return json(400, { error: 'there is no part with that number in this set' })
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/zip',
+        headers: {
+          'content-disposition': `attachment; filename="${SLUG}-set-${SET_KEY}-part-${String(n)}-of-${String(SET_PARTS.length)}.zip"`,
+        },
+        body: Buffer.from(bytes),
+      })
+    }
     if (section === 'project_archive') {
       return route.fulfill({
         status: 200,
@@ -236,6 +287,7 @@ async function openWriter(
       restores.push({
         body: Buffer.from(route.request().postDataBuffer() ?? Buffer.alloc(0)),
         contentType: route.request().headers()['content-type'] ?? '',
+        url: route.request().url(),
       })
       const refused = options.tamperedDownload === true
       if (refused)
@@ -349,6 +401,83 @@ for (const [label, width, mobile] of [
         `${d.suggestedFilename()} saved ${String(saved.length)} expected ${String(expected.body.length)} | ${saved.toString('utf8').slice(0, 60)}`,
       )
     }
+    await context.close()
+  }
+
+  // S. A project larger than one archive: every part is downloaded, every part is restored, and the set is committed once.
+  {
+    const { context, page } = await openWriter(width, mobile, { setMode: true })
+    await openSettings(page)
+    const expectedNames = SET_PARTS.map(
+      (_, i) => `${SLUG}-set-${SET_KEY}-part-${String(i + 1)}-of-${String(SET_PARTS.length)}.zip`,
+    )
+    // A listener, not one waitForEvent per file: each waitForEvent resolves on the NEXT download, so two of them report the same one.
+    const seen = []
+    page.on('download', (d) => seen.push(d))
+    await press(page, 'button:has-text("Download archive (ZIP)")').catch(() => undefined)
+    for (let i = 0; i < 100 && seen.length < expectedNames.length; i++)
+      await page.waitForTimeout(100)
+    const names = seen.map((d) => d.suggestedFilename())
+    check(
+      `${label}: S1. a project too large for one archive downloads every part, each named for the set`,
+      names.length === expectedNames.length && names.every((n, i) => n === expectedNames[i]),
+      names.join(' | '),
+    )
+    await context.close()
+  }
+  {
+    const { context, page, restores } = await openWriter(width, mobile, { setMode: true })
+    await openSettings(page)
+    const partFiles = SET_PARTS.map((bytes, i) => ({
+      name: `${SLUG}-set-${SET_KEY}-part-${String(i + 1)}-of-${String(SET_PARTS.length)}.zip`,
+      mimeType: 'application/zip',
+      buffer: Buffer.from(bytes),
+    }))
+    await page.setInputFiles('[data-bc-restore-file]', partFiles)
+    await page
+      .waitForURL(new RegExp(`/p/${RESTORED_SLUG}`), { timeout: 15000 })
+      .catch(() => undefined)
+    const partRequests = restores.filter((r) => r.url.includes('&part='))
+    const commitRequests = restores.filter((r) => r.url.includes('&commit=1'))
+    check(
+      `${label}: S2. a set restores each part in order, then commits once, under its key`,
+      partRequests.length === 2 &&
+        partRequests[0]?.url.includes('part=1') === true &&
+        partRequests[1]?.url.includes('part=2') === true &&
+        commitRequests.length === 1 &&
+        partRequests.every((r) => r.url.includes(`set=${SET_KEY}`)),
+      `${String(partRequests.length)} part request(s), ${String(commitRequests.length)} commit(s)`,
+    )
+    check(
+      `${label}: S3. a committed set moves to the restored project`,
+      page.url().includes(`/p/${RESTORED_SLUG}`),
+      page.url().slice(0, 90),
+    )
+    await context.close()
+  }
+  {
+    // Half a set is refused in words, before any request is sent: the page names what is missing.
+    const { context, page, restores } = await openWriter(width, mobile, { setMode: true })
+    await openSettings(page)
+    await page.setInputFiles('[data-bc-restore-file]', [
+      {
+        name: `${SLUG}-set-${SET_KEY}-part-1-of-2.zip`,
+        mimeType: 'application/zip',
+        buffer: Buffer.from(SET_PARTS[0] ?? new Uint8Array()),
+      },
+    ])
+    await page.waitForTimeout(1500)
+    const said =
+      (await page
+        .locator('[data-bc-restore-said]')
+        .first()
+        .textContent()
+        .catch(() => '')) ?? ''
+    check(
+      `${label}: S4. half a set is refused in words, and no part is sent`,
+      restores.length === 0 && said.includes('choose all 2 parts'),
+      `${String(restores.length)} request(s); said ${JSON.stringify(said.slice(0, 90))}`,
+    )
     await context.close()
   }
 

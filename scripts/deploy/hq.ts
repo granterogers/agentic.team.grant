@@ -127,6 +127,9 @@ for (const [src, name] of [
   ['src/portability/originals.ts', 'originals.ts'],
   ['src/files/policy.ts', 'policy.ts'],
   ['src/files/links.ts', 'links.ts'],
+  // Project sets (#471, item 5): a project larger than one archive is carried in parts (set-store imports parts and originals).
+  ['src/portability/parts.ts', 'parts.ts'],
+  ['src/portability/set-store.ts', 'set-store.ts'],
 ] as const) {
   form.append(
     'file',

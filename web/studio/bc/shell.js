@@ -370,7 +370,7 @@ const menuPanel = () => {
         ? `<button type="button" role="menuitem" class="bcmenuitem bcmenurestore" data-bc-menu-restore>
              <span class="bcmenuplus" aria-hidden="true">↑</span><span class="bcmenuname">Restore a project from an archive</span>
            </button>
-           <input type="file" accept=".zip,application/zip" hidden data-bc-restore-file aria-label="Archive to restore">
+           <input type="file" accept=".zip,application/zip" multiple hidden data-bc-restore-file aria-label="Archive to restore, or every part of a project set">
            <p class="bcmenunone" role="status" aria-live="polite" data-bc-restore-said>${esc(compose.restoreSaid())}</p>`
         : ''
     }
@@ -3907,6 +3907,17 @@ const notLive = () => {
     return `<div class="bcnotlive bcnotlive--bad" role="status">
       <b>You're offline</b>
       <span>What you see was current when the connection dropped. Changes can't reach the office until it's back.</span>
+    </div>`
+  }
+  /*
+    A restore the office refused because the browser is no longer signed in (#471). It is said here, whatever the state,
+    because the sign-out that caused it has already redrawn the project menu where a restore sentence would have been.
+  */
+  const refused = compose.restoreRefused()
+  if (refused !== '') {
+    return `<div class="bcnotlive bcnotlive--bad" role="alert" data-bc-restore-refused>
+      <b>Your archive was not restored</b>
+      <span>${esc(refused)}</span>
     </div>`
   }
   if (source.live === true) return ''

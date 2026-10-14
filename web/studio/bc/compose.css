@@ -4065,6 +4065,9 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
     transform: none !important;
     display: grid;
     gap: 14px;
+    /* The page's 16px side gutter (the spec's phone rule). Without it the stacked modules and the notes ran edge to edge. */
+    padding-inline: 16px;
+    box-sizing: border-box;
   }
   [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed,
   [data-experience='basecamp'] .bcpostit {

@@ -292,6 +292,17 @@ export const setRestoreSaid = (words) => {
 }
 
 /*
+  A restore REFUSED because the browser is no longer signed in (#471, item 3). That refusal signs the browser out, which redraws
+  the project menu away, so its sentence cannot live in the menu. It is said on the page itself, in the strip above the shell,
+  and it stays until the next restore starts.
+*/
+let restoreRefusal = ''
+export const restoreRefused = () => restoreRefusal
+export const setRestoreRefused = (words) => {
+  restoreRefusal = String(words ?? '')
+}
+
+/*
   THE HEADER SAYS WHAT IS HAPPENING, NOT WHAT THE PROJECT IS CALLED.
 
   Grant, 23 September: remove the redundant legacy project title area, the

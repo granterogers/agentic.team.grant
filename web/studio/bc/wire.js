@@ -22,6 +22,7 @@ import {
   read,
   readFile,
   restoreArchive,
+  restoreArchiveSet,
   say,
   token,
 } from '../office.js'
@@ -29,6 +30,36 @@ import * as session from '../session.js'
 import { signOut } from '../signout.js'
 import { esc } from './parts.js'
 import * as bcDrive from './drive.js'
+
+/*
+  A PART OF A PROJECT SET (#471, item 5). The archive names its set and its place in it, so the page can order the parts it was
+  given without opening them. The gateway checks the key against the set itself, so a name is never trusted beyond ordering.
+*/
+const SET_PART = /-set-([0-9a-f]{64})-part-(\d+)-of-(\d+)\.zip$/
+function parseSetPart(file) {
+  const m = SET_PART.exec(file?.name ?? '')
+  if (m === null) return null
+  return { set: m[1], number: Number(m[2]), of: Number(m[3]), file }
+}
+
+/** The chosen files as one complete project set, in part order. Anything else is refused by words before a byte is sent. */
+function orderedSetParts(files) {
+  const parts = files.map(parseSetPart)
+  if (parts.some((p) => p === null)) {
+    throw new Error('Choose one archive, or every part of one project set. These files are not all parts of a set.')
+  }
+  const set = parts[0].set
+  const of = parts[0].of
+  if (parts.some((p) => p.set !== set || p.of !== of)) {
+    throw new Error('These parts belong to different project sets, so they cannot be restored together.')
+  }
+  const ordered = [...parts].sort((a, b) => a.number - b.number)
+  const complete = ordered.length === of && ordered.every((p, i) => p.number === i + 1)
+  if (!complete) {
+    throw new Error(`This is part of a project set: choose all ${String(of)} parts together to restore it.`)
+  }
+  return ordered
+}
 import * as live from './livevoice.js'
 import * as stopping from './stopping.js'
 import * as notes from './notestore.js'
@@ -775,12 +806,20 @@ export const wire = (root) => {
   }
   for (const f of root.querySelectorAll('[data-bc-restore-file]')) {
     f.addEventListener('change', async () => {
-      const file = f.files?.[0]
-      if (!file) return
+      const picked = [...(f.files ?? [])]
+      if (picked.length === 0) return
       compose.setRestoreSaid('Checking the archive and restoring it…')
+      compose.setRestoreRefused('')
       ctx.render()
       try {
-        const done = await restoreArchive(file)
+        // One archive is restored as it always was. Several files must be every part of one project set, complete and in one set.
+        const done =
+          picked.length === 1 && parseSetPart(picked[0]) === null
+            ? await restoreArchive(picked[0])
+            : await restoreArchiveSet(orderedSetParts(picked), (words) => {
+                compose.setRestoreSaid(words)
+                ctx.render()
+              })
         const c = done?.report?.counts ?? {}
         const docs = c.documents?.restored ?? 0
         const tasks = c.tasks?.restored ?? 0
@@ -794,8 +833,15 @@ export const wire = (root) => {
         globalThis.location.assign(`/p/${encodeURIComponent(String(done.slug))}`)
       } catch (error) {
         // The menu opens to show the office's sentence: a failed restore must not be told inside a closed menu.
-        compose.setRestoreSaid(error instanceof Error ? error.message : String(error))
-        menu.setOpen(true)
+        const said = error instanceof Error ? error.message : String(error)
+        compose.setRestoreSaid(said)
+        if (error?.signedOut === true) {
+          // The strip above the shell says this one. Opening the menu would lay it over the strip and hide the start of the sentence.
+          compose.setRestoreRefused(said)
+          menu.setOpen(false)
+        } else {
+          menu.setOpen(true)
+        }
         ctx.render()
       } finally {
         f.value = ''

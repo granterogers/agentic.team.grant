@@ -6,13 +6,17 @@
  * and drove /classic/, which main no longer serves. This is its local replacement.)
  *   npm run verify:arrangement-local
  *
- * What it asserts, at desktop 1440 x 900 (the phone board is stacked and offers no drag or resize, by design):
- *   A. what the office holds is what is drawn: a placed module at the office's position is drawn there
+ * What it asserts, at desktop 1440 x 900 and at a 390 x 844 phone (the phone board is stacked and offers no drag or resize):
+ *   A. what the office holds is what is drawn: a placed module at the office's position is drawn there (both sizes)
  *   B. a drag leaves the browser: the save is a dashboard_layout_set request whose panel moved
  *   C. a resize leaves the browser: the save carries the new width
  *   D. a second device with no local copy draws what the office now holds, and the office holds a moved copy
+ *   E. a reload of the same browser draws the saved position and width
+ *   F. a save the office refuses is not drawn as saved: after a reload the original position is shown
+ *   G1-G4. on the phone: the module sits inside the 16px gutter, the page does not scroll sideways, no resize handle is
+ *          offered, and a reload draws the same board
  * Control: ARRANGEMENT_CONTROL=local-only makes the office refuse to keep any save, which is what a page that keeps the
- * arrangement only in its own browser looks like from outside. B, C and D must then go red.
+ * arrangement only in its own browser looks like from outside. B, C, D, E and F must then go red.
  */
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -90,7 +94,7 @@ const browser = await chromium.launch()
 async function openDevice(
   office: { panels: Panels },
   saves: Record<string, unknown>[],
-  options: { withLocalCopy: boolean; width: number; mobile: boolean },
+  options: { withLocalCopy: boolean; width: number; mobile: boolean; refuseSaves?: boolean },
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({
     viewport: { width: options.width, height: options.mobile ? 844 : 900 },
@@ -144,6 +148,10 @@ async function openDevice(
     }
     if (route.request().method() === 'POST') {
       const body = JSON.parse(route.request().postData() ?? '{}') as Record<string, unknown>
+      if (body.action === 'dashboard_layout_set' && options.refuseSaves === true) {
+        // The office refuses the save: nothing is kept, and the page must not show the moved board as saved.
+        return json(502, { error: 'the layout could not be saved' })
+      }
       if (body.action === 'dashboard_layout_set' && !LOCAL_ONLY) {
         // The page sends { action, args }: the arguments are what the office stores.
         const args = (body.args ?? {}) as Record<string, unknown>
@@ -202,7 +210,10 @@ const waitForSave = (saves: Record<string, unknown>[], before: number) =>
     tick()
   })
 
-for (const [label, width, mobile] of [['desktop', 1440, false]] as const) {
+for (const [label, width, mobile] of [
+  ['desktop', 1440, false],
+  ['phone', 390, true],
+] as const) {
   const office = { panels: planted() }
   const saves: Record<string, unknown>[] = []
   const { context, page } = await openDevice(office, saves, {
@@ -219,13 +230,78 @@ for (const [label, width, mobile] of [['desktop', 1440, false]] as const) {
 
   // A. What the office holds is what is drawn.
   const first = await boxOf(page)
+  // On the phone the board is stacked, so a position does not apply: what must hold there is that the module is drawn.
   check(
-    `${label}: A. the office's placed module is drawn at the office's position`,
-    first !== null && Math.abs(first.x - PLANTED.x) <= 3 && Math.abs(first.y - PLANTED.y) <= 3,
+    mobile
+      ? `${label}: A. the office's module is drawn on the stacked phone board`
+      : `${label}: A. the office's placed module is drawn at the office's position`,
+    mobile
+      ? first !== null && first.w > 0 && first.h > 0
+      : first !== null && Math.abs(first.x - PLANTED.x) <= 3 && Math.abs(first.y - PLANTED.y) <= 3,
     first === null
       ? 'no module drawn'
       : `drawn at ${String(first.x)},${String(first.y)} size ${String(first.w)}x${String(first.h)}`,
   )
+
+  if (mobile) {
+    /*
+      The phone board is stacked and offers no drag or resize, by design. What must hold on a phone is that the board is
+      drawn inside the page's gutter, that the page does not scroll sideways, that the module offers no resize handle it
+      cannot use, and that a reload draws the same board.
+    */
+    await page.screenshot({ path: '.out/arrangement-phone.png' })
+    const edges = await page.evaluate(() => {
+      const m = document.querySelector('[data-mod="tasks"]')
+      if (m === null) return null
+      const r = m.getBoundingClientRect()
+      return { left: r.left, right: r.right, width: window.innerWidth }
+    })
+    check(
+      `${label}: G1. the module sits inside the 16px gutter on a 390px screen`,
+      edges !== null && edges.left >= 14 && edges.right <= edges.width - 14,
+      edges === null
+        ? 'no module drawn'
+        : `left ${String(Math.round(edges.left))} right ${String(Math.round(edges.right))}`,
+    )
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    )
+    check(
+      `${label}: G2. the page does not scroll sideways`,
+      overflow <= 1,
+      `overflow ${String(overflow)}px`,
+    )
+    // Visible handles only: a handle that is in the DOM and hidden is not one the person can use.
+    const handles = await page.locator('[data-mod="tasks"] [data-bc-resize]').evaluateAll(
+      (els) =>
+        els.filter((e) => {
+          const r = e.getBoundingClientRect()
+          return r.width > 0 && r.height > 0 && getComputedStyle(e).display !== 'none'
+        }).length,
+    )
+    check(
+      `${label}: G3. the phone board offers no resize handle it cannot use`,
+      handles === 0,
+      `handles ${String(handles)}`,
+    )
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page
+      .waitForFunction(() => document.querySelector('[data-mod="tasks"]') !== null, null, {
+        timeout: 12000,
+      })
+      .catch(() => undefined)
+    await page.waitForTimeout(600)
+    const afterReload = await boxOf(page)
+    check(
+      `${label}: G4. a reload draws the same phone board`,
+      afterReload !== null &&
+        edges !== null &&
+        Math.abs(afterReload.w - (edges.right - edges.left)) <= 3,
+      afterReload === null ? 'no module after reload' : `width ${String(afterReload.w)}`,
+    )
+    await context.close()
+    continue
+  }
 
   // B. A drag leaves the browser as a save that moves the panel.
   const before = saves.length
@@ -265,6 +341,26 @@ for (const [label, width, mobile] of [['desktop', 1440, false]] as const) {
       saved ? `saved w ${String(tasks?.w)}` : 'no save arrived',
     )
   }
+  // E. A reload of the same browser draws the saved board: the office's copy, not a stale one.
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page
+    .waitForFunction(() => document.querySelector('[data-mod="tasks"]') !== null, null, {
+      timeout: 12000,
+    })
+    .catch(() => undefined)
+  await page.waitForTimeout(600)
+  const reloaded = await boxOf(page)
+  const held = office.panels.find((p) => p.id === 'tasks') as { x?: number; w?: number } | undefined
+  check(
+    `${label}: E. after a reload the saved position and width are drawn`,
+    reloaded !== null &&
+      held !== undefined &&
+      Math.abs(reloaded.x - (held.x ?? -999)) <= 3 &&
+      Math.abs(reloaded.w - (held.w ?? -999)) <= 3,
+    reloaded === null
+      ? 'no module after reload'
+      : `drawn x ${String(reloaded.x)} w ${String(reloaded.w)}; office x ${String(held?.x)} w ${String(held?.w)}`,
+  )
   await context.close()
 
   // D. A second device, with nothing stored in its browser, draws what the office now holds.
@@ -294,6 +390,46 @@ for (const [label, width, mobile] of [['desktop', 1440, false]] as const) {
       : `drawn at ${String(elsewhere.x)} width ${String(elsewhere.w)}; office holds x ${String(officeTasks?.x)} w ${String(officeTasks?.w)}`,
   )
   await second.context.close()
+
+  // F. A save the office REFUSES is not shown as saved: a device that reloads afterwards draws the office's board, which
+  // is the original position, not the dragged one.
+  const refusing = { panels: planted() }
+  const refusedSaves: Record<string, unknown>[] = []
+  // WITH the browser's own copy: the strong form. A refused move that the page kept locally would reload as "saved".
+  const refused = await openDevice(refusing, refusedSaves, {
+    withLocalCopy: true,
+    width,
+    mobile,
+    refuseSaves: true,
+  })
+  await refused.page.goto(`${ORIGIN}/p/${SLUG}`, { waitUntil: 'domcontentloaded' })
+  await refused.page
+    .waitForFunction(() => document.querySelector('[data-mod="tasks"]') !== null, null, {
+      timeout: 12000,
+    })
+    .catch(() => undefined)
+  const grab = await centreOf(refused.page, '[data-mod="tasks"] .bcmodhead')
+  if (grab !== null) await drag(refused.page, grab, 120, 60)
+  await refused.page.waitForTimeout(1500)
+  await refused.page.reload({ waitUntil: 'domcontentloaded' })
+  await refused.page
+    .waitForFunction(() => document.querySelector('[data-mod="tasks"]') !== null, null, {
+      timeout: 12000,
+    })
+    .catch(() => undefined)
+  await refused.page.waitForTimeout(800)
+  const afterRefusal = await boxOf(refused.page)
+  check(
+    `${label}: F. a refused save is not drawn as saved: the reload shows the office's original position`,
+    grab !== null &&
+      afterRefusal !== null &&
+      Math.abs(afterRefusal.x - PLANTED.x) <= 3 &&
+      Math.abs(afterRefusal.y - PLANTED.y) <= 3,
+    afterRefusal === null
+      ? 'no module after reload'
+      : `drawn at ${String(afterRefusal.x)},${String(afterRefusal.y)}; the office refused the move`,
+  )
+  await refused.context.close()
 }
 
 await browser.close()

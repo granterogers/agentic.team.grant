@@ -130,3 +130,23 @@ an earlier session and not re-checked here.
 - Browser checks of the Settings export buttons, the download, and restore progress and failure messages, at 390 × 844 and
   desktop.
 - The empty-list and permission states of the Projects menu, once a signed-in fixture account with no projects exists.
+
+## Update, late 14 October: what the list above now says
+
+Done since, and verified on the final tree (see `docs/release/PROGRESS-LEDGER.md`, entry "PR #465, remaining items"):
+
+- Main is merged into the branch; the module-identity duplicate is removed in favour of main's; the deployment record matches main.
+- Signed-link reads: all three link-signing paths are tested across office boundaries (9 tests), with sabotage.
+- A refused restore (not signed in) is said in words above the shell, and the browser check asserts it.
+- The layout harness covers drag, resize, save, reload, a refused save and the phone (11 checks, both sizes). A 390 px gutter defect is fixed.
+- `verify:layouts` runs the Team HQ suites; the `/classic/` version is retired.
+- A project larger than one archive is carried as a set of 8 MB parts, with its limits named, a part-by-part restore, one commit and rollback (tests at unit, storage and gateway level, plus browser checks at both sizes). Not built: a single original over 5.5 MiB; sweeping the storage that exports and abandoned restores leave behind.
+- The six pending migrations and their order are in `docs/release/MIGRATION-PLAN-PR465-2026-10-14.md`.
+
+Still blocked, and why:
+
+- Google OAuth activation: needs the owner's Google client and Supabase Auth configuration (no credential has been used).
+- Production migrations, deploys and any production read: need the owner's named authorisation (`ALLOW_PRODUCTION_CHECKS` or `ALLOW_PRODUCTION_WRITES`, each for one stated operation).
+- The Google-session read rule in the gateway: depends on the owner's Supabase configuration.
+- Storage sweep for `exports/` and abandoned `restores/`: needs the owner's approval of the rule (age and office).
+- The production-reading checks: refused by the guard here; they need the owner's read authorisation to run.

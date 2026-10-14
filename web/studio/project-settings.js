@@ -42,7 +42,17 @@
 
 import { markup as appearanceMarkup, wire as appearanceWire } from './bc/appearance-pane.js'
 import { CREW } from './data.js'
-import { act, attempt, canWrite, read, readFile, say, sure } from './office.js'
+import {
+  act,
+  attempt,
+  canWrite,
+  read,
+  readArchiveSetIndex,
+  readArchiveSetPart,
+  readFile,
+  say,
+  sure,
+} from './office.js'
 
 /*
   The panes. 8 October 2026, Grant: remove the Team tab (the main Team section stays) and the Project tab; keep
@@ -826,9 +836,21 @@ export function wire(root, p, people, redraw, openLook, reload) {
       b.disabled = true
       say(b, 'Packing the archive…')
       try {
-        const blob = await readFile('project_archive', p.id)
-        saveBlob(`${p.slug}-archive.zip`, blob)
-        say(b, 'Downloaded — check your downloads.')
+        try {
+          const blob = await readFile('project_archive', p.id)
+          saveBlob(`${p.slug}-archive.zip`, blob)
+          say(b, 'Downloaded — check your downloads.')
+        } catch (error) {
+          // Too large for one archive: the office describes the set, and each part is saved as it arrives.
+          if (error?.useSet !== true) throw error
+          const set = await readArchiveSetIndex(p.id)
+          for (let n = 1; n <= set.part_count; n++) {
+            say(b, `Packing part ${String(n)} of ${String(set.part_count)}…`)
+            const part = await readArchiveSetPart(p.id, set.set, set.cache, n)
+            saveBlob(`${p.slug}-set-${set.set}-part-${String(n)}-of-${String(set.part_count)}.zip`, part)
+          }
+          say(b, `Downloaded ${String(set.part_count)} parts — keep them together to restore the project.`)
+        }
       } catch (error) {
         say(b, error instanceof Error ? error.message : String(error), 'warn')
       } finally {

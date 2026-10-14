@@ -33,7 +33,7 @@
     "verify:breaks": "tsx scripts/verify/breaks.ts",
     "verify:cors": "tsx scripts/verify/cors.ts",
     "verify:wrappers": "tsx scripts/verify/wrappers.ts",
-    "verify:layouts": "tsx scripts/verify/layouts.ts",
+    "verify:layouts": "tsx scripts/verify/arrangement-local.ts && tsx scripts/verify/access-browser-local.ts",
     "verify:controls": "npm run verify:controls:studio && npm run verify:controls:project-a && npm run verify:controls:project-b && npm run verify:controls:project-phone-a && npm run verify:controls:project-phone-b && npm run verify:controls:team && npm run verify:controls:settings",
     "verify:controls:studio": "ROUTES=portfolio SIZE=desktop tsx scripts/verify/controls.ts && ROUTES=portfolio SIZE=phone tsx scripts/verify/controls.ts",
     "verify:controls:team": "ROUTES=team SIZE=desktop tsx scripts/verify/controls.ts && ROUTES=team SIZE=phone tsx scripts/verify/controls.ts",
