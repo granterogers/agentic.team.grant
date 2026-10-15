@@ -456,11 +456,14 @@ export function wire(root) {
         f?.querySelector('[name=email]')?.focus()
         return
       }
+      // The sentence can sit below the fold on a phone; bring it into view so the press visibly did something.
+      const reveal = () => said?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
       try {
         say(said, await session.passwordReset(email))
       } catch (error) {
         say(said, error instanceof Error ? error.message : String(error))
       }
+      reveal()
     })
   }
   for (const b of root.querySelectorAll('[data-bc-password-toggle]')) {
