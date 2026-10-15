@@ -818,5 +818,6 @@
   "1062_a_held_back_over_budget_agent_is_recorded_in_the_activity_ledger.sql": "07c26ad8eb700e0fc79f8504ea60faccd90db0a97a3d59bb66b66ab90fd40534",
   "1070_a_project_can_be_exported_as_contacts_events_and_tasks.sql": "fff495aaa271d72d4ff754ec6d09686f8f99d82b8e89832982b3156a3dd40f63",
   "1071_a_project_can_be_restored_from_its_archive.sql": "edf2d66de82f5e88523f41ed5217961a9c6cfbdc27e2817ed44a86cff47d6f01",
-  "1072_archives_carry_each_documents_original_file.sql": "7cdeaa04fda193b2893e36ff447db60026b2a4677898f543cbe26f8957a263e0"
+  "1072_archives_carry_each_documents_original_file.sql": "7cdeaa04fda193b2893e36ff447db60026b2a4677898f543cbe26f8957a263e0",
+  "1073_a_sign_in_is_a_pin_the_person_chose.sql": "a03fb32d501e16c191ba7f2c82592434c6c81d31e2ad20f0367f9f4290e393d9"
 }
