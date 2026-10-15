@@ -44,6 +44,11 @@ export const EXTENDED: readonly Proof[] = [
     'a status question about a piece paused on an open question says it is waiting on Grant, and stops saying so once he has answered',
   ),
   p(
+    'failed-piece-is-said',
+    2,
+    'a failed piece nobody took on is counted for its own turn and said in the status prompt; the Chief of Staff taking it on removes exactly that one from the count, and the prompt agrees with the reader',
+  ),
+  p(
     'duplicate-while-stalled',
     2,
     'a repeat of work whose first attempt has stalled (lease lapsed) starts nothing; a repeat the matcher calls different work starts a new piece (the control)',

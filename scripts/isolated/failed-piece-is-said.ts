@@ -94,10 +94,23 @@ async function askStatus(): Promise<{ prompt: string; command: string; office: s
   return { prompt: shown.join('\n'), command, office }
 }
 
-// The number of failed pieces nobody took on, as the reader counts them for a status question.
-async function untaken(command: string, office: string): Promise<number> {
+// How many earlier turns in the window carry an untaken failure, as the reader reports them. The handler states the
+// sentence once per such turn, so the prompt should say it exactly this many times, whatever other proofs left behind.
+async function turnsWithUntaken(command: string, office: string): Promise<number> {
+  const row = (await one(`select count(*)::int as n
+    from jsonb_array_elements(app.conversation_before('${office}'::uuid, '${command}'::uuid)) e
+   where (e ->> 'failedUntaken')::int > 0`)) as { n: number }
+  return Number(row.n)
+}
+const sentences = (prompt: string) => (prompt.match(new RegExp(FAILED.source, 'g')) ?? []).length
+
+// The number of failed pieces nobody took on that belong to THIS turn, as the reader counts them for a status question.
+// Read from the turn's own entry (migration 1079 gives each entry its job id), not the window total, because other
+// proofs' committed turns in the same chat can carry their own untaken pieces.
+async function untaken(turn: string, command: string, office: string): Promise<number> {
   const row = (await one(`select coalesce(sum((e ->> 'failedUntaken')::int), 0)::int as n
-    from jsonb_array_elements(app.conversation_before('${office}'::uuid, '${command}'::uuid)) e`)) as {
+    from jsonb_array_elements(app.conversation_before('${office}'::uuid, '${command}'::uuid)) e
+   where e ->> 'jobId' = '${turn}'`)) as {
     n: number
   }
   return Number(row.n)
@@ -127,7 +140,7 @@ try {
     where job_id = '${child}'::uuid`)
 
   const before = await askStatus()
-  const countBefore = await untaken(before.command, before.office)
+  const countBefore = await untaken(priorTurn, before.command, before.office)
   check(
     'a failed piece nobody took on is counted as failed and untaken, and the status prompt says so',
     countBefore >= 1 && FAILED.test(before.prompt),
@@ -140,14 +153,17 @@ try {
   )
   const took = /"reassigned":\s*true/.test(reassigned)
   const after = await askStatus()
-  const countAfter = await untaken(after.command, after.office)
+  const countAfter = await untaken(priorTurn, after.command, after.office)
+  // The prompt must say the failure once per turn the reader counts, before and after. Asserting the word is gone
+  // would fail on other proofs' untaken turns in the same window, which are correctly still said.
+  const windowAfter = await turnsWithUntaken(after.command, after.office)
   check(
-    'CONTROL: once the Chief of Staff has taken it on, the count falls by exactly one, the prompt stops saying it failed untaken, and the replacement is underway',
+    "CONTROL: once the Chief of Staff has taken it on, this turn's count falls by exactly one, and the prompt says the failure once per turn the reader counts, the replacement is underway",
     took &&
       countAfter === countBefore - 1 &&
-      !FAILED.test(after.prompt) &&
+      sentences(after.prompt) === windowAfter &&
       UNDERWAY.test(after.prompt),
-    `reassigned=${String(took)}; count ${String(countBefore)} -> ${String(countAfter)}; sentence=${String(FAILED.test(after.prompt))}; underway=${String(UNDERWAY.test(after.prompt))}`,
+    `reassigned=${String(took)}; this turn ${String(countBefore)} -> ${String(countAfter)}; prompt says it ${String(sentences(after.prompt))}x, reader counts ${String(windowAfter)} turn(s); underway=${String(UNDERWAY.test(after.prompt))}`,
   )
 } finally {
   await db.execute('rollback')
