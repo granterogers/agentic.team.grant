@@ -18,6 +18,10 @@ evidence recorded here. Run with `npm run check:reliability`.
 | TM-014 | Checkpoint procedure and minimal output followed | Review of commit sequence and reports | git log on development branch | Manual | Pending |
 | TM-015 | Reload order is written and usable after compaction | Review | progress file, reload section | Manual | Pass (documented) |
 | TM-016 | Final acceptance gate | Not run | — | Not started | — |
+| TM-017 | No secret or private correspondence printed; no security weakening or broad test skip | Review of diffs and reports; grep for skips in changed test files | `git diff` review | Manual | Pending |
+| TM-018 | Missing source requirement detected: each consolidated §7 item and §25 item maps to exactly one register ID; hashes match files; transcript has eight entries; historical topics present | Automated, with 11 sabotages in self-test | `npm run check:reliability` and `-- --self-test` | Built | Pending first run on this checkpoint |
+| TM-019 | Parent/child completion rule (ECS-020) | Not built | — | Not built | — |
+| TM-020 | Forensic timeline assembled from authorised records; each finding classified | Review of `docs/reliability/` timeline once written | Not yet written | Not started | — |
 
 ## Not yet tested (blocked by the missing source documents)
 - Telegram ingress and voice transcription, approval state machines, callbacks, duplicate suppression, approval-to-execution continuation, worker leases, stalled-job detection, Gmail and Notion discovery, artifacts, the Canary Coworking incident simulation, approval-loop recovery and model failover. Each becomes a row here once its requirement text is extracted (DEC-002).

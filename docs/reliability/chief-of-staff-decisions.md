@@ -35,3 +35,30 @@ Append-only. A decision is changed by adding a new entry that supersedes an earl
 - **Decision:** These rules are followed by process at this checkpoint and recorded AMBER. An automated guard (a pre-push hook or CI check that refuses pushes to `main` and refuses deploy and migrate commands from this branch) is planned, not built.
 - **Basis:** Those rules are in force regardless of a guard, so the guard is extra assurance. Building it now would be a new control that needs its own review.
 - **Status:** Open. Resolve by adding a row to the test matrix.
+
+## DEC-002 — UPDATE (15 October 2026, resume instruction): blocker resolved
+- The consolidated master specification and the original incident transcript were supplied with the resume instruction. They are preserved as `chief-of-staff-master-spec-consolidated.md` and `chief-of-staff-incident.md`.
+- DEC-002's blocker is closed. The consolidated specification is authoritative (DEC-007). The historical execution-control specification is retained as evidence.
+
+## DEC-006 — Register expansion and remapping
+- **Decision:** Keep all 88 existing IDs unchanged. Append COS-069 to COS-146, ECS-021 to ECS-039 and REG-001 to REG-045. Map every consolidated §7 item (CONS-7.01 to CONS-7.76) and §25 item (CONS-25.01 to CONS-25.45) to exactly one ID in the register's traceability map.
+- **Basis:** Consolidated §7 says to preserve existing IDs where practical and document any remapping. None was needed.
+- **Note:** COS-011 to COS-068 are historical §3 topics (the execution-control spec). They are not the consolidated §7 list. Both lists are mapped; neither replaces the other.
+
+## DEC-007 — Source hierarchy
+- **Decision:** The consolidated master specification is authoritative. The historical execution-control specification is kept as evidence. Where they differ, the consolidated text governs and the difference is recorded here.
+- **Discrepancy recorded:** The historical §3 list (58 topics plus 10 examples) and the consolidated §7 inventory (76 items) are different enumerations of overlapping subject matter. The register maps both. Neither was dropped.
+
+## DEC-008 — Verbatim preservation limit
+- **Decision:** The consolidated specification and the incident transcript were written by transcribing the supplied text into the repository. A byte-for-byte comparison against the original message cannot be run in this session.
+- **Control:** The register records each file's SHA-256 from this checkpoint onward. `check:reliability` fails if a recorded file changes. Anyone holding the original message can confirm the transcription by comparing text, and should record any correction as a new dated decision, never by editing the hash in place.
+
+## DEC-010 — Historical specification header changed; hash re-recorded
+- **Date:** 15 October 2026
+- **Change:** The header of `chief-of-staff-master-spec.md` was edited to say it is historical and that the consolidated specification is authoritative. The verbatim body below the header was not changed.
+- **Hash:** SHA-256 re-recorded in the register from `5daf076f…` to `18a98bd9…`. The old value was recorded at baseline `b0b006f6`, so the change stays auditable.
+
+## DEC-009 — Production telemetry not read
+- **Decision:** No production read was made in this checkpoint. Forensic items that need production records stay AMBER or GREY (COS-091, COS-144 to COS-146).
+- **Basis:** ECS-021 and the repository's production-access rule require explicit authorisation for the specific read. None has been given.
+- **Resolution:** Grant authorises a named read-only check (`ALLOW_PRODUCTION_CHECKS=1`, for the stated purpose). Until then, the forensic timeline is built from the repository and the incident transcript only.

@@ -2,39 +2,49 @@
 
 **Canonical register:** `docs/reliability/chief-of-staff-requirements.md`
 **Epic:** https://github.com/granterogers/agentic.team.grant/issues/476
-**Development branch:** `claude/chief-of-staff-reliability` (branched from `main`; `main` not modified; no merge; no production contact)
-**Last checkpoint commit:** recorded in the epic comment for this checkpoint
+**Development branch:** `claude/chief-of-staff-reliability` (from `main` at `f23af36`; `main` not modified; no merge; no production contact)
+**Baseline:** `b0b006f6`. **Source-preservation checkpoint:** recorded in the epic comment for this checkpoint.
 
-**Reload order after compaction or restart (ECS-017):** epic → requirements register → this file → decisions log →
-test matrix → `git status` and `git log` on the development branch. Then run `npm run check:reliability`.
+**Reload order after compaction or restart (ECS-017):** epic #476 → `chief-of-staff-master-spec-consolidated.md` (authoritative) → `chief-of-staff-incident.md` → `chief-of-staff-requirements.md` → this file → `chief-of-staff-decisions.md` → `chief-of-staff-test-matrix.md` → `git status` and `git log` on the development branch. Then run `npm run check:reliability`.
 
 ## Reconciliation (must match the register; checked by `npm run check:reliability`)
 
-🟢 3 | 🟡 18 | 🔴 0 | ⚪ 67 — Total 88/88 tracked
+🟢 3 | 🟡 35 | 🔴 0 | ⚪ 192 — Total 230/230 tracked
 
-- Execution-control rules (ECS): 20 — 🟢 3 · 🟡 16 · 🔴 0 · ⚪ 1
-- Topic requirements (COS): 68 — 🟢 0 · 🟡 2 · 🔴 0 · ⚪ 66
-- Source documents: consolidated master prompt and Telegram incident transcript NOT supplied (DEC-002). No COS row may be GREEN.
+- Execution-control rules (ECS): 39 — 🟢 3 · 🟡 31 · 🔴 0 · ⚪ 5
+- Chief of Staff requirements (COS): 146 — 🟢 0 · 🟡 3 · 🔴 0 · ⚪ 143
+- Mandatory regression tests (REG): 45 — 🟢 0 · 🟡 1 · 🔴 0 · ⚪ 44
 
-## Completed
-- Development branch created from `main`. `main` untouched.
-- Execution-control specification saved verbatim: `docs/reliability/chief-of-staff-master-spec.md`.
-- Requirements register created with 88 IDs (ECS-001 to ECS-020; COS-001 to COS-068).
-- Reconciliation validator: `scripts/reliability/check-register.mjs`, run as `npm run check:reliability`, with a self-test.
+## Sources
 
-## Working
-- Epic creation and linking of files (ECS-008, ECS-009).
-- Test matrix and decisions log.
+| Source | Status |
+|---|---|
+| Consolidated master specification | Preserved, authoritative. `chief-of-staff-master-spec-consolidated.md` |
+| Original Telegram incident transcript (Canary Coworking, 15 October 2026) | Preserved. `chief-of-staff-incident.md`. Eight timestamped entries |
+| Historical execution-control specification | Retained as evidence. `chief-of-staff-master-spec.md` |
+
+The consolidated file was written by transcribing the supplied text. Its SHA-256 is recorded in the register from this point. Byte-level equality with the original message cannot be machine-checked in this session (DEC-008).
+
+## Completed (this checkpoint)
+- Verified the branch and tree at `b0b006f6` before changes.
+- Saved the consolidated specification and the incident transcript; recorded SHA-256 for all three sources.
+- Expanded the register from 88 to 230 IDs. Preserved all 88 existing IDs. Added COS-069 to COS-146, ECS-021 to ECS-039, REG-001 to REG-045 (DEC-006).
+- Mapped all 76 consolidated §7 inventory items and all 45 §25 regression items to register IDs.
+- Extended `check:reliability` to detect missing source requirements, unmapped items, changed or unrecorded source hashes, a dropped transcript entry, and a dropped historical topic. Self-test extended to 11 sabotages.
+
+## Working (next checkpoints, in order)
+1. Forensic timeline (COS-091, COS-144 to COS-146): read the Canary Coworking records. Requires authorised read access. Until then this stays AMBER/GREY.
+2. Approval lifecycle investigation and repair (COS-020 to COS-024, COS-072 to COS-074, COS-092 to COS-095, REG-001 to REG-006).
+3. Duplicate-objective and existing-run handling (COS-033, COS-034, COS-108 to COS-110, REG-009 to REG-011).
+4. Worker leasing, stall detection and safe recovery (COS-030 to COS-032, COS-111 to COS-114, REG-012 to REG-015).
+5. Automatic delegation and reassignment (COS-005, COS-006, COS-014 to COS-019, COS-096 to COS-102, REG-016 to REG-020).
+6. Gmail research, artifacts and status truthfulness (COS-035 to COS-050, COS-082, COS-083, COS-103 to COS-131, REG-022 to REG-039).
+7. End-to-end Canary simulation (COS-136 to COS-138, REG-045).
 
 ## Blocked
-- **Consolidated master prompt and Telegram incident transcript** — not present in the supplied material, `main`, or any branch (searched 15 October 2026). Not reconstructed. Recorded in DEC-002. COS-001 to COS-068 cannot be made exact until they arrive.
-- **Repository guards for ECS-001 to ECS-006** — no automated guard yet. Recorded as AMBER, not GREEN.
+- **Production telemetry for the incident.** Reading production requires `ALLOW_PRODUCTION_CHECKS=1` and Grant's explicit authorisation for that read. It has not been given for this checkpoint. Forensic items that need production records remain AMBER or GREY.
+- **Repository guards for ECS-001 to ECS-006.** Not built (DEC-005).
 
-## Next
-1. Commit these records and push the development branch.
-2. Investigate the Chief of Staff implementation in `src/` and map existing code to COS topics (evidence-first).
-3. Add a regression test for each COS topic once its exact text is known.
-
-## Production verification (ECS-013, recorded separately, pending)
-- No production verification has been performed. No production deploy, migration or config change was made.
-- Production verification of any COS row: **pending**.
+## Production verification (ECS-013, pending, recorded separately)
+- No production verification has been performed. No deploy, migration, configuration or secret change has been made.
+- Production verification of every requirement: **pending**.

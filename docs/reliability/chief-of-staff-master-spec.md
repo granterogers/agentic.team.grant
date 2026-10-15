@@ -1,14 +1,11 @@
 # Chief of Staff Reliability — Master Specification (source record)
 
-> **Source status — read first.** This file holds the **execution-control specification** exactly as supplied in the
-> session that started this mission (verbatim, below the line). The brief also referred to a *consolidated master prompt*
-> and an *original Telegram incident transcript*. **Neither was present in the supplied material**, and neither is in
-> `main` or any other branch. They have NOT been reconstructed here. They are recorded as a blocker in
-> `chief-of-staff-decisions.md` (DEC-002) and in the epic. When they are committed, add them as
-> `chief-of-staff-master-spec-consolidated.md` and `chief-of-staff-incident.md` and update DEC-002.
+> **Historical source — retained as evidence.** This file holds the original **execution-control specification** exactly as
+> supplied at the start of the mission (verbatim, below the line). It is no longer the authoritative specification.
 >
-> Canonical requirement list: `chief-of-staff-requirements.md`. Where this file and the register disagree, the register
-> records the topic and this file is the source text.
+> **Authoritative:** `chief-of-staff-master-spec-consolidated.md` (supplied 15 October 2026 with the resume instruction).
+> **Incident evidence:** `chief-of-staff-incident.md`. DEC-002 (blocker) is closed by DEC-007 in `chief-of-staff-decisions.md`.
+> Canonical requirement list: `chief-of-staff-requirements.md`.
 
 ---
 
