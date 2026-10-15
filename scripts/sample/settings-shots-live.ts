@@ -51,7 +51,9 @@ for (const vp of VPS) {
     const style = await page.addStyleTag({ content: UNCLIP })
     await page.waitForTimeout(200)
     await page.screenshot({ path: `${out}/${vp.name}-${tab}.png`, fullPage: true })
-    await style.evaluate((n) => n.remove())
+    await style.evaluate((n) => {
+      if (n instanceof Element) n.remove()
+    })
     await closeSettings(page)
   }
   for (const e of errors) problems.push(`${vp.name}: page error ${e}`)

@@ -718,9 +718,14 @@ for (const [size, opts] of SIZES) {
       A non-writer sees no Stop button, so there is nothing to seed and the progress line cannot be drawn. That is a
       gap to report, not a reason to end the whole capture run: every later screen still needs its PNG.
     */
-    const stopShown = await page.waitForSelector('[data-stop-job]', { timeout: 5000 }).then(() => true, () => false)
+    const stopShown = await page.waitForSelector('[data-stop-job]', { timeout: 5000 }).then(
+      () => true,
+      () => false,
+    )
     if (!stopShown) {
-      console.error('  NOT CAPTURED  job-progress — no Stop button drawn (not a writer); progress was not seeded')
+      console.error(
+        '  NOT CAPTURED  job-progress — no Stop button drawn (not a writer); progress was not seeded',
+      )
       missed.push('job-progress')
     }
     /*
@@ -757,7 +762,12 @@ for (const [size, opts] of SIZES) {
       localStorage.setItem('hq.token', 'local-capture-only')
       w.render()
     })()`)
-    const stepsShown = stopShown && (await page.waitForSelector('.jsteps', { timeout: 5000 }).then(() => true, () => false))
+    const stepsShown =
+      stopShown &&
+      (await page.waitForSelector('.jsteps', { timeout: 5000 }).then(
+        () => true,
+        () => false,
+      ))
     if (stepsShown) {
       await page.evaluate(
         `(() => { const el = document.querySelector('.jsteps');
@@ -766,7 +776,9 @@ for (const [size, opts] of SIZES) {
       await page.waitForTimeout(300)
       await shoot('job-progress')
     } else if (stopShown) {
-      console.error('  NOT CAPTURED  job-progress — the step line never appeared for the seeded job')
+      console.error(
+        '  NOT CAPTURED  job-progress — the step line never appeared for the seeded job',
+      )
       missed.push('job-progress')
     }
     await page.evaluate(`(() => {
@@ -874,9 +886,14 @@ for (const [size, opts] of SIZES) {
     })()`)
     await page.waitForTimeout(400)
     await page.locator('[data-doc="0"]').click()
-    const organiserShown = await page.waitForSelector('.docorg', { timeout: 5000 }).then(() => true, () => false)
+    const organiserShown = await page.waitForSelector('.docorg', { timeout: 5000 }).then(
+      () => true,
+      () => false,
+    )
     if (!organiserShown) {
-      console.error('  NOT CAPTURED  document-tags-and-collections — the organising rows never drew (classic document sheet)')
+      console.error(
+        '  NOT CAPTURED  document-tags-and-collections — the organising rows never drew (classic document sheet)',
+      )
       missed.push('document-tags-and-collections')
     }
     /*
@@ -1096,7 +1113,9 @@ for (const [size, opts] of SIZES) {
       await shoot(`empty-${s}`)
     }
     await openSwitchMenu(page)
-    await page.locator('[data-switch-menu] [data-open="legacy-coaching-course"]').click({ force: true })
+    await page
+      .locator('[data-switch-menu] [data-open="legacy-coaching-course"]')
+      .click({ force: true })
     await page.waitForTimeout(700)
 
     for (const section of ['tasks', 'contacts', 'sources']) {

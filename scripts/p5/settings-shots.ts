@@ -127,7 +127,9 @@ for (const vp of VIEWPORTS) {
     const style = await page.addStyleTag({ content: UNCLIP })
     await page.waitForTimeout(150)
     await page.screenshot({ path: `${out}/${vp.name}-${tab}-full.png`, fullPage: true })
-    await style.evaluate((n) => n.remove())
+    await style.evaluate((n) => {
+      if (n instanceof Element) n.remove()
+    })
     // leave settings so the next section opens from a known place
     await page.locator('#settings [data-stg-back]').click({ force: true })
     if (phone && (await page.locator('#settings').isVisible()))

@@ -64,7 +64,10 @@ function drive(
       return new Response(JSON.stringify(meta), { status: 200 })
     }
     if (kind === 'export') return new Response(f.exported ?? '', { status: 200 })
-    return new Response(f.body ?? '', { status: 200 })
+    return new Response(
+      typeof f.body === 'string' || f.body === undefined ? (f.body ?? '') : new Uint8Array(f.body),
+      { status: 200 },
+    )
   }) as typeof fetch
   return { calls, fetchImpl, provider: driveProvider('test-token', fetchImpl) }
 }

@@ -90,7 +90,7 @@ for (const f of files) {
       'x-vercel-digest': f.sha,
       'Content-Length': String(f.size),
     },
-    body: f.body,
+    body: typeof f.body === 'string' ? f.body : new Uint8Array(f.body ?? new Uint8Array()),
   })
   if (!up.ok && up.status !== 409) {
     console.error(`upload failed for ${f.file}: http ${String(up.status)}`)

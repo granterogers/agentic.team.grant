@@ -102,7 +102,9 @@ const fakeFetch = (async (url: string | URL, init?: { body?: unknown }) => {
         { status: 200 },
       )
     const body =
-      typeof f.body === 'string' ? new TextEncoder().encode(f.body) : (f.body ?? new Uint8Array())
+      typeof f.body === 'string'
+        ? new TextEncoder().encode(f.body)
+        : new Uint8Array(f.body ?? new Uint8Array())
     return new Response(body, { status: 200 })
   }
   if (u.includes('/object/files/')) {

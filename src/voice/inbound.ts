@@ -173,7 +173,7 @@ export async function transcribeOverApi(
   // wav webm]". The bytes were always fine; only the name was wrong, which is
   // the kind of rejection that reads like a codec problem and is not one.
   const named = filename.replace(/\.oga$/i, '.ogg')
-  form.append('file', new File([audio], named, { type: 'audio/ogg' }))
+  form.append('file', new File([new Uint8Array(audio)], named, { type: 'audio/ogg' }))
   form.append('model', model)
   form.append('response_format', 'json')
   // English, said out loud. Left to guess, a short note in accented English is
