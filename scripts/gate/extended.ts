@@ -39,6 +39,11 @@ export const EXTENDED: readonly Proof[] = [
     'a status question is answered from the conversation work as recorded: queued work is still underway, and failed work is no longer shown as underway',
   ),
   p(
+    'approval-concurrent-presses',
+    2,
+    'two button presses that reach the office at the same moment: exactly one answers the question and the other is refused as already answered, in every round',
+  ),
+  p(
     'approval-consumed-once',
     4,
     'an approval is answered once: a repeated or conflicting press does not change the answer, and an option never offered is refused and leaves the question open',
