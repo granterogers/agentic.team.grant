@@ -231,7 +231,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | REG-008 | Restrictive project autonomy | §25.8 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-009 | Duplicate user objective while running | §25.9 | P0 | QA (Claude) | 🟡 AMBER | An identical repeat starts nothing and says so; a paraphrase the matcher calls the same starts nothing; the control (matcher says different) starts a job (TM-038, 3/3) | Partial: the matcher's answer is scripted, so it proves the handler acts on the answer, not that the real model judges well | TM-038 | Real model judgement not run |
 | REG-010 | Duplicate objective while stalled | §25.10 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
-| REG-011 | Duplicate objective after completion | §25.11 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
+| REG-011 | Duplicate objective after completion | §25.11 | P0 | QA (Claude) | 🟡 AMBER | A completed piece of work is driven through the legal transitions and its output written; a repeat the matcher calls the same is answered with that result and starts nothing; the control starts a job (TM-039, 2/2) | Partial: the matcher's answer is scripted; the completion path is set up through the trigger's legal transitions, not through the worker | TM-039 | Real worker completion not used |
 | REG-012 | Worker interruption | §25.12 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-013 | Worker lease expiry | §25.13 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-014 | Safe job reclamation | §25.14 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |

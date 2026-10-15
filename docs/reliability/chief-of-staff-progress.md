@@ -9,11 +9,11 @@
 
 ## Reconciliation (must match the register; checked by `npm run check:reliability`)
 
-🟢 11 | 🟡 72 | 🔴 0 | ⚪ 147 — Total 230/230 tracked
+🟢 11 | 🟡 73 | 🔴 0 | ⚪ 146 — Total 230/230 tracked
 
 - Execution-control rules (ECS): 39 — 🟢 3 · 🟡 31 · 🔴 0 · ⚪ 5
 - Chief of Staff requirements (COS): 146 — 🟢 7 · 🟡 29 · 🔴 0 · ⚪ 110
-- Mandatory regression tests (REG): 45 — 🟢 1 · 🟡 12 · 🔴 0 · ⚪ 32
+- Mandatory regression tests (REG): 45 — 🟢 1 · 🟡 13 · 🔴 0 · ⚪ 31
 
 ## Implementation checkpoint (this session)
 
