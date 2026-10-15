@@ -347,7 +347,7 @@ try {
   const lastPassage = viaRetrieve.find((h) => h.documentId === idOf.long)
   check(
     'the real retrieve(): a fact at the END of a long file is found and the excerpt shown carries it',
-    lastPassage !== undefined && lastPassage.excerpt.includes(W.tail),
+    lastPassage?.excerpt.includes(W.tail) === true,
     lastPassage === undefined
       ? 'not found'
       : `excerpt ${String(lastPassage.excerpt.length)} chars, passage ${JSON.stringify(lastPassage.passage ?? null)}`,

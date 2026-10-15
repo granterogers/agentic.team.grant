@@ -3223,10 +3223,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
           `${DB_URL}/rest/v1/projects?project_id=eq.${projectId}&select=is_fixture&limit=1`,
           { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
         ).catch(() => null)
-        const rows =
-          shown !== null && shown.ok
-            ? ((await shown.json().catch(() => [])) as { is_fixture?: boolean }[])
-            : []
+        const rows = shown?.ok
+          ? ((await shown.json().catch(() => [])) as { is_fixture?: boolean }[])
+          : []
         if (rows[0]?.is_fixture !== true) {
           return json(
             {
