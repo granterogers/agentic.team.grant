@@ -263,8 +263,8 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | REG-040 | Requirements-register reconciliation | §25.40 | P0 | QA (Claude) | 🟡 AMBER | `npm run check:reliability` passes on the current register | Validator | TM-001 | Extend to inventory checks |
 | REG-041 | Context-compaction recovery | §25.41 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-042 | Model failover without approval duplication | §25.42 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
-| REG-043 | Security and authorisation boundaries | §25.43 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
-| REG-044 | No unauthorised external communication | §25.44 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
+| REG-043 | Security and authorisation boundaries | §25.43 | P0 | QA (Claude) | 🟡 AMBER | `sender-authorization` (critical gate, 31): a message from somebody who is not the office's person is not that person's instruction. `office-ownership` and `office-ownership-sabotage` (critical gate): one office cannot reach another's rows | Partial: authorisation of the browser and gateway surfaces is not in these proofs | TM-031 | Gateway authorisation not driven here |
+| REG-044 | No unauthorised external communication | §25.44 | P0 | QA (Claude) | 🟡 AMBER | `containment` and `external-containment` (critical gate, 15 each): a harness job is refused any real destination, and an external-assistant or test-origin turn never reaches his real chat | Partial: outbound email is not granted (the registry disables send), but whether an approved outward message is delivered once is not in these proofs | TM-031 | Outward approved delivery not driven here |
 | REG-045 | End-to-end Canary Coworking simulation | §25.45 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 
 ## D. Source traceability map (checked by `check:reliability`)
