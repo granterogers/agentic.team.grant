@@ -33,6 +33,11 @@ export const EXTENDED: readonly Proof[] = [
     3,
     'a plan task is stored with its specialist or the Chief of Staff as owner, never unowned or refused silently',
   ),
+  p(
+    'approval-consumed-once',
+    4,
+    'an approval is answered once: a repeated or conflicting press does not change the answer, and an option never offered is refused and leaves the question open',
+  ),
   // ---- the unified activity ledger -------------------------------------------------------------------------------------
   p(
     'activity-worker',
