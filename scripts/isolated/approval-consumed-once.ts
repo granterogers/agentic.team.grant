@@ -51,17 +51,17 @@ const press = async (answer: string) => {
   return (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown>
 }
 const stateOf = async () =>
-  (
-    await one(
-      `select state, answered_option from public.blockers where blocker_id = '${blockerId}'::uuid`,
-    )
-  ) as { state: string; answered_option: string | null }
+  (await one(
+    `select state, answered_option from public.blockers where blocker_id = '${blockerId}'::uuid`,
+  )) as { state: string; answered_option: string | null }
 
 const first = await press('Go ahead')
 const afterFirst = await stateOf()
 check(
   'the first valid press answers the question',
-  first.ok !== false && afterFirst.state === 'resolved' && afterFirst.answered_option === 'Go ahead',
+  first.ok !== false &&
+    afterFirst.state === 'resolved' &&
+    afterFirst.answered_option === 'Go ahead',
   `state=${afterFirst.state} answered=${afterFirst.answered_option ?? 'none'}`,
 )
 
@@ -96,7 +96,10 @@ const notOffered = await one(
   `select app.hq_answer_blocker('${office}'::uuid, '${offered}'::uuid, 'Burn it', 'grant') as r`,
 )
 const rawNot = notOffered.r
-const parsedNot = (typeof rawNot === 'string' ? JSON.parse(rawNot) : rawNot) as Record<string, unknown>
+const parsedNot = (typeof rawNot === 'string' ? JSON.parse(rawNot) : rawNot) as Record<
+  string,
+  unknown
+>
 const offeredState = await one(
   `select state from public.blockers where blocker_id = '${offered}'::uuid`,
 )
