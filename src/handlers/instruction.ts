@@ -7047,7 +7047,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   t.waitingOnYou > 0
                     ? `Still open from that: ${String(t.waitingOnYou)} piece(s) of it are waiting on your answer.`
                     : t.stillGoing > 0
-                      ? `Still open from that: ${String(t.stillGoing)} piece(s) are still running.`
+                      ? `Still open from that: ${String(t.stillGoing)} piece(s) are still underway, queued or running, not finished.`
                       : ''
                 const lines = [
                   ...(t.colleagues.length === 0
