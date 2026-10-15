@@ -49,6 +49,11 @@ export const EXTENDED: readonly Proof[] = [
     'a repeat of work whose first attempt has stalled (lease lapsed) starts nothing; a repeat the matcher calls different work starts a new piece (the control)',
   ),
   p(
+    'follow-up-task-shape',
+    4,
+    'a follow-up task is stored with its owner, source job and project, its detail carries the contact and action, and no due date is invented',
+  ),
+  p(
     'mail-awaiting',
     4,
     'a quiet thread is awaiting a reply in the right direction and is named for the counterpart, never Grant; recent and non-contact threads are not listed',
