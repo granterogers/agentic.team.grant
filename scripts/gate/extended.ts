@@ -39,6 +39,11 @@ export const EXTENDED: readonly Proof[] = [
     'a status question is answered from the conversation work as recorded: queued work is still underway, and failed work is no longer shown as underway',
   ),
   p(
+    'duplicate-while-running',
+    3,
+    'a repeat of work already running starts no second piece of work, identical or paraphrased; a paraphrase the matcher calls different work does start one (the control)',
+  ),
+  p(
     'approval-concurrent-presses',
     2,
     'two button presses that reach the office at the same moment: exactly one answers the question and the other is refused as already answered, in every round',

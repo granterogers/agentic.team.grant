@@ -229,7 +229,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | REG-006 | Planner regeneration after approval | §25.6 | P0 | QA (Claude) | 🟡 AMBER | Duplicate question per job and action refused (TM-021); identity stable under renumbering (TM-022) | Partial; reworded reason re-asks once (DEC-011) | TM-021, TM-022 | End-to-end regenerated plan not run |
 | REG-007 | Backup-model planning | §25.7 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-008 | Restrictive project autonomy | §25.8 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
-| REG-009 | Duplicate user objective while running | §25.9 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
+| REG-009 | Duplicate user objective while running | §25.9 | P0 | QA (Claude) | 🟡 AMBER | An identical repeat starts nothing and says so; a paraphrase the matcher calls the same starts nothing; the control (matcher says different) starts a job (TM-038, 3/3) | Partial: the matcher's answer is scripted, so it proves the handler acts on the answer, not that the real model judges well | TM-038 | Real model judgement not run |
 | REG-010 | Duplicate objective while stalled | §25.10 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-011 | Duplicate objective after completion | §25.11 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-012 | Worker interruption | §25.12 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
