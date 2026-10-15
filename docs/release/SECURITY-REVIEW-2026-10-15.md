@@ -7,7 +7,7 @@ function definitions that the migration and the page deploy needed.
 
 ## Findings
 
-### F1 — Export returned a package for another office's project (fixed in branch, not deployed)
+### F1 — Export returned a package for another office's project (fixed: migration 1075, merged and deployed)
 
 - Where: `app.project_export(p_office, p_project_id)` (migration 0720). Reached through `public.project_export`, which
   is `security definer`.
@@ -18,7 +18,8 @@ function definitions that the migration and the page deploy needed.
   `on_this_project = true`.
 - Severity: low to medium. No other office's record came back. The answer was false, and it is a tenant-boundary
   defect because the function, not the gateway, is the boundary.
-- Fix: migration `1075` refuses with `22023` "no project of this office has that id". It is spliced from the live
+- Fix: migration `1075`, applied to production on 15 October 2026 (verified read-only: the refusal text is in the live
+  definition). It refuses with `22023` "no project of this office has that id". It is spliced from the live
   definition at apply time, and a control refuses to apply unless the refusal is present.
 - Verified: on a copy with 1075, the foreign call is refused and the office's own export is unchanged. On the unmigrated
   replica, the same check fails (negative control). Proof: `scripts/isolated/project-roundtrip.ts`, 10 of 10.
