@@ -3007,7 +3007,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               `${(alreadyRunning.answer ?? '').trim().slice(0, 600)}\n\n` +
               'Say the word if you want it done again from scratch.'
             : `${alreadyRunning.who === 'someone' ? 'Somebody' : alreadyRunning.who} is already on that — ` +
-              `"${alreadyRunning.about.trim().slice(0, 120)}" is running now, so I have not started it ` +
+              `"${alreadyRunning.about.trim().slice(0, 120)}" is underway and not finished (queued or running), so I have not started it ` +
               'a second time. Say the word if you want somebody else to take a separate look.'
 
       /*
