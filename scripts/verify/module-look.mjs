@@ -64,6 +64,23 @@ const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromi
   await page.waitForTimeout(500)
   const openText = await page.$eval('.bcmenupanel', (el) => el.innerText)
   check('project menu opens and lists the projects', openText.includes('Legacy Coaching Course') && openText.includes('Wellness'))
+  // Every module row in the menu carries its own icon, in its own colour, from the dashboard's identity table. A row
+  // without an icon is the failure this guards; the control is that the rows are counted, not assumed.
+  const menuRows = await page.$$eval('.bcmenuitem[data-bc-expand], .bcmenuitem[data-bc-sources]', (els) =>
+    els.map((el) => {
+      const icon = el.querySelector('.bcmenuicon svg')
+      const wrap = el.querySelector('.bcmenuicon')
+      return {
+        name: el.innerText.trim(),
+        hasIcon: icon !== null,
+        colour: wrap === null ? '' : getComputedStyle(wrap).color,
+      }
+    }),
+  )
+  check('menu has the six module rows plus Sources (control)', menuRows.length >= 7, `${menuRows.length} rows`)
+  check('every module row in the menu has its icon', menuRows.every((r) => r.hasIcon), menuRows.filter((r) => !r.hasIcon).map((r) => r.name).join(', '))
+  const menuColours = new Set(menuRows.map((r) => r.colour))
+  check('menu icons take their own colours, not one shared colour', menuColours.size >= 3, `${menuColours.size} distinct`)
   const projectsBefore = (await page.$eval('.bcmenupanel', (el) => el.innerText)).includes('AI learning')
   check('Projects list is shown by default (control)', projectsBefore)
   // The Projects section header is the one button carrying aria-expanded; pressing it must collapse the list.
