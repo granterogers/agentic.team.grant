@@ -39,7 +39,7 @@
 import { mayAct } from '../agents/approval.ts'
 import { howComposed } from '../agents/provenance.ts'
 import { applyDesign, type Design, designBrief, effectiveStyle } from '../artifacts/design.ts'
-import { deterministicDraft } from '../artifacts/deterministic.ts'
+import { deterministicDraft, deterministicKind } from '../artifacts/deterministic.ts'
 import { type FetchLogoBytes, loadLogo, storageFetcher } from '../artifacts/logo.ts'
 import { type Block, coverTakes, type Report, renderReport } from '../artifacts/report.ts'
 import { resolveSourceDocument, revisesEarlier, sourcePhrase } from '../artifacts/source.ts'
@@ -338,12 +338,6 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
             'Say which, and I will start it.',
         )
       }
-      if (router === null) {
-        return say(
-          'I cannot write a report just now — the office has no model to think with. ' +
-            'Nothing was created.',
-        )
-      }
 
       /*
         THE DIAL. Making a document is the office acting inside the project, which Observe does not allow; asked for the tool
@@ -373,6 +367,17 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         ).rows[0] as { pinned_config?: Record<string, unknown> } | undefined
       )?.pinned_config
       const brief = String(payload?.brief ?? payload?.instruction ?? '').trim()
+      /*
+        No model is needed for the two documents answered from the records (§19A, §19B): their figures come from the
+        database, so the refusal below must not stop them. Any other document is drafted by a model, and without one
+        the honest answer is to say so.
+      */
+      if (router === null && deterministicKind(brief) === null) {
+        return say(
+          'I cannot write a report just now — the office has no model to think with. ' +
+            'Nothing was created.',
+        )
+      }
       /*
         Captured once, because a closure loses the narrowing.
 
@@ -628,6 +633,12 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
                     )
                     .catch(() => ({ rows: [] as Record<string, unknown>[] }))
                 ).rows[0]?.c as MailCoverage | undefined) ?? null
+              /*
+                Unreachable by construction: a request without a model is refused before this step unless it is one of the
+                two record-based documents, which returned above. Stated here so a future change cannot reach a model
+                call with no model.
+              */
+              if (router === null) throw new Error('a drafted document has no model to draft it')
               const completion = await router.complete({
                 correlationId: job.correlationId,
                 jobId: job.jobId,

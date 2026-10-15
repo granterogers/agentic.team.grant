@@ -128,6 +128,34 @@ try {
     modelCalls >= 1,
     `model calls: ${String(modelCalls)}; reply: ${control.body.slice(0, 120)}`,
   )
+  // With NO model configured: a record-based document still reaches the store step, and a plain report is refused
+  // with the honest reason rather than drafted. Each on its own job, for the checkpoint reason given above.
+  const noModel = artifactHandler({
+    db,
+    router: null,
+    projectRef: 'replica',
+    serviceKey: 'replica',
+  })
+  const recordJob = await realParent(db)
+  await setBrief(recordJob, 'Create an accommodation comparison for this project')
+  const recordNoModel = await reachedStore(async () =>
+    noModel.handle(await jobFor(recordJob, `art3-${tag}`), db),
+  )
+  check(
+    'with no model, an accommodation comparison still reaches the store step (it needs no model)',
+    recordNoModel.reached,
+    recordNoModel.body.slice(0, 100),
+  )
+  const plainJob = await realParent(db)
+  await setBrief(plainJob, 'Write me a short report on the villa enquiry from Priya Proof')
+  const plainNoModel = await reachedStore(async () =>
+    noModel.handle(await jobFor(plainJob, `art4-${tag}`), db),
+  )
+  check(
+    'with no model, a plain report is refused with the reason, not drafted',
+    !plainNoModel.reached && /no model to think with/.test(plainNoModel.body),
+    plainNoModel.body.slice(0, 100),
+  )
 } finally {
   await db.execute('rollback')
   await db.end()
