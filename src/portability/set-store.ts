@@ -517,3 +517,61 @@ export async function abandonSet(input: {
   await input.store.remove(indexOf(input.office, input.setKey))
   return { ok: true, removed }
 }
+
+/** How long an export cache or an uncommitted restore may sit before the sweep removes it (the owner's rule, 15 October 2026). */
+export const SWEEP_AFTER_MS = 24 * 60 * 60 * 1000
+
+/** One stored object: its path and when it was created (milliseconds), or NaN when the store did not say. */
+export interface StoredItem {
+  readonly path: string
+  readonly createdAt: number
+}
+
+/**
+ * Remove what an office's set work left behind, and nothing else:
+ *   - an export cache whose newest object is older than the limit, all of its objects together;
+ *   - a restore that never committed (no committed marker) whose newest object is older than the limit, all of its objects.
+ * A committed restore is never removed, because its files now belong to a project. An object whose age the store did not
+ * report is kept: a sweep that guesses removes data it should not. Returns what it removed, so the caller can report it.
+ */
+export async function sweepOffice(input: {
+  office: string
+  now: number
+  items: readonly StoredItem[]
+  store: OriginalStore
+}): Promise<{ removed: number; exportCaches: number; abandonedSets: number }> {
+  const exportsPrefix = `exports/${input.office}/`
+  const restorePrefix = `restores/${input.office}/`
+  const groups = new Map<string, { kind: 'export' | 'restore'; items: StoredItem[] }>()
+  for (const item of input.items) {
+    let key: string | null = null
+    let kind: 'export' | 'restore' = 'export'
+    if (item.path.startsWith(exportsPrefix)) {
+      key = `e:${item.path.slice(exportsPrefix.length).split('/')[0] ?? ''}`
+    } else if (item.path.startsWith(restorePrefix)) {
+      kind = 'restore'
+      key = `r:${item.path.slice(restorePrefix.length).split('/')[0] ?? ''}`
+    }
+    if (key === null || key.endsWith(':')) continue
+    const group = groups.get(key) ?? { kind, items: [] }
+    group.items.push(item)
+    groups.set(key, group)
+  }
+  let removed = 0
+  let exportCaches = 0
+  let abandonedSets = 0
+  for (const group of groups.values()) {
+    const committed =
+      group.kind === 'restore' && group.items.some((i) => i.path.endsWith('/_committed.json'))
+    if (committed) continue
+    const newest = Math.max(...group.items.map((i) => i.createdAt))
+    // NaN fails every comparison, so an object whose age the store did not report keeps its group.
+    if (!(input.now - newest > SWEEP_AFTER_MS)) continue
+    for (const item of group.items) {
+      if (await input.store.remove(item.path)) removed += 1
+    }
+    if (group.kind === 'export') exportCaches += 1
+    else abandonedSets += 1
+  }
+  return { removed, exportCaches, abandonedSets }
+}

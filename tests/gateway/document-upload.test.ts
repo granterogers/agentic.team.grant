@@ -80,44 +80,57 @@ const upload = (token: string, args: Record<string, unknown>): Promise<Response>
   )
 
 describe('a document upload is checked before it is stored, through the gateway', () => {
-  it('refuses a file whose contents are not the type it declares, and stores nothing', async () => {
+  // The owner's decision (15 October 2026): any type is stored as it arrived. The only refusals are empty and oversize.
+  it('stores a file whose contents are not the type it declares, as it arrived', async () => {
     const res = await upload(`${jwt}u1`, {
       p_project_id: PROJECT,
       p_name: 'report.pdf',
       p_mime: 'application/pdf',
       p_base64: base64(new TextEncoder().encode('this is not a pdf')),
     })
-    expect(res.status).toBe(400)
-    expect(((await res.json()) as { error: string }).error).toContain(
-      'contents do not match the declared type',
-    )
-    expect(stored).toEqual([])
-    expect(recorded).toEqual([])
+    expect(res.status).not.toBe(400)
+    expect(stored).toHaveLength(1)
+    expect(recorded).toHaveLength(1)
   })
 
-  it('refuses a name whose extension does not agree with the declared type', async () => {
+  it('stores a file whose name and declared type disagree', async () => {
     const res = await upload(`${jwt}u2`, {
       p_project_id: PROJECT,
       p_name: 'plan.exe',
       p_mime: 'image/png',
       p_base64: base64(PNG),
     })
-    expect(res.status).toBe(400)
-    expect(((await res.json()) as { error: string }).error).toContain(
-      'extension does not match the declared type',
-    )
-    expect(stored).toEqual([])
+    expect(res.status).not.toBe(400)
+    expect(stored).toHaveLength(1)
   })
 
-  it('refuses a type the office does not take, and stores nothing', async () => {
-    const res = await upload(`${jwt}u3`, {
+  it('stores an executable and an HTML page', async () => {
+    const exe = await upload(`${jwt}u3`, {
       p_project_id: PROJECT,
-      p_name: 'tool.bin',
+      p_name: 'tool.exe',
       p_mime: 'application/x-msdownload',
       p_base64: base64(PNG),
     })
+    const html = await upload(`${jwt}u5`, {
+      p_project_id: PROJECT,
+      p_name: 'page.html',
+      p_mime: 'text/html',
+      p_base64: base64(new TextEncoder().encode('<script>x()</script>')),
+    })
+    expect(exe.status).not.toBe(400)
+    expect(html.status).not.toBe(400)
+    expect(stored).toHaveLength(2)
+  })
+
+  it('refuses an empty file, and stores nothing (the gateway names the empty body as a missing argument)', async () => {
+    const res = await upload(`${jwt}u6`, {
+      p_project_id: PROJECT,
+      p_name: 'empty.pdf',
+      p_mime: 'application/pdf',
+      p_base64: '',
+    })
     expect(res.status).toBe(400)
-    expect(((await res.json()) as { error: string }).error).toContain('type not allowed')
+    expect(((await res.json()) as { error: string }).error).toContain('p_base64')
     expect(stored).toEqual([])
   })
 

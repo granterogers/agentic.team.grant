@@ -21,6 +21,8 @@ const partAt = (list: readonly Uint8Array[], i: number): Uint8Array => {
 }
 
 const bucket = new Map<string, { bytes: Uint8Array; mime: string }>()
+/** When a stored object was created, for the storage listing (the sweep reads it). Absent means "now". */
+const createdAt = new Map<string, string>()
 const rpc: { fn: string; body: Record<string, unknown> }[] = []
 let restoreReply: Record<string, unknown> = {
   ok: true,
@@ -60,6 +62,29 @@ const fake = vi.fn(async (url: string | URL | Request, init?: RequestInit): Prom
       const had = bucket.delete(path)
       return new Response('{}', { status: had ? 200 : 404 })
     }
+  }
+  if (u.endsWith('/storage/v1/object/list/files') && init?.method === 'POST') {
+    // The storage listing: files directly under the prefix, and folders (no id) for anything deeper.
+    const prefix = String(
+      (JSON.parse(String(init.body ?? '{}')) as { prefix?: string }).prefix ?? '',
+    )
+    const seen = new Map<string, { name: string; id: string | null; created_at?: string }>()
+    for (const [path] of bucket) {
+      if (!path.startsWith(prefix)) continue
+      const rest = path.slice(prefix.length)
+      const slash = rest.indexOf('/')
+      if (slash >= 0) {
+        const folder = rest.slice(0, slash)
+        if (!seen.has(folder)) seen.set(folder, { name: folder, id: null })
+      } else {
+        seen.set(rest, {
+          name: rest,
+          id: 'file',
+          created_at: createdAt.get(path) ?? new Date().toISOString(),
+        })
+      }
+    }
+    return new Response(JSON.stringify([...seen.values()]), { status: 200 })
   }
   if (u.endsWith('/auth/v1/user'))
     return new Response(JSON.stringify({ id: 'auth-1', email: 'sam@example.com' }), { status: 200 })
@@ -108,6 +133,7 @@ beforeAll(async () => {
 afterEach(() => {
   rpc.length = 0
   bucket.clear()
+  createdAt.clear()
   exportOverride = null
   restoreReply = { ok: true, already: false, project_id: 'new', slug: 'big', report: {} }
 })
@@ -260,6 +286,20 @@ describe('exporting a project larger than one archive, through the gateway', () 
     expect(res.status).toBe(413)
     const body = (await res.json()) as { use_set: boolean }
     expect(body.use_set).toBe(true)
+  })
+
+  it('starting an export sweeps a cache older than a day, and keeps a fresh one', async () => {
+    projectWithLargeFiles()
+    const stale = `exports/${OFFICE}/stale-cache/set.json`
+    const fresh = `exports/${OFFICE}/fresh-cache/set.json`
+    bucket.set(stale, { bytes: new Uint8Array([1]), mime: 'application/json' })
+    createdAt.set(stale, new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString())
+    bucket.set(fresh, { bytes: new Uint8Array([2]), mime: 'application/json' })
+    createdAt.set(fresh, new Date().toISOString())
+    const res = await get(`${jwt}sw1`, 'set=index')
+    expect(res.status).toBe(200)
+    expect(bucket.has(stale)).toBe(false)
+    expect(bucket.has(fresh)).toBe(true)
   })
 
   it('a part cannot be read through another office: its export is held under the office that made it', async () => {

@@ -183,10 +183,8 @@ try {
     { label: 'long', name: 'long.txt', mime: 'text/plain', bytes: enc(long), word: W.tail },
   ]
   /*
-    HTML is REFUSED, not stored: a stored page is served from the storage origin with its own content type and runs its
-    script there when opened from a signed link. This is the one format the product took before the allowlist (#471) that
-    is now refused; it is a deliberate break, recorded for the owner, and asserted by its reason, with the refused row
-    checked as absent so a refusal that still wrote a document cannot pass.
+    HTML is stored like any other file. The owner accepts any type (15 October 2026), so a stored page is served back under its own
+    content type when opened from a signed link: that risk is accepted, and this proof checks only what is indexed.
   */
   const page = await upload(
     SA,
@@ -198,16 +196,24 @@ try {
     ),
   )
   check(
-    'html: refused by its reason, not stored (a deliberate break of an earlier accepted format)',
-    page.status === 400 && String(page.error ?? '').includes('type not allowed') && page.id === '',
-    `http ${String(page.status)} error=${String(page.error ?? '')}`,
+    'html: stored and filed like any other file (the owner accepts any type, 15 October 2026)',
+    page.status === 200 && page.id !== '' && page.searchable === true,
+    `http ${String(page.status)} searchable=${String(page.searchable)} why=${String(page.why ?? page.error ?? '')}`,
   )
   const pageRows = await one(
+    `select content from public.documents where document_id = ${lit(page.id)}::uuid`,
+  )
+  check(
+    'html: <script> content is not indexed, visible text is',
+    !String(pageRows.content).includes(W.secret) && String(pageRows.content).includes(W.html),
+    String(pageRows.content).slice(0, 60),
+  )
+  const pageNamed = await one(
     `select count(*)::int as n from public.documents where title = 'page.html'`,
   )
   check(
-    'html: no document row exists for the refused file',
-    Number(pageRows.n) === 0,
+    'html: one document row exists for the stored file',
+    Number(pageNamed.n) === 1,
     `rows=${String(pageRows.n)}`,
   )
   const idOf: Record<string, string> = {}

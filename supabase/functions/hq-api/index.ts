@@ -75,7 +75,9 @@ import {
   commitSet,
   prepareSet,
   restorePart,
+  type StoredItem,
   storeExportCache,
+  sweepOffice,
 } from './set-store.ts'
 import { extensionFor } from './store.ts'
 
@@ -131,6 +133,56 @@ function linkLookup(): LinkLookup {
 function originalStore() {
   const ref = new URL(DB_URL).hostname.split('.')[0] ?? ''
   return supabaseObjectStore(ref, SERVICE_KEY)
+}
+
+/*
+  THE SWEEP'S LISTING (owner-approved rule, 15 October 2026). Every object under a prefix, with its creation time, walking into
+  folders. The storage list endpoint names a folder as an entry with no id, and a file with one. Depth is bounded, so a listing
+  cannot run away; an entry the endpoint does not describe is skipped, and the sweep keeps what it cannot age.
+*/
+async function storageItems(prefix: string, depth = 0): Promise<StoredItem[]> {
+  if (depth > 4) return []
+  const r = await fetch(`${DB_URL}/storage/v1/object/list/files`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ prefix, limit: 1000, offset: 0 }),
+  }).catch(() => null)
+  if (r === null || !r.ok) return []
+  const rows: unknown = await r.json().catch(() => null)
+  if (!Array.isArray(rows)) return []
+  const out: StoredItem[] = []
+  for (const row of rows as { name?: unknown; id?: unknown; created_at?: unknown }[]) {
+    if (typeof row.name !== 'string' || row.name === '') continue
+    const path = `${prefix}${row.name}`
+    if (row.id === null) out.push(...(await storageItems(`${path}/`, depth + 1)))
+    else out.push({ path, createdAt: Date.parse(String(row.created_at ?? '')) })
+  }
+  return out
+}
+
+/**
+ * Run the sweep for one office. Never fails the request that asked for it: a listing or removal that goes wrong is logged and
+ * the request proceeds, because the sweep is housekeeping and a person's download or restore must not depend on it.
+ */
+async function sweepOfficeSafely(office: string): Promise<void> {
+  try {
+    const items = [
+      ...(await storageItems(`exports/${office}/`)),
+      ...(await storageItems(`restores/${office}/`)),
+    ]
+    const out = await sweepOffice({ office, now: Date.now(), items, store: originalStore() })
+    if (out.removed > 0) {
+      console.log(
+        `hq-api sweep: removed ${String(out.removed)} object(s) (${String(out.exportCaches)} export cache(s), ${String(out.abandonedSets)} abandoned restore(s))`,
+      )
+    }
+  } catch (error) {
+    console.error(`hq-api sweep: ${error instanceof Error ? error.message : 'failed'}`)
+  }
 }
 /** How long an Activity read may wait on the database before the gateway answers for it. The database's own budget is 8 s and arrives first. */
 const ACTIVITY_READ_DEADLINE_MS = ((): number => {
@@ -2673,6 +2725,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
       if (!Number.isInteger(number) || number < 1) {
         return json({ error: 'a set part needs its part number' }, 400)
       }
+      // A new restore starts with part 1: the sweep runs then, not on every part of one restore.
+      if (number === 1) await sweepOfficeSafely(office)
       const out = await restorePart({
         bytes,
         office,
@@ -3862,6 +3916,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (setMode !== null) {
       const store = originalStore()
       if (setMode === 'index') {
+        await sweepOfficeSafely(office)
         const prepared = await prepareSet({ pkg, slug, store, extension: extensionFor })
         if (!prepared.ok) return json({ error: prepared.error, section: name }, prepared.status)
         const cache = crypto.randomUUID()
