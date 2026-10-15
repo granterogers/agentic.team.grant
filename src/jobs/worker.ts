@@ -1282,6 +1282,27 @@ const runJobHeld = async (
         `handler threw: ${(error as Error).message.slice(0, 180)}`,
       ),
     )
+    /*
+      A SPECIALIST'S HAND-OFF THAT FAILED FOR GOOD GOES TO THE CHIEF OF STAFF, ONCE (COS-006, migration 1075).
+
+      The function refuses, with a reason, for anything it should not touch (a job that has not failed, the Chief of
+      Staff's own work, a job that is not a hand-off). Its own failure is recorded where Grant looks, and is never
+      a second failure of the job.
+    */
+    if (!retryable) {
+      await db
+        .execute(`select app.reassign_failed_specialist(${lit(job.jobId)}::uuid) as r`)
+        .catch(async (reassignError: unknown) => {
+          const why = reassignError instanceof Error ? reassignError.message : String(reassignError)
+          await db
+            .execute(
+              `select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                 'hand the failed work to the Chief of Staff', 'the worker',
+                 ${lit(`the reassignment could not be written: ${why.slice(0, 300)}`)}, null)`,
+            )
+            .catch(() => undefined)
+        })
+    }
     return {
       jobId: job.jobId,
       finalState: retryable ? 'retrying' : 'failed',

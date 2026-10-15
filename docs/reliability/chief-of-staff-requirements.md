@@ -75,7 +75,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-003 | Objective decomposition | Historical §3 example | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-004 | Durable agent ownership | Historical §3 example | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-005 | Automatic specialist assignment | Historical §3 example | P0 | Lead (Claude) | 🟡 AMBER | Plan tasks take the step's specialist as owner (`task-home.ts`, `perform.ts`) | Writer proof and unit tests; not run through the planner end to end | TM-023, TM-024 | End-to-end delegation run not done |
-| COS-006 | Automatic reassignment and recovery | Historical §3 example | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-006 | Automatic reassignment and recovery | Historical §3 example | P0 | Lead (Claude) | 🟡 AMBER | A specialist hand-off that fails for good goes once to the Chief of Staff: migration 1075, `app.reassign_failed_specialist`, called by the worker's failure path (`worker.ts`). Proofs `specialist-reassign` 6/6 and `specialist-reassign-worker` 3/3 (TM-030) | Failure reassignment verified; unavailable (not failed) specialist not handled | TM-030 | Unavailable-specialist path not built |
 | COS-007 | Approval identity and persistence | Historical §3 example | P0 | Lead (Claude) | 🟡 AMBER | Identity is the material scope (`step-approval.ts`), stable under a renumbered plan (DEC-011) | Unit tests green; persistence across restart not tested | TM-022 | Restart persistence not tested |
 | COS-008 | Approval callback processing | Historical §3 example | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-009 | Duplicate approval suppression | Historical §3 example | P0 | Lead (Claude) | 🟡 AMBER | `raiseBlocker` returns the open question instead of a second one; migration 1073 unique index `blockers_one_open_per_job_action`. Proof: `scripts/isolated/approval-asked-once.ts` (5/5) | Replica proof green; production duplicates not yet inspected | TM-021 | Production evidence pending (DEC-009) |
@@ -88,7 +88,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-016 | Human versus agent task ownership | Historical §3 topic 6; CONS-7.11 | P0 | Lead (Claude) | 🟡 AMBER | Human-owned (his list) only for `audience: grant` (`task-home.ts`) | Unit tests green | TM-024 | Human-decision steps not separately typed |
 | COS-017 | Specialist delegation and collaboration | Historical §3 topic 7; CONS-7.07; CONS-7.59 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-018 | Agent workload and capability routing | Historical §3 topic 8; CONS-7.08 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-019 | Failed assignment recovery | Historical §3 topic 9; CONS-7.60 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-019 | Failed assignment recovery | Historical §3 topic 9; CONS-7.60 | P0 | Lead (Claude) | 🟡 AMBER | Same mechanism as COS-006 (TM-030): the replacement is recorded on the parent with `reassigned_from`; a repeat failure does not add a second | Verified at the worker and the function; the parent's synthesis reading the replacement not yet tested | TM-030 | Fan-in over a replacement not tested |
 | COS-020 | Approval state machines | Historical §3 topic 10; CONS-7.16 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-021 | Telegram approval callbacks | Historical §3 topic 11 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-022 | Duplicate approval prevention (parent of COS-074 and COS-009) | Historical §3 topic 12 | P0 | Lead (Claude) | 🟡 AMBER | COS-009 done at the writer and database (TM-021). COS-074 not yet verified | Children incomplete (COS-074) | TM-021 | COS-074 open |
@@ -238,8 +238,8 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | REG-015 | Duplicate side-effect prevention | §25.15 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-016 | Automatic specialist assignment | §25.16 | P0 | QA (Claude) | 🟡 AMBER | `task-home.ts` and writer proof (TM-023, TM-024) | Partial: writer and rule, not the planner | TM-023, TM-024 | Planner-level run not done |
 | REG-017 | Ambiguous agent routing | §25.17 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
-| REG-018 | Unavailable assigned specialist | §25.18 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
-| REG-019 | Automatic reassignment | §25.19 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
+| REG-018 | Unavailable assigned specialist | §25.18 | P0 | QA (Claude) | 🟡 AMBER | A specialist hand-off that failed is reassigned to the Chief of Staff (TM-030). "Unavailable" is treated as failure here | Failure path verified; an inactive specialist before any attempt is not handled | TM-030 | Pre-attempt unavailability not built |
+| REG-019 | Automatic reassignment | §25.19 | P0 | QA (Claude) | 🟡 AMBER | Worker runs `reassign_failed_specialist` on terminal failure (TM-030): 3/3 at the worker, 6/6 at the function | Verified for failed hand-offs; no planner-level run yet | TM-030 | Planner-level run not done |
 | REG-020 | User not assigned ordinary internal work | §25.20 | P0 | QA (Claude) | 🟡 AMBER | `taskHome` never returns Grant as owner of a project task (TM-024) | Partial: rule and writer, not the planner | TM-024 | Planner-level run not done |
 | REG-021 | Human approval required for a consequential action | §25.21 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-022 | Gmail search strategy generation | §25.22 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |

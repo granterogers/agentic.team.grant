@@ -12,6 +12,22 @@ import { p, via } from './p.ts'
 import type { Proof } from './types.ts'
 
 export const EXTENDED: readonly Proof[] = [
+  // ---- the Chief of Staff registry and its writers (moved here from the critical tier, which is capped at 70) -----------
+  p(
+    'registry-never-asks',
+    4,
+    'the registry tells the office never to ask Grant for a Gmail query, a message choice or a Notion workspace',
+  ),
+  p(
+    'specialist-reassign',
+    6,
+    'a failed specialist hand-off is reassigned to the Chief of Staff once; the Chief of Staff own failure is not',
+  ),
+  p(
+    'task-owner-writes',
+    3,
+    'a plan task is stored with its specialist or the Chief of Staff as owner, never unowned or refused silently',
+  ),
   // ---- the unified activity ledger -------------------------------------------------------------------------------------
   p(
     'activity-worker',

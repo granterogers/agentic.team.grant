@@ -92,9 +92,9 @@ export const CRITICAL: readonly Proof[] = [
     'an unchanged plan step is asked once per job and action; the database refuses a second open question',
   ),
   p(
-    'task-owner-writes',
+    'specialist-reassign-worker',
     3,
-    'a plan task is stored with its specialist or the Chief of Staff as owner, never unowned or refused silently',
+    'the worker itself hands a terminally failed specialist hand-off to the Chief of Staff, once',
   ),
 
   // ---- approvals and the human-contact boundary ----------------------------------------------------------------------
