@@ -190,8 +190,8 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-118 | Gmail search expands adaptively from discovered organisations | §17 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-119 | Pagination is bounded; no full-mailbox extraction | §17 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-120 | Uncertainties are recorded and no facts are invented | §17 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-121 | A missing optional detail does not block unrelated steps | §18 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-122 | No invented workspace, task owner or external recipient; no unauthorised destination | §18 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-121 | A missing optional detail does not block unrelated steps | §18 | P0 | Lead (Claude) | 🟡 AMBER | Registry rows for Gmail search, Gmail read and Notion write now say the office finds its own query and destination (migration 1074, TM-029). The Canary question "I need a precise Gmail search term" came from the model reading those rows | Registry text verified on replica; the answer behaviour under a live model not run | TM-029 | Model behaviour not re-run end to end |
+| COS-122 | No invented workspace, task owner or external recipient; no unauthorised destination | §18 | P0 | Lead (Claude) | 🟡 AMBER | Notion write names only the project's attached database and says so when none is attached (migration 1074, TM-029). Projectless task owners go to the Chief of Staff (task-home.ts, earlier checkpoint) | Registry text verified on replica; no invented-recipient test yet | TM-029, TM-024 | External-recipient rule not tested |
 | COS-123 | Ask one precise question only when genuinely necessary | §18 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-124 | Correspondence summary contains the §19A fields for every contact | §19A | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-125 | Accommodation comparison contains the §19B fields | §19B | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
