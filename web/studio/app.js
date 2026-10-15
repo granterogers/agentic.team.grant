@@ -34,6 +34,7 @@ import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, toke
 import * as bc from './bc/shell.js'
 import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
+import { mountSetPassword } from './set-password.js'
 import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
 import * as backdropUi from './bc/backdrop-ui.js'
@@ -14734,6 +14735,7 @@ backdropStore.useRemote({
 })
 
 bcSession.adopt()
+mountSetPassword()
 
 render()
 

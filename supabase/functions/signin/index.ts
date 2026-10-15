@@ -448,6 +448,52 @@ Deno.serve(async (request: Request): Promise<Response> => {
     )
   }
 
+  // Choose a new password after a reset link. The person's own reset session is the proof; Auth checks it.
+  if (action === 'password_set') {
+    if (!passwordSignInEnabled(Deno.env.get('PASSWORD_SIGN_IN'))) {
+      return json({ ok: false, said: NOT_SWITCHED_ON }, 404, request)
+    }
+    const accessToken = String(body.access_token ?? '')
+    const password = String(body.password ?? '')
+    const email = normaliseEmail(String(body.email ?? '')) ?? ''
+    if (accessToken === '' || accessToken.length > 4096) {
+      return json(
+        { ok: false, said: 'That reset has ended. Ask for a new link and try again.' },
+        401,
+        request,
+      )
+    }
+    const problem = passwordProblem(password, email)
+    if (problem !== null) return json({ ok: false, said: problem }, 400, request)
+    const changed = await upstream(`${DB_URL}/auth/v1/user`, {
+      method: 'PUT',
+      headers: {
+        apikey: ANON,
+        Authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ password }),
+    }).catch(() => null)
+    if (changed === null || changed.status >= 500)
+      return json({ ok: false, said: UNAVAILABLE }, 503, request)
+    if (changed.status === 401 || changed.status === 403) {
+      return json(
+        { ok: false, said: 'That reset has ended. Ask for a new link and try again.' },
+        401,
+        request,
+      )
+    }
+    if (changed.status === 422) {
+      return json(
+        { ok: false, said: 'That password is not strong enough for this office.' },
+        400,
+        request,
+      )
+    }
+    if (!changed.ok) return json({ ok: false, said: UNAVAILABLE }, 503, request)
+    return json({ ok: true, said: 'Your new password is saved. You are signed in.' }, 200, request)
+  }
+
   if (
     action === 'password_sign_in' ||
     action === 'password_sign_up' ||
@@ -461,11 +507,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json({ ok: false, said: 'That does not look like an email address.' }, 400, request)
 
     if (action === 'password_reset') {
-      const asked = await upstream(`${DB_URL}/auth/v1/recover`, {
-        method: 'POST',
-        headers: { apikey: ANON, 'content-type': 'application/json' },
-        body: JSON.stringify({ email }),
-      }).catch(() => null)
+      // The reset comes back to the page that asked, carrying its flow marker (checked as a sign-in link is).
+      const back = safeRedirectTarget(String(body.back ?? ''), ALLOWED_ORIGINS, origin)
+      const asked = await upstream(
+        `${DB_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(back)}`,
+        {
+          method: 'POST',
+          headers: { apikey: ANON, 'content-type': 'application/json' },
+          body: JSON.stringify({ email }),
+        },
+      ).catch(() => null)
       if (asked === null || asked.status >= 500)
         return json({ ok: false, said: UNAVAILABLE }, 503, request)
       return json({ ok: true, said: RESET_SENT }, 200, request)

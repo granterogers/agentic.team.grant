@@ -185,6 +185,9 @@ export const decide = ({ hash, search, store, now, kind = KIND_LINK }) => {
       access_token: access,
       refresh_token: refresh,
       expires_at: now + Math.max(60, Number.isFinite(seconds) ? seconds : 3600) * 1000,
+      // A password reset's return (type=recovery): the person must choose a password before the session is used.
+      recovery: q.get('type') === 'recovery',
+      email: typeof match.email === 'string' ? match.email : '',
     },
   }
 }
