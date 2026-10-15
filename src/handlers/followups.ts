@@ -86,7 +86,8 @@ export function followupsHandler(db: SqlExecutor): Handler {
           const marker = `[thread ${item.thread_id}]`
           const seen = (
             await db.execute(
-              `select 1 from public.tasks where project_id = ${lit(project_id)}::uuid
+              `select 1 from public.tasks where office_id = ${lit(office)}::uuid
+                and project_id = ${lit(project_id)}::uuid
                 and detail like ${lit(`%${marker}%`)} limit 1`,
             )
           ).rows.length

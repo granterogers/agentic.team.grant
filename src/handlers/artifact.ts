@@ -39,6 +39,7 @@
 import { mayAct } from '../agents/approval.ts'
 import { howComposed } from '../agents/provenance.ts'
 import { applyDesign, type Design, designBrief, effectiveStyle } from '../artifacts/design.ts'
+import { deterministicDraft } from '../artifacts/deterministic.ts'
 import { type FetchLogoBytes, loadLogo, storageFetcher } from '../artifacts/logo.ts'
 import { type Block, coverTakes, type Report, renderReport } from '../artifacts/report.ts'
 import { resolveSourceDocument, revisesEarlier, sourcePhrase } from '../artifacts/source.ts'
@@ -557,6 +558,22 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
           {
             name: 'draft',
             run: async (done) => {
+              /*
+                A correspondence summary or accommodation comparison (§19A, §19B) is answered from the records, never
+                drafted by a model: its figures are read from the database and nothing is written in their place.
+              */
+              if (job.officeId !== undefined) {
+                const fixed = await deterministicDraft(db, job.jobId, projectId, brief, new Date())
+                if (fixed !== null) {
+                  return {
+                    outcome: {
+                      blocks: fixed.blocks,
+                      title: fixed.title,
+                      deterministic: fixed.kind,
+                    },
+                  }
+                }
+              }
               if (done.gather?.ask !== null && done.gather?.ask !== undefined) {
                 return { outcome: { asked: true } }
               }

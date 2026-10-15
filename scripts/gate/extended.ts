@@ -49,6 +49,16 @@ export const EXTENDED: readonly Proof[] = [
     'a repeat of work whose first attempt has stalled (lease lapsed) starts nothing; a repeat the matcher calls different work starts a new piece (the control)',
   ),
   p(
+    'correspondence-summary',
+    8,
+    'the §19A correspondence summary carries all seventeen fields per contact, shows what the records hold, says "not in the records yet" for the rest, and never fills a price',
+  ),
+  p(
+    'accommodation-comparison',
+    7,
+    'the §19B accommodation comparison carries all seventeen fields per supplier; a supplier who has not answered is "awaiting reply", never unavailable',
+  ),
+  p(
     'followup-duty',
     6,
     'the daily follow-up duty puts one task per quiet thread on the list, owned by the Chief of Staff, once per thread, announces nothing, and leaves recent and stranger threads alone',
