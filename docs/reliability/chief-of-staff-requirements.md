@@ -112,8 +112,8 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-040 | Missing data and uncertainty | Historical §3 topic 30; CONS-7.41 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-041 | Notion workspace discovery and selection | Historical §3 topic 31; CONS-7.43 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-042 | Default project destinations | Historical §3 topic 32; CONS-7.44 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-043 | Artifact generation | Historical §3 topic 33; CONS-7.45 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-044 | Artifact verification | Historical §3 topic 34; CONS-7.47 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-043 | Artifact generation | Historical §3 topic 33; CONS-7.45 | P1 | Lead (Claude) | 🟢 GREEN | The PDF renderer and report artifacts build a complete, structurally valid document from the office's content (`tests/artifacts/pdf.test.ts`, `cover*.test.ts`, `design.test.ts`, `image.test.ts`, 204 artifact tests green; TM-033) | `npx vitest run tests/artifacts` 204/204 (TM-033) | TM-033 | — |
+| COS-044 | Artifact verification | Historical §3 topic 34; CONS-7.47 | P1 | Lead (Claude) | 🟢 GREEN | A structurally valid PDF with an intro printed over the title is refused by the layout check, not stored or sent; the fixed path is green; controls prove the check discriminates (`tests/artifacts/qa.test.ts`; TM-033) | `npx vitest run tests/artifacts/qa.test.ts` (TM-033) | TM-033 | — |
 | COS-045 | Accommodation comparison documents | Historical §3 topic 35; CONS-7.49 | P2 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-046 | Contact correspondence summaries | Historical §3 topic 36; CONS-7.48 | P2 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-047 | Prices and currency handling | Historical §3 topic 37; CONS-7.50 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
@@ -251,7 +251,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | REG-028 | Unanswered inquiries | §25.28 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-029 | Follow-up task creation | §25.29 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-030 | Artifact creation failure | §25.30 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
-| REG-031 | Artifact verification | §25.31 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
+| REG-031 | Artifact verification | §25.31 | P0 | QA (Claude) | 🟢 GREEN | Layout-collision and structural checks on generated PDFs, with red and green controls (`qa.test.ts`; TM-033) | `npx vitest run tests/artifacts` (TM-033) | TM-033 | — |
 | REG-032 | Partial-result preservation | §25.32 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-033 | Missing Notion workspace | §25.33 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-034 | Missing optional task owner | §25.34 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
