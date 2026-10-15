@@ -19,6 +19,11 @@ export const EXTENDED: readonly Proof[] = [
     'the registry tells the office never to ask Grant for a Gmail query, a message choice or a Notion workspace',
   ),
   p(
+    'work-carries-its-project',
+    2,
+    'the conversation work the duplicate guard weighs says which project each piece is for, so another project is never a repeat',
+  ),
+  p(
     'specialist-reassign',
     6,
     'a failed specialist hand-off is reassigned to the Chief of Staff once; the Chief of Staff own failure is not',

@@ -53,6 +53,47 @@ describe('the model answer decides a match, and only a bare answer counts', () =
   })
 })
 
+describe('only work for the same project can be a repeat (priority 3, DEC-016)', () => {
+  const A = '11111111-1111-4111-8111-111111111111'
+  const B = '22222222-2222-4222-8222-222222222222'
+  const otherProject = [
+    { job: 'job-b', about: 'Draft the venue summary', who: 'Research', project: B },
+  ]
+
+  it('work for another project is never offered, so a different request is not suppressed', async () => {
+    stub.lastUser = ''
+    const result = await alreadyPursuing('Draft the venue summary', otherProject, stub('1'), {
+      projectId: A,
+    })
+    expect(result).toBeNull()
+    expect(stub.lastUser).toBe('')
+  })
+
+  it('work for the same project is offered and can match', async () => {
+    const same = [{ job: 'job-a', about: 'Draft the venue summary', who: 'Research', project: A }]
+    expect(
+      await alreadyPursuing('Draft the venue summary', same, stub('1'), { projectId: A }),
+    ).toEqual(same[0])
+  })
+
+  it('work whose project is unknown is not offered to a request that has a project', async () => {
+    stub.lastUser = ''
+    const unknown = [
+      { job: 'job-n', about: 'Draft the venue summary', who: 'Research', project: null },
+    ]
+    expect(
+      await alreadyPursuing('Draft the venue summary', unknown, stub('1'), { projectId: A }),
+    ).toBeNull()
+    expect(stub.lastUser).toBe('')
+  })
+
+  it('with no project given the candidates are offered as before (no behaviour change for old callers)', async () => {
+    expect(await alreadyPursuing('Draft the venue summary', otherProject, stub('1'))).toEqual(
+      otherProject[0],
+    )
+  })
+})
+
 describe('what the model is shown', () => {
   it('each running request is cut to 240 characters before the judgement', async () => {
     const long = `${'x'.repeat(300)} TAIL-MARKER`

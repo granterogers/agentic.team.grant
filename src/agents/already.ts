@@ -59,13 +59,31 @@ const SYSTEM =
   '- Same subject is not enough. It must be the same work.\n' +
   '- A question about the work ("how is it going") is NONE, not a match.'
 
+/**
+ * Only work for the SAME project can be a repeat of this request (priority 3, migration 1076).
+ *
+ * The candidates come from the whole conversation, so a request for one project could otherwise be judged a repeat of
+ * work on another. When the request's project is known, a candidate is offered to the judgement only if it is for that
+ * project too. A candidate whose project is unknown is not offered (a request that cannot be matched is not suppressed).
+ */
+export const sameProjectWork = <T extends { readonly project?: string | null }>(
+  work: readonly T[],
+  projectId: string | null,
+): T[] => work.filter((w) => (w.project ?? null) === projectId)
+
 export async function alreadyPursuing(
   request: string,
-  live: readonly LiveWork[],
+  live: readonly (LiveWork & { readonly project?: string | null })[],
   router: ProviderRouter | null,
-  trace: { readonly jobId?: string; readonly correlationId?: string } = {},
+  trace: {
+    readonly jobId?: string
+    readonly correlationId?: string
+    /** The request's own project. When given, only work for the same project is offered (DEC-016). */
+    readonly projectId?: string | null
+  } = {},
 ): Promise<LiveWork | null> {
-  const usable = live.filter((w) => w.about.trim() !== '')
+  const scoped = trace.projectId === undefined ? live : sameProjectWork(live, trace.projectId)
+  const usable = scoped.filter((w) => w.about.trim() !== '')
   if (usable.length === 0 || router === null) return null
 
   const listed = usable

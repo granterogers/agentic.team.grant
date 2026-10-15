@@ -2922,13 +2922,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               .then(async (r) => {
                 const raw = (r.rows[0] as { r?: unknown })?.r
                 const work = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
-                  in_flight?: { job?: string; about?: string; who?: string }[]
+                  in_flight?: {
+                    job?: string
+                    about?: string
+                    who?: string
+                    project?: string | null
+                  }[]
                   recently_done?: {
                     job?: string
                     about?: string
                     who?: string
                     answer?: string
                     hit_trouble?: boolean
+                    project?: string | null
                   }[]
                 } | null
                 /*
@@ -2948,6 +2954,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                       job: String(w.job ?? ''),
                       about: String(w.about ?? ''),
                       who: String(w.who ?? 'someone'),
+                      project: w.project ?? null,
                     })),
                     /*
                       A FINISHED JOB THAT RECORDED AN IMPEDIMENT IS NOT AN
@@ -2970,10 +2977,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                         about: String(w.about ?? ''),
                         who: String(w.who ?? 'someone'),
                         answer: String(w.answer ?? ''),
+                        project: w.project ?? null,
                       })),
                   ],
                   deps.router,
-                  { jobId: job.jobId, correlationId: job.correlationId },
+                  { jobId: job.jobId, correlationId: job.correlationId, projectId: job.projectId },
                 )
               })
               .catch(() => null)
