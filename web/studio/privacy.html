@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team HQ privacy policy</title>
+<meta name="robots" content="noindex">
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; font: 16px/1.6 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #fff; color: #1d1d1f; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  h2 { font-size: 19px; margin: 32px 0 8px; }
+  p, li { margin: 0 0 12px; }
+  ul { padding-left: 22px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 15px; }
+  th, td { text-align: left; vertical-align: top; border-bottom: 1px solid #d2d2d7; padding: 8px 6px; }
+  .draft { background: #fff4d6; color: #5c4400; padding: 10px 12px; border-radius: 6px; margin-bottom: 20px; }
+  .todo { background: #fff4d6; color: #5c4400; padding: 0 3px; border-radius: 3px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1c1c1e; color: #f5f5f7; }
+    th, td { border-bottom-color: #3a3a3c; }
+    .draft, .todo { background: #4a3b00; color: #ffe9a6; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<div class="draft"><strong>DRAFT, not yet published.</strong> Items in yellow must be confirmed or filled in before this page is linked from Google Cloud. Remove this box when they are done.</div>
+
+<h1>Team HQ privacy policy</h1>
+<p>Last updated: <span class="todo">[date]</span></p>
+
+<p>Team HQ is a personal office of AI assistants used by one person, Grant Rogers, to manage his projects, tasks, documents and communications. This policy explains what data Team HQ reads from Google, why, where it is stored and how to stop access.</p>
+
+<h2>Who runs this service</h2>
+<p>Team HQ is operated by Grant Rogers. Contact: <span class="todo">[contact email]</span></p>
+
+<h2>What Team HQ reads from your Google account</h2>
+<p>Team HQ asks for these Google permissions, and only these:</p>
+<table>
+  <tr><th>Permission</th><th>What it is used for</th></tr>
+  <tr><td>Read your calendar</td><td>Answer questions about your schedule and show upcoming events.</td></tr>
+  <tr><td>Create and change calendar events</td><td>Only when you ask the office to add or move an event.</td></tr>
+  <tr><td>Read your Gmail messages</td><td>Answer questions about your mail, and find messages related to a project.</td></tr>
+  <tr><td>Create Gmail drafts</td><td>Prepare a reply for you to review. Team HQ does not send mail.</td></tr>
+  <tr><td>Read selected Google Drive files</td><td>Use documents you attach to a project as source material.</td></tr>
+</table>
+
+<h2>Limited Use</h2>
+<p>Team HQ's use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. Google data is used only to provide the features described on this page. It is not used for advertising, it is not sold, and it is not used to build profiles of you for anyone else. People do not read your Google data unless you ask us to, or it is needed for security or to comply with law.</p>
+
+<h2>How the office uses your data</h2>
+<ul>
+  <li>To answer your questions, the relevant part of your data is sent to the AI model provider that answers the request. Current providers: <span class="todo">[list the providers in use, for example OpenRouter and the models it routes to]</span>.</li>
+  <li>The provider used for each request is recorded so you can see where it went.</li>
+  <li><span class="todo">[OWNER DECISION. Choose one and delete the other: (a) "No Google data is sent to a model provider that may use it for training." (b) "Google data may be sent to free model providers, which may use it to improve their models. You can stop this by ..."]</span></li>
+</ul>
+
+<h2>Where your data is stored</h2>
+<ul>
+  <li><strong>Database and files:</strong> Supabase (hosted Postgres and file storage). Region: <span class="todo">[confirm region]</span>.</li>
+  <li><strong>Google connection:</strong> your Google access is stored as an encrypted secret in the Supabase Vault. It is never shown to a browser.</li>
+  <li><strong>Website:</strong> Vercel.</li>
+  <li><strong>Messages:</strong> Telegram and Slack, where you have connected them.</li>
+  <li><strong>Voice:</strong> <span class="todo">[confirm the speech service in use]</span>.</li>
+  <li><strong>Backups:</strong> a nightly copy of the database is stored in Supabase storage. Backups are kept for the most recent 7 days and one per week for the previous 8 weeks, then deleted. <span class="todo">[confirm this policy has been executed]</span></li>
+</ul>
+
+<h2>How long we keep Google data</h2>
+<ul>
+  <li>Calendar and mail content is kept only as long as the office needs it to answer your questions. <span class="todo">[confirm and state the actual retention for mail bodies and calendar details]</span></li>
+  <li>Disconnecting Google deletes the stored access. Other data is handled as described above.</li>
+</ul>
+
+<h2>Stopping access</h2>
+<p>You can stop Team HQ at any time:</p>
+<ul>
+  <li>In Team HQ, go to <strong>Settings → Connections → Google</strong> and choose <strong>Disconnect</strong>.</li>
+  <li>Or remove the app at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+</ul>
+
+<h2>Who else sees your data</h2>
+<p>We share data only with the providers listed above, and only as needed to run the features you use. We do not sell it. We do not share it with advertisers.</p>
+
+<h2>Changes to this policy</h2>
+<p>If this policy changes, the date at the top changes too. Material changes will be announced in Team HQ before they take effect.</p>
+
+<h2>Questions</h2>
+<p>Email <span class="todo">[contact email]</span>.</p>
+
+</main>
+</body>
+</html>
