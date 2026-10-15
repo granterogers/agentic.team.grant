@@ -1866,6 +1866,8 @@
 .bcmenuitem[aria-current='page'] { background: var(--bc-hover); font-weight: 650; box-shadow: inset 3px 0 0 var(--bc-accent); }
 .bcmenuitem:disabled { opacity: .55; cursor: not-allowed; }
 .bcmenuname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* A module's icon in the menu takes its colour from --bc-tint, as the dashboard's module icon does (shell.js rowMark). */
+.bcmenuicon { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; color: var(--bc-tint, var(--bc-text-muted)); }
 .bcmenumark { display: inline-grid; place-items: center; flex: none; }
 .bcmenuplus { display: inline-grid; place-items: center; width: 18px; font-size: 18px; line-height: 1; color: var(--bc-accent); }
 .bcmenusep { margin: 6px 4px; border: 0; border-top: 1px solid var(--bc-border-control); }
