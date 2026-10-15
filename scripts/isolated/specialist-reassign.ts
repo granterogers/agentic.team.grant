@@ -128,7 +128,8 @@ check(
 
 // Clear the queued work this proof made, so a later proof's dequeue cannot claim it (#184).
 await db.execute(
-  `update public.jobs set state = 'cancelled', state_reason = 'proof: cleared' where parent_job_id = '${parent}'::uuid and state = 'queued'`,
+  `update public.jobs set state = 'cancelled', state_reason = 'proof: cleared'
+    where (job_id = '${parent}'::uuid or parent_job_id = '${parent}'::uuid) and state = 'queued'`,
 )
 const failed = results.filter((r) => !r.ok)
 console.log(`\n${results.length - failed.length}/${results.length} ok`)

@@ -92,6 +92,10 @@ check(
   nobody.id === undefined ? `refused: ${nobody.error ?? 'no reason given'}` : 'a task was stored',
 )
 
+// Clear the queued turn this proof made, so a later proof's dequeue cannot claim it (#184).
+await db.execute(
+  `update public.jobs set state = 'cancelled', state_reason = 'proof: cleared' where job_id = '${jobId}'::uuid and state = 'queued'`,
+)
 const failed = results.filter((r) => !r.ok)
 console.log(`\n${results.length - failed.length}/${results.length} ok`)
 await db.end()

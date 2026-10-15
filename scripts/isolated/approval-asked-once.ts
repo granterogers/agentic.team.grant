@@ -110,6 +110,10 @@ check(
 
 const failed = results.filter((r) => !r.ok)
 console.log(`\n${results.length - failed.length}/${results.length} ok`)
+// Clear the queued turn this proof made, so a later proof's dequeue cannot claim it (#184).
+await db.execute(
+  `update public.jobs set state = 'cancelled', state_reason = 'proof: cleared' where job_id = '${jobId}'::uuid and state = 'queued'`,
+)
 // The guard leaves the pool open; without this the process never exits.
 await db.end()
 process.exitCode = failed.length === 0 ? 0 : 1

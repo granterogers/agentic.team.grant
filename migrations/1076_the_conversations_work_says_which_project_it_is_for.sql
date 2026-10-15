@@ -28,6 +28,11 @@ declare
   i int;
   n int;
 begin
+  -- Idempotent: a database that already carries the project (this migration applied before, or a rebuilt replica)
+  -- is left as it is. Only a live definition that has NOT been changed is spliced.
+  if position('w.project_id' in v) > 0 then
+    return;
+  end if;
   for i in 1 .. array_length(pairs, 1) loop
     n := (length(v) - length(replace(v, pairs[i][1], ''))) / length(pairs[i][1]);
     if n <> 1 then

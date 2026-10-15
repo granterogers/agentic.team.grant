@@ -52,6 +52,11 @@ check(
   entry !== undefined,
   entry === undefined ? 'not listed' : 'listed',
 )
+// Clear the queued turns and their hand-off this proof made, so no later proof's dequeue can claim them (#184).
+await db.execute(
+  `update public.jobs set state = 'cancelled', state_reason = 'proof: cleared'
+    where job_id in ('${first}'::uuid, '${second}'::uuid, '${handed}'::uuid) and state = 'queued'`,
+)
 check(
   'the entry carries the project the job belongs to',
   entry !== undefined && entry.project === firstProject,

@@ -332,8 +332,14 @@ export function artifactListing(instruction: string): ArtifactListingRequest | n
   What keeps "the document you sent me" out is not this list — it is the
   request verb below and the you-already-made-it exclusion in `asksForAFile`.
 */
+/*
+  "a summary document", "some documents": a document is named with whatever ordinary words come before it. The first
+  version allowed three words (short, brief, quick, written), so "create a summary document of the replies" (the Canary
+  request, 15 October 2026) matched nothing and was answered in prose. A plural counts, and the making verb still has to
+  be there (MAKE_IT), so the wider noun does not turn an ordinary mention into a request.
+*/
 const ARTIFACT_NOUN =
-  /\b(pdf|report|white\s?paper|whitepaper|one[-\s]?pager|brief(?:ing)?\s+document|document\s+for|briefing\s+note|dossier|(?:a|an|the|your|this)\s+(?:short\s+|brief\s+|quick\s+|written\s+)?(?:write[-\s]?up|document))\b/i
+  /\b(pdf|report|white\s?paper|whitepaper|one[-\s]?pager|brief(?:ing)?\s+document|document\s+for|briefing\s+note|dossier|(?:a|an|the|your|this|some|any)\s+(?:[a-z][a-z-]*\s+){0,3}?(?:write[-\s]?ups?|documents?))\b/i
 
 /** Asking for it to be MADE, as opposed to asking about one that exists. */
 const MAKE_IT =

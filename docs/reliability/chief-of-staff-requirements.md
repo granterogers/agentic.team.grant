@@ -205,7 +205,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-133 | Diagnostic records carry correlation identifiers and no secrets or private correspondence | §23 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-134 | Reuse the Unified Activity Ledger; do not create a competing ledger | §23 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-135 | Mandatory regression test set (parent of REG-001 to REG-045) | §25 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Children not started |
-| COS-136 | End-to-end Canary simulation covers the seven §26 fixture scenarios | §26 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-136 | End-to-end Canary simulation covers the seven §26 fixture scenarios | §26 | P0 | Lead (Claude) | 🟡 AMBER | Canary readers: a clarification does not stop a Canary request; "create a summary document" and "tasks" are recognised as requests; control phrasings are not (TM-035) | Partial: the seven §26 scenarios are not run end to end through the real planner and worker | TM-035 | Full scenario run needs a live model; not run |
 | COS-137 | Simulation sends no real email, spends no money and changes no production state | §26 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-138 | Generated documents reconcile with fixture data | §26 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-139 | Security boundaries preserved; no weakened tests or broad skips | §27 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
