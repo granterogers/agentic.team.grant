@@ -86,6 +86,16 @@ export const CRITICAL: readonly Proof[] = [
     "a public key reaches no view in public (14 views run with the owner's rights and bypassed row security), the office roles still do, and the proof fails without migration 1053",
   ),
   p('google-office-binding', 15, "a Google job in one office never borrows another office's token"),
+  p(
+    'approval-asked-once',
+    5,
+    'an unchanged plan step is asked once per job and action; the database refuses a second open question',
+  ),
+  p(
+    'task-owner-writes',
+    3,
+    'a plan task is stored with its specialist or the Chief of Staff as owner, never unowned or refused silently',
+  ),
 
   // ---- approvals and the human-contact boundary ----------------------------------------------------------------------
   p(

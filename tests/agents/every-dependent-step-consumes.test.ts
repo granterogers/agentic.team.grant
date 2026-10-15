@@ -41,6 +41,10 @@ const silentDb = {
     if (sql.includes('from public.documents')) {
       return { rows: [{ t: `The ${DISTINCTIVE} handbook` }] }
     }
+    // The job's project (or the catch-all project) that a task is filed under.
+    if (sql.includes('from public.jobs') && sql.includes('as project')) {
+      return { rows: [{ project: '22222222-2222-2222-2222-222222222222' }] }
+    }
     return {
       rows: [
         {

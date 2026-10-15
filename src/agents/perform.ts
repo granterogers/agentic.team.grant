@@ -487,11 +487,19 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         It lands on his own list only when the step is for him (audience 'grant'), or when the plan has no project
         to hold a project task.
       */
+      // The job's project, or the office's catch-all when the work names none (ADR-0024), so projectless
+      // internal work is an owned project task and never a task on Grant's list.
       const { rows: where } = await db.execute(
-        `select project_id::text as project from public.jobs where job_id = ${lit(jobId)}::uuid and office_id = app.job_office(${lit(jobId)}::uuid)`,
+        `select coalesce(project_id, app.unnamed_project(app.job_office(${lit(jobId)}::uuid)))::text as project from public.jobs where job_id = ${lit(jobId)}::uuid and office_id = app.job_office(${lit(jobId)}::uuid)`,
       )
       const projectId = (where[0] as { project?: string | null } | undefined)?.project ?? null
-      const home = taskHome({ audience: step.audience, specialist: step.specialist, projectId })
+      if (projectId === null) {
+        return nothing(
+          'task.create',
+          'the job that asked for this is not on record, so there is nowhere to file it',
+        )
+      }
+      const home = taskHome({ audience: step.audience, specialist: step.specialist })
       const forHim = home.kind === 'personal'
       const { rows } = forHim
         ? await db.execute(`

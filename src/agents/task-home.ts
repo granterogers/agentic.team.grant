@@ -6,9 +6,9 @@
  * it. The rule is now stated once, here:
  *
  *   - a task for Grant himself (the step's audience is `grant`) is his: his personal list;
- *   - a task with no project to hold it has nowhere to be a project task, so it stays on his list until one exists;
  *   - every other task is a project task owned by the step's specialist, or by the Chief of Staff when the step
- *     names none. The Chief of Staff keeps accountability for work that no specialist was named for (COS-098).
+ *     names none. The project is the job's own, or the office's catch-all project when the work names none
+ *     (ADR-0024: "where a message that names no project lands"). Projectless work is therefore never Grant's.
  *
  * Grant is never the owner of ordinary internal work by default (COS-099).
  */
@@ -21,13 +21,11 @@ export interface TaskHomeInput {
   readonly audience: string | null
   /** The specialist the step names, if any. */
   readonly specialist: string | null
-  /** The job's project, or null when the work has none. */
-  readonly projectId: string | null
 }
 
 export const CHIEF_OF_STAFF = 'chief-of-staff'
 
 export const taskHome = (input: TaskHomeInput): TaskHome =>
-  input.audience === 'grant' || input.projectId === null
+  input.audience === 'grant'
     ? { kind: 'personal' }
     : { kind: 'project', owner: input.specialist ?? CHIEF_OF_STAFF }

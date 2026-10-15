@@ -65,7 +65,7 @@ Append-only. A decision is changed by adding a new entry that supersedes an earl
 - **Date:** 15 October 2026 (implementation pass)
 - **Decision:** A plan task is a project task owned by the step's specialist, or by `chief-of-staff` when none is named. It is on Grant's personal list only when the step's audience is `grant`, or when the plan has no project.
 - **Basis:** COS-098 and COS-099 (the Chief of Staff keeps ownership; Grant is never the fallback owner for internal routing failures). The planner's question "who should own it" came from a task with nobody to own it.
-- **Risk:** a plan with no project still puts its tasks on Grant's list, because there is no project to hold them. That is recorded as a limitation, not hidden. Resolving it needs a project-less owner that is not Grant, which is a product decision.
+- **Revised (same day):** a plan with no project no longer falls back to Grant's list. Its tasks go to the office's catch-all project, `app.unnamed_project`, which ADR-0024 defines as where a message that names no project lands, owned by the specialist or the Chief of Staff. Grant's list is now only for steps whose audience is `grant`.
 - **Writer:** `app.task_add` with `p_assignee` is used for project tasks. It refuses an unknown owner with "nobody here is called", and that refusal is returned as a refusal, not stored.
 
 ## DEC-013 — One open question per job and action, enforced by the database
