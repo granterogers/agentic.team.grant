@@ -1433,3 +1433,27 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
     pointer-events: none;
   }
 }
+
+/*
+  MODULE LOOK (Grant, 15 October 2026): a module's background is neutral, its colour lives in the border glow, its title
+  and its icon. Added last so it wins over the older tint fills in this file and in compose.css. The tint still arrives
+  through --bc-tint, so every module keeps its own hue.
+*/
+[data-experience='basecamp'] .bcmod.bcmod--tinted {
+  background: var(--bc-surface) !important;
+  background-image: none !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--bc-tint) 30%, transparent) inset,
+    0 0 0 1px color-mix(in srgb, var(--bc-tint) 18%, transparent),
+    0 0 24px -4px color-mix(in srgb, var(--bc-tint) 70%, transparent),
+    var(--bc-sh-2);
+}
+[data-experience='basecamp'] .bcmod.bcmod--tinted::before {
+  background: none !important;
+}
+[data-experience='basecamp'] .bcmod--tinted .bcmodtitle {
+  color: color-mix(in srgb, var(--bc-tint) 72%, var(--bc-text-strong));
+}
+[data-experience='basecamp'] .bcmod--tinted .bcmodicon {
+  color: var(--bc-tint);
+}
