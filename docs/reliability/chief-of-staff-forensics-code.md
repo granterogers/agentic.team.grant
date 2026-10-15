@@ -67,6 +67,12 @@ Two claims in the first pass were checked against the code before any fix, as th
 - The 120-character text is display only. It is the stored `pinned_config` request of the running job, cut for the reply.
 - **Consequence, a new finding:** any unrelated request in the same chat within 24 hours is treated as a duplicate of whatever is still running. Duplicate detection is by conversation, not by objective. This is an over-suppression risk. It is recorded as F6 and is not yet fixed.
 
+### C1b — the matcher itself, read in full (second pass, 15 October 2026)
+- The candidates come from `app.conversation_work` (C1). The match itself is `alreadyPursuing` in `src/agents/already.ts`. It is **a model judgement**: the new request and up to every running candidate's stored request, each cut to **240 characters**, go to `router.complete` at temperature 0. The model must answer with a bare number or `NONE`. Anything else is no match. A router error or no router is no match.
+- So the matching is neither textual nor deterministic. Its failure modes are: a model that answers a number for a different objective (it sees only the first 240 characters of each request), and the candidate set being conversation-wide.
+- No deterministic matcher was added. Replacing a model judgement with string rules would be a design change, and the rules would fail in the other direction. The change that is safe to make now is to pin the parser and the inputs. `tests/agents/already-pursuing.test.ts` does this (8 tests, stub router): a bare number matches, `NONE` and a sentence do not, an out-of-range number does not, a model error fails open, the 240-character cut is what the model sees, and an empty stored request is never offered.
+- **Still open:** whether the production model ever answered a number for a different objective is unknown. That needs the production request, the candidate list and the model's answer, which are not in the repository.
+
 ### C2 — F2 confirmed; logical idempotency already exists in the database
 - The callback dedupe key is per click (`telegram:callback:<bot>:<callback query id>`). That handles transport retries, as stated.
 - Logical idempotency across distinct clicks is in `app.hq_answer_blocker`: the blocker row is locked `FOR UPDATE` (migration 0596), and an answer to a question no longer `open` returns `{already: true}`. Verified by reading the latest definition (`migrations/0741`), not yet by a test.

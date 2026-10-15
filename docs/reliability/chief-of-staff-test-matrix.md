@@ -26,6 +26,7 @@ evidence recorded here. Run with `npm run check:reliability`.
 | TM-023 | A plan task is stored with its specialist as owner, or the Chief of Staff's; an unknown owner is refused, not stored | Isolated replica proof through the writer `app.task_add` on a real job's project | `npx tsx scripts/isolated/task-owner-writes.ts post` | Built | 3/3 |
 | TM-024 | Routing: a project task never has Grant as owner; his list only for `audience: grant` or with no project | Behavioural unit tests on `taskHome` | `npx vitest run tests/reliability/task-home.test.ts` | Built | 6/6 |
 | TM-025 | Whole unit suite green after the change, including the wiring tests that pin R45 and the multi-user inline-SQL rule | Vitest | `npx vitest run` | Run | 7390 passed, 0 failed |
+| TM-027 | The duplicate-work matcher (`alreadyPursuing`): bare number matches; NONE, a sentence, an out-of-range number, a model error and an empty request do not; the model is shown at most 240 characters per request | Behavioural unit tests with a stub router | `npx vitest run tests/agents/already-pursuing.test.ts` | Built | 8/8 |
 | TM-026 | Existing approval and blocker proofs still pass on the migrated replica | Isolated proofs | `approval-binding`, `approval-execution`, `ask-unasked-loop`, `blocker-failure` against `post` | Run | 30/30, 15/15, 20/20, 7/7 |
 | TM-020 | Forensic timeline assembled from authorised records; each finding classified | Review of `docs/reliability/` timeline once written | Not yet written | Not started | — |
 
