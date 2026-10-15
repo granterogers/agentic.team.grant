@@ -118,11 +118,11 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-046 | Contact correspondence summaries | Historical §3 topic 36; CONS-7.48 | P2 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-047 | Prices and currency handling | Historical §3 topic 37; CONS-7.50 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-048 | Confirmed versus unknown availability | Historical §3 topic 38; CONS-7.51 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-049 | Automatic follow-up task creation | Historical §3 topic 39; CONS-7.52 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-049 | Automatic follow-up task creation | Historical §3 topic 39; CONS-7.52 | P1 | Lead (Claude) | 🟡 AMBER | Tasks created through the real doors (`e2e-tasks`, 70 assertions, critical gate TM-031); the planner's task step writes a task with its owner (`task-owner-writes` 3/3, TM-023) | Task creation verified; automatic follow-up from an email reply not built or tested | TM-031, TM-023 | Follow-up derivation from a reply not built |
 | COS-050 | Draft reply preparation | Historical §3 topic 40; CONS-7.53 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-051 | External action authorisation | Historical §3 topic 41; CONS-7.54 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-052 | Partial results and recovery | Historical §3 topic 42; CONS-7.55 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-053 | Truthful execution status | Historical §3 topic 43; CONS-7.56 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-053 | Truthful execution status | Historical §3 topic 43; CONS-7.56 | P0 | Lead (Claude) | 🟡 AMBER | Status is read from the jobs table (`app.conversation_work`: in-flight and finished counts), not inferred from conversation (the duplicate guard path, forensics C1). Claim checks exist in the unit suite | Read path verified by reading the definition; no end-to-end status answer test | TM-032 | End-to-end status answer not tested |
 | COS-054 | Progress-report accuracy | Historical §3 topic 44 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-055 | Human-friction minimisation | Historical §3 topic 45; CONS-7.58 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-056 | Recovery from repeated approval requests | Historical §3 topic 46; CONS-7.57 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
@@ -151,8 +151,8 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-079 | Inbound-reply discovery | CONS-7.35 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-080 | Email deduplication | CONS-7.38 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-081 | Connected-tool discovery | CONS-7.42 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-082 | Artifact persistence | CONS-7.46; §20 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-083 | Status answered from authoritative execution state | CONS-7.56; §13 invariant 10; §21 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-082 | Artifact persistence | CONS-7.46; §20 | P0 | Lead (Claude) | 🟡 AMBER | Documents are ingested and retrieved, project- and office-scoped (`e2e-documents`, 48 assertions, critical gate TM-031). Generated artifacts are not yet the subject of this proof | Persistence of ingested documents verified; generated-artifact persistence not verified | TM-031 | Generated-artifact persistence not verified |
+| COS-083 | Status answered from authoritative execution state | CONS-7.56; §13 invariant 10; §21 | P0 | Lead (Claude) | 🟡 AMBER | `app.conversation_work` reads `jobs` (state, kind, finished) for the conversation's work; the duplicate guard's status sentences are built from it (forensics C1, C1b) | Source of the status verified by reading the definition; the answer to a status question not yet tested end to end | TM-032 | End-to-end status answer not tested |
 | COS-084 | Authentication and tenant isolation | CONS-7.63 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-085 | System-level provenance and auditability | CONS-7.64 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-086 | Unit tests | CONS-7.65 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
