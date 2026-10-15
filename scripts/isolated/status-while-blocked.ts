@@ -98,7 +98,7 @@ const job: Job = {
   attempt: 1,
   officeId: office,
 }
-await handler.handle(job)
+await handler.handle(job, db)
 const promptOpen = shown.join('\n')
 check(
   'while the question is open, the status prompt says the piece is waiting on Grant',
@@ -111,7 +111,7 @@ await db.execute(
     where blocker_id = '${blockerId}'::uuid`,
 )
 shown.length = 0
-await handler.handle({ ...job, idempotencyKey: `blk2-${statusJob}` })
+await handler.handle({ ...job, idempotencyKey: `blk2-${statusJob}` }, db)
 const promptAnswered = shown.join('\n')
 check(
   'CONTROL: once he has answered, the status prompt no longer says it is waiting on him',

@@ -121,7 +121,7 @@ async function scenario(label: string, repeat: string, matcherSays: string): Pro
     attempt: 1,
     officeId: office,
   }
-  const out = await handler.handle(job)
+  const out = await handler.handle(job, db)
   const newWork = Number(
     (
       await one(`select count(*)::int as n from public.jobs

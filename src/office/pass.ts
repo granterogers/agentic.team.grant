@@ -60,6 +60,7 @@ import { driveWatchHandler } from '../handlers/drive.ts'
 import { driveIndexHandler } from '../handlers/drive-index.ts'
 import { driveReadHandler } from '../handlers/drive-read.ts'
 import { extractTasksHandler } from '../handlers/extract-tasks.ts'
+import { followupsHandler } from '../handlers/followups.ts'
 import { googleRevokeHandler } from '../handlers/google-revoke.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
 import { jobTracesHandler } from '../handlers/job-traces.ts'
@@ -520,6 +521,8 @@ export const buildPass = async (
     */
     proposeHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
     choresHandler(db),
+    // A quiet email thread gets a follow-up on Grant's list, once (REG-029). A task only; nothing is sent.
+    followupsHandler(db),
     remindersHandler(db),
     tasksSyncHandler(db),
     // "Use the Notion you already have" — a configuration change the office can

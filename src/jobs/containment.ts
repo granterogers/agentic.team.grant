@@ -97,6 +97,8 @@ export const REACH: Readonly<Record<string, KindReach>> = {
   'office.capacity_watch': { reach: 'internal' },
   'office.chores': { reach: 'internal' },
   'office.extract_tasks': { reach: 'internal' },
+  // REG-029: a follow-up is a task on Grant's list. It reaches nothing outside the office.
+  'office.followups': { reach: 'internal' },
   'office.instruction': { reach: 'internal' },
   'office.propose': { reach: 'internal' },
   'office.prune_build_shots': { reach: 'internal' },

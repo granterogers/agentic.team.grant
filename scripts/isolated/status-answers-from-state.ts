@@ -107,7 +107,7 @@ const job: Job = {
   attempt: 1,
   officeId: office,
 }
-const queuedRun = await handler.handle(job)
+const queuedRun = await handler.handle(job, db)
 const promptQueued = shown.join('\n')
 if (process.env.STATUS_DUMP)
   for (const p of shown)
@@ -137,7 +137,7 @@ await db.execute(
   `update public.jobs set state = 'failed', state_reason = 'status proof: ran out of attempts' where job_id = '${handedOn}'::uuid`,
 )
 shown.length = 0
-await handler.handle({ ...job, idempotencyKey: `status-proof-2-${statusJob}` })
+await handler.handle({ ...job, idempotencyKey: `status-proof-2-${statusJob}` }, db)
 const promptFailed = shown.join('\n')
 const readerAfter = JSON.parse(
   String(

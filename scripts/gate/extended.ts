@@ -49,6 +49,11 @@ export const EXTENDED: readonly Proof[] = [
     'a repeat of work whose first attempt has stalled (lease lapsed) starts nothing; a repeat the matcher calls different work starts a new piece (the control)',
   ),
   p(
+    'followup-duty',
+    6,
+    'the daily follow-up duty puts one task per quiet thread on the list, owned by the Chief of Staff, once per thread, announces nothing, and leaves recent and stranger threads alone',
+  ),
+  p(
     'follow-up-task-shape',
     4,
     'a follow-up task is stored with its owner, source job and project, its detail carries the contact and action, and no due date is invented',

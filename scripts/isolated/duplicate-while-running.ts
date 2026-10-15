@@ -122,7 +122,7 @@ async function scenario(label: string, repeat: string, matcherSays: string): Pro
     attempt: 1,
     officeId: office,
   }
-  const out = await handler.handle(job)
+  const out = await handler.handle(job, db)
   // Every piece of work started for the repeat's wording, under either turn, other than the original.
   // Every job started under either turn that carries this run's token, other than the original piece of work. That
   // covers a specialist's child, a deliverable (artifact.report) and anything else the handler enqueues for the repeat.

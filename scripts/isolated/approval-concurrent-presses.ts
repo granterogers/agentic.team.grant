@@ -32,10 +32,9 @@ const jobId = await realParent(db)
 const office = String((await one(`select app.job_office('${jobId}'::uuid)::text as o`)).o)
 const ROUNDS = 5
 const tag = Date.now().toString(36)
-const pressers = [
-  await isolated(process.argv[2] ?? 'post'),
-  await isolated(process.argv[2] ?? 'post'),
-]
+const presserA = await isolated(process.argv[2] ?? 'post')
+const presserB = await isolated(process.argv[2] ?? 'post')
+const pressers = [presserA, presserB]
 
 const parse = (raw: unknown) =>
   (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown>
@@ -67,7 +66,7 @@ for (let round = 0; round < ROUNDS; round++) {
     )
     return parse((r.rows[0] as { r: unknown }).r)
   }
-  const both = Promise.all([press(pressers[0], 'Go ahead'), press(pressers[1], 'Leave it')])
+  const both = Promise.all([press(presserA, 'Go ahead'), press(presserB, 'Leave it')])
   release()
   const [a, b] = await both
   const aWon = a.ok === true && a.already !== true && a.error === undefined
