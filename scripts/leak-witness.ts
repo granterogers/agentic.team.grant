@@ -1,3 +1,5 @@
+import { commandIdUuidSql } from './lib/command-id.ts'
+
 /**
  * The containment witnesses that do NOT ask `app.harness_job` (ledger R37).
  *
@@ -21,7 +23,7 @@ export const ADAPTER_SHAPE = String.raw`^telegram:(message:([A-Za-z0-9_-]+:)?-?[
 export const offShapeSql = `
   select distinct c.dedupe_key as key, d.delivery_id::text as delivery_id
     from public.inbound_commands c
-    join public.jobs j on (j.pinned_config ->> 'command_id')::uuid = c.command_id
+    join public.jobs j on ${commandIdUuidSql("j.pinned_config ->> 'command_id'")} = c.command_id
     join public.deliveries d on d.job_id = j.job_id
    where d.sent_at is not null
      and d.created_at > app.harness_guard_since()

@@ -7,6 +7,10 @@
  */
 export const HELPERS: readonly { readonly stem: string; readonly role: string }[] = [
   {
+    stem: 'artifact-correspondence-path',
+    role: 'NOT a gate: drives the real artifact handler for a correspondence summary and reaches the store step, which the production guard refuses on the replica (no storage); run by hand, 5 of 5 by hand as recorded in the register (TM-048)',
+  },
+  {
     stem: 'activity-ledger-perf',
     role: 'NOT a gate: measures what the unified activity ledger costs (read latency against history, write cost, concurrency, footprint) and reports; run by hand with a job count',
   },
