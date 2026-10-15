@@ -241,8 +241,8 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | REG-018 | Unavailable assigned specialist | §25.18 | P0 | QA (Claude) | 🟡 AMBER | A specialist hand-off that failed is reassigned to the Chief of Staff (TM-030). "Unavailable" is treated as failure here | Failure path verified; an inactive specialist before any attempt is not handled | TM-030 | Pre-attempt unavailability not built |
 | REG-019 | Automatic reassignment | §25.19 | P0 | QA (Claude) | 🟡 AMBER | Worker runs `reassign_failed_specialist` on terminal failure (TM-030): 3/3 at the worker, 6/6 at the function | Verified for failed hand-offs; no planner-level run yet | TM-030 | Planner-level run not done |
 | REG-020 | User not assigned ordinary internal work | §25.20 | P0 | QA (Claude) | 🟡 AMBER | `taskHome` never returns Grant as owner of a project task (TM-024) | Partial: rule and writer, not the planner | TM-024 | Planner-level run not done |
-| REG-021 | Human approval required for a consequential action | §25.21 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
-| REG-022 | Gmail search strategy generation | §25.22 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
+| REG-021 | Human approval required for a consequential action | §25.21 | P0 | QA (Claude) | 🟡 AMBER | `approval-binding` and `approval-execution` (critical gate): an approval applies to exactly what it approved, and a consequential step is asked before it runs | Partial: the consequence classes covered are the ones those two proofs drive, not the full policy matrix | TM-031 | Full policy matrix not driven here |
+| REG-022 | Gmail search strategy generation | §25.22 | P1 | QA (Claude) | 🟡 AMBER | The Gmail search and read descriptions tell the office to find its own query and never ask Grant for one (migration 1074; `registry-never-asks`, 4/4; TM-035) | Partial: the office's generated query is not run against a live Gmail; the registry proof checks the instruction, not the search quality | TM-035 | Live query quality not measured |
 | REG-023 | Sent and received email matching | §25.23 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-024 | Email thread pagination | §25.24 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-025 | Duplicate email handling | §25.25 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
@@ -253,8 +253,8 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | REG-030 | Artifact creation failure | §25.30 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-031 | Artifact verification | §25.31 | P0 | QA (Claude) | 🟢 GREEN | Layout-collision and structural checks on generated PDFs, with red and green controls (`qa.test.ts`; TM-033) | `npx vitest run tests/artifacts` (TM-033) | TM-033 | — |
 | REG-032 | Partial-result preservation | §25.32 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
-| REG-033 | Missing Notion workspace | §25.33 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
-| REG-034 | Missing optional task owner | §25.34 | P1 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
+| REG-033 | Missing Notion workspace | §25.33 | P1 | QA (Claude) | 🟡 AMBER | The Notion write description says never to ask Grant which workspace, and to say so and carry on when none is attached (migration 1074; `registry-never-asks`, 4/4; TM-035) | Partial: the carry-on behaviour is an instruction to the model; not run against a model | TM-035 | Live behaviour without a workspace not run |
+| REG-034 | Missing optional task owner | §25.34 | P1 | QA (Claude) | 🟡 AMBER | A task with no named owner goes to the Chief of Staff, never to Grant's list by default (`task-home`, 6/6; `task-owner-writes`, 3/3; TM-023, TM-024) | Partial: the owner routing is proved at the writer; the plan's own choice of owner is a model judgement | TM-023, TM-024 | — |
 | REG-035 | Status request during execution | §25.35 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-036 | Status request during blocking | §25.36 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-037 | Status request after verified completion | §25.37 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
