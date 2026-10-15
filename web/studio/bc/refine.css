@@ -1315,11 +1315,9 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
       linear-gradient(var(--bc-text-muted), var(--bc-text-muted)),
       linear-gradient(var(--bc-text-muted), var(--bc-text-muted));
     background-size: 15px 1.5px, 15px 1.5px, 1.5px 15px, 1.5px 15px;
-    background-position:
-      calc(50% - 7.5px) calc(50% - 7.5px),
-      calc(50% - 7.5px) calc(50% + 6px),
-      calc(50% - 7.5px) calc(50% - 7.5px),
-      calc(50% + 6px) calc(50% - 7.5px);
+    /* Exact pixels, not percentages: a percentage offset is measured against the space left over after each thin
+       layer, so the four edges landed in different places and drew "+ |" (verified at 3x, 390px). The box is 44px. */
+    background-position: 14.5px 14.5px, 14.5px 28px, 14.5px 14.5px, 28px 14.5px;
   }
   [data-experience='basecamp'] :is(.bctasklist, .bclists) .bccheck:checked {
     background-color: transparent;
