@@ -79,40 +79,59 @@ export async function listRuns(ref: string, serviceKey: string): Promise<RunInfo
  * whether the bytes can be read. An unfinished run, a failed read or a throw is NOT verified. Attended and slow (it
  * downloads each run), so the caller decides which runs to ask about.
  */
+/**
+ * Read one backup back and check it. The same checks as before: an unfinished or foreign backup is never verified, and
+ * any read or checksum failure is a refusal to verify rather than an error that stops the run.
+ */
+async function verifyOne(ref: string, serviceKey: string, r: RunInfo): Promise<boolean> {
+  if (!isOurs(r.name) || !r.complete) return false
+  try {
+    if (r.name.startsWith('run-')) {
+      const inside = await listUnder(ref, serviceKey, r.name)
+      const tables = inside
+        .map((o) => o.name)
+        .filter((n) => n.endsWith('.json.gz') && !n.endsWith('/manifest.json.gz'))
+      const read = await readFolder(ref, serviceKey, { prefix: r.name, tables })
+      return read.corrupt.length === 0 && Object.keys(read.data).length > 0
+    }
+    const bytes = await downloadArchive(ref, serviceKey, r.name)
+    const stated = new TextDecoder()
+      .decode(await downloadArchive(ref, serviceKey, `${r.name}.sha256`))
+      .trim()
+      .split(/\s+/)[0]
+    return stated !== undefined && stated !== '' && stated === (await checksum(bytes))
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Verify every run, a few at a time. The concurrency only changes how long it takes: each run is still read in full and
+ * checked on its own, and the results come back in the order the runs were given. A sequential read of 39 backups did
+ * not finish inside a ten-minute foreground command.
+ */
 export async function verifyRuns(
   ref: string,
   serviceKey: string,
   runs: readonly RunInfo[],
   onEach: (run: RunInfo, verified: boolean) => void = () => undefined,
+  concurrency = 4,
 ): Promise<RunInfo[]> {
-  const out: RunInfo[] = []
-  for (const r of runs) {
-    let verified = false
-    if (isOurs(r.name) && r.complete) {
-      try {
-        if (r.name.startsWith('run-')) {
-          const inside = await listUnder(ref, serviceKey, r.name)
-          const tables = inside
-            .map((o) => o.name)
-            .filter((n) => n.endsWith('.json.gz') && !n.endsWith('/manifest.json.gz'))
-          const read = await readFolder(ref, serviceKey, { prefix: r.name, tables })
-          verified = read.corrupt.length === 0 && Object.keys(read.data).length > 0
-        } else {
-          const bytes = await downloadArchive(ref, serviceKey, r.name)
-          const stated = new TextDecoder()
-            .decode(await downloadArchive(ref, serviceKey, `${r.name}.sha256`))
-            .trim()
-            .split(/\s+/)[0]
-          verified = stated !== undefined && stated !== '' && stated === (await checksum(bytes))
-        }
-      } catch {
-        verified = false
-      }
+  const results: boolean[] = Array.from({ length: runs.length }, () => false)
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < runs.length) {
+      const i = next
+      next += 1
+      results[i] = await verifyOne(ref, serviceKey, runs[i] as RunInfo)
     }
-    onEach(r, verified)
-    out.push({ ...r, verified })
   }
-  return out
+  await Promise.all(Array.from({ length: Math.min(concurrency, runs.length) }, worker))
+  return runs.map((r, i) => {
+    const verified = results[i] === true
+    onEach(r, verified)
+    return { ...r, verified }
+  })
 }
 
 export interface Applied {
