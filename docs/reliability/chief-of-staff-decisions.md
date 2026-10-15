@@ -53,6 +53,27 @@ Append-only. A decision is changed by adding a new entry that supersedes an earl
 - **Decision:** The consolidated specification and the incident transcript were written by transcribing the supplied text into the repository. A byte-for-byte comparison against the original message cannot be run in this session.
 - **Control:** The register records each file's SHA-256 from this checkpoint onward. `check:reliability` fails if a recorded file changes. Anyone holding the original message can confirm the transcription by comparing text, and should record any correction as a new dated decision, never by editing the hash in place.
 
+## DEC-011 — What an approval is consent to: the step id is out, the reason stays in
+- **Date:** 15 October 2026 (implementation pass)
+- **Decision:** The approval identity for a plan step is the material scope: capability, project, audience, specialist, inputs and reason. The step's `id` (its position in one plan) is excluded.
+- **Why not exclude the reason too:** an approval given to "email the caterer about the allergy" must not carry to "email the caterer about cancelling". The reason is part of what Grant reads and agrees to. R45 (`an-answer-decides-the-step.test.ts`) pins it, and the unit test "an approval given to one reason does not carry to a different reason" pins it too.
+- **Cost:** a planner that rewords the reason of the same work causes one more question. This is accepted for now. It is the conservative direction for consent.
+- **Follow-up:** canonicalise `why` only after production evidence shows how plans are regenerated (COS-091). Do not do it on guesswork.
+- **Legacy:** questions written before this change were fingerprinted with the id and reason too. `stepLegacyBinds` keeps that shape, so an approval given under it still matches. The pre-0611 shape is no longer consulted. An approval given only under that old shape will be asked again, once. That is the safe direction.
+
+## DEC-012 — Plan tasks have an owner: the specialist, or the Chief of Staff
+- **Date:** 15 October 2026 (implementation pass)
+- **Decision:** A plan task is a project task owned by the step's specialist, or by `chief-of-staff` when none is named. It is on Grant's personal list only when the step's audience is `grant`, or when the plan has no project.
+- **Basis:** COS-098 and COS-099 (the Chief of Staff keeps ownership; Grant is never the fallback owner for internal routing failures). The planner's question "who should own it" came from a task with nobody to own it.
+- **Risk:** a plan with no project still puts its tasks on Grant's list, because there is no project to hold them. That is recorded as a limitation, not hidden. Resolving it needs a project-less owner that is not Grant, which is a product decision.
+- **Writer:** `app.task_add` with `p_assignee` is used for project tasks. It refuses an unknown owner with "nobody here is called", and that refusal is returned as a refusal, not stored.
+
+## DEC-013 — One open question per job and action, enforced by the database
+- **Date:** 15 October 2026 (implementation pass)
+- **Decision:** A partial unique index `blockers_one_open_per_job_action` on `(job_id, action_fingerprint)` where the question is open. `raiseBlocker` uses `on conflict do nothing` and returns the open question's id.
+- **Migration 1073** withdraws existing duplicate open questions (newest kept) with a resolution that says why, rather than deleting them, because blockers are an audit record. Withdrawal closes the question's task through the existing trigger.
+- **Not applied to production.** The migration is written and proved on the local replica only. Applying it needs the production read of duplicate counts and Grant's authorisation for the write (DEC-009 and the production rules). The migration number 1073 is the next free number in this checkout. It has not been checked against production's migration ledger.
+
 ## DEC-010 — Historical specification header changed; hash re-recorded
 - **Date:** 15 October 2026
 - **Change:** The header of `chief-of-staff-master-spec.md` was edited to say it is historical and that the consolidated specification is authoritative. The verbatim body below the header was not changed.

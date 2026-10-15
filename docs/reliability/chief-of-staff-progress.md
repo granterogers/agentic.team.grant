@@ -9,11 +9,23 @@
 
 ## Reconciliation (must match the register; checked by `npm run check:reliability`)
 
-🟢 3 | 🟡 40 | 🔴 0 | ⚪ 187 — Total 230/230 tracked
+🟢 3 | 🟡 52 | 🔴 0 | ⚪ 175 — Total 230/230 tracked
 
 - Execution-control rules (ECS): 39 — 🟢 3 · 🟡 31 · 🔴 0 · ⚪ 5
-- Chief of Staff requirements (COS): 146 — 🟢 0 · 🟡 8 · 🔴 0 · ⚪ 138
-- Mandatory regression tests (REG): 45 — 🟢 0 · 🟡 1 · 🔴 0 · ⚪ 44
+- Chief of Staff requirements (COS): 146 — 🟢 0 · 🟡 17 · 🔴 0 · ⚪ 129
+- Mandatory regression tests (REG): 45 — 🟢 0 · 🟡 4 · 🔴 0 · ⚪ 41
+
+## Implementation checkpoint (this session)
+
+Done, with evidence in the test matrix (TM-021 to TM-026):
+- **Duplicate open questions (COS-009, COS-022, REG-006):** `raiseBlocker` returns the open question for the same job and action instead of inserting a second; migration 1073 withdraws existing duplicates and adds a unique index. Replica proof 5/5. Before the fix the same proof failed 4 of 5.
+- **Approval identity (COS-007, COS-093):** the planner's step id is no longer part of the approval identity. The reason stays bound (DEC-011). Unit tests 12/12.
+- **Task ownership (COS-005, COS-016, COS-096, COS-098, COS-099, REG-016, REG-020):** plan tasks go to the step's specialist, or the Chief of Staff, not Grant's list by default. `taskHome` 6/6; writer proof 3/3.
+- Full unit suite: 7390 passed, 0 failed. Typecheck: 102 errors, the same count as the baseline, none in changed files. Biome: exit 0 on changed files.
+
+Corrections to the forensic report (see `chief-of-staff-forensics-code.md`, section "Correction, 15 October 2026 (implementation pass)"):
+- F1 is narrower than stated. Duplicate detection does not match objectives by their text. It matches by conversation (origin channel, chat and subject, within 24 hours) through `app.conversation_work`. The 120-character text is only display.
+- F2 is confirmed as stated: callback-query-id dedupe is per click. Logical idempotency across clicks is handled by `app.hq_answer_blocker` (row lock, returns `already`), so no second mechanism was added at the click path.
 
 ## Sources
 

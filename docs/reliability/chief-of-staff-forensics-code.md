@@ -57,3 +57,28 @@
 | Did the Gmail, Notion or artifact steps run at all? | `outputs`, `documents`, `tool_calls` for the objective | same |
 
 Until that authorisation is given, F1–F5 remain AMBER. They cannot become GREEN, and no fix claiming to cure the incident can be verified against the real records.
+
+## Correction, 15 October 2026 (implementation pass)
+
+Two claims in the first pass were checked against the code before any fix, as the implementation brief required.
+
+### C1 — F1 was overstated: duplicate detection does not match by text
+- The duplicate guard calls `app.conversation_work(office, command, 24h, …)` (`src/handlers/instruction.ts` ~2917). It returns the in-flight and recently finished work of the **conversation**: the same origin channel, chat and subject, within 24 hours (`migrations/0783`, the latest definition).
+- The 120-character text is display only. It is the stored `pinned_config` request of the running job, cut for the reply.
+- **Consequence, a new finding:** any unrelated request in the same chat within 24 hours is treated as a duplicate of whatever is still running. Duplicate detection is by conversation, not by objective. This is an over-suppression risk. It is recorded as F6 and is not yet fixed.
+
+### C2 — F2 confirmed; logical idempotency already exists in the database
+- The callback dedupe key is per click (`telegram:callback:<bot>:<callback query id>`). That handles transport retries, as stated.
+- Logical idempotency across distinct clicks is in `app.hq_answer_blocker`: the blocker row is locked `FOR UPDATE` (migration 0596), and an answer to a question no longer `open` returns `{already: true}`. Verified by reading the latest definition (`migrations/0741`), not yet by a test.
+- **Decision:** no second mechanism at the click path. The gap was the creation side (below), not the click side.
+
+### New confirmed findings from the implementation pass
+- **F6 — over-suppression by conversation** (see C1). Confirmed in code. Not yet reproduced.
+- **F7 — no uniqueness on open questions.** `raiseBlocker` was a bare insert and the schema had only a non-unique index on `action_fingerprint`. Confirmed in code and on the replica. Reproduced: 4 of 5 checks failed before the fix. Fixed in `raiseBlocker` and migration 1073. Proof: `scripts/isolated/approval-asked-once.ts`.
+- **F8 — the approval identity included the planner's step id and reason.** `perform.ts` fingerprinted `step.id`, so a renumbered plan no longer matched an approval given earlier. The id is now excluded (DEC-011). The reason stays bound, because it is part of what Grant agrees to.
+- **F9 — every plan task went to Grant's personal list.** `task.create` called `app.my_task_add` whatever the step's audience or specialist. Confirmed in code. Fixed by `src/agents/task-home.ts` and the writer call in `perform.ts`. Proof: `scripts/isolated/task-owner-writes.ts`.
+
+### Still unverified
+- F3 (the button carries no approval identity, so a press resolves through the message) is still a hypothesis. It needs production blocker and delivery rows, or a replica test that drives a press through `telegram.ts` and `callbacks.ts`.
+- F4 (three raises of one stop) is now explained by F7 and F8 in code. Its production occurrence is not confirmed.
+- F5 (optional details block the start) has not been traced.

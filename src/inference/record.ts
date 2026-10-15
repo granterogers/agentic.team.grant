@@ -123,11 +123,31 @@ export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promis
        ${nullableLit(draft.standingTool)}, ${nullableLit(draft.standingOption)},
        ${draft.onAnswer === undefined ? 'null' : `${lit(JSON.stringify(draft.onAnswer))}::jsonb`},
        ${nullableLit(draft.actionFingerprint)}, ${nullableLit(draft.declineOption)})
+    on conflict (job_id, action_fingerprint)
+      where state = 'open' and action_fingerprint is not null and job_id is not null
+      do nothing
     returning blocker_id::text as blocker_id
   `)
-  const id = rows[0]?.blocker_id
-  if (typeof id !== 'string') throw new Error('blocker insert returned no id')
-  return id
+  const created = rows[0]?.blocker_id
+  if (typeof created === 'string') return created
+  /*
+    The same action is already open on this job (migration 1073, COS-092). Return THAT question: the caller's pause then
+    names a real question, and nothing new is filed on Grant's list or put in front of him a second time. Only an
+    action fingerprint can collide; a draft without one has no identity to repeat, so an empty insert there is a fault.
+  */
+  if (draft.actionFingerprint === undefined) throw new Error('blocker insert returned no id')
+  const { rows: open } = await db.execute(`
+    select blocker_id::text as blocker_id from public.blockers
+     where office_id = app.job_office(${lit(draft.jobId)}::uuid)
+       and job_id = ${lit(draft.jobId)}::uuid
+       and action_fingerprint = ${lit(draft.actionFingerprint)}
+       and state = 'open'
+     limit 1
+  `)
+  const existing = open[0]?.blocker_id
+  if (typeof existing !== 'string')
+    throw new Error('blocker insert returned no id and no open question matches')
+  return existing
 }
 
 /**

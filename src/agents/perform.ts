@@ -50,6 +50,8 @@ import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { mayAct, refusalSentence } from './approval.ts'
 import type { GoalPlan, PlanStep } from './goal.ts'
+import { stepActionBinds, stepLegacyBinds, stepLegacyFingerprint } from './step-approval.ts'
+import { CHIEF_OF_STAFF, taskHome } from './task-home.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -476,25 +478,57 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         `app.undo_tasks_from_job` take it back, and what lets a reader tell
         harness traffic from his own list without reading the title.
       */
-      const { rows } = await db.execute(`
-        select app.my_task_add(p_office => app.job_office(${lit(jobId)}::uuid),
-                               p_title => ${lit(title)},
-                               p_detail => ${lit(detail)},
-                               p_job => ${lit(jobId)}::uuid) as t`)
+      /*
+        WHO OWNS THE TASK (COS-096, COS-098, COS-099; Canary incident 15 October 2026).
+
+        Every plan task used to land on Grant's personal list, whoever the step was for. So an internal piece of
+        work ("draft the comparison", "file the follow-up") became HIS to do, and the office then asked him who
+        should own it. A task belongs to the specialist the step names, or to the Chief of Staff when none is named.
+        It lands on his own list only when the step is for him (audience 'grant'), or when the plan has no project
+        to hold a project task.
+      */
+      const { rows: where } = await db.execute(
+        `select project_id::text as project from public.jobs where job_id = ${lit(jobId)}::uuid and office_id = app.job_office(${lit(jobId)}::uuid)`,
+      )
+      const projectId = (where[0] as { project?: string | null } | undefined)?.project ?? null
+      const home = taskHome({ audience: step.audience, specialist: step.specialist, projectId })
+      const forHim = home.kind === 'personal'
+      const { rows } = forHim
+        ? await db.execute(`
+            select app.my_task_add(p_office => app.job_office(${lit(jobId)}::uuid),
+                                   p_title => ${lit(title)},
+                                   p_detail => ${lit(detail)},
+                                   p_job => ${lit(jobId)}::uuid) as t`)
+        : await db.execute(`
+            select app.task_add(p_office => app.job_office(${lit(jobId)}::uuid),
+                                p_project => ${lit(projectId ?? '')}::uuid,
+                                p_title => ${lit(title)},
+                                p_detail => ${lit(detail)},
+                                p_assignee => ${lit(home.kind === 'project' ? home.owner : CHIEF_OF_STAFF)},
+                                p_added_by => 'the office',
+                                p_job => ${lit(jobId)}::uuid) as t`)
       const raw = (rows[0] as { t?: unknown })?.t
+      /*
+        Two writers, two success shapes: `my_task_add` answers {ok, id}; `task_add` answers the task itself, {id},
+        and a refusal as {error}. A refusal is reported, never read as success.
+      */
       const got = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
         ok?: boolean
         id?: string
         error?: string
       }
-      if (got?.ok !== true || typeof got.id !== 'string') {
+      const stored =
+        typeof got?.id === 'string' && got.error === undefined && (!forHim || got.ok === true)
+      if (!stored) {
         return nothing('task.create', String(got?.error ?? 'the writer refused it'))
       }
       return {
         capability: 'task.create',
         found: true,
-        ids: [got.id],
-        saw: `Put on ${currentPerson().possessive} list: "${title}"`,
+        ids: [got.id as string],
+        saw: forHim
+          ? `Put on ${currentPerson().possessive} list: "${title}"`
+          : `Put on the project's list for ${home.kind === 'project' ? home.owner : CHIEF_OF_STAFF}: "${title}"`,
         title,
       }
     },
@@ -703,39 +737,28 @@ export const compile = (
           derivation as consent would make LLM interpretation into
           authorization, which is the one thing the whole design forbids.
         */
-        const binds = {
-          step: `${step.id}:${step.capability}`,
-          capability: step.capability,
-          project: projectId,
-          why: step.why,
-          needs: [...step.needs],
-          /*
-            Who acts and who it reaches are inputs to the decision, so they are
-            part of WHAT is approved: a yes given to a step for the office must
-            not carry to the same step relabelled for somebody outside. And a
-            step with no reason (validate allows one) would otherwise have the
-            same fingerprint in every request, so its No would follow it into
-            unrelated work; the request then says which work this is.
-          */
-          audience: step.audience,
-          specialist: step.specialist,
-          ...(step.why.trim() === '' ? { request: request.slice(0, 400) } : {}),
-        }
+        /*
+          WHAT the approval is about, and what it is NOT about (COS-092). The
+          material scope lives in `step-approval.ts`: capability, project, who
+          acts and who it reaches, and the inputs. The planner's id and wording
+          are not part of it, so a regenerated plan that says the same work again
+          finds the answer already given.
+        */
+        // `action` is what the approval is consent to: the identity a yes or a no is recorded against.
+        // `binds` is the record the pause keeps for the sentence Grant reads (`step`, `why`); it is never
+        // the approval's identity, so rewording a step does not re-ask the same work.
+        const action = stepActionBinds({ step, projectId, request })
+        const binds = stepLegacyBinds({ step, projectId, request })
         const decision = await mayAct(db, {
           projectId,
           tool: step.capability,
           staff: step.specialist,
           audience: step.audience,
-          fingerprint: await fingerprint(binds),
-          // A question raised before 0611 was fingerprinted without audience,
-          // specialist or request; the same step, in that old shape, still finds it.
-          legacyFingerprint: await fingerprint({
-            step: binds.step,
-            capability: binds.capability,
-            project: binds.project,
-            why: binds.why,
-            needs: binds.needs,
-          }),
+          fingerprint: await fingerprint(action),
+          // Questions raised before the material scope was defined were fingerprinted
+          // with the planner's position and wording as well; an approval given under
+          // that shape still finds the step.
+          legacyFingerprint: await stepLegacyFingerprint({ step, projectId, request }),
           job: jobId,
         })
         /*
@@ -843,7 +866,7 @@ export const compile = (
             whyNeeded: decision.because,
             consequencesOfDelay: 'The rest of the plan waits until you answer.',
             approvalOptions: [...STEP_OPTIONS],
-            actionFingerprint: await fingerprint(binds),
+            actionFingerprint: await fingerprint(action),
             declineOption: STEP_OPTIONS[1],
             originatingAgent: 'chief-of-staff',
             workCanContinue: false,

@@ -17,7 +17,7 @@ describe('an answer already given decides the step (R45)', () => {
     for (const wired of [
       'staff: step.specialist',
       'audience: step.audience',
-      'fingerprint: await fingerprint(binds)',
+      'fingerprint: await fingerprint(action)',
       'job: jobId',
     ]) {
       expect(call).toContain(wired)
@@ -33,21 +33,37 @@ describe('an answer already given decides the step (R45)', () => {
       /if \(stateNow === 'paused'\) \{\s*if \(!gate\.exempt\) \{\s*const verdict = await review\(output, job\)/,
     )
   })
-  it('the approval binds what the step will DO, so a changed step is asked afresh', () => {
-    // The property, not the expression: what is approved names the step, what it is for, what
-    // it depends on, who acts and who it reaches - and the decision is asked of exactly that.
-    const binds =
-      /const binds = \{([\s\S]*?)\n\s*\}\s*const decision = await mayAct/.exec(perform)?.[1] ?? ''
-    for (const part of [
-      'capability: step.capability',
-      'project: projectId',
-      'why: step.why',
-      'needs: [...step.needs]',
-      'audience: step.audience',
-      'specialist: step.specialist',
-    ]) {
-      expect(binds).toContain(part)
+  it('the approval binds what the step will DO, so a changed step is asked afresh', async () => {
+    // The property, checked on the real function: what is approved names what the step is for, what
+    // it depends on, who acts and who it reaches, and a changed one is a different question (COS-092).
+    const { stepActionFingerprint } = await import('../../src/agents/step-approval.ts')
+    const ctx = {
+      projectId: '11111111-1111-4111-8111-111111111111',
+      request: 'r',
+      step: {
+        id: 's1',
+        capability: 'draft.create',
+        why: 'Reply to the venue',
+        needs: ['n1'],
+        audience: 'outside',
+        specialist: 'comms',
+      },
     }
+    const same = await stepActionFingerprint(ctx)
+    for (const change of [
+      { capability: 'task.create' },
+      { why: 'Reply to the caterer' },
+      { needs: ['n2'] },
+      { audience: 'office' },
+      { specialist: 'finance' },
+    ]) {
+      expect(await stepActionFingerprint({ ...ctx, step: { ...ctx.step, ...change } })).not.toBe(
+        same,
+      )
+    }
+    // And the decision is asked of that identity, not of the planner's position.
+    expect(perform).toMatch(/const action = stepActionBinds\(\{ step, projectId, request \}\)/)
+    expect(perform).toMatch(/fingerprint: await fingerprint\(action\)/)
   })
   it("0592's idempotency never returns a question's own to-do as the step's work", () => {
     const sql = readFileSync('migrations/0592_a_retry_does_not_write_the_task_again.sql', 'utf8')
