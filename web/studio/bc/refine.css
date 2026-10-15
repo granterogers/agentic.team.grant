@@ -1437,16 +1437,18 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   and its icon. Added last so it wins over the older tint fills in this file and in compose.css. The tint still arrives
   through --bc-tint, so every module keeps its own hue.
 */
-[data-experience='basecamp'] .bcmod.bcmod--tinted {
+/* The selector carries .bccomp--c because the composed layout's own rules (earlier in this file) use it, and a
+   same-weight rule written later here would lose to their !important background. */
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--tinted {
   background: var(--bc-surface) !important;
   background-image: none !important;
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--bc-tint) 30%, transparent) inset,
     0 0 0 1px color-mix(in srgb, var(--bc-tint) 18%, transparent),
     0 0 24px -4px color-mix(in srgb, var(--bc-tint) 70%, transparent),
-    var(--bc-sh-2);
+    var(--bc-sh-2) !important;
 }
-[data-experience='basecamp'] .bcmod.bcmod--tinted::before {
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--tinted::before {
   background: none !important;
 }
 [data-experience='basecamp'] .bcmod--tinted .bcmodtitle {
