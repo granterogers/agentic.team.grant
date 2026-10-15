@@ -22,6 +22,7 @@
     "sample:fingerprint": "tsx scripts/sample/fp-compare.ts",
     "verify:google-connect": "tsx scripts/verify/google-connect.ts",
     "check:secrets": "python3 scripts/secret-scan.py",
+    "check:reliability": "node scripts/reliability/check-register.mjs && node scripts/reliability/check-register.mjs --self-test",
     "check:gateway-wrappers": "tsx scripts/check-gateway-wrappers.ts",
     "trust:proxy-ca": "tsx scripts/trust-proxy-ca.ts",
     "verify": "npm run lint && npm run typecheck && npm run check:migrations && npm run test && npm run check:secrets",
