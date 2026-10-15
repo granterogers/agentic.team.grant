@@ -282,18 +282,19 @@ export async function startSample() {
 */
 
 /** Whether this deployment offers a password. Any failure reads as "no", so the link path is never hidden by an outage. */
+/** Whether the office offers sign-in by the PIN the person chose (the name predates the change to PINs). */
 export async function passwordOffered() {
   try {
     const { body } = await post({ action: 'methods' })
-    return body.password === true
+    return body.pin === true
   } catch {
     return false
   }
 }
 
-/** Sign in with an address and a password. Resolves when the session is held; throws the office's sentence otherwise. */
-export async function passwordSignIn(email, password) {
-  const { body } = await post({ action: 'password_sign_in', email, password })
+/** Sign in with an address and the PIN the person chose. Resolves when the session is held; throws the office's sentence otherwise. */
+export async function passwordSignIn(email, pin) {
+  const { body } = await post({ action: 'pin_sign_in', email, pin })
   if (body.ok === true && body.session !== undefined && write(body.session)) return true
   throw new Error(String(body.said ?? 'Sign-in is not reachable just now. Try again shortly.'))
 }
