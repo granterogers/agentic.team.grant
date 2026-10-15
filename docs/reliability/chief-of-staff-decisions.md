@@ -61,6 +61,13 @@ Append-only. A decision is changed by adding a new entry that supersedes an earl
 - **Follow-up:** canonicalise `why` only after production evidence shows how plans are regenerated (COS-091). Do not do it on guesswork.
 - **Legacy:** questions written before this change were fingerprinted with the id and reason too. `stepLegacyBinds` keeps that shape, so an approval given under it still matches. The pre-0611 shape is no longer consulted. An approval given only under that old shape will be asked again, once. That is the safe direction.
 
+## DEC-015 — Three fingerprint shapes, tried newest first
+- **Date:** 15 October 2026 (priority pass, after the critical gate)
+- **Problem:** I had dropped the oldest fingerprint shape (pre-0611). The critical proof `authority` then failed: a No given to a pre-0611 question did not hold on resume, and the step would have proceeded against a refusal. That is a safety regression in my own change, found by the gate, not in a review.
+- **Decision:** The policy takes one legacy fingerprint, so the lookup tries the material identity, then the shape written by questions just before this change, then the oldest shape. The first with an answer decides. A new question is always written under the material identity.
+- **Consequence:** a No or Yes given under any earlier shape still decides the step. Verified by the critical gate (70/70).
+- **Lesson recorded:** a legacy path removed from a change is not removed from the proofs. Run the critical gate before calling a consent change done.
+
 ## DEC-014 — Internal work does not bind its reason; outside work does
 - **Date:** 15 October 2026 (priority pass)
 - **Decision:** An approval for a step whose audience is `office` is bound to capability, project, specialist, audience and inputs. Its reason is not bound. A step whose audience is `outside` or `grant`, or has no audience, keeps its reason in the identity.

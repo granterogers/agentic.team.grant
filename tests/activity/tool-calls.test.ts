@@ -115,7 +115,8 @@ describe('the plan executor', () => {
   })
 
   it('runs only after the policy has answered: nothing is recorded for a refusal, a question or an absent executor', () => {
-    const policy = source.indexOf('const decision = await mayAct(db, {')
+    // The first policy consultation (the three-shape lookup in perform.ts, DEC-015).
+    const policy = source.indexOf('let decision = await decisionFor(')
     const refused = source.indexOf(`if (decision.verdict === 'ask') {`)
     expect(policy).toBeGreaterThan(0)
     expect(start).toBeGreaterThan(refused)

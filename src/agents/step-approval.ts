@@ -80,6 +80,22 @@ export const stepLegacyBinds = ({ step, projectId, request }: StepApprovalContex
   ...(step.why.trim() === '' ? { request: request.slice(0, 400) } : {}),
 })
 
+/**
+ * The oldest shape (questions raised before migration 0611): the position, capability, project, reason and inputs,
+ * without audience, specialist or request. Consulted only when neither of the newer shapes has an answer, so an
+ * answer given to a pre-0611 question still decides the step (DEC-015).
+ */
+export const stepOldestBinds = ({ step, projectId }: StepApprovalContext) => ({
+  step: `${step.id}:${step.capability}`,
+  capability: step.capability,
+  project: projectId,
+  why: step.why,
+  needs: [...step.needs],
+})
+
+export const stepOldestFingerprint = (ctx: StepApprovalContext): Promise<string> =>
+  fingerprint(stepOldestBinds(ctx))
+
 export const stepActionFingerprint = (ctx: StepApprovalContext): Promise<string> =>
   fingerprint(stepActionBinds(ctx))
 

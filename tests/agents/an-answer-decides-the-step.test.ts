@@ -12,14 +12,8 @@ describe('an answer already given decides the step (R45)', () => {
   const pursue = readFileSync('src/handlers/pursue.ts', 'utf8')
   const worker = readFileSync('src/jobs/worker.ts', 'utf8')
   it('the step asks the ONE boundary, carrying the exact action, who acts and who it reaches', () => {
-    const call =
-      /const decision = await mayAct\(db, \{([\s\S]*?)\n {8}\}\)/.exec(perform)?.[1] ?? ''
-    for (const wired of [
-      'staff: step.specialist',
-      'audience: step.audience',
-      'fingerprint: await fingerprint(action)',
-      'job: jobId',
-    ]) {
+    const call = /const base = \{([\s\S]*?)\n {8}\}/.exec(perform)?.[1] ?? ''
+    for (const wired of ['staff: step.specialist', 'audience: step.audience', 'job: jobId']) {
       expect(call).toContain(wired)
     }
     expect(perform).toMatch(/if \(decision\.verdict === 'ask'\) \{/)
@@ -63,7 +57,8 @@ describe('an answer already given decides the step (R45)', () => {
     }
     // And the decision is asked of that identity, not of the planner's position.
     expect(perform).toMatch(/const action = stepActionBinds\(\{ step, projectId, request \}\)/)
-    expect(perform).toMatch(/fingerprint: await fingerprint\(action\)/)
+    expect(perform).toMatch(/const material = await fingerprint\(action\)/)
+    expect(perform).toMatch(/decisionFor\(\s*material,/)
   })
   it("0592's idempotency never returns a question's own to-do as the step's work", () => {
     const sql = readFileSync('migrations/0592_a_retry_does_not_write_the_task_again.sql', 'utf8')

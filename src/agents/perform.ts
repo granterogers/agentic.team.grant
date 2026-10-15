@@ -50,7 +50,12 @@ import { currentPerson } from '../office/person.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { mayAct, refusalSentence } from './approval.ts'
 import type { GoalPlan, PlanStep } from './goal.ts'
-import { stepActionBinds, stepLegacyBinds, stepLegacyFingerprint } from './step-approval.ts'
+import {
+  stepActionBinds,
+  stepLegacyBinds,
+  stepLegacyFingerprint,
+  stepOldestFingerprint,
+} from './step-approval.ts'
 import { CHIEF_OF_STAFF, taskHome } from './task-home.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -757,18 +762,34 @@ export const compile = (
         // the approval's identity, so rewording a step does not re-ask the same work.
         const action = stepActionBinds({ step, projectId, request })
         const binds = stepLegacyBinds({ step, projectId, request })
-        const decision = await mayAct(db, {
+        /*
+          THREE SHAPES, ONE ANSWER (DEC-015).
+
+          A question written before the material scope was defined carries an older fingerprint, and the answer
+          given to it must still decide this step: a No to a pre-0611 question has to hold on resume, or the step
+          proceeds against a refusal (critical proof `authority`). The policy takes one legacy fingerprint, so the
+          older shapes are tried in turn, newest first, and the first that has an answer decides.
+        */
+        const base = {
           projectId,
           tool: step.capability,
           staff: step.specialist,
           audience: step.audience,
-          fingerprint: await fingerprint(action),
-          // Questions raised before the material scope was defined were fingerprinted
-          // with the planner's position and wording as well; an approval given under
-          // that shape still finds the step.
-          legacyFingerprint: await stepLegacyFingerprint({ step, projectId, request }),
           job: jobId,
-        })
+        }
+        const material = await fingerprint(action)
+        const decisionFor = async (fp: string, legacyFp: string | null) =>
+          mayAct(db, { ...base, fingerprint: fp, legacyFingerprint: legacyFp })
+        let decision = await decisionFor(
+          material,
+          await stepLegacyFingerprint({ step, projectId, request }),
+        )
+        if (decision.verdict === 'ask' && !decision.approved && !decision.declined) {
+          decision = await decisionFor(
+            await stepOldestFingerprint({ step, projectId, request }),
+            null,
+          )
+        }
         /*
           REFUSE AND ASK ARE DIFFERENT ANSWERS, AND THE FIRST DRAFT TREATED
           THEM AS ONE.

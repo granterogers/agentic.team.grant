@@ -98,10 +98,10 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-026 | User autonomy settings | Historical §3 topic 16; CONS-7.24 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-027 | Action-level risk classification | Historical §3 topic 17; CONS-7.23 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-028 | Safe autonomous execution | Historical §3 topic 18 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-029 | Objective lifecycle states | Historical §3 topic 19; CONS-7.26 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-030 | Worker heartbeats and leases | Historical §3 topic 20; CONS-7.27 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-031 | Stalled-job detection | Historical §3 topic 21; CONS-7.28 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-032 | Retry and idempotency | Historical §3 topic 22; CONS-7.29 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-029 | Objective lifecycle states | Historical §3 topic 19; CONS-7.26 | P0 | Lead (Claude) | 🟢 GREEN | Job states move only along legal transitions; exhausted attempts fail with a reason (`job-lifecycle`, 21 assertions; TM-031) | Critical gate 70/70 on fresh clones (TM-031) | TM-031 | — |
+| COS-030 | Worker heartbeats and leases | Historical §3 topic 20; CONS-7.27 | P0 | Lead (Claude) | 🟢 GREEN | One claim per job; a stale or lapsed claim is fenced and can neither complete nor write (`job-fence`, 18 assertions; TM-031) | Critical gate 70/70 on fresh clones (TM-031) | TM-031 | — |
+| COS-031 | Stalled-job detection | Historical §3 topic 21; CONS-7.28 | P0 | Lead (Claude) | 🟢 GREEN | Every stallable job state is recovered or failed; a malformed row is contained (`recovery-matrix`, 27 assertions; TM-031) | Critical gate 70/70 on fresh clones (TM-031) | TM-031 | — |
+| COS-032 | Retry and idempotency | Historical §3 topic 22; CONS-7.29 | P0 | Lead (Claude) | 🟢 GREEN | Handler failures retry with the reason recorded and never spend an attempt twice; a duplicate webhook, job or child produces one of each (`worker-failure-paths` 11 assertions; `exactly-once` 5; TM-031) | Critical gate 70/70 on fresh clones (TM-031) | TM-031 | — |
 | COS-033 | Duplicate objective detection | Historical §3 topic 23; CONS-7.31 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-034 | Existing-run continuation | Historical §3 topic 24; CONS-7.32 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-035 | Natural-language Gmail discovery | Historical §3 topic 25; CONS-7.33 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
@@ -146,7 +146,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-074 | Duplicate callback idempotency | CONS-7.18 | P0 | Lead (Claude) | 🟡 AMBER | Code: `telegram.ts` 223–270 (dedupe per callback id, F2); `callbacks.ts` ~584 (idempotent answer claimed in a comment). See `chief-of-staff-forensics-code.md` | Unverified: answer idempotency not yet proven by a test | REG-001 (planned) | Repeat press not yet tested against `hq_answer_blocker` |
 | COS-075 | Primary and fallback model execution parity | CONS-7.22 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-076 | Safe independent work during blocked steps | CONS-7.25 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-077 | Recovery after process interruption | CONS-7.30 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-077 | Recovery after process interruption | CONS-7.30 | P0 | Lead (Claude) | 🟢 GREEN | A job stranded by an interrupted process is reclaimed and recovered or failed (`recovery-matrix`; TM-031) | Critical gate 70/70 on fresh clones (TM-031) | TM-031 | — |
 | COS-078 | Sent-email discovery | CONS-7.34 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-079 | Inbound-reply discovery | CONS-7.35 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-080 | Email deduplication | CONS-7.38 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |

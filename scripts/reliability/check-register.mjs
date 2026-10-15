@@ -279,7 +279,7 @@ function selfTest(files) {
   expectFail('GREEN without evidence', {
     register: register.replace(/(\| ECS-011 \| [^|]*\| [^|]*\| [^|]*\| [^|]*\| 🟢 GREEN \| )[^|]*\|/, '$1 — |'),
   });
-  expectFail('total drift', { progress: progress.replace('Total 230/230', 'Total 229/230').replace('⚪ 169', '⚪ 168') });
+  expectFail('total drift', { progress: progress.replace('Total 230/230', 'Total 229/230').replace('⚪ 164', '⚪ 163') });
   expectFail('missing source requirement (inventory item unmapped)', {
     register: register.replace(/^\| CONS-7\.40 \|.*\n/m, ''),
   });
