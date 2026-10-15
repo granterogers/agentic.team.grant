@@ -39,6 +39,11 @@ export const EXTENDED: readonly Proof[] = [
     'a status question is answered from the conversation work as recorded: queued work is still underway, and failed work is no longer shown as underway',
   ),
   p(
+    'duplicate-while-stalled',
+    2,
+    'a repeat of work whose first attempt has stalled (lease lapsed) starts nothing; a repeat the matcher calls different work starts a new piece (the control)',
+  ),
+  p(
     'duplicate-after-completion',
     2,
     'a repeat of work that already completed is answered with its result and starts nothing; a repeat the matcher calls different work starts a new piece (the control)',
