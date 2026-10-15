@@ -49,6 +49,11 @@ export const EXTENDED: readonly Proof[] = [
     'a repeat of work whose first attempt has stalled (lease lapsed) starts nothing; a repeat the matcher calls different work starts a new piece (the control)',
   ),
   p(
+    'mail-paging',
+    4,
+    'the Gmail reader follows every page of a listing, stores a message that appears on two pages once, and reads one page when there is no next token (the control)',
+  ),
+  p(
     'duplicate-after-completion',
     2,
     'a repeat of work that already completed is answered with its result and starts nothing; a repeat the matcher calls different work starts a new piece (the control)',
