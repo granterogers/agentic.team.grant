@@ -15,15 +15,15 @@
  *   - the project it happens in,
  *   - who acts (`specialist`) and who it reaches (`audience`),
  *   - the inputs it acts on (`needs`),
- *   - the step's reason (`why`), which is what Grant reads when he agrees to it. Content, not wording
- *     trivia: an approval given to "email the caterer about the allergy" must not carry to "email the caterer
- *     about cancelling", even though both are the same capability with the same inputs,
+ *   - the step's reason (`why`) when the work reaches outside the office or Grant himself (DEC-014). There the
+ *     words are the content he agreed to: an approval given to "email the caterer about the allergy" must not carry
+ *     to "email the caterer about cancelling". Internal work does not bind its reason, so a planner that rewords the
+ *     same internal effect is not asked again,
  *   - when the step gives no reason at all, the request, because then the request is the only statement of the work.
  *
- * NOT part of the identity: the step's `id`. That is its position in one plan, and a regenerated plan renumbers
- * the same work. Removing the id is the proven part of the fix; the reason stays bound (DEC-011), so a planner
- * that rewords the reason is still asked once more. Making `why` canonical is a follow-up that needs evidence
- * of how plans are regenerated in production (COS-091).
+ * NOT part of the identity: the step's `id`, which is its position in one plan, and, for internal work, its reason.
+ * Removing the id was the first half of the fix (DEC-011). Binding no reason for internal work is the second (DEC-014).
+ * Making outside-facing reasons canonical is a follow-up that needs evidence of how plans are regenerated (COS-091).
  *
  * The LEGACY shape is the one written by every question raised before this module existed. It is still
  * consulted, so an approval given under it keeps matching. Nothing already answered is re-asked.
@@ -49,13 +49,19 @@ export interface StepApprovalContext {
 }
 
 /** The material scope of a step. This is what a new approval is recorded against. */
+/**
+ * Internal work (audience `office`) is bound to what it IS, not to how the planner described it. Its reason is
+ * prose that a regenerated plan rewords for the same effect, and the effect is reversible inside the office.
+ * Work that reaches somebody outside, or Grant himself, keeps its reason: there the words are the content he agreed
+ * to (DEC-014). A missing audience is treated as outside, so the conservative binding is the default.
+ */
 export const stepActionBinds = ({ step, projectId, request }: StepApprovalContext) => ({
   capability: step.capability,
   project: projectId,
   audience: step.audience,
   specialist: step.specialist,
   needs: [...step.needs],
-  why: step.why,
+  ...(step.audience === 'office' ? {} : { why: step.why }),
   ...(step.why.trim() === '' ? { request: request.slice(0, 400) } : {}),
 })
 

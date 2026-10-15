@@ -36,12 +36,22 @@ describe('a regenerated plan that says the same work again', () => {
     )
   })
 
-  it('a reworded reason is still asked once more, because the reason is what Grant agrees to (DEC-011)', async () => {
+  it('a reworded reason for INTERNAL work keeps its approval: the same effect, described differently (DEC-014)', async () => {
     expect(
       await stepActionFingerprint(
         withStep({ why: 'Draft the summary so the replies can be compared' }),
       ),
-    ).not.toBe(await stepActionFingerprint(base))
+    ).toBe(await stepActionFingerprint(base))
+  })
+
+  it('a reworded reason for work that REACHES OUTSIDE is asked again: the words are what he agreed to (DEC-014)', async () => {
+    const outside = withStep({ audience: 'outside' })
+    expect(
+      await stepActionFingerprint({
+        ...outside,
+        step: { ...outside.step, why: 'Send the summary to the venue' },
+      }),
+    ).not.toBe(await stepActionFingerprint(outside))
   })
 
   it('keeps the same approval identity when the request wording changes but the step has a reason', async () => {
@@ -104,8 +114,19 @@ describe('the legacy shape keeps matching what was already asked', () => {
     expect(await stepLegacyFingerprint(base)).not.toBe(await stepActionFingerprint(base))
   })
 
-  it('the approval identity carries no planner position: the step id is not in it', () => {
+  it('internal work binds no planner position or reason: neither the step id nor the why is in it', () => {
     const binds = stepActionBinds(base) as Record<string, unknown>
+    expect(Object.keys(binds).sort()).toEqual([
+      'audience',
+      'capability',
+      'needs',
+      'project',
+      'specialist',
+    ])
+  })
+
+  it('outside work binds its reason as well, and still never the step id', () => {
+    const binds = stepActionBinds(withStep({ audience: 'outside' })) as Record<string, unknown>
     expect(Object.keys(binds).sort()).toEqual([
       'audience',
       'capability',
@@ -116,9 +137,15 @@ describe('the legacy shape keeps matching what was already asked', () => {
     ])
   })
 
-  it('an approval given to one reason does not carry to a different reason for the same capability', async () => {
-    const cancel = withStep({ why: 'Email the caterer about cancelling the order' })
-    const allergy = withStep({ why: 'Email the caterer about the allergy list' })
+  it('an approval given to one reason does not carry to a different reason for outside work', async () => {
+    const cancel = withStep({
+      audience: 'outside',
+      why: 'Email the caterer about cancelling the order',
+    })
+    const allergy = withStep({
+      audience: 'outside',
+      why: 'Email the caterer about the allergy list',
+    })
     expect(await stepActionFingerprint(cancel)).not.toBe(await stepActionFingerprint(allergy))
   })
 })

@@ -84,6 +84,11 @@ Two claims in the first pass were checked against the code before any fix, as th
 - **F8 — the approval identity included the planner's step id and reason.** `perform.ts` fingerprinted `step.id`, so a renumbered plan no longer matched an approval given earlier. The id is now excluded (DEC-011). The reason stays bound, because it is part of what Grant agrees to.
 - **F9 — every plan task went to Grant's personal list.** `task.create` called `app.my_task_add` whatever the step's audience or specialist. Confirmed in code. Fixed by `src/agents/task-home.ts` and the writer call in `perform.ts`. Proof: `scripts/isolated/task-owner-writes.ts`.
 
+### C3 — F3 resolved by design, not a defect (priority pass)
+- The button carries the job's correlation, but the press does not resolve through it. Each question's delivery stores its own `blocker_id` when the message is sent. `app.approval_for_delivery` returns that stored id. The fallback to "the job's only question" applies only to messages from before `delivery.bindings_from`, and only when the job had exactly one question. Otherwise it returns null and the press is refused.
+- So a press answers the question on the message it was pressed on. Proof: `scripts/isolated/approval-delivery.ts` passes 9/9 against the replica (question reaches him once, retry, answered on another surface is not asked again).
+- **Replica debris:** that proof first failed with "could not take the fixture job". Earlier proofs had left 81 queued real-turn jobs, and the proof's dequeue takes the oldest queued job (#184). Cancelling those on the disposable replica made it pass. This is a harness coupling, not a product defect. Proofs should clear their own queue or own their jobs.
+
 ### Still unverified
 - F3 (the button carries no approval identity, so a press resolves through the message) is still a hypothesis. It needs production blocker and delivery rows, or a replica test that drives a press through `telegram.ts` and `callbacks.ts`.
 - F4 (three raises of one stop) is now explained by F7 and F8 in code. Its production occurrence is not confirmed.

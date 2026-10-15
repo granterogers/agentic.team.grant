@@ -61,6 +61,13 @@ Append-only. A decision is changed by adding a new entry that supersedes an earl
 - **Follow-up:** canonicalise `why` only after production evidence shows how plans are regenerated (COS-091). Do not do it on guesswork.
 - **Legacy:** questions written before this change were fingerprinted with the id and reason too. `stepLegacyBinds` keeps that shape, so an approval given under it still matches. The pre-0611 shape is no longer consulted. An approval given only under that old shape will be asked again, once. That is the safe direction.
 
+## DEC-014 — Internal work does not bind its reason; outside work does
+- **Date:** 15 October 2026 (priority pass)
+- **Decision:** An approval for a step whose audience is `office` is bound to capability, project, specialist, audience and inputs. Its reason is not bound. A step whose audience is `outside` or `grant`, or has no audience, keeps its reason in the identity.
+- **Why:** DEC-011 kept the reason for every step, which re-asked Grant when a planner reworded the same internal effect. That is the harmless re-ask the brief asked to remove. The consent boundary still holds where the words are the content: an email to an outside party, or work for Grant himself.
+- **Risk accepted:** an internal step whose reason changes while its capability, inputs and specialist stay the same is covered by the earlier yes. Internal writes are reversible within the office (undo exists), and an external effect cannot be covered this way.
+- **Tests:** `tests/reliability/step-approval.test.ts` (outside reason re-asked; internal reason not re-asked).
+
 ## DEC-012 — Plan tasks have an owner: the specialist, or the Chief of Staff
 - **Date:** 15 October 2026 (implementation pass)
 - **Decision:** A plan task is a project task owned by the step's specialist, or by `chief-of-staff` when none is named. It is on Grant's personal list only when the step's audience is `grant`, or when the plan has no project.
