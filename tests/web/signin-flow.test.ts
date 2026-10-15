@@ -111,12 +111,23 @@ describe('the decision about a returning address', () => {
     expect(flow.pending(store, NOW)).toHaveLength(1)
   })
 
-  it('a pending flow does not make a token WITHOUT its nonce adoptable', () => {
+  // OWNER DECISION (15 October 2026, single-person office): a return that lost its flow marker in transit is adopted
+  // against the newest pending link this browser asked for. The trade-off is that an attacker's link opened in a
+  // browser that has a request of its own pending is accepted. The control below is the one that must still hold.
+  it('a token WITHOUT a flow marker is adopted only against this browser’s newest pending link, once', () => {
     const store = memory()
     started(store)
     const d = flow.decide({ hash: frag(TOKENS), search: '', store, now: NOW })
+    expect(d.session).not.toBeNull()
+    expect(flow.pending(store, NOW)).toHaveLength(0)
+    expect(flow.decide({ hash: frag(TOKENS), search: '', store, now: NOW }).session).toBeNull()
+  })
+
+  it('a token WITHOUT a flow marker is refused when this browser has no pending link', () => {
+    const store = memory()
+    const d = flow.decide({ hash: frag(TOKENS), search: '', store, now: NOW })
     expect(d.session).toBeNull()
-    expect(flow.pending(store, NOW)).toHaveLength(1)
+    expect(d.problem).not.toBe('')
   })
 
   it('an expired flow is refused', () => {
