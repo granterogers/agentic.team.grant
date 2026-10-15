@@ -58,9 +58,17 @@ if (Number(migrated.n) !== 1) {
     // The controls: a live project and a paused one still take work, exactly as before.
     for (const state of ['active', 'paused']) {
       const task = await attempt(state, 'task')
-      check(`a ${state} project takes a task (control)`, task.includes('"ok": true') || task.includes('"ok":true'), task.slice(0, 80))
+      check(
+        `a ${state} project takes a task (control)`,
+        task.includes('"ok": true') || task.includes('"ok":true'),
+        task.slice(0, 80),
+      )
       const event = await attempt(state, 'event')
-      check(`a ${state} project takes an event (control)`, event.includes('"ok": true') || event.includes('"ok":true'), event.slice(0, 80))
+      check(
+        `a ${state} project takes an event (control)`,
+        event.includes('"ok": true') || event.includes('"ok":true'),
+        event.slice(0, 80),
+      )
     }
 
     // The refusals: every state that is not live refuses work, and says why.
@@ -68,13 +76,17 @@ if (Number(migrated.n) !== 1) {
       const task = await attempt(state, 'task')
       check(
         `a ${state} project refuses a task`,
-        task.includes('no active project') && !task.includes('"ok": true') && !task.includes('"ok":true'),
+        task.includes('no active project') &&
+          !task.includes('"ok": true') &&
+          !task.includes('"ok":true'),
         task.slice(0, 100),
       )
       const event = await attempt(state, 'event')
       check(
         `a ${state} project refuses an event`,
-        event.includes('no active project') && !event.includes('"ok": true') && !event.includes('"ok":true'),
+        event.includes('no active project') &&
+          !event.includes('"ok": true') &&
+          !event.includes('"ok":true'),
         event.slice(0, 100),
       )
     }
