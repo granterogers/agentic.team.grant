@@ -18,7 +18,11 @@ export const insertsWithoutOffice = (source: string, tables: readonly string[]):
   const bare = source.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
   const hits: string[] = []
   for (const t of tables) {
-    const re = new RegExp(`insert\\s+into\\s+(?:public\\.)?${t}\\b\\s*(\\([^)]*\\))?`, 'gi')
+    // An optional alias (`insert into public.t as s (office_id, ...)`) sits between the table and its column list.
+    const re = new RegExp(
+      `insert\\s+into\\s+(?:public\\.)?${t}\\b(?:\\s+as\\s+\\w+)?\\s*(\\([^)]*\\))?`,
+      'gi',
+    )
     for (const m of bare.matchAll(re)) {
       if (m[1] === undefined || !/office_id/i.test(m[1])) hits.push(t)
     }
@@ -36,7 +40,21 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     'insert into public.signals (office_id, source) values (1, 2)',
     ['signals'],
   )
-  if (bad.length !== 1 || good.length !== 0) {
+  // The aliased forms, which the writers in migrations 0990 and 1020 use: a named office is still a named office.
+  const aliasedBad = insertsWithoutOffice(
+    'insert into public.signals as s (source, event_type) values (1, 2)',
+    ['signals'],
+  )
+  const aliasedGood = insertsWithoutOffice(
+    'insert into public.signals as s (office_id, source) values (1, 2)',
+    ['signals'],
+  )
+  if (
+    bad.length !== 1 ||
+    good.length !== 0 ||
+    aliasedBad.length !== 1 ||
+    aliasedGood.length !== 0
+  ) {
     console.log(
       'FAIL the predicate cannot tell a writer that names its office from one that does not',
     )
