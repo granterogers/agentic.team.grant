@@ -144,7 +144,7 @@ for (let round = 0; round < 3 && response.status === 400; round += 1) {
           'x-vercel-digest': s,
           'Content-Length': String(body.length),
         },
-        body,
+        body: new Uint8Array(body),
       })
       if (up.ok) break
       if (attempt === 4) throw new Error(`upload of ${s} failed: http ${String(up.status)}`)

@@ -45,7 +45,10 @@ function fakeSupabase() {
       const path = decodeURI(rest.slice('files/'.length))
       const bytes = objects.get(path)
       if (!bytes) return new Response('not found', { status: 404 })
-      return new Response(bytes, { status: 200, headers: { 'content-type': 'text/plain' } })
+      return new Response(new Uint8Array(bytes), {
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+      })
     }
     return new Response('unexpected', { status: 500 })
   }) as typeof fetch

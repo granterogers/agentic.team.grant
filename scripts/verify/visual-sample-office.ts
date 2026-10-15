@@ -177,7 +177,7 @@ for (const [mode, stored] of MODES.filter(([m]) => onlyMode === undefined || m =
         // A transport failure ("upstream request failed") is the request path answering, not the screen: retried the same way.
         where.backendFailed = where.backendFailed || where.transportFailed
         if (!where.backendFailed || attempts > BACKEND_RETRY_MS.length) break
-        console.log(`  backend did not answer: ${mode} ${device} ${name} (attempt ${attempts}), waiting ${BACKEND_RETRY_MS[attempts - 1] / 1000}s`)
+        console.log(`  backend did not answer: ${mode} ${device} ${name} (attempt ${attempts}), waiting ${(BACKEND_RETRY_MS[attempts - 1] ?? 0) / 1000}s`)
         await new Promise((ok) => setTimeout(ok, BACKEND_RETRY_MS[attempts - 1]))
       }
       const scan = JSON.parse((await page.evaluate(SCAN)) as string) as Record<string, unknown>

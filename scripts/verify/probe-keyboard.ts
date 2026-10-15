@@ -34,7 +34,9 @@ try {
   // The note's box is on its grip's parent; measure the note itself.
   const noteBox = () =>
     page.evaluate(() => {
-      const el = document.querySelector<HTMLElement>('[data-bc-note-grip]')?.closest<HTMLElement>('.bcpostit')
+      const el = document
+        .querySelector<HTMLElement>('[data-bc-note-grip]')
+        ?.closest<HTMLElement>('.bcpostit')
       if (!el) return null
       const r = el.getBoundingClientRect()
       return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]

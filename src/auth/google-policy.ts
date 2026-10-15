@@ -67,7 +67,7 @@ function fromB64url(text: string): Uint8Array {
 async function hmacKey(secret: Uint8Array) {
   return await globalThis.crypto.subtle.importKey(
     'raw',
-    secret,
+    new Uint8Array(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign', 'verify'],
@@ -115,7 +115,7 @@ export async function verifyState(
   const valid = await globalThis.crypto.subtle.verify(
     'HMAC',
     await hmacKey(secret),
-    macBytes,
+    new Uint8Array(macBytes),
     enc.encode(payload),
   )
   if (!valid) return { ok: false, reason: 'bad signature' }
