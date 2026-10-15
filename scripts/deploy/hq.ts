@@ -98,6 +98,45 @@ form.append(
   }),
 )
 
+// The standard-format export (#470): the serialisers and the route's choices, uploaded beside the entrypoint as
+// ./formats.ts and ./export-route.ts. export-route.ts imports ./formats.ts, so both travel together.
+form.append(
+  'file',
+  new File([await readFile('src/portability/formats.ts', 'utf8')], 'formats.ts', {
+    type: 'application/typescript',
+  }),
+)
+form.append(
+  'file',
+  new File([await readFile('src/portability/export-route.ts', 'utf8')], 'export-route.ts', {
+    type: 'application/typescript',
+  }),
+)
+// The project archive (#471, C2): the ZIP reader and writer, uploaded beside the entrypoint as ./archive.ts.
+form.append(
+  'file',
+  new File([await readFile('src/portability/archive.ts', 'utf8')], 'archive.ts', {
+    type: 'application/typescript',
+  }),
+)
+// The original files of archived documents (#471, migration 1072): the object store and its helpers, beside the entrypoint.
+// object-store.ts imports ./store.ts, so both travel together.
+for (const [src, name] of [
+  ['src/files/object-store.ts', 'object-store.ts'],
+  ['src/files/store.ts', 'store.ts'],
+  ['src/portability/originals.ts', 'originals.ts'],
+  ['src/files/policy.ts', 'policy.ts'],
+  ['src/files/links.ts', 'links.ts'],
+  // Project sets (#471, item 5): a project larger than one archive is carried in parts (set-store imports parts and originals).
+  ['src/portability/parts.ts', 'parts.ts'],
+  ['src/portability/set-store.ts', 'set-store.ts'],
+] as const) {
+  form.append(
+    'file',
+    new File([await readFile(src, 'utf8')], name, { type: 'application/typescript' }),
+  )
+}
+
 const deployed = await fetch(`${api}/functions/deploy?slug=hq-api`, {
   method: 'POST',
   headers: { Authorization: `Bearer ${supabaseToken}` },

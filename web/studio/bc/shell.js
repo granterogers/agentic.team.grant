@@ -34,6 +34,7 @@ import * as menu from './menu.js'
 import { PROJECTS, SOURCE_STATE, source } from '../data.js'
 import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
+import * as identity from './identity.js'
 import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
 import * as cal from './calendar.js'
@@ -329,7 +330,11 @@ const menuPanel = () => {
   const firstRunShown = projects.length === 0 && source.live === true && mine && state().view === 'home'
   /* Always in the page, hidden until opened: the button's aria-controls always names something that exists. */
   return `<div class="bcmenupanel" id="bc-menu" role="${menu.isMaking() ? 'dialog' : 'menu'}" aria-label="${menu.isMaking() ? 'New project' : 'Projects and navigation'}"${menu.isOpen() ? '' : ' hidden'}>
-    <p class="bcmenuhead">Projects</p>
+    <div class="bcmenuprojgroup">
+    <button type="button" class="bcmenuprojects" aria-expanded="${menu.projectsExpanded() ? 'true' : 'false'}" aria-controls="bc-menu-projects" data-bc-menu-projects>
+      <span class="bcmenuhead">Projects</span><span class="bcmenucount" aria-label="${projects.length} projects">${projects.length}</span><span class="bcmenuchev" aria-hidden="true">${menu.projectsExpanded() ? '−' : '+'}</span>
+    </button>
+    <div id="bc-menu-projects" class="bcmenuprojectlist${menu.projectsExpanded() ? '' : ' is-collapsed'}">
     ${
       projects.length === 0
         ? `<p class="bcmenunone">${source.state === 'unreachable' ? 'Your projects could not be loaded.' : 'No projects yet.'}</p>`
@@ -346,6 +351,8 @@ const menuPanel = () => {
             )
             .join('')}</div>`
     }
+    </div>
+    </div>
     ${
       firstRunShown
         ? ''
@@ -357,6 +364,15 @@ const menuPanel = () => {
               </button>`
           : `<button type="button" role="menuitem" class="bcmenuitem bcmenucreate" data-bc-signin-first disabled
               title="Sign in to create a project"><span class="bcmenuplus" aria-hidden="true">+</span><span class="bcmenuname">Create project (sign in first)</span></button>`
+    }
+    ${
+      mine
+        ? `<button type="button" role="menuitem" class="bcmenuitem bcmenurestore" data-bc-menu-restore>
+             <span class="bcmenuplus" aria-hidden="true">↑</span><span class="bcmenuname">Restore a project from an archive</span>
+           </button>
+           <input type="file" accept=".zip,application/zip" multiple hidden data-bc-restore-file aria-label="Archive to restore, or every part of a project set">
+           <p class="bcmenunone" role="status" aria-live="polite" data-bc-restore-said>${esc(compose.restoreSaid())}</p>`
+        : ''
     }
     ${
       here === null
@@ -3891,6 +3907,17 @@ const notLive = () => {
     return `<div class="bcnotlive bcnotlive--bad" role="status">
       <b>You're offline</b>
       <span>What you see was current when the connection dropped. Changes can't reach the office until it's back.</span>
+    </div>`
+  }
+  /*
+    A restore the office refused because the browser is no longer signed in (#471). It is said here, whatever the state,
+    because the sign-out that caused it has already redrawn the project menu where a restore sentence would have been.
+  */
+  const refused = compose.restoreRefused()
+  if (refused !== '') {
+    return `<div class="bcnotlive bcnotlive--bad" role="alert" data-bc-restore-refused>
+      <b>Your archive was not restored</b>
+      <span>${esc(refused)}</span>
     </div>`
   }
   if (source.live === true) return ''

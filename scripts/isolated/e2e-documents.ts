@@ -154,15 +154,6 @@ try {
       word: W.md,
     },
     {
-      label: 'html',
-      name: 'page.html',
-      mime: 'text/html',
-      bytes: enc(
-        `<html><script>var x="${W.secret}"</script><body><p>Visible ${W.html} text</p></body></html>`,
-      ),
-      word: W.html,
-    },
-    {
       label: 'docx',
       name: 'report.docx',
       mime: DOCX_MIME,
@@ -191,6 +182,40 @@ try {
     },
     { label: 'long', name: 'long.txt', mime: 'text/plain', bytes: enc(long), word: W.tail },
   ]
+  /*
+    HTML is stored like any other file. The owner accepts any type (15 October 2026), so a stored page is served back under its own
+    content type when opened from a signed link: that risk is accepted, and this proof checks only what is indexed.
+  */
+  const page = await upload(
+    SA,
+    pA,
+    'page.html',
+    'text/html',
+    enc(
+      `<html><script>var x="${W.secret}"</script><body><p>Visible ${W.html} text</p></body></html>`,
+    ),
+  )
+  check(
+    'html: stored and filed like any other file (the owner accepts any type, 15 October 2026)',
+    page.status === 200 && page.id !== '' && page.searchable === true,
+    `http ${String(page.status)} searchable=${String(page.searchable)} why=${String(page.why ?? page.error ?? '')}`,
+  )
+  const pageRows = await one(
+    `select content from public.documents where document_id = ${lit(page.id)}::uuid`,
+  )
+  check(
+    'html: <script> content is not indexed, visible text is',
+    !String(pageRows.content).includes(W.secret) && String(pageRows.content).includes(W.html),
+    String(pageRows.content).slice(0, 60),
+  )
+  const pageNamed = await one(
+    `select count(*)::int as n from public.documents where title = 'page.html'`,
+  )
+  check(
+    'html: one document row exists for the stored file',
+    Number(pageNamed.n) === 1,
+    `rows=${String(pageRows.n)}`,
+  )
   const idOf: Record<string, string> = {}
   for (const f of files) {
     const r = await upload(SA, pA, f.name, f.mime, f.bytes)
@@ -287,14 +312,6 @@ try {
       tx.has_search === true,
     String(tx.content).slice(0, 60),
   )
-  const htmlRow = await one(
-    `select content from public.documents where document_id = ${lit(idOf.html ?? '')}::uuid`,
-  )
-  check(
-    'html: <script> content is not indexed, visible text is',
-    !String(htmlRow.content).includes(W.secret) && String(htmlRow.content).includes(W.html),
-    String(htmlRow.content).slice(0, 60),
-  )
   const chunks = await one(
     `select count(*)::int as n, count(*) filter (where state = 'active')::int as active from public.document_chunks where document_id = ${lit(idOf.long ?? '')}::uuid`,
   )
@@ -330,7 +347,7 @@ try {
   const lastPassage = viaRetrieve.find((h) => h.documentId === idOf.long)
   check(
     'the real retrieve(): a fact at the END of a long file is found and the excerpt shown carries it',
-    lastPassage !== undefined && lastPassage.excerpt.includes(W.tail),
+    lastPassage?.excerpt.includes(W.tail) === true,
     lastPassage === undefined
       ? 'not found'
       : `excerpt ${String(lastPassage.excerpt.length)} chars, passage ${JSON.stringify(lastPassage.passage ?? null)}`,

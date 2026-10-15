@@ -145,8 +145,10 @@ describe('the deploy carries the shared check', () => {
   it('the signin bundle is closed and includes src/auth/redirect-target.ts', async () => {
     const { prepareBundle } = await import('../../scripts/deploy/lib/bundle.ts')
     const prepared = await prepareBundle('signin', 'supabase/functions/signin/index.ts')
+    // The property, not a count: the bundle carries every module the entrypoint reaches. A count went red the day
+    // password sign-in added a module that the entrypoint correctly imports.
     expect([...prepared.files.keys()]).toContain('src/auth/redirect-target.ts')
-    expect(prepared.files.size).toBe(2)
+    expect([...prepared.files.keys()]).toContain('src/auth/password.ts')
   })
 })
 

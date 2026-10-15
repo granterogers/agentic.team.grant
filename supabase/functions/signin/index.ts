@@ -54,6 +54,18 @@
  * has already proved they own the mailbox.
  */
 
+import { googleOffered, googleStartPlan } from '../../../src/auth/google-flow.ts'
+import {
+  NOT_SWITCHED_ON,
+  normaliseEmail,
+  passwordProblem,
+  passwordSessionFrom,
+  passwordSignInEnabled,
+  RESET_SENT,
+  SIGN_IN_REFUSED,
+  SIGN_UP_SENT,
+  UNAVAILABLE,
+} from '../../../src/auth/password.ts'
 import { safeRedirectTarget } from '../../../src/auth/redirect-target.ts'
 
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -394,6 +406,112 @@ Deno.serve(async (request: Request): Promise<Response> => {
       200,
       request,
     )
+  }
+
+  /*
+    PASSWORD SIGN-IN (#466, A1). Off unless the deployment sets PASSWORD_SIGN_IN to 1 or true: every action below answers
+    "not switched on" until then, and `methods` is how the page learns which to show. Auth checks the password; the
+    decisions (policy, address shape, what a session is, what a refusal says) live in src/auth/password.ts.
+
+    Every answer that could reveal whether an address has an account is the same sentence. The one exception is a 422
+    from Auth for a weak password, which says nothing about the address and is passed on as a sentence of its own.
+  */
+  /*
+    GOOGLE (#467). The office decides whether Google is offered and builds the provider address; the page only asks.
+    The return carries the browser's own flow nonce, so the session is adopted only in the browser that started it (the
+    same rule as a link). Off until the owner enables it, and the refusal names why.
+  */
+  if (action === 'google_start') {
+    const plan = googleStartPlan({
+      switchedOn: googleOffered(Deno.env.get('GOOGLE_SIGN_IN')),
+      authorizeBase: DB_URL,
+      back: String(body.back ?? ''),
+      allowedOrigins: ALLOWED_ORIGINS,
+      nonce: String(body.nonce ?? ''),
+    })
+    return json(
+      plan.ok ? { ok: true, url: plan.url } : { ok: false, said: plan.said },
+      200,
+      request,
+    )
+  }
+
+  if (action === 'methods') {
+    return json(
+      {
+        ok: true,
+        password: passwordSignInEnabled(Deno.env.get('PASSWORD_SIGN_IN')),
+        google: googleOffered(Deno.env.get('GOOGLE_SIGN_IN')),
+      },
+      200,
+      request,
+    )
+  }
+
+  if (
+    action === 'password_sign_in' ||
+    action === 'password_sign_up' ||
+    action === 'password_reset'
+  ) {
+    if (!passwordSignInEnabled(Deno.env.get('PASSWORD_SIGN_IN'))) {
+      return json({ ok: false, said: NOT_SWITCHED_ON }, 404, request)
+    }
+    const email = normaliseEmail(String(body.email ?? ''))
+    if (email === null)
+      return json({ ok: false, said: 'That does not look like an email address.' }, 400, request)
+
+    if (action === 'password_reset') {
+      const asked = await upstream(`${DB_URL}/auth/v1/recover`, {
+        method: 'POST',
+        headers: { apikey: ANON, 'content-type': 'application/json' },
+        body: JSON.stringify({ email }),
+      }).catch(() => null)
+      if (asked === null || asked.status >= 500)
+        return json({ ok: false, said: UNAVAILABLE }, 503, request)
+      return json({ ok: true, said: RESET_SENT }, 200, request)
+    }
+
+    const password = String(body.password ?? '')
+    if (action === 'password_sign_up') {
+      const problem = passwordProblem(password, email)
+      if (problem !== null) return json({ ok: false, said: problem }, 400, request)
+      const made = await upstream(`${DB_URL}/auth/v1/signup`, {
+        method: 'POST',
+        headers: { apikey: ANON, 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      }).catch(() => null)
+      if (made === null || made.status >= 500)
+        return json({ ok: false, said: UNAVAILABLE }, 503, request)
+      if (made.status === 422) {
+        return json(
+          { ok: false, said: 'That password is not strong enough for this office.' },
+          400,
+          request,
+        )
+      }
+      return json({ ok: true, said: SIGN_UP_SENT }, 200, request)
+    }
+
+    // password_sign_in
+    if (password === '') return json({ ok: false, said: SIGN_IN_REFUSED }, 400, request)
+    const signed = await upstream(`${DB_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { apikey: ANON, 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    }).catch(() => null)
+    if (signed === null || signed.status >= 500)
+      return json({ ok: false, said: UNAVAILABLE }, 503, request)
+    if (signed.status === 429) {
+      return json(
+        { ok: false, said: 'Too many attempts. Wait a few minutes and try again.' },
+        429,
+        request,
+      )
+    }
+    if (!signed.ok) return json({ ok: false, said: SIGN_IN_REFUSED }, 400, request)
+    const session = passwordSessionFrom(await signed.json(), Date.now())
+    if (session === null) return json({ ok: false, said: UNAVAILABLE }, 503, request)
+    return json({ ok: true, session }, 200, request)
   }
 
   if (action === 'refresh') {

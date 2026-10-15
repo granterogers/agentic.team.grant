@@ -316,9 +316,139 @@ export async function readFile(section, id, extra) {
   if (!r.ok) {
     const answered = await r.json().catch(() => ({}))
     const said = typeof answered?.error === 'string' ? answered.error.trim() : ''
-    throw new Error(said === '' ? `The server returned ${r.status}` : said)
+    // The office says when a project is too large for one archive, so the page offers the set instead of guessing from words.
+    throw Object.assign(new Error(said === '' ? `The server returned ${r.status}` : said), {
+      useSet: answered?.use_set === true,
+    })
   }
   return await r.blob()
+}
+
+/*
+  A PROJECT LARGER THAN ONE ARCHIVE (#471, item 5). The office describes the set (its key, the export id and the parts), then
+  serves each part on its own. The page saves each part as it arrives, so it never holds more than one part.
+*/
+export async function readArchiveSetIndex(projectId) {
+  refuseUnconfigured()
+  const r = await bounded(
+    'office:archive-set',
+    `${API}?section=project_archive&id=${encodeURIComponent(projectId)}&set=index`,
+    { headers: { Authorization: `Bearer ${await toPresent()}` } },
+    60_000,
+  )
+  if (r.status === 401) {
+    session.forget()
+    token.clear()
+    throw new Error('You are not signed in any more.')
+  }
+  const answered = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(typeof answered?.error === 'string' ? answered.error : `The server returned ${r.status}`)
+  return answered.data
+}
+
+export async function readArchiveSetPart(projectId, set, cache, number) {
+  refuseUnconfigured()
+  const r = await bounded(
+    `office:archive-part:${String(number)}`,
+    `${API}?section=project_archive&id=${encodeURIComponent(projectId)}&set=${encodeURIComponent(set)}&cache=${encodeURIComponent(cache)}&part=${String(number)}`,
+    { headers: { Authorization: `Bearer ${await toPresent()}` } },
+    120_000,
+  )
+  if (!r.ok) {
+    const answered = await r.json().catch(() => ({}))
+    throw new Error(typeof answered?.error === 'string' ? answered.error : `The server returned ${r.status}`)
+  }
+  return await r.blob()
+}
+
+/*
+  RESTORE A PROJECT FROM ITS ARCHIVE (#471, C2). The file is sent as the body, not as JSON, so the office can open and
+  check it before anything is written. The office answers with the new project and a report of what was restored and
+  what the archive does not carry. A repeat of the same file answers with the first result and writes nothing.
+*/
+export async function restoreArchive(file) {
+  refuseUnconfigured()
+  const began = session.epoch()
+  const r = await bounded(
+    'office:restore',
+    `${API}?section=project_restore`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${await toPresent()}`, 'content-type': 'application/zip' },
+      body: file,
+    },
+    120_000,
+  )
+  if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
+  if (r.status === 401) {
+    session.forget()
+    token.clear()
+    // Marked so the page says it in words that survive the sign-out (bc/compose.js setRestoreRefused).
+    throw Object.assign(new Error('You are no longer signed in, so nothing was restored. Sign in again, then choose the archive again.'), { signedOut: true })
+  }
+  const answered = await r.json().catch(() => ({}))
+  if (!r.ok) {
+    const said = typeof answered?.error === 'string' ? answered.error.trim() : ''
+    throw new Error(said === '' ? `The server returned ${r.status}` : said)
+  }
+  return answered.data
+}
+
+/*
+  RESTORE A PROJECT SET (#471, item 5). The parts are sent in order, each on its own request, then one commit creates the
+  project. If any step is refused, the set is abandoned, so the office keeps nothing from a set that did not finish.
+  `parts` are { set, number, of, file } objects, already checked to belong to one set and to be complete.
+*/
+export async function restoreArchiveSet(parts, onProgress = () => {}) {
+  refuseUnconfigured()
+  const began = session.epoch()
+  const set = parts[0]?.set ?? ''
+  const headers = { Authorization: `Bearer ${await toPresent()}`, 'content-type': 'application/zip' }
+  const step = async (url, init) => {
+    const r = await bounded('office:restore-set', url, init, 120_000)
+    if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
+    if (r.status === 401) {
+      session.forget()
+      token.clear()
+      throw Object.assign(new Error('You are no longer signed in, so nothing was restored. Sign in again, then choose the archive again.'), { signedOut: true })
+    }
+    return r
+  }
+  try {
+    for (const part of parts) {
+      onProgress(`Restoring part ${String(part.number)} of ${String(part.of)}…`)
+      const r = await step(`${API}?section=project_restore&set=${set}&part=${String(part.number)}`, {
+        method: 'POST',
+        headers,
+        body: part.file,
+      })
+      if (!r.ok) {
+        const answered = await r.json().catch(() => ({}))
+        throw new Error(typeof answered?.error === 'string' ? answered.error : `The server returned ${r.status}`)
+      }
+    }
+    onProgress('Creating the project…')
+    const committed = await step(`${API}?section=project_restore&set=${set}&commit=1`, {
+      method: 'POST',
+      headers: { Authorization: headers.Authorization, 'content-type': 'application/zip' },
+      body: new Uint8Array(0),
+    })
+    const answered = await committed.json().catch(() => ({}))
+    if (!committed.ok) {
+      throw new Error(typeof answered?.error === 'string' ? answered.error : `The server returned ${committed.status}`)
+    }
+    return answered.data
+  } catch (error) {
+    // Anything refused leaves nothing: the set is discarded, unless the restore itself was not refused by the office.
+    if (error?.signedOut !== true) {
+      await bounded('office:restore-set-abandon', `${API}?section=project_restore&set=${set}&abandon=1`, {
+        method: 'POST',
+        headers,
+        body: new Uint8Array(0),
+      }).catch(() => undefined)
+    }
+    throw error
+  }
 }
 
 /**

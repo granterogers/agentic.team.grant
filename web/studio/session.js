@@ -43,7 +43,7 @@
 */
 
 import { HQ_API as API, SIGNIN as ENDPOINT } from './backend.js'
-import { begin as beginFlow, decide, returnAddress } from './flow.js'
+import { begin as beginFlow, decide, KIND_GOOGLE, KIND_LINK, kindOf, returnAddress } from './flow.js'
 import { bounded, note, unreachable } from './net.js'
 
 const KEY = 'hq.session'
@@ -137,11 +137,14 @@ export const adopt = () => {
   } catch {
     flows = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
   }
+  // The return is judged as the kind of flow it names: a link, or a Google sign-in this browser started (#467).
+  const asked = new URLSearchParams(window.location.search).get('flow') ?? ''
   const decided = decide({
     hash: window.location.hash,
     search: window.location.search,
     store: flows,
     now: Date.now(),
+    kind: kindOf(flows, asked, Date.now()) ?? KIND_LINK,
   })
   if (!decided.touched) return false
   window.history.replaceState(null, '', `${window.location.pathname}${decided.search}`)
@@ -272,6 +275,36 @@ export async function startSample() {
   return true
 }
 
+/*
+  PASSWORD SIGN-IN (#466, A1). The office decides whether it is switched on; the page only asks. A sign-in that
+  succeeds stores the same session a link sign-in does, so everything after it is unchanged. Every refusal is the
+  sentence the office sent, and the office sends the same sentence for an unknown address and a wrong password.
+*/
+
+/** Whether this deployment offers a password. Any failure reads as "no", so the link path is never hidden by an outage. */
+export async function passwordOffered() {
+  try {
+    const { body } = await post({ action: 'methods' })
+    return body.password === true
+  } catch {
+    return false
+  }
+}
+
+/** Sign in with an address and a password. Resolves when the session is held; throws the office's sentence otherwise. */
+export async function passwordSignIn(email, password) {
+  const { body } = await post({ action: 'password_sign_in', email, password })
+  if (body.ok === true && body.session !== undefined && write(body.session)) return true
+  throw new Error(String(body.said ?? 'Sign-in is not reachable just now. Try again shortly.'))
+}
+
+/** Ask for a link to choose a new password. It answers the same way for any address. */
+export async function passwordReset(email) {
+  const { body } = await post({ action: 'password_reset', email })
+  if (body.ok !== true) throw new Error(String(body.said ?? 'The reset could not be asked just now. Try again shortly.'))
+  return String(body.said)
+}
+
 /** Ask the office to email a link. It answers the same way for any address. */
 export async function askForLink(email) {
   /*
@@ -299,6 +332,42 @@ export async function askForLink(email) {
     throw new Error(String(body.said ?? 'The link could not be sent just now. Try again shortly.'))
   }
   return String(body.said ?? 'Check your email for a link to sign in.')
+}
+
+/**
+ * Whether this deployment offers Google (#467). Off unless the owner has switched it on; any failure reads as "no", so
+ * the other ways in are never hidden by an outage.
+ */
+export async function googleOffered() {
+  try {
+    const { body } = await post({ action: 'methods' })
+    return body.google === true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Start a Google sign-in. This browser remembers its flow (the same binding a link uses), the office gives back the
+ * provider's address, and the browser is sent there. Throws the sentence the office sent when there is no address.
+ */
+export async function googleStart() {
+  let nonce = ''
+  try {
+    nonce = beginFlow(localStorage, { kind: KIND_GOOGLE }, Date.now(), crypto.getRandomValues(new Uint8Array(24)))
+  } catch {
+    nonce = ''
+  }
+  if (nonce === '') {
+    throw new Error('This browser is blocking the storage sign-in needs. Allow site data for this page and try again.')
+  }
+  const back = returnAddress(window.location.origin, window.location.pathname, nonce)
+  const { body } = await post({ action: 'google_start', back, nonce })
+  if (body.ok !== true || typeof body.url !== 'string') {
+    throw new Error(String(body.said ?? 'Google sign-in is not reachable just now. Try again shortly.'))
+  }
+  window.location.assign(body.url)
+  return true
 }
 
 /** Who the office thinks this is, for a page that wants to say so. */

@@ -135,12 +135,17 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
     optional tint hue. Nothing about the grid survives here.
   */
   const hue = grid.hueFor(id, rect === null ? null : rect.tint)
+  /*
+    The module's colour is main's (grid.hueFor and identity.css). A second, per-module colour variable set (#472) was removed
+    in the merge: two colour sources for one module is the defect the identity table exists to prevent.
+  */
+  const vars = hue === '' ? '' : `--bc-tint:${hue}`
   const style =
     rect === null
-      ? hue === ''
+      ? vars === ''
         ? ''
-        : ` style="--bc-tint:${hue}"`
-      : ` style="left:${String(rect.x)}px;top:${String(rect.y)}px;width:${String(rect.w)}px;height:${String(rect.h)}px;z-index:${String(rect.z ?? 1)}${hue === '' ? '' : `;--bc-tint:${hue}`}"`
+        : ` style="${vars}"`
+      : ` style="left:${String(rect.x)}px;top:${String(rect.y)}px;width:${String(rect.w)}px;height:${String(rect.h)}px;z-index:${String(rect.z ?? 1)}${vars === '' ? '' : `;${vars}`}"`
   return `<section class="bcmod${wide ? ' bcmod--wide' : ''}${rect === null ? '' : ' bcmod--placed'}${hue === '' ? '' : ' bcmod--tinted'}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}"${style}>
     <!--
       THE HEADER IS STILL THE WHOLE POINTER TARGET (Grant, 22 September), but
@@ -273,6 +278,28 @@ let menuOpen = false
 export const pageMenuOpen = () => menuOpen
 export const setPageMenuOpen = (want) => {
   menuOpen = want === true
+}
+
+/*
+  The sentence a restore leaves beside its control (#471). It is state, not text poked into a node: a redraw replaces every
+  node, so a sentence written straight into the menu was lost the moment the menu redrew, and a restore that failed inside a
+  closed menu told the person nothing. The menu opens to show it.
+*/
+let restoreWords = ''
+export const restoreSaid = () => restoreWords
+export const setRestoreSaid = (words) => {
+  restoreWords = String(words ?? '')
+}
+
+/*
+  A restore REFUSED because the browser is no longer signed in (#471, item 3). That refusal signs the browser out, which redraws
+  the project menu away, so its sentence cannot live in the menu. It is said on the page itself, in the strip above the shell,
+  and it stays until the next restore starts.
+*/
+let restoreRefusal = ''
+export const restoreRefused = () => restoreRefusal
+export const setRestoreRefused = (words) => {
+  restoreRefusal = String(words ?? '')
 }
 
 /*

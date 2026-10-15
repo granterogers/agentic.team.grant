@@ -1,4 +1,8 @@
 /**
+ * RETIRED (14 October 2026). This walks the older studio at /classic/, which main no longer serves as the product, and it
+ * drives that studio's selectors. `npm run verify:layouts` now runs the Team HQ suites (arrangement-local, access-browser-local).
+ * Kept only as a reference for the 38 states it once covered; do not read its results as current.
+ *
  * Every layout, at every width, in every skin.
  *
  *   npm run verify:layouts            everything

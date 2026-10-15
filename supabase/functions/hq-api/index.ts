@@ -38,6 +38,8 @@
  * rejects everything rather than waving requests through.
  */
 
+// The project archive (#471, C2): uploaded beside the entrypoint by scripts/deploy/hq.ts, from src/portability/archive.ts.
+import { ARCHIVE_LIMITS, ArchiveError, buildArchive, openArchive } from './archive.ts'
 import {
   BG_LIMITS,
   backgroundKey,
@@ -47,9 +49,19 @@ import {
   revisionFromStamp,
   vetBackground,
 } from './background.ts'
+// The standard-format export (#470): uploaded beside the entrypoint by scripts/deploy/hq.ts, from src/portability.
+import { isStandardFormat, kindFor, renderStandardExport } from './export-route.ts'
 // Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
 import { fileText } from './file-text.ts'
+// Who may be given a signed link (#468): judged from the owner the database records, never from the path alone.
+import { type LinkLookup, mayLinkDocument, mayLinkPhoto, mayLinkProjectFile } from './links.ts'
 import { authorizeUrl, revokeToken } from './oauth.ts'
+// The original files of archived documents (#471, migration 1072): uploaded beside the entrypoint by scripts/deploy/hq.ts.
+import { supabaseObjectStore } from './object-store.ts'
+import { discardOriginals, gatherOriginals, planOriginals, writeOriginals } from './originals.ts'
+import { SET_LIMITS } from './parts.ts'
+// The storage policy (#468): the type, extension and contents of an upload, checked before it is stored. Uploaded beside this file.
+import { checkUpload } from './policy.ts'
 import {
   driveProvider,
   type Failure,
@@ -57,10 +69,121 @@ import {
   previewDocument,
   streamDocument,
 } from './preview.ts'
+import {
+  abandonSet,
+  buildSetPart,
+  commitSet,
+  prepareSet,
+  restorePart,
+  type StoredItem,
+  storeExportCache,
+  sweepOffice,
+} from './set-store.ts'
+import { extensionFor } from './store.ts'
 
 const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+
+/**
+ * The database lookups the signed-link rule needs (links.ts). Service-key reads, every one filtered by office, and a
+ * failed read returns no rows, so a link is refused when the database cannot be asked. The rule re-checks each answer.
+ */
+function linkLookup(): LinkLookup {
+  const rowsOf = async (query: string): Promise<Record<string, unknown>[]> => {
+    const r = await fetch(`${DB_URL}/rest/v1/${query}`, {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    }).catch(() => null)
+    if (r === null || !r.ok) return []
+    const rows: unknown = await r.json().catch(() => [])
+    return Array.isArray(rows) ? (rows as Record<string, unknown>[]) : []
+  }
+  const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
+  return {
+    documentOwner: async (path, office) => {
+      const rows = await rowsOf(
+        `documents?storage_path=eq.${encodeURIComponent(path)}&office_id=eq.${encodeURIComponent(office)}&select=office_id,project_id&limit=1`,
+      )
+      const office_id = text(rows[0]?.office_id)
+      const project = text(rows[0]?.project_id)
+      return office_id !== null && project !== null ? { office: office_id, project } : null
+    },
+    photoProject: async (path) => {
+      const rows = await rowsOf(
+        `contacts?photo_path=eq.${encodeURIComponent(path)}&select=project_id&limit=1`,
+      )
+      return text(rows[0]?.project_id)
+    },
+    projectOffice: async (project) => {
+      const rows = await rowsOf(
+        `projects?project_id=eq.${encodeURIComponent(project)}&select=office_id&limit=1`,
+      )
+      return text(rows[0]?.office_id)
+    },
+    officeProjects: async (office) => {
+      const rows = await rowsOf(
+        `projects?office_id=eq.${encodeURIComponent(office)}&select=project_id`,
+      )
+      return rows.map((r) => text(r.project_id)).filter((p): p is string => p !== null)
+    },
+  }
+}
+
+/** The object store the originals live in: the Supabase project this gateway talks to, found from its URL. */
+function originalStore() {
+  const ref = new URL(DB_URL).hostname.split('.')[0] ?? ''
+  return supabaseObjectStore(ref, SERVICE_KEY)
+}
+
+/*
+  THE SWEEP'S LISTING (owner-approved rule, 15 October 2026). Every object under a prefix, with its creation time, walking into
+  folders. The storage list endpoint names a folder as an entry with no id, and a file with one. Depth is bounded, so a listing
+  cannot run away; an entry the endpoint does not describe is skipped, and the sweep keeps what it cannot age.
+*/
+async function storageItems(prefix: string, depth = 0): Promise<StoredItem[]> {
+  if (depth > 4) return []
+  const r = await fetch(`${DB_URL}/storage/v1/object/list/files`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ prefix, limit: 1000, offset: 0 }),
+  }).catch(() => null)
+  if (r === null || !r.ok) return []
+  const rows: unknown = await r.json().catch(() => null)
+  if (!Array.isArray(rows)) return []
+  const out: StoredItem[] = []
+  for (const row of rows as { name?: unknown; id?: unknown; created_at?: unknown }[]) {
+    if (typeof row.name !== 'string' || row.name === '') continue
+    const path = `${prefix}${row.name}`
+    if (row.id === null) out.push(...(await storageItems(`${path}/`, depth + 1)))
+    else out.push({ path, createdAt: Date.parse(String(row.created_at ?? '')) })
+  }
+  return out
+}
+
+/**
+ * Run the sweep for one office. Never fails the request that asked for it: a listing or removal that goes wrong is logged and
+ * the request proceeds, because the sweep is housekeeping and a person's download or restore must not depend on it.
+ */
+async function sweepOfficeSafely(office: string): Promise<void> {
+  try {
+    const items = [
+      ...(await storageItems(`exports/${office}/`)),
+      ...(await storageItems(`restores/${office}/`)),
+    ]
+    const out = await sweepOffice({ office, now: Date.now(), items, store: originalStore() })
+    if (out.removed > 0) {
+      console.log(
+        `hq-api sweep: removed ${String(out.removed)} object(s) (${String(out.exportCaches)} export cache(s), ${String(out.abandonedSets)} abandoned restore(s))`,
+      )
+    }
+  } catch (error) {
+    console.error(`hq-api sweep: ${error instanceof Error ? error.message : 'failed'}`)
+  }
+}
 /** How long an Activity read may wait on the database before the gateway answers for it. The database's own budget is 8 s and arrives first. */
 const ACTIVITY_READ_DEADLINE_MS = ((): number => {
   const asked = Number(Deno.env.get('HQ_ACTIVITY_DEADLINE_MS') ?? '')
@@ -2510,6 +2633,167 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   // --- configuration -------------------------------------------------------
   //
+  /*
+    RESTORE A PROJECT FROM ITS ARCHIVE (issue #471, C2). The body is a ZIP, not JSON, so this is answered before the named
+    actions below. Only a person restores: a machine token has nobody to attribute the restore to, and a Sample visitor
+    changes nothing. The archive is opened and checked here (checksums, names, sizes, format); the restore itself is one
+    database call, idempotent on the archive's SHA-256, that creates a new project and never overwrites one.
+  */
+  if (
+    request.method === 'POST' &&
+    new URL(request.url).searchParams.get('section') === 'project_restore'
+  ) {
+    if (office === null) return json({ error: 'no_office' }, 403)
+    if (kind === 'guest') {
+      return json(
+        {
+          error: 'sample_readonly',
+          message:
+            'This is a sample office, so changes are not saved. Create your own office to make it yours.',
+        },
+        403,
+      )
+    }
+    if (principal === null || principal === '') {
+      return json(
+        { error: 'a restore is attributed to a person, and this session is not one' },
+        403,
+      )
+    }
+    const declared = Number(request.headers.get('content-length') ?? '0')
+    if (declared > ARCHIVE_LIMITS.maxBytes) {
+      return json({ error: 'the archive is larger than the 8 MB this office takes' }, 413)
+    }
+    const bytes = new Uint8Array(await request.arrayBuffer())
+    if (bytes.length > ARCHIVE_LIMITS.maxBytes) {
+      return json({ error: 'the archive is larger than the 8 MB this office takes' }, 413)
+    }
+    /*
+      A PROJECT SET (#471, item 5). Each part is sent alone (its originals are written under this set's key), then the commit
+      creates the project once, if every part is present. An abandon discards an uncommitted set. Each request holds one part.
+    */
+    const search = new URL(request.url).searchParams
+    const setKey = search.get('set')
+    if (setKey !== null) {
+      if (!/^[0-9a-f]{64}$/.test(setKey)) {
+        return json({ error: 'that set key is not one this office issued' }, 400)
+      }
+      const store = originalStore()
+      if (search.get('abandon') === '1') {
+        const out = await abandonSet({ office, setKey, store })
+        return out.ok
+          ? json({ data: { removed: out.removed } })
+          : json({ error: out.error }, out.status)
+      }
+      if (search.get('commit') === '1') {
+        const out = await commitSet({
+          office,
+          setKey,
+          store,
+          extension: extensionFor,
+          restore: async (pkg) => {
+            const r = await fetch(`${DB_URL}/rest/v1/rpc/project_restore`, {
+              method: 'POST',
+              headers: {
+                apikey: SERVICE_KEY,
+                Authorization: `Bearer ${SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                p_office: office,
+                p_key: setKey,
+                p_package: pkg,
+                p_by: principal,
+              }),
+            })
+            const body = (await r.json().catch(() => ({}))) as {
+              ok?: boolean
+              error?: string
+              already?: boolean
+            }
+            if (!r.ok || body.ok !== true) {
+              return { ok: false, error: body.error ?? 'the restore was refused' }
+            }
+            // The database's own answer, as the single-archive restore returns it.
+            return { ...body, ok: true }
+          },
+        })
+        if (!out.ok) return json({ error: out.error }, out.status)
+        return json({ data: out.out }, out.already ? 200 : 201)
+      }
+      const number = Number(search.get('part'))
+      if (!Number.isInteger(number) || number < 1) {
+        return json({ error: 'a set part needs its part number' }, 400)
+      }
+      // A new restore starts with part 1: the sweep runs then, not on every part of one restore.
+      if (number === 1) await sweepOfficeSafely(office)
+      const out = await restorePart({
+        bytes,
+        office,
+        setKey,
+        number,
+        store,
+        extension: extensionFor,
+      })
+      if (!out.ok) return json({ error: out.error }, out.status)
+      return json(
+        {
+          data: { part: out.number, of: out.partCount, written: out.written, already: out.already },
+        },
+        out.already ? 200 : 201,
+      )
+    }
+    let opened: Awaited<ReturnType<typeof openArchive>>
+    try {
+      opened = await openArchive(bytes)
+    } catch (error) {
+      return json(
+        { error: error instanceof ArchiveError ? error.message : 'the archive could not be read' },
+        400,
+      )
+    }
+    /*
+      The originals first, then the database. The stored path comes from the plan, built here under this office and this
+      archive's key; a path the package names is never used. If the database refuses after the files were written, the
+      files this run wrote are removed, so a refused restore leaves no file behind.
+    */
+    const plan = await planOriginals({
+      pkg: opened.pkg,
+      files: opened.files,
+      key: opened.key,
+      office,
+      extension: extensionFor,
+    })
+    if (!plan.ok) return json({ error: plan.reason }, 400)
+    const store = originalStore()
+    const written = await writeOriginals({ writes: plan.writes, store })
+    if (!written.ok) return json({ error: written.reason }, 502)
+    const restored = await fetch(`${DB_URL}/rest/v1/rpc/project_restore`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        p_office: office,
+        p_key: opened.key,
+        p_package: plan.pkg,
+        p_by: principal,
+      }),
+    })
+    if (!restored.ok) {
+      await discardOriginals({ store, written: written.written })
+      return json({ error: 'the restore could not be written' }, 502)
+    }
+    const out = (await restored.json()) as { ok?: boolean; error?: string; already?: boolean }
+    if (out.ok !== true) {
+      await discardOriginals({ store, written: written.written })
+      return json({ error: out.error ?? 'the restore was refused' }, 400)
+    }
+    return json({ data: out }, out.already === true ? 200 : 201)
+  }
+
   // POST, and only the named actions. Same rule as the reads: the page names an
   // ACTION from a fixed list and the projection lives in `app.hq_*` where it
   // can be reviewed. A page that could send SQL, or even a function name, is a
@@ -2939,10 +3223,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
           `${DB_URL}/rest/v1/projects?project_id=eq.${projectId}&select=is_fixture&limit=1`,
           { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
         ).catch(() => null)
-        const rows =
-          shown !== null && shown.ok
-            ? ((await shown.json().catch(() => [])) as { is_fixture?: boolean }[])
-            : []
+        const rows = shown?.ok
+          ? ((await shown.json().catch(() => [])) as { is_fixture?: boolean }[])
+          : []
         if (rows[0]?.is_fixture !== true) {
           return json(
             {
@@ -2991,6 +3274,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
           },
           400,
         )
+      }
+      /*
+        The storage policy (#468). The type the browser declares is a claim: the name's extension must agree with it, the
+        bytes must start the way that type starts, and the type must be one this office takes. A file refused here is
+        never stored, so nothing is left in the bucket that no record points at.
+      */
+      const verdict = checkUpload({ name, mime, bytes })
+      if (!verdict.ok) {
+        return json({ error: `that file cannot be stored: ${verdict.reason}.` }, 400)
       }
 
       /*
@@ -3522,6 +3814,202 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   /*
+    STANDARD-FORMAT EXPORT (issue #470, C1). One project's contacts as vCard, its calendar as iCalendar, or its tasks as
+    CSV or JSON. The office is the verified session's, never a caller-named one, and the project must belong to it
+    (`public.project_records` returns null otherwise, reported as not found). The bytes are rendered by
+    src/portability/export-route.ts, which also chooses the file name and content type, so this route is only plumbing.
+    Nothing is stored: the response is the file, marked no-store.
+  */
+  if (name === 'project_standard_export') {
+    if (office === null) return json({ error: 'no_office' }, 403)
+    const id = url.searchParams.get('id') ?? ''
+    const format = (url.searchParams.get('format') ?? '').trim()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return json({ error: 'that section needs a valid project id', section: name }, 400)
+    }
+    if (!isStandardFormat(format)) {
+      return json({ error: 'format must be vcard, ics, csv or json', section: name }, 400)
+    }
+    const kind = kindFor(format)
+    if (kind === null)
+      return json({ error: 'format must be vcard, ics, csv or json', section: name }, 400)
+    const r = await fetch(`${DB_URL}/rest/v1/rpc/project_records`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_office: office, p_project_id: id, p_kind: kind }),
+    })
+    if (!r.ok) return json({ error: 'the export could not be read', section: name }, 502)
+    const payload = (await r.json()) as unknown
+    if (payload === null)
+      return json({ error: 'no such project in this office', section: name }, 404)
+    let rendered: ReturnType<typeof renderStandardExport>
+    try {
+      rendered = renderStandardExport(
+        format,
+        payload as Parameters<typeof renderStandardExport>[1],
+        { exportedAt: new Date().toISOString() },
+      )
+    } catch (error) {
+      return json(
+        {
+          error: error instanceof Error ? error.message : 'the export could not be built',
+          section: name,
+        },
+        500,
+      )
+    }
+    return new Response(rendered.body, {
+      status: 200,
+      headers: {
+        'content-type': rendered.contentType,
+        'content-disposition': `attachment; filename="${rendered.filename}"`,
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'authorization, content-type',
+      },
+    })
+  }
+
+  /*
+    THE PROJECT ARCHIVE (issue #471, C2). One project as a ZIP: the package, a manifest of SHA-256 checksums, and a README
+    that says what the archive does not carry. Built here from the same package `project_export` returns, so the archive
+    and the Download JSON cannot disagree. Office-scoped like every other read; not stored anywhere.
+  */
+  if (name === 'project_archive') {
+    if (office === null) return json({ error: 'no_office' }, 403)
+    const id = url.searchParams.get('id') ?? ''
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return json({ error: 'that section needs a valid project id', section: name }, 400)
+    }
+    const exported = await fetch(`${DB_URL}/rest/v1/rpc/project_export`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_office: office, p_project_id: id }),
+    })
+    if (!exported.ok) return json({ error: 'the archive could not be read', section: name }, 502)
+    const pkg = (await exported.json()) as { project?: { slug?: unknown } | null } | null
+    if (pkg === null || typeof pkg.project !== 'object' || pkg.project === null) {
+      return json({ error: 'no such project in this office', section: name }, 404)
+    }
+    const rawSlug = typeof pkg.project.slug === 'string' ? pkg.project.slug : 'project'
+    const slug =
+      rawSlug
+        .replace(/[^a-z0-9-]+/gi, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80) || 'project'
+    /*
+      A PROJECT LARGER THAN ONE ARCHIVE (#471, item 5). `set=index` reads each original once, keeps its checksum, and holds the
+      index, the package and the plan under a cache id; `set=<key>&cache=<id>&part=N` then builds ONE part of at most 8 MB,
+      reading only that part's files. A project that fits one archive still gets the single ZIP below, unchanged.
+    */
+    const setMode = url.searchParams.get('set')
+    if (setMode !== null) {
+      const store = originalStore()
+      if (setMode === 'index') {
+        await sweepOfficeSafely(office)
+        const prepared = await prepareSet({ pkg, slug, store, extension: extensionFor })
+        if (!prepared.ok) return json({ error: prepared.error, section: name }, prepared.status)
+        const cache = crypto.randomUUID()
+        if (!(await storeExportCache(store, office, cache, prepared))) {
+          return json({ error: 'the set could not be prepared', section: name }, 502)
+        }
+        const parts = Array.from({ length: prepared.partCount }, (_, i) => {
+          const files = prepared.plan.filter((f) => f.part === i + 1)
+          return {
+            number: i + 1,
+            files: files.length,
+            bytes: files.reduce((sum, f) => sum + f.bytes, 0),
+          }
+        })
+        return json({
+          data: {
+            set: prepared.setKey,
+            cache,
+            slug,
+            part_count: prepared.partCount,
+            parts,
+            limits: {
+              part_bytes: ARCHIVE_LIMITS.maxBytes,
+              file_bytes_per_part: SET_LIMITS.fileBytesPerPart,
+            },
+          },
+        })
+      }
+      const setKey = setMode
+      const cache = url.searchParams.get('cache') ?? ''
+      const number = Number(url.searchParams.get('part'))
+      if (
+        !/^[0-9a-f]{64}$/.test(setKey) ||
+        !/^[0-9a-f-]{36}$/.test(cache) ||
+        !Number.isInteger(number) ||
+        number < 1
+      ) {
+        return json({ error: 'that part is not one this set holds', section: name }, 400)
+      }
+      const built = await buildSetPart({
+        office,
+        cacheId: cache,
+        setKey,
+        number,
+        store,
+        exportedAt: new Date().toISOString(),
+      })
+      if (!built.ok) return json({ error: built.error, section: name }, built.status)
+      return new Response(built.bytes as unknown as BodyInit, {
+        status: 200,
+        headers: {
+          'content-type': 'application/zip',
+          'content-length': String(built.bytes.byteLength),
+          'content-disposition': `attachment; filename="${slug}-set-${setKey}-part-${String(number)}-of-${String(built.partCount)}.zip"`,
+          'cache-control': 'private, no-store',
+          'x-content-type-options': 'nosniff',
+          'access-control-allow-origin': '*',
+          'access-control-allow-headers': 'authorization, content-type',
+        },
+      })
+    }
+    const gathered = await gatherOriginals({
+      pkg,
+      store: originalStore(),
+      extension: extensionFor,
+      maxBytes: ARCHIVE_LIMITS.maxBytes,
+    })
+    if (!gathered.ok) {
+      // A 413 here means the project is larger than one archive: the page asks for the set instead.
+      return json(
+        { error: gathered.error, section: name, use_set: gathered.status === 413 },
+        gathered.status,
+      )
+    }
+    const { bytes } = await buildArchive(
+      gathered.pkg,
+      { slug, exportedAt: new Date().toISOString() },
+      gathered.files,
+    )
+    return new Response(bytes as unknown as BodyInit, {
+      status: 200,
+      headers: {
+        'content-type': 'application/zip',
+        'content-length': String(bytes.byteLength),
+        'content-disposition': `attachment; filename="${slug}-archive.zip"`,
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'authorization, content-type',
+      },
+    })
+  }
+
+  /*
     BROWSING GOOGLE DRIVE.
 
     Grant: *"Grant should be able to add file/document, choose Google Drive,
@@ -3983,7 +4471,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   if (name === 'document' && typeof data?.path === 'string' && data.path !== '') {
-    const url = await signPath(data.path)
+    // The link is minted only when the owner of the file is this office and project (#468). Otherwise the text stays.
+    const allowed = office !== null && (await mayLinkDocument(linkLookup(), office, data.path))
+    const url = allowed ? await signPath(data.path) : null
     // Not fatal: the reader falls back to the text, which is usually there.
     if (url !== null) data.url = url
     data.path = undefined
@@ -4009,7 +4499,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
       for (const person of people as Record<string, unknown>[]) {
         const path = person.photo
         if (typeof path !== 'string' || path === '') continue
-        const url = await signPath(path)
+        const allowed = office !== null && (await mayLinkPhoto(linkLookup(), office, path))
+        const url = allowed ? await signPath(path) : null
         person.photo = url === null ? undefined : url
       }
     }
@@ -4033,7 +4524,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (name === 'browser_lately' && Array.isArray(data)) {
     for (const row of data as { shot_path?: unknown; shot_url?: string | null }[]) {
       if (typeof row.shot_path === 'string' && row.shot_path !== '') {
-        row.shot_url = await signPath(row.shot_path)
+        const allowed =
+          office !== null && (await mayLinkProjectFile(linkLookup(), office, row.shot_path))
+        row.shot_url = allowed ? await signPath(row.shot_path) : null
       }
       row.shot_path = undefined
     }
