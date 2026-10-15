@@ -114,6 +114,17 @@ await mkdir(OUT, { recursive: true })
   being watched.
 */
 const missed: string[] = []
+
+/*
+  Open the project switcher only if it is shut. The control toggles, so a second press on an open menu closes it and
+  the option that follows is then hidden: that is the failure the capture hit after the first switch.
+*/
+const openSwitchMenu = async (page: import('playwright').Page): Promise<void> => {
+  const menu = page.locator('[data-switch-menu]')
+  if (await menu.isVisible()) return
+  await page.locator('[data-switch-open]').click()
+  await menu.waitFor({ state: 'visible', timeout: 3000 })
+}
 {
   // (block kept so the declaration above sits at module scope)
 }
@@ -703,7 +714,15 @@ for (const [size, opts] of SIZES) {
       localStorage.setItem('hq.token', 'local-capture-only')
       w.render()
     })()`)
-    await page.waitForSelector('[data-stop-job]', { timeout: 5000 })
+    /*
+      A non-writer sees no Stop button, so there is nothing to seed and the progress line cannot be drawn. That is a
+      gap to report, not a reason to end the whole capture run: every later screen still needs its PNG.
+    */
+    const stopShown = await page.waitForSelector('[data-stop-job]', { timeout: 5000 }).then(() => true, () => false)
+    if (!stopShown) {
+      console.error('  NOT CAPTURED  job-progress — no Stop button drawn (not a writer); progress was not seeded')
+      missed.push('job-progress')
+    }
     /*
       AND WAIT FOR THAT RENDER'S OWN FETCH TO LAND BEFORE SEEDING.
 
@@ -722,7 +741,7 @@ for (const [size, opts] of SIZES) {
     await page.evaluate(`(() => {
       const w = window.__shots
       const running = document.querySelectorAll('[data-stop-job]')
-      if (running.length === 0) throw new Error('no running job to show progress for')
+      if (running.length === 0) return false
       for (const b of running) {
         w.progress[b.dataset.stopJob] = {
           state: 'running',
@@ -738,13 +757,18 @@ for (const [size, opts] of SIZES) {
       localStorage.setItem('hq.token', 'local-capture-only')
       w.render()
     })()`)
-    await page.waitForSelector('.jsteps', { timeout: 5000 })
-    await page.evaluate(
-      `(() => { const el = document.querySelector('.jsteps');
-                if (el !== null) el.scrollIntoView({ block: 'center' }); })()`,
-    )
-    await page.waitForTimeout(300)
-    await shoot('job-progress')
+    const stepsShown = stopShown && (await page.waitForSelector('.jsteps', { timeout: 5000 }).then(() => true, () => false))
+    if (stepsShown) {
+      await page.evaluate(
+        `(() => { const el = document.querySelector('.jsteps');
+                  if (el !== null) el.scrollIntoView({ block: 'center' }); })()`,
+      )
+      await page.waitForTimeout(300)
+      await shoot('job-progress')
+    } else if (stopShown) {
+      console.error('  NOT CAPTURED  job-progress — the step line never appeared for the seeded job')
+      missed.push('job-progress')
+    }
     await page.evaluate(`(() => {
       localStorage.removeItem('hq.token')
       for (const k of Object.keys(window.__shots.progress)) delete window.__shots.progress[k]
@@ -850,7 +874,11 @@ for (const [size, opts] of SIZES) {
     })()`)
     await page.waitForTimeout(400)
     await page.locator('[data-doc="0"]').click()
-    await page.waitForSelector('.docorg', { timeout: 5000 })
+    const organiserShown = await page.waitForSelector('.docorg', { timeout: 5000 }).then(() => true, () => false)
+    if (!organiserShown) {
+      console.error('  NOT CAPTURED  document-tags-and-collections — the organising rows never drew (classic document sheet)')
+      missed.push('document-tags-and-collections')
+    }
     /*
       Scrolled to the block, because on a phone the sheet is taller than the
       screen and the organising rows are below the fold — CLAUDE.md: a panel
@@ -859,12 +887,14 @@ for (const [size, opts] of SIZES) {
       actions, which is how the phone defect above was found rather than the
       thing the shot was taken for.
     */
-    await page.evaluate(
-      `(() => { const el = document.querySelector('.docorg');
-                if (el !== null) el.scrollIntoView({ block: 'center' }); })()`,
-    )
-    await page.waitForTimeout(500)
-    await shoot('document-tags-and-collections')
+    if (organiserShown) {
+      await page.evaluate(
+        `(() => { const el = document.querySelector('.docorg');
+                  if (el !== null) el.scrollIntoView({ block: 'center' }); })()`,
+      )
+      await page.waitForTimeout(500)
+      await shoot('document-tags-and-collections')
+    }
     await page.evaluate(`(() => {
       localStorage.removeItem('hq.token')
       const p = window.__shots.projects.find((x) => x.slug === 'legacy-coaching-course')
@@ -1056,18 +1086,17 @@ for (const [size, opts] of SIZES) {
       await page.locator('#settings [data-stg-back]').click() // and out
       await page.waitForTimeout(400)
     }
-    await page.locator('[data-switch-open]').click()
-    await page.waitForTimeout(300)
-    await page.locator('[data-switch-menu] [data-open="wellness"]').click()
+    await openSwitchMenu(page)
+    // Forced: the studio never stops moving, so the stability check cannot pass (CLAUDE.md, the trap on click stability).
+    await page.locator('[data-switch-menu] [data-open="wellness"]').click({ force: true })
     await page.waitForTimeout(700)
     for (const s of ['documents', 'tasks', 'contacts', 'sources']) {
       await page.locator(`[data-tab="${s}"]`).click()
       await page.waitForTimeout(350)
       await shoot(`empty-${s}`)
     }
-    await page.locator('[data-switch-open]').click()
-    await page.waitForTimeout(300)
-    await page.locator('[data-switch-menu] [data-open="legacy-coaching-course"]').click()
+    await openSwitchMenu(page)
+    await page.locator('[data-switch-menu] [data-open="legacy-coaching-course"]').click({ force: true })
     await page.waitForTimeout(700)
 
     for (const section of ['tasks', 'contacts', 'sources']) {
@@ -1142,7 +1171,9 @@ for (const [size, opts] of SIZES) {
     */
     await page.locator('[data-tab="settings"]').click()
     await page.waitForTimeout(900)
-    for (const pane of ['people', 'automations', 'labels', 'project']) {
+    // The panes this capture's studio draws (web/studio/project-settings.js PANES). Appearance is Team HQ only, and this
+    // run is the classic studio, so it is not in the loop; the Team HQ run is judged by module-look.mjs instead.
+    for (const pane of ['automations', 'labels']) {
       await page.locator(`[data-setpane="${pane}"]`).click()
       await page.waitForTimeout(450)
       await shoot(`settings-project-${pane}`)
