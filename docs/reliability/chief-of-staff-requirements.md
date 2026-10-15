@@ -143,7 +143,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-071 | Workload-aware assignment | CONS-7.09 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-072 | Approval callback authentication | CONS-7.14 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-073 | Approval consumption | CONS-7.17 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-074 | Duplicate callback idempotency | CONS-7.18 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-074 | Duplicate callback idempotency | CONS-7.18 | P0 | Lead (Claude) | 🟡 AMBER | Code: `telegram.ts` 223–270 (dedupe per callback id, F2); `callbacks.ts` ~584 (idempotent answer claimed in a comment). See `chief-of-staff-forensics-code.md` | Unverified: answer idempotency not yet proven by a test | REG-001 (planned) | Repeat press not yet tested against `hq_answer_blocker` |
 | COS-075 | Primary and fallback model execution parity | CONS-7.22 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-076 | Safe independent work during blocked steps | CONS-7.25 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-077 | Recovery after process interruption | CONS-7.30 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
@@ -161,7 +161,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-089 | Telegram callback tests | CONS-7.69 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-090 | Staging and release verification | CONS-7.71 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-091 | Forensic incident timeline with classified findings | §10 | P0 | Lead (Claude) | 🟡 AMBER | Transcript preserved; no historical records yet inspected | Timeline in `docs/reliability/` | TM-020 | Production telemetry not yet read; needs authorised read access |
-| COS-092 | Planner regeneration does not recreate equivalent approvals | §11 item 6; §11 examine list | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-092 | Planner regeneration does not recreate equivalent approvals | §11 item 6; §11 examine list | P0 | Lead (Claude) | 🟡 AMBER | Transcript 09:36, 09:53, 10:59 show one stop message three times (forensics F4, supported hypothesis) | Production blocker rows needed | REG-006 (planned) | Blocker and delivery rows not yet inspected |
 | COS-093 | Re-approval only when scope materially changes | §11 item 10 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-094 | Approval state transitions are atomic where required | §11 item 11 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-095 | Approval records and job state remain reconcilable | §11 item 12 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
@@ -177,7 +177,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-105 | A document-generation instruction is not a verified artifact | §13 invariant 6 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-106 | A stalled job is not reported as making progress | §13 invariant 7 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-107 | Completed work is retained through later failures | §13 invariant 8 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-108 | A duplicate request classifies the existing run's actual state | §14 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-108 | A duplicate request classifies the existing run's actual state | §14 | P0 | Lead (Claude) | 🟡 AMBER | Code: `instruction.ts` 2981–3003 names the running job by its first 120 characters (F1, confirmed in code); `already.ts` 121 (second wording) | Run-state classification not yet verified | REG-009 to REG-011 (planned) | Production job rows not yet inspected |
 | COS-109 | A follow-up is not abandoned because a matching objective exists | §14 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-110 | "Just do it" never bypasses security controls or approvals | §14; §22 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-111 | Dead-letter processing for exhausted work | §15 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
@@ -213,8 +213,8 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 | COS-141 | No unsafe substitute is used when a tool is unavailable | §27 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-142 | Existing state models are reused; no redundant infrastructure | §13 | P1 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 | COS-143 | Ordinary internal work is delegated without asking Grant for an assignee | §12 acceptance test; §4 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-144 | Approval callback encoding, scope and expiry behaviour are verified | §11 examine list | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
-| COS-145 | Root-cause hypotheses are tested; no single cause assumed | §11 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
+| COS-144 | Approval callback encoding, scope and expiry behaviour are verified | §11 examine list | P0 | Lead (Claude) | 🟡 AMBER | Code: button payload carries no approval id; press resolves via `approval_for_delivery` (F3, supported hypothesis, `telegram.ts` 223–270, `callbacks.ts` ~504–538) | Unverified: needs blocker and delivery rows | COS-072, COS-073 (planned) | Production press rows not yet inspected |
+| COS-145 | Root-cause hypotheses are tested; no single cause assumed | §11 | P0 | Lead (Claude) | 🟡 AMBER | Five code-level findings F1–F5 recorded as hypotheses in `chief-of-staff-forensics-code.md`; none tested against production | Each hypothesis needs a test or a record | REG-001 to REG-006 (planned) | Production evidence pending (DEC-009) |
 | COS-146 | Each forensic finding is classified as confirmed, supported, unverified or ruled out, with evidence | §10 | P0 | Lead (Claude) | ⚪ GREY | — | — | — | Not started |
 
 ## C. Mandatory regression tests (REG, §25)

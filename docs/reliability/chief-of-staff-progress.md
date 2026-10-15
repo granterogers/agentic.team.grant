@@ -9,10 +9,10 @@
 
 ## Reconciliation (must match the register; checked by `npm run check:reliability`)
 
-🟢 3 | 🟡 35 | 🔴 0 | ⚪ 192 — Total 230/230 tracked
+🟢 3 | 🟡 40 | 🔴 0 | ⚪ 187 — Total 230/230 tracked
 
 - Execution-control rules (ECS): 39 — 🟢 3 · 🟡 31 · 🔴 0 · ⚪ 5
-- Chief of Staff requirements (COS): 146 — 🟢 0 · 🟡 3 · 🔴 0 · ⚪ 143
+- Chief of Staff requirements (COS): 146 — 🟢 0 · 🟡 8 · 🔴 0 · ⚪ 138
 - Mandatory regression tests (REG): 45 — 🟢 0 · 🟡 1 · 🔴 0 · ⚪ 44
 
 ## Sources
@@ -31,6 +31,10 @@ The consolidated file was written by transcribing the supplied text. Its SHA-256
 - Expanded the register from 88 to 230 IDs. Preserved all 88 existing IDs. Added COS-069 to COS-146, ECS-021 to ECS-039, REG-001 to REG-045 (DEC-006).
 - Mapped all 76 consolidated §7 inventory items and all 45 §25 regression items to register IDs.
 - Extended `check:reliability` to detect missing source requirements, unmapped items, changed or unrecorded source hashes, a dropped transcript entry, and a dropped historical topic. Self-test extended to 11 sabotages.
+
+## Investigation done (repository only, no production read)
+- `chief-of-staff-forensics-code.md`: five findings (F1–F5) from code and transcript. Confirmed in code: F1 (duplicate guard names the job by its text) and F2 (callback dedupe is per click). Supported hypotheses: F3 (button carries no approval identity), F4 (one stop raised three times). F5 (optional details block the start) is user-visible only.
+- COS-074, COS-092, COS-108, COS-144, COS-145 moved GREY → AMBER on that evidence. None is GREEN: each needs a test or production records.
 
 ## Working (next checkpoints, in order)
 1. Forensic timeline (COS-091, COS-144 to COS-146): read the Canary Coworking records. Requires authorised read access. Until then this stays AMBER/GREY.
