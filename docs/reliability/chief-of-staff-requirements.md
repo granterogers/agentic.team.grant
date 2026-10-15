@@ -221,7 +221,7 @@ Titles are short. Exact text is the cited source item (Consolidated §7 numberin
 
 | ID | Requirement | Source | Priority | Owner | Status | Evidence / reference | Verification | Test ref | Blocker |
 |---|---|---|---|---|---|---|---|---|---|
-| REG-001 | Duplicate approval button clicks | §25.1 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
+| REG-001 | Duplicate approval button clicks | §25.1 | P0 | QA (Claude) | 🟡 AMBER | Repeated and conflicting presses are answered once; the recorded answer does not change (TM-036, 4/4) | Partial: sequential presses only; concurrent simultaneous presses (REG-002) not run | TM-036 | Concurrent presses not driven |
 | REG-002 | Approval callbacks arriving concurrently | §25.2 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-003 | Approval persisting across restart | §25.3 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
 | REG-004 | Job continuation after approval | §25.4 | P0 | QA (Claude) | ⚪ GREY | — | — | — | Not started |
