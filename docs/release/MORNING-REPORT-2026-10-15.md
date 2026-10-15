@@ -5,11 +5,12 @@ Numbers are measured in this session. Anything not run is listed as not run.
 
 ## A. Executive summary
 
-Shipped to production on your instruction: migration `1074` (projects can be archiving or restoring) and the page
-(module look, phone checkbox, project menu). Merged to `main`: the lifecycle rules, the module look, the gate fixes.
+Shipped to production on your instruction: migrations `1074` (projects can be archiving or restoring) and `1075` (an
+export refuses a project the office does not hold), and the page (module look, phone checkbox, project menu icons).
+Merged to `main`: the lifecycle rules, the module look, the gate fixes, the export fix, the menu icons, this report, and
+the deployment records.
 
-Prepared on branches, not merged, not deployed: the module menu icons (`feat/menu-module-icons`) and an export fix that
-refuses another office's project (`fix/export-refuses-other-offices`, migration `1075`).
+Not deployed: the worker, hq-api, signin and voice. Their changes on `main` do not alter their behaviour.
 
 The brief's four workstreams are not complete. Password and Google sign-in, external storage, backup retention and the
 staging preview are not built, and each needs an owner decision or a credential. **Release recommendation: partially
@@ -24,19 +25,23 @@ ready (section J).**
   - #477 module look: merged (`afe87a26`).
   - #479 gates and screenshot run: merged (`e6b660e7`).
   - #478 archive lifecycle: merged (`b7501b4d`).
-  - #480 deploy record: merged (`14f65ad8`).
-- Open, not merged:
-  - `feat/menu-module-icons` (`31144184`): module icons in the project menu.
-  - `fix/export-refuses-other-offices` (`f56aa426`): migration 1075 and the round-trip proof.
-  - `docs/morning-report-2026-10-15`: this report and the security review.
+  - #480 deploy record (1074 and the first page): merged (`14f65ad8`).
+  - #481 export refuses another office's project (migration 1075): merged (`b0c5e14e`).
+  - #482 module icons in the project menu: merged (`8e384444`).
+  - #483 this report and the security review: merged (`bb61e4b0`).
+  - #484 deployment record (1075 and the second page): merged (`88acffa7`).
+- Open: none of the brief's branches. The deploy-record and report branches are merged.
 - Staging preview: **not deployed** (no staging environment is available to this session; section I).
 - Main: merged, on your instruction, and the brief forbade it without approval. An earlier fast-forward of `main` to
   the sign-in branch, made without a pull request, is still in place.
 - Production:
-  - Migration `1074` applied. Production ledger: 821 before, 822 after, latest `1074`.
-  - Page deployed as `dpl_GixBZzkwkvUekHADwRtEBQ8rgaGo`. Rollback point: `dpl_BWk6MvPTAF7JaEnUdv5H481hWd4K`.
+  - Migration `1074` applied (production ledger 821 before, 822 after).
+  - Migration `1075` applied (ledger 822 before, 823 after, latest `1075`). Verified read-only: the refusal text is in
+    the live `app.project_export` definition.
+  - Page `dpl_Fr1iDRevDSJbtUCgchrLoYXAY2uy` deployed, READY, serving the menu icons. Rollback point:
+    `dpl_GixBZzkwkvUekHADwRtEBQ8rgaGo`.
+  - Earlier rollback point for the first page: `dpl_BWk6MvPTAF7JaEnUdv5H481hWd4K`.
   - Not deployed: worker, hq-api, signin, voice.
-  - Migration `1075` is **not** applied to production.
 
 ## C. Authentication
 
@@ -90,8 +95,9 @@ Standard formats (from the earlier PR, unit-tested): vCard `.vcf` (contacts), iC
 - Module background: neutral. Verified in a browser (opaque white surface on the light theme).
 - Coloured title and icon: done. Each module's title takes its colour (Contacts, Docs and Schedule are visibly different).
 - Border glow: done. Visible on every module.
-- Hamburger menu icons and colours: done on branch `feat/menu-module-icons`, not yet merged. Seven rows show their module
-  icon in its colour, from the same identity table the dashboard uses. Verified in a browser.
+- Hamburger menu icons and colours: done, merged (#482) and deployed (page `dpl_Fr1iDRevDSJbtUCgchrLoYXAY2uy`). Seven rows
+  show their module icon in its colour, from the same identity table the dashboard uses. Verified in a browser, and the
+  live `bc/shell.js` contains the code.
 - Projects submenu: done. Opens, collapses, lists projects, and stays open while the pointer moves into it (desktop).
   Keyboard and mobile tap are not verified.
 - Desktop and mobile results: `scripts/verify/module-look.mjs`, 16 of 16 checks pass, at 1440 by 900 and at 390 wide.
@@ -125,7 +131,7 @@ Counts are from the last full run in this session.
 
 Security review (summary; the full review is `docs/release/SECURITY-REVIEW-2026-10-15.md`):
 
-- **Finding (fixed in branch `fix/export-refuses-other-offices`, migration 1075, not deployed):** `app.project_export`
+- **Finding (fixed in migration 1075, merged and deployed 15 October 2026):** `app.project_export`
   returned a package for another office's project id. Its project sections were empty, but the team section reported
   every agent as on the project. Severity: low to medium. No other office's data was returned; the answer was false, and
   the boundary is the function, not the gateway.
@@ -137,13 +143,14 @@ Security review (summary; the full review is `docs/release/SECURITY-REVIEW-2026-
 
 Rollback:
 
-- Page: promote `dpl_BWk6MvPTAF7JaEnUdv5H481hWd4K` (the previous deployment) with the Vercel dashboard or the deploy
-  script's rollback.
+- Page: promote `dpl_GixBZzkwkvUekHADwRtEBQ8rgaGo` (the page before the menu icons and migration 1075) with the Vercel
+  dashboard or the deploy script's rollback. Older point: `dpl_BWk6MvPTAF7JaEnUdv5H481hWd4K`.
 - Migration 1074: additive. Rolling it back means restoring the constraint `projects_status_known` to three states and
   restoring the fourteen readers from their pre-1074 definitions. Those definitions are in migration history.
   Do not roll back while any project is `archiving` or `restoring`.
 - Migration 1075: a `create or replace` of `app.project_export`. Rolling back means re-applying the previous definition,
-  which is `app.project_export` as in migration 0720.
+  which is `app.project_export` as in migration 0720, and then deploying the page from before the change. The
+  refusal only removes a false answer; nothing stored changes.
 - Deployment record: `docs/ops/deployment-state.json` describes the page and migration state.
 
 ## I. Remaining owner decisions and configuration
@@ -168,8 +175,8 @@ Configuration:
 
 **PARTIALLY READY — SPECIFIC BLOCKERS REMAIN.**
 
-What is ready to merge after review: `feat/menu-module-icons`, `fix/export-refuses-other-offices` (migration 1075 is
-additive and tested on a replica).
+Done since the first draft of this report: `feat/menu-module-icons` and `fix/export-refuses-other-offices` are merged and
+deployed (section B). The recommendation still stands because the blockers below are not resolved.
 
 What is blocked:
 
@@ -180,12 +187,12 @@ What is blocked:
 - Calendar events in the export (decision and a migration).
 - Restore on a real project, and the browser journeys beyond one.
 
-Proposed merge and production sequence (not executed):
+Merge and production sequence (executed on your instruction, 15 October 2026):
 
-1. Review and merge `fix/export-refuses-other-offices` and `feat/menu-module-icons` into `main`.
-2. Apply migration `1075` to production with `npm run migrate` (both production flags, a clean tree, a pushed commit).
-   Verify with a read-only query that the refusal text is in `app.project_export`.
-3. Deploy the page from the pushed commit with `scripts/deploy/hq-page-delta.ts --go` (both flags, `DEPLOY_SOURCE_SHA`).
-   Probe the page and the notebook endpoints.
-4. Record the deployment in `docs/ops/deployment-state.json` in the same commit, and run `check:deployment-state`.
+1. Merged #481, #482 and #483 into `main`.
+2. Applied migration `1075` to production with `npm run migrate` (both production flags, a clean tree, a pushed commit).
+   Verified with a read-only query that the refusal text is in `app.project_export`.
+3. Committed the ledger line on `docs/deploy-record-1075`, pushed it, and deployed the page from that commit with
+   `scripts/deploy/hq-page-delta.ts --go` (both flags, `DEPLOY_SOURCE_SHA`). Probed the page and the notebook endpoints.
+4. Recorded the deployment in `docs/ops/deployment-state.json` (#484) and ran `check:deployment-state`.
 5. Keep the rollback point (section H) until the next release.
