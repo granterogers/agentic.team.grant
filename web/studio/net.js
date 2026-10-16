@@ -84,7 +84,8 @@ export const unreachable = (boundary, ms) => {
     boundary === 'auth:link'
       ? 'If an email arrives you can use it; if not, try again in a minute.'
       : 'Nothing was lost and you are still signed in. Try again in a minute.'
-  const e = new Error(`${whoIs(boundary)} did not answer${within}. ${after} (stopped at ${boundary})`)
+  // The step is kept on the error (e.boundary) and in the trace (remember), not in the sentence a person reads.
+  const e = new Error(`${whoIs(boundary)} did not answer${within}. ${after}`)
   e.name = 'Unreachable'
   e.boundary = boundary
   return e
@@ -122,9 +123,8 @@ export async function bounded(boundary, url, init = {}, ms = 20_000) {
     if (timedOut) throw unreachable(boundary, ms)
     if (error instanceof Error && error.name === 'AbortError') throw error
     // A network failure (offline, refused, blocked): say so in the same plain words, with the same boundary.
-    const e = new Error(
-      `${whoIs(boundary)} could not be reached. Check your connection and try again. (stopped at ${boundary})`,
-    )
+    // The step is kept on the error and in the trace, not in the sentence a person reads.
+    const e = new Error(`${whoIs(boundary)} could not be reached. Check your connection and try again.`)
     e.name = 'Unreachable'
     e.boundary = boundary
     throw e

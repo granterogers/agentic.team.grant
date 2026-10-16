@@ -60,7 +60,9 @@ describe('a request that never answers is given up on', () => {
     expect(error).toBeInstanceOf(Error)
     expect((error as Error).name).toBe('Unreachable')
     expect((error as Error).message).toMatch(/did not answer/)
-    expect((error as Error).message).toMatch(/stopped at auth:refresh/)
+    // The step is carried on the error, and is not written into the sentence a person reads.
+    expect((error as { boundary?: string }).boundary).toBe('auth:refresh')
+    expect((error as Error).message).not.toMatch(/stopped at|auth:/)
     expect(Date.now() - began).toBeLessThan(2000)
     expect(net.lastStall()?.boundary).toBe('auth:refresh')
     expect(net.lastStall()?.outcome).toBe('timeout')
