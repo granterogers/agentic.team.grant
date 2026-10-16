@@ -93,6 +93,28 @@ const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromi
   const afterCollapse = (await page.$eval('.bcmenupanel', (el) => el.innerText)).includes('AI learning')
   check('Projects section collapses when its toggle is pressed', afterCollapse === false && (await sectionToggle.getAttribute('aria-expanded')) === 'false', afterCollapse ? 'still listed' : '')
 
+  // Keyboard: the same header, reached and operated without a pointer. Enter flips it both ways.
+  // The starting state is whatever the pointer test left it in, so each Enter must flip it from where it is.
+  await sectionToggle.focus()
+  const start = await sectionToggle.getAttribute('aria-expanded')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(300)
+  const afterFirst = await sectionToggle.getAttribute('aria-expanded')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(300)
+  const afterSecond = await sectionToggle.getAttribute('aria-expanded')
+  check(
+    'the Projects header works from the keyboard both ways (Enter flips it, and back)',
+    start !== null && afterFirst !== start && afterSecond === start,
+    `start=${String(start)} afterFirst=${String(afterFirst)} afterSecond=${String(afterSecond)}`,
+  )
+
+  // Escape closes the menu, and a person who opened it with the keyboard is not left in it.
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(400)
+  const closedByEscape = await page.$eval('.bcmenupanel', (el) => el.hidden === true || getComputedStyle(el).display === 'none')
+  check('Escape closes the project menu', closedByEscape === true)
+
   check('no page error on desktop', errors.length === 0, errors.slice(0, 2).join(' | '))
   await page.close()
 }
@@ -114,6 +136,20 @@ const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromi
   check('phone checkbox edges use exact pixel offsets, not percentages', box !== null && box.pos.includes('14.5px') && !box.pos.includes('%'), box ? box.pos : '')
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  // Touch: the Projects header is a tap, and the list opens and shuts on that tap alone (no hover on a phone).
+  await page.locator('[data-bc-menu]').first().tap()
+  await page.waitForTimeout(500)
+  const tapHeader = page.locator('.bcmenuprojects').first()
+  const tapBefore = await tapHeader.getAttribute('aria-expanded')
+  await tapHeader.tap()
+  await page.waitForTimeout(400)
+  const tapAfter = await tapHeader.getAttribute('aria-expanded')
+  check(
+    'on a phone, tapping the Projects header toggles its list',
+    tapBefore === 'true' && tapAfter === 'false',
+    `before=${String(tapBefore)} after=${String(tapAfter)}`,
+  )
+
   check('no sideways scroll at 390px', overflow <= 0, `overflow ${overflow}px`)
   check('no page error on phone', errors.length === 0, errors.slice(0, 2).join(' | '))
   await page.close()
