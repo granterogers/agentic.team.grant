@@ -3,7 +3,7 @@ begin;
 -- A piece of a turn's work that FAILED, and that nobody took on, is said to the next turn (COS-053, COS-083, REG-039).
 --
 -- `app.conversation_before` told a later turn what was still going and what waited on Grant, and was silent about a
--- failed piece. A failed specialist hand-off is reassigned to the Chief of Staff (migration 1075): the replacement
+-- failed piece. A failed specialist hand-off is reassigned to the Chief of Staff (migration 1080): the replacement
 -- carries the same instruction, the same parent and `reassigned_from`. So a failed piece is "taken on" when such a
 -- replacement exists, and is untaken otherwise.
 --
@@ -43,7 +43,7 @@ begin
   for i in 1 .. array_length(pairs, 1) loop
     n := (length(v) - length(replace(v, pairs[i][1], ''))) / length(pairs[i][1]);
     if n <> 1 then
-      raise exception '1078: expected one occurrence of % in the live conversation_before, found %', pairs[i][1], n;
+      raise exception '1083: expected one occurrence of % in the live conversation_before, found %', pairs[i][1], n;
     end if;
     v := replace(v, pairs[i][1], pairs[i][2]);
   end loop;

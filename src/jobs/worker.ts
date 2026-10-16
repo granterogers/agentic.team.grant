@@ -1283,7 +1283,7 @@ const runJobHeld = async (
       ),
     )
     /*
-      A SPECIALIST'S HAND-OFF THAT FAILED FOR GOOD GOES TO THE CHIEF OF STAFF, ONCE (COS-006, migration 1075).
+      A SPECIALIST'S HAND-OFF THAT FAILED FOR GOOD GOES TO THE CHIEF OF STAFF, ONCE (COS-006, migration 1080).
 
       The function refuses, with a reason, for anything it should not touch (a job that has not failed, the Chief of
       Staff's own work, a job that is not a hand-off). Its own failure is recorded where Grant looks, and is never

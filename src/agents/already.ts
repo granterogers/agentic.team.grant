@@ -60,7 +60,7 @@ const SYSTEM =
   '- A question about the work ("how is it going") is NONE, not a match.'
 
 /**
- * Only work for the SAME project can be a repeat of this request (priority 3, migration 1076).
+ * Only work for the SAME project can be a repeat of this request (priority 3, migration 1081).
  *
  * The candidates come from the whole conversation, so a request for one project could otherwise be judged a repeat of
  * work on another. When the request's project is known, a candidate is offered to the judgement only if it is for that

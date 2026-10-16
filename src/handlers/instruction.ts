@@ -2200,7 +2200,7 @@ async function conversationBefore(
       */
       stillGoing: Number(entry.stillGoing ?? 0),
       waitingOnYou: Number(entry.waitingOnYou ?? 0),
-      // A failed piece nobody took on (migration 1078): said, so a failure is not silence.
+      // A failed piece nobody took on (migration 1083): said, so a failure is not silence.
       failedUntaken: Number(entry.failedUntaken ?? 0),
     }))
 }
@@ -7053,7 +7053,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     : t.stillGoing > 0
                       ? `Still open from that: ${String(t.stillGoing)} piece(s) are still underway, queued or running, not finished.`
                       : '',
-                  // A failure is said, never left out: nobody took these pieces on (migration 1078).
+                  // A failure is said, never left out: nobody took these pieces on (migration 1083).
                   t.failedUntaken > 0
                     ? `${String(t.failedUntaken)} piece(s) of it failed and nobody has taken them on.`
                     : '',

@@ -131,7 +131,7 @@ export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promis
   const created = rows[0]?.blocker_id
   if (typeof created === 'string') return created
   /*
-    The same action is already open on this job (migration 1073, COS-092). Return THAT question: the caller's pause then
+    The same action is already open on this job (migration 1078, COS-092). Return THAT question: the caller's pause then
     names a real question, and nothing new is filed on Grant's list or put in front of him a second time. Only an
     action fingerprint can collide; a draft without one has no identity to repeat, so an empty insert there is a fault.
   */

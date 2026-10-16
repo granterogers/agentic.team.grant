@@ -85,8 +85,8 @@ Append-only. A decision is changed by adding a new entry that supersedes an earl
 ## DEC-013 — One open question per job and action, enforced by the database
 - **Date:** 15 October 2026 (implementation pass)
 - **Decision:** A partial unique index `blockers_one_open_per_job_action` on `(job_id, action_fingerprint)` where the question is open. `raiseBlocker` uses `on conflict do nothing` and returns the open question's id.
-- **Migration 1073** withdraws existing duplicate open questions (newest kept) with a resolution that says why, rather than deleting them, because blockers are an audit record. Withdrawal closes the question's task through the existing trigger.
-- **Not applied to production.** The migration is written and proved on the local replica only. Applying it needs the production read of duplicate counts and Grant's authorisation for the write (DEC-009 and the production rules). The migration number 1073 is the next free number in this checkout. It has not been checked against production's migration ledger.
+- **Migration 1078** withdraws existing duplicate open questions (newest kept) with a resolution that says why, rather than deleting them, because blockers are an audit record. Withdrawal closes the question's task through the existing trigger.
+- **Not applied to production.** The migration is written and proved on the local replica only. Applying it needs the production read of duplicate counts and Grant's authorisation for the write (DEC-009 and the production rules). The migration number 1078 is the next free number in this checkout. It has not been checked against production's migration ledger.
 
 ## DEC-010 — Historical specification header changed; hash re-recorded
 - **Date:** 15 October 2026

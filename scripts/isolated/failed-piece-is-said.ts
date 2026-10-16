@@ -5,7 +5,7 @@
  *   npx tsx scripts/isolated/failed-piece-is-said.ts <replica-db>
  *
  * Drives the REAL `instructionHandler` (the prompt it builds is what the model is shown), the REAL
- * `app.reassign_failed_specialist` (migration 1075) and the REAL `app.conversation_before` (migration 1078), inside a
+ * `app.reassign_failed_specialist` (migration 1080) and the REAL `app.conversation_before` (migration 1083), inside a
  * rolled-back transaction. The model is a stub that records its prompt.
  *
  * The count is read from the reader, not from the wording, and the check is a CHANGE in it. The chat is shared with
@@ -105,7 +105,7 @@ async function turnsWithUntaken(command: string, office: string): Promise<number
 const sentences = (prompt: string) => (prompt.match(new RegExp(FAILED.source, 'g')) ?? []).length
 
 // The number of failed pieces nobody took on that belong to THIS turn, as the reader counts them for a status question.
-// Read from the turn's own entry (migration 1079 gives each entry its job id), not the window total, because other
+// Read from the turn's own entry (migration 1084 gives each entry its job id), not the window total, because other
 // proofs' committed turns in the same chat can carry their own untaken pieces.
 async function untaken(turn: string, command: string, office: string): Promise<number> {
   const row = (await one(`select coalesce(sum((e ->> 'failedUntaken')::int), 0)::int as n

@@ -33,7 +33,7 @@ begin
   for i in 1 .. array_length(pairs, 1) loop
     n := (length(v) - length(replace(v, pairs[i][1], ''))) / length(pairs[i][1]);
     if n <> 1 then
-      raise exception '1079: expected one occurrence of % in the live conversation_before, found %', pairs[i][1], n;
+      raise exception '1084: expected one occurrence of % in the live conversation_before, found %', pairs[i][1], n;
     end if;
     v := replace(v, pairs[i][1], pairs[i][2]);
   end loop;

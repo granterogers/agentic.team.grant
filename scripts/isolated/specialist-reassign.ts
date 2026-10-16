@@ -4,7 +4,7 @@
  *   npx tsx scripts/isolated/specialist-reassign.ts <replica-db>
  *
  * Drives the real `app.enqueue_child_once` (the writer the instruction handler uses to hand a request to a
- * specialist) and the real `app.reassign_failed_specialist` (migration 1075), on a real parent job. The state moves
+ * specialist) and the real `app.reassign_failed_specialist` (migration 1080), on a real parent job. The state moves
  * are the legal ones (`queued -> failed`), enforced by the job-state trigger.
  *
  * Asserts:

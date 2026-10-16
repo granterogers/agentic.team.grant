@@ -18,7 +18,7 @@
 ## Implementation checkpoint (this session)
 
 Done, with evidence in the test matrix (TM-021 to TM-026):
-- **Duplicate open questions (COS-009, COS-022, REG-006):** `raiseBlocker` returns the open question for the same job and action instead of inserting a second; migration 1073 withdraws existing duplicates and adds a unique index. Replica proof 5/5. Before the fix the same proof failed 4 of 5.
+- **Duplicate open questions (COS-009, COS-022, REG-006):** `raiseBlocker` returns the open question for the same job and action instead of inserting a second; migration 1078 withdraws existing duplicates and adds a unique index. Replica proof 5/5. Before the fix the same proof failed 4 of 5.
 - **Approval identity (COS-007, COS-093):** the planner's step id is no longer part of the approval identity. The reason stays bound (DEC-011). Unit tests 12/12.
 - **Task ownership (COS-005, COS-016, COS-096, COS-098, COS-099, REG-016, REG-020):** plan tasks go to the step's specialist, or the Chief of Staff, not Grant's list by default. `taskHome` 6/6; writer proof 3/3.
 - Full unit suite: 7390 passed, 0 failed. Typecheck: 102 errors, the same count as the baseline, none in changed files. Biome: exit 0 on changed files.

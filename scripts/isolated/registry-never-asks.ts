@@ -6,7 +6,7 @@
  * Reads the LIVE registry on the replica (what every prompt is built from). Asserts that the descriptions of the
  * tools whose inputs the office must find for itself (Gmail search and read, Notion write) carry the rule, and that
  * the rule is detected in the text the office would actually be given. A control checks that the detector fails on
- * the description the registry held before migration 1074, so a detector that matches everything cannot pass.
+ * the description the registry held before migration 1079, so a detector that matches everything cannot pass.
  */
 import { isolated } from './guard.ts'
 
@@ -33,10 +33,10 @@ for (const tool of tools) {
   )
 }
 
-// Control: the description these rows held before migration 1074 must NOT pass the detector.
+// Control: the description these rows held before migration 1079 must NOT pass the detector.
 const before = 'Search Gmail'
 check(
-  'control: the pre-1074 description fails the detector',
+  'control: the pre-1079 description fails the detector',
   RULE.test(before) === false,
   `"${before}" is not accepted`,
 )

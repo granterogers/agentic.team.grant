@@ -1,5 +1,5 @@
 /**
- * COS-006 / REG-018 — the WORKER reassigns a specialist's hand-off that fails for good (migration 1075 wired into
+ * COS-006 / REG-018 — the WORKER reassigns a specialist's hand-off that fails for good (migration 1080 wired into
  * `runJob`).
  *
  *   npx tsx scripts/isolated/specialist-reassign-worker.ts <replica-db>
