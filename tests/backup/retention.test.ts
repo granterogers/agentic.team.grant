@@ -644,7 +644,9 @@ describe('the deletion path: dry run by default, refused without the attended fl
     expect(deletes(calls)).toBe(0)
   })
 
-  it('only with both does it delete, the whole run, its manifest last', async () => {
+  it('only with both does it delete, the whole run, its manifest FIRST', async () => {
+    // The manifest goes first: a folder that keeps its manifest reads as complete even with objects missing, so an
+    // interrupted deletion must leave no manifest behind. Control: the data objects are still all removed.
     const { calls } = bucket()
     const out = await applyRetention('ref', 'key', removable(), {
       go: true,
@@ -654,8 +656,8 @@ describe('the deletion path: dry run by default, refused without the attended fl
     expect(out.dryRun).toBe(false)
     const del = calls.filter((c) => c.method === 'DELETE').map((c) => c.url)
     expect(del).toHaveLength(4)
-    expect(del.slice(0, 2).every((u) => !u.includes('manifest.json.gz'))).toBe(true)
-    expect(del.slice(2).every((u) => u.includes('manifest.json.gz'))).toBe(true)
+    expect(del.slice(0, 2).every((u) => u.includes('manifest.json.gz'))).toBe(true)
+    expect(del.slice(2).every((u) => !u.includes('manifest.json.gz'))).toBe(true)
   })
 
   it('a plan naming an unverified or unfinished run is refused whole, before anything is sent', async () => {

@@ -8,8 +8,10 @@
  *   - a plan that was `refused` deletes nothing;
  *   - a name this system did not create is never deleted, whatever the plan says;
  *   - nothing is deleted without `go: true`, and the default is a dry run that returns what it WOULD delete;
- *   - a folder is emptied object by object, its manifest LAST, so an interrupted deletion leaves an INCOMPLETE run (which
- *     a restore refuses and the next pass sweeps) and never a manifest vouching for objects that are gone.
+ *   - a folder is emptied with its manifest FIRST, then its data objects. A manifest is what makes a run complete, and
+ *     verification reads only the objects still present, so a manifest left behind after some objects are gone reads as
+ *     a complete, verified backup with holes in it. Removing the manifest first means an interrupted deletion leaves an
+ *     INCOMPLETE run, which a restore refuses and the policy reports rather than deletes.
  *
  * Nothing calls `applyRetention` with `go: true` except `scripts/backup/prune.ts`, behind the production-writes gate and a
  * person's explicit `--attended`. A deletion refuses (throws) without BOTH the attended flag and the repository's own
@@ -166,6 +168,15 @@ const remove = async (ref: string, serviceKey: string, path: string): Promise<bo
   return r.ok
 }
 
+/**
+ * The order a run folder's objects are removed in: its manifest and manifest checksum first, then every data object.
+ * Exported so the order is tested directly, rather than inferred from a deletion that may be killed halfway.
+ */
+export function deletionOrder(inside: readonly string[]): string[] {
+  const isManifest = (n: string): boolean => n.includes('/manifest.json.gz')
+  return [...inside.filter(isManifest), ...inside.filter((n) => !isManifest(n))]
+}
+
 export async function applyRetention(
   ref: string,
   serviceKey: string,
@@ -201,14 +212,8 @@ export async function applyRetention(
   for (const name of names) {
     if (name.startsWith('run-')) {
       const inside = (await listUnder(ref, serviceKey, name)).map((o) => o.name)
-      // manifest LAST: a half-deleted run must read as interrupted, never as a complete backup with holes in it
-      const order = [
-        ...inside.filter(
-          (n) => !n.endsWith('/manifest.json.gz') && !n.endsWith('/manifest.json.gz.sha256'),
-        ),
-        ...inside.filter((n) => n.includes('/manifest.json.gz')),
-      ]
-      for (const path of order) if (await remove(ref, serviceKey, path)) objects += 1
+      for (const path of deletionOrder(inside))
+        if (await remove(ref, serviceKey, path)) objects += 1
     } else {
       for (const path of [name, `${name}.sha256`])
         if (await remove(ref, serviceKey, path)) objects += 1
