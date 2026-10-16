@@ -37,7 +37,9 @@ describe('the registries are sound', () => {
 
   it('the critical tier is deliberately small and every entry says what it guards', () => {
     expect(CRITICAL.length).toBeGreaterThanOrEqual(30)
-    expect(CRITICAL.length).toBeLessThanOrEqual(70)
+    // Raised 70 to 75 for the Chief of Staff reliability proofs (approval-asked-once, specialist-reassign-worker): each
+    // guards a live path that no other critical proof covers. The ceiling still bounds the tier; it is not a count to hit.
+    expect(CRITICAL.length).toBeLessThanOrEqual(75)
     for (const p of CRITICAL) {
       expect(p.why.length, p.name).toBeGreaterThanOrEqual(20)
       expect(p.min, `${p.name} needs an assertion floor`).toBeGreaterThanOrEqual(1)
