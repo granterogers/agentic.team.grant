@@ -12,8 +12,8 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 823,
-    "highestAppliedAtRecord": "1075",
+    "appliedAtRecord": 825,
+    "highestAppliedAtRecord": "1077",
     "note": "On 15 October 2026 the six PR #465 migrations were applied by npm run migrate from main 41e1206f: 1060, 1061, 1062 (main) and 1070, 1071, 1072 (PR #465), in that order (820 recorded; check:deployment-state holds the ledger to the committed directory). Earlier: on 9 October 2026 at 19:11 UTC migration 1053 (a public key reaches no view, #457) was applied ALONE with migrate:one, making 803; on 10 October at 01:18 UTC 1042 to 1052 were applied by npm run migrate (11 applied, 803 skipped), making 814: nothing is pending (1030 was never a file here, deferred). The pending set is DERIVED: every committed migration file whose name is not in the ledger. It is not stored here, so it cannot go stale. The 802 are: the 798 of the 6 October record, the efficiency workstream's 1023_the_health_reading_asks_the_cheap_question_first and 1027_the_pulse_reads_each_table_once (7 October), and 1040 and 1041 (9 October). The reliability migrations are authored 1023 to 1035 on claude/deep-systems-audit-3cwbtc and are renumbered 1042 to 1052 here, because production already held a different 1023 and 1027."
   },
   "components": {
