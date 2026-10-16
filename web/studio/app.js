@@ -6568,6 +6568,8 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
     } else if (route.how === 'tab' && route.to !== 'setup') {
       action = ui.button({ label: 'Set up', tone: 'primary', a: { 'data-goto-setting': route.to } })
     } else if (route.how === 'mcp') action = ui.button({ label: route.label, tone: 'primary', a: { 'data-mcp-open': true } })
+    // A link out to the provider's own sign-in page. It does not connect Team HQ by itself; the route's why says so.
+    else if (route.url) action = `<a class="btn primary" href="${esc(route.url)}" target="_blank" rel="noopener">${esc(route.urlLabel ?? 'Open')}</a>`
   } else if (route.how === 'mcp') {
     action = ui.button({ label: 'How to connect an app', tone: 'quiet', a: { 'data-mcp-open': true } })
   } else if (route.off !== undefined && canWrite() && op) {
@@ -6595,6 +6597,7 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
       <p class="st-desc">${esc(c.used ?? '')}</p>
       ${showDetail && detail && !expired ? `<p class="st-meta">${esc(detail)}</p>` : ''}
       ${expiredNote ? `<p class="st-meta">${esc(expiredNote)}</p>` : ''}
+      ${route.url && !connected && !expired ? `<p class="st-meta">${esc(route.why ?? '')}</p>` : ''}
       ${unreachable && !expired ? `<p class="st-meta">${esc(whyNot ?? 'Set up outside Team HQ.')}</p>` : ''}
       <span class="st-said" data-said role="status" aria-live="polite"></span>
     </div>
