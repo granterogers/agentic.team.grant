@@ -13,7 +13,7 @@
  * to rotate would silently lock Grant's phone out of the dashboard.
  */
 import '../../src/safety/require-production-writes.ts'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
@@ -384,21 +384,55 @@ const writer = await readFile('api/notebook-act.py', 'utf8')
 const actScript = await readFile('scripts/notebook/act.py', 'utf8')
 const requirements = await readFile('requirements.txt', 'utf8')
 const vercelConfig = await readFile('vercel.json', 'utf8')
+/*
+  Uploaded by digest, as scripts/deploy/gallery-preview.ts does. The inline body carried every studio file twice (the root
+  copy and the studio/ copy), which passed Vercel's 10 MB request limit on the first deploy with the full studio. A digest
+  upload sends each distinct content once, so the second copy costs nothing; the deployment then names every path by hash.
+*/
+const pageFiles: { file: string; data: string; encoding?: 'base64' }[] = [
+  { file: 'index.html', data: html },
+  { file: 'api/notebook.py', data: reader },
+  { file: 'api/notebook-act.py', data: writer },
+  { file: 'scripts/notebook/act.py', data: actScript },
+  { file: 'requirements.txt', data: requirements },
+  { file: 'vercel.json', data: vercelConfig },
+  ...studioFiles,
+]
+const uploaded = new Set<string>()
+const entries: { file: string; sha: string; size: number }[] = []
+for (const f of pageFiles) {
+  const bytes =
+    f.encoding === 'base64' ? Buffer.from(f.data, 'base64') : Buffer.from(f.data, 'utf8')
+  const sha = createHash('sha1').update(bytes).digest('hex')
+  if (!uploaded.has(sha)) {
+    const up = await fetch('https://api.vercel.com/v2/files', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${vercelToken}`,
+        'Content-Type': 'application/octet-stream',
+        'x-vercel-digest': sha,
+        'Content-Length': String(bytes.length),
+      },
+      body: new Uint8Array(bytes),
+    })
+    if (!up.ok && up.status !== 409) {
+      console.error(`page upload failed for ${f.file}: http ${String(up.status)}`)
+      process.exit(1)
+    }
+    uploaded.add(sha)
+  }
+  entries.push({ file: f.file, sha, size: bytes.length })
+}
+console.log(
+  `  page: ${String(entries.length)} paths, ${String(uploaded.size)} distinct contents uploaded`,
+)
 const deployment = await fetch('https://api.vercel.com/v13/deployments', {
   method: 'POST',
   headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
   body: JSON.stringify({
     name: 'ai-team-hq',
     target: 'production',
-    files: [
-      { file: 'index.html', data: html },
-      { file: 'api/notebook.py', data: reader },
-      { file: 'api/notebook-act.py', data: writer },
-      { file: 'scripts/notebook/act.py', data: actScript },
-      { file: 'requirements.txt', data: requirements },
-      { file: 'vercel.json', data: vercelConfig },
-      ...studioFiles,
-    ],
+    files: entries,
     projectSettings: { framework: null },
   }),
 })
