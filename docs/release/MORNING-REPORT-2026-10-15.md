@@ -5,8 +5,12 @@ Numbers are measured in this session. Anything not run is listed as not run.
 
 ## A. Executive summary
 
-Shipped to production on your instruction: migrations `1074` (projects can be archiving or restoring) and `1075` (an
-export refuses a project the office does not hold), and the page (module look, phone checkbox, project menu icons).
+Shipped to production on your instruction: migrations `1074` (projects can be archiving or restoring), `1075` (an
+export refuses a project the office does not hold), `1076` (the complete export carries the project calendar) and `1077`
+(a restore brings the calendar back), and the page (module look, phone checkbox, project menu icons).
+
+Update, after the 1076 and 1077 applications: the calendar gap listed below is closed in the database. The migrations
+were applied to production on your instruction; no page or worker deployment was made for them.
 Merged to `main`: the lifecycle rules, the module look, the gate fixes, the export fix, the menu icons, this report, and
 the deployment records.
 
@@ -38,6 +42,10 @@ ready (section J).**
   - Migration `1074` applied (production ledger 821 before, 822 after).
   - Migration `1075` applied (ledger 822 before, 823 after, latest `1075`). Verified read-only: the refusal text is in
     the live `app.project_export` definition.
+  - Migration `1076` applied (ledger 823 to 824): the complete export carries `events`.
+  - Migration `1077` applied (ledger 824 to 825, latest `1077`): a restore recreates the exported calendar events.
+  - The ledger count and latest name come from `docs/ops/deployment-state.json` (`appliedAtRecord` 825,
+    `highestAppliedAtRecord` 1077). I did not re-read production for this update.
   - Page `dpl_Fr1iDRevDSJbtUCgchrLoYXAY2uy` deployed, READY, serving the menu icons. Rollback point:
     `dpl_GixBZzkwkvUekHADwRtEBQ8rgaGo`.
   - Earlier rollback point for the first page: `dpl_BWk6MvPTAF7JaEnUdv5H481hWd4K`.
@@ -82,8 +90,11 @@ Standard formats (from the earlier PR, unit-tested): vCard `.vcf` (contacts), iC
   three tasks, two contacts and one document were exported, restored as a new project (`unnamed-restored`), and all of
   them were found in the restored project by content. A repeat restore returned the stored answer and wrote no project.
   10 of 10 checks pass. **The round trip is local only, on a replica. It has not been run on a real project.**
-- Missing from the complete package: **calendar events**. The package has no events section. The brief requires them.
-  Not fixed in this session.
+- Calendar events (closed after this report was first written): migration `1076` adds an `events` section to the complete
+  package, and migration `1077` restores those events into the new project with origin `archive`. Events that were
+  filed from Google are skipped on restore and counted in the restore report, so they are not duplicated. The round-trip
+  proof now asserts that the event added before export is present, by title, after restore. This update did not re-run
+  the proof.
 - Not verified: export coverage of conversations, activity and artifacts; secrets exclusion beyond one package.
 - Manual archive: the lifecycle states and the refusal of work during archiving/restoring are live (migration 1074,
   proof `archive-lifecycle.ts`, 10 of 10). The archive and restore *operations* that move a project through those states
@@ -151,6 +162,10 @@ Rollback:
 - Migration 1075: a `create or replace` of `app.project_export`. Rolling back means re-applying the previous definition,
   which is `app.project_export` as in migration 0720, and then deploying the page from before the change. The
   refusal only removes a false answer; nothing stored changes.
+- Migration 1076: a `create or replace` of `app.project_export`. Rolling back means re-applying the 1075 definition.
+  Nothing stored changes.
+- Migration 1077: a `create or replace` of `app.project_restore`. Rolling back means re-applying the 1071 definition.
+  Restored events already in projects stay where they are; rolling back does not delete them.
 - Deployment record: `docs/ops/deployment-state.json` describes the page and migration state.
 
 ## I. Remaining owner decisions and configuration
@@ -161,7 +176,7 @@ Decisions:
 2. Staging environment: do you want a Vercel preview with its own Supabase project? Without it, the brief's staging step
    cannot be done.
 3. Backup retention: approve the exact list before any deletion. The retention planner refuses to run without it.
-4. Calendar events in the complete export: confirm the events section should be added (a migration to the export function).
+4. ~~Calendar events in the complete export~~ Closed: migrations 1076 and 1077 were applied on your instruction.
 
 Configuration:
 
@@ -184,8 +199,7 @@ What is blocked:
 - External storage (provider accounts and credentials).
 - Backup retention and scheduling (owner approval of exact lists).
 - Staging preview (owner-provided isolated environment).
-- Calendar events in the export (decision and a migration).
-- Restore on a real project, and the browser journeys beyond one.
+- Restore on a real project (the calendar restore is proven on a replica only), and the browser journeys beyond one.
 
 Merge and production sequence (executed on your instruction, 15 October 2026):
 
