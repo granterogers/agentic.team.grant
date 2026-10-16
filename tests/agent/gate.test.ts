@@ -13,7 +13,9 @@ import { emptyState } from '../../scripts/agent/lib/state.mjs'
 
 const GATE = resolve('scripts/agent/stop-gate.mjs')
 const NOW = new Date('2026-10-14T10:00:00.000Z')
-const LATER = '2026-10-14T16:00:00.000Z'
+// Six hours after the real clock at load, not a fixed date: the hook process reads the real clock, so a fixed deadline
+// that has passed makes the gate allow the stop silently and these tests read it as a missing block decision.
+const LATER = new Date(Date.now() + 6 * 3_600_000).toISOString()
 
 function mission(overrides: Record<string, unknown> = {}, requirements: Requirement[] = []) {
   return {
