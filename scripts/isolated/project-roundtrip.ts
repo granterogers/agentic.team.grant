@@ -165,6 +165,15 @@ try {
     Number(restoredDocs.n) === 1,
     `${String(restoredDocs.n)} found`,
   )
+  // The restore brings the owned calendar back (migration 1077): the event added above must be in the restored project.
+  const restoredEvents = await one(
+    `select count(*)::int as n from public.project_events where project_id = ${npid}::uuid and title = ${lit(eventTitle)}`,
+  )
+  check(
+    'the source calendar event is in the restored project, by title',
+    Number(restoredEvents.n) === 1,
+    `${String(restoredEvents.n)} found`,
+  )
 
   // The idempotency control: a repeat of the same archive writes nothing and returns the stored answer.
   const before = await one(
