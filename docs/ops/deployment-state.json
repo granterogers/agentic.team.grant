@@ -2,32 +2,40 @@
   "schema": 1,
   "_about": "THE canonical, machine-readable record of what is deployed. Human documents (CLAUDE.md, docs/HANDOFF.md, the deployment-readiness notes) DEFER to this file and must not restate these numbers. It records what existing evidence proves at the time named below; it is never read from production by a check, and it is updated in the same commit as any deploy record. `npm run check:deployment-state` (local, no production contact) holds it against migrations/applied.json and the committed migrations directory.",
   "recorded": {
-    "at": "2026-10-15",
-    "by": "the 15 October PR #465 release: PR merged to main as 41e1206f, ledger recorded from main 41e1206f on docs/deploy-record-2026-10-15 (754ab4b1), then hq-api, signin, page and worker deployed from 754ab4b1 with their probes; the owner's approvals for the purge, the migration and the deploys were given in the session",
+    "at": "2026-10-16",
+    "by": "the 16 October release of the chief-of-staff reliability branch: merged to main (13c4a4f6, then f98d527e with the page upload fix), the seven pending migrations 1078 to 1084 applied by npm run migrate:one with production writes flag set for that release, then worker v988, signin v146, hq-api v913, the page (ai-team-lnvw90ucb-agentic-team-grant.vercel.app, promoted to ai-team-hq.vercel.app) and voice v674 / voice-token v703 deployed with their probes. The owner's instruction 'go ahead with the production migrations and deploys' was given in the session. The 15 October PR #465 release before it: PR merged to main as 41e1206f, ledger recorded from main 41e1206f on docs/deploy-record-2026-10-15 (754ab4b1), then hq-api, signin, page and worker deployed from 754ab4b1 with their probes; the owner's approvals for the purge, the migration and the deploys were given in the session",
     "evidence": "docs/release/MIGRATION-PLAN-PR465-2026-10-14.md; docs/release/FEATURE-BATCH-STATUS-2026-10-14.md; the migrate and deploy output of 15 October 2026 (six migrations applied, 820 recorded; hq-api v904, signin v136, page dpl_CAEeDg4jkBZSePHwoL42E5yPVBUt, worker v983)",
-    "shippedCommit": "5cf36d321f748d70470e45889d653cf7a2c995cc",
-    "shippedCommitMeans": "hq-api, signin, the page and the worker were deployed from this commit on 15 October 2026. It is main 41e1206f plus one change to migrations/applied.json recording the six migrations. The worker's code is main's, which includes PR #465's and main's handler, agent and job changes since 9310116. Before this, the worker and functions were last deployed from 9310116 on 6 October and hq-api v899 and the page on 9 October.",
+    "shippedCommit": "f98d527e7d0c5886b5bf98a680f8823bcd20b2d2",
+    "shippedCommitMeans": "16 October 2026: the worker, signin and voice were deployed from 13c4a4f6ddb3 and hq-api and the page from f98d527e7d0c5886b5bf98a680f8823bcd20b2d2, which differs from 13c4a4f6 only in scripts/deploy/hq.ts (the digest page upload). All of it is the branch merged onto main. Before it, on 15 October 2026: hq-api, signin, the page and the worker were deployed from 5cf36d321f748d70470e45889d653cf7a2c995cc. It is main 41e1206f plus one change to migrations/applied.json recording the six migrations. The worker's code is main's, which includes PR #465's and main's handler, agent and job changes since 9310116. Before this, the worker and functions were last deployed from 9310116 on 6 October and hq-api v899 and the page on 9 October.",
     "isLiveProductionReading": false,
     "liveReadingNote": "15 October 2026, read-only: ledger (814 before the migrations); storage and database size; check:callers, check:gateway-wrappers (after the migrations), check:machine-key, check:anon-exposure, check:capabilities, check:carrier-writers and check:office-edges (after the migrations) against production, and check:leaks (after the purge). Plus the owner-approved fixture purge (19 tasks) and the six migrations."
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 825,
-    "highestAppliedAtRecord": "1077",
-    "note": "On 15 October 2026 the six PR #465 migrations were applied by npm run migrate from main 41e1206f: 1060, 1061, 1062 (main) and 1070, 1071, 1072 (PR #465), in that order (820 recorded; check:deployment-state holds the ledger to the committed directory). Earlier: on 9 October 2026 at 19:11 UTC migration 1053 (a public key reaches no view, #457) was applied ALONE with migrate:one, making 803; on 10 October at 01:18 UTC 1042 to 1052 were applied by npm run migrate (11 applied, 803 skipped), making 814: nothing is pending (1030 was never a file here, deferred). The pending set is DERIVED: every committed migration file whose name is not in the ledger. It is not stored here, so it cannot go stale. The 802 are: the 798 of the 6 October record, the efficiency workstream's 1023_the_health_reading_asks_the_cheap_question_first and 1027_the_pulse_reads_each_table_once (7 October), and 1040 and 1041 (9 October). The reliability migrations are authored 1023 to 1035 on claude/deep-systems-audit-3cwbtc and are renumbered 1042 to 1052 here, because production already held a different 1023 and 1027."
+    "appliedAtRecord": 832,
+    "highestAppliedAtRecord": "1084",
+    "note": "On 16 October 2026 the seven pending migrations of the chief-of-staff reliability branch were applied to production one at a time with npm run migrate:one, in order: 1078 (a question is open once per job and action), 1079 (the registry says the office finds its own query and destination), 1080 (a failed specialist hand-off goes to the chief of staff once), 1081 (the conversation's work says which project it is for), 1082 (a quiet thread gets a follow-up on the list), 1083 (a failed piece nobody took on is said) and 1084 (each earlier turn says which job it was). Production ledger read before and after: 825 then 832, highest 1077 then 1084; npm run migrate then recorded the ledger file (applied 0, skipped 832). Before them, on 15 October 2026 the six PR #465 migrations were applied by npm run migrate from main 41e1206f: 1060, 1061, 1062 (main) and 1070, 1071, 1072 (PR #465), in that order (820 recorded; check:deployment-state holds the ledger to the committed directory). Earlier: on 9 October 2026 at 19:11 UTC migration 1053 (a public key reaches no view, #457) was applied ALONE with migrate:one, making 803; on 10 October at 01:18 UTC 1042 to 1052 were applied by npm run migrate (11 applied, 803 skipped), making 814: nothing is pending (1030 was never a file here, deferred). The pending set is DERIVED: every committed migration file whose name is not in the ledger. It is not stored here, so it cannot go stale. The 802 are: the 798 of the 6 October record, the efficiency workstream's 1023_the_health_reading_asks_the_cheap_question_first and 1027_the_pulse_reads_each_table_once (7 October), and 1040 and 1041 (9 October). The reliability migrations are authored 1023 to 1035 on claude/deep-systems-audit-3cwbtc and are renumbered 1042 to 1052 here, because production already held a different 1023 and 1027."
   },
   "components": {
     "worker": {
-      "version": "v983",
-      "note": "15 October 2026, deploy:worker from 754ab4b1 (closure of 226 files verified; liveness ok; unauthenticated kick 401; authenticated kick 200). Before it v980: 10 October 01:20 UTC, V1 release from 047f6f17; before that v976 (code of 9310116)"
+      "version": "v988",
+      "note": "16 October 2026, deploy:worker from 13c4a4f6 (deployed v988 ACTIVE; liveness ok; unauthenticated kick 401; authenticated kick 200; slack.per_office_delivery true). Before it v983, 15 October 2026, deploy:worker from 754ab4b1 (closure of 226 files verified; liveness ok; unauthenticated kick 401; authenticated kick 200). Before it v980: 10 October 01:20 UTC, V1 release from 047f6f17; before that v976 (code of 9310116)"
     },
     "signin": {
-      "version": "v143",
-      "note": "15 October 2026, deploy:signin from 5cf36d32 (PIN sign-in; passwords off, PASSWORD_SIGN_IN=0; refuses a stranger, a missing origin and a dud refresh with 403 or expired; health configured=true; the PIN path refuses an unknown login with the neutral sentence, proving the service role can read sign_in_pins). Earlier in the day: v136 from 754ab4b1, v139 and v141 (password experiments, retired). Before that v134 (10 October)"
+      "version": "v146",
+      "note": "16 October 2026, deploy:signin from 13c4a4f6 (v146 ACTIVE; health configured=true; a stranger 403; no origin 403; a dud refresh ok=false expired; nobody ok=false). Before it v143, 15 October 2026, deploy:signin from 5cf36d32 (PIN sign-in; passwords off, PASSWORD_SIGN_IN=0; refuses a stranger, a missing origin and a dud refresh with 403 or expired; health configured=true; the PIN path refuses an unknown login with the neutral sentence, proving the service role can read sign_in_pins). Earlier in the day: v136 from 754ab4b1, v139 and v141 (password experiments, retired). Before that v134 (10 October)"
     },
     "hq-api": {
-      "version": "v904",
-      "note": "15 October 2026, deploy:hq-api from 754ab4b1 (15 files, closure verified; unauthenticated 401, authenticated 200). Before it v903: 10 October 01:20 UTC V1 release from 047f6f17 (before it v899). Earlier: 9 October, Team HQ release (revisioned layout saves, project backgrounds); rollback bundle v897 captured by that release into .out/rollback-release/hq-api.v897 (gitignored, may no longer exist)"
+      "version": "v913",
+      "note": "16 October 2026, deploy:hq from f98d527e (v913 ACTIVE; unauthenticated 401; authenticated 200 counts present). Before it v904, 15 October 2026, deploy:hq-api from 754ab4b1 (15 files, closure verified; unauthenticated 401, authenticated 200). Before it v903: 10 October 01:20 UTC V1 release from 047f6f17 (before it v899). Earlier: 9 October, Team HQ release (revisioned layout saves, project backgrounds); rollback bundle v897 captured by that release into .out/rollback-release/hq-api.v897 (gitignored, may no longer exist)"
+    },
+    "voice": {
+      "version": "v674",
+      "note": "16 October 2026, deploy:voice from f98d527e (voice is listening and refuses strangers; mint http 200; unauthenticated mint 401)"
+    },
+    "voice-token": {
+      "version": "v703",
+      "note": "16 October 2026, deploy:voice from f98d527e (preflight allow-origin ai-team-hq.vercel.app; unauthenticated mint 401)"
     },
     "mcp": {
       "version": "v665"
@@ -48,7 +56,8 @@
       "report": "docs/audit/V1-RELEASE-REPORT-2026-10-09.md"
     },
     "page": {
-      "deployment": "dpl_Fr1iDRevDSJbtUCgchrLoYXAY2uy",
+      "deployment": "ai-team-lnvw90ucb-agentic-team-grant.vercel.app (16 October 2026, deploy:hq from f98d527e; the dpl_ id was not printed by the deploy script, so it is recorded by URL until read back)",
+      "deploymentNote16OctDigestUpload": "16 October 2026: 295 paths, 150 distinct contents uploaded by digest (scripts/deploy/hq.ts). Served 200 text/html, deep link 200. The deploy script exits 1 because its notebook reader probe answered 502 AuthError: NotebookLM sign-in expired (external Google session, not this release); the reader needs its sign-in refreshed by Grant.",
       "deploymentNote16OctMenuIconsAndExportRefusal": "Migration 1075 (an export refuses a project the office does not hold) applied to production 15 October 2026 and verified read-only (refusal text in the live app.project_export definition); page dpl_Fr1iDRevDSJbtUCgchrLoYXAY2uy deployed by hq-page-delta.ts --go from f102b376 (docs/deploy-record-1075, main bb61e4b0 plus the ledger line) with DEPLOY_SOURCE_SHA and both production flags. Serves the new page with the project-menu module icons; /api/notebook and /api/notebook-act answer 200. Rollback: dpl_GixBZzkwkvUekHADwRtEBQ8rgaGo.",
       "deploymentNote16OctArchiveAndModules": "Migration 1074 (projects can be archiving or restoring, 15 October 2026) applied to production and verified read-only; page dpl_GixBZzkwkvUekHADwRtEBQ8rgaGo deployed by hq-page-delta.ts --go from 945262d4 (docs/deploy-record-1074, main b7501b4d plus the ledger line) with DEPLOY_SOURCE_SHA and both production flags. Serves the new page; /api/notebook and /api/notebook-act answer 200. Rollback: dpl_BWk6MvPTAF7JaEnUdv5H481hWd4K.",
       "deploymentNote16OctSignInMessage": "Sign-in message fix (PR #500, main fbb701de): net.js no longer appends '(stopped at <step>)' to the 'could not be reached' and 'did not answer' sentences a person reads; the step stays on the error and in the trace. Deployed 16 October 2026 by hq-page-delta.ts --go from fbb701de with DEPLOY_SOURCE_SHA and both production flags. Dry run first: names matched production except the two notebook build outputs excluded by design. One file uploaded. Deployment dpl_Gee9GFsYLpGhxnDfQpJNt26uBscd, READY, serves the new page. Live /studio/net.js is byte-identical to main and contains no '(stopped at'. Rollback: promote dpl_Fr1iDRevDSJbtUCgchrLoYXAY2uy (the page before this change).",
@@ -79,8 +88,6 @@
       "note": "dpl_Dj7er... was the efficiency workstream's page (7 October) that production served before the Team HQ release; dpl_BaQDvaKi1PMQhnXCYCaBKrbd42Cx (the 6 October page) is kept as an older rollback by the efficiency closeout"
     },
     "notRedeployed": {
-      "voice": "v658",
-      "voice-token": "v687",
       "telegram-webhook": "v698",
       "slack-events": "v676",
       "google-oauth": "v646",
