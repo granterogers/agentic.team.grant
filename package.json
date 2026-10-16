@@ -135,6 +135,7 @@
     "notebook:probe": "tsx scripts/notebook/probe.ts",
     "notebook:bootstrap": "tsx scripts/notebook/bootstrap.ts",
     "notebook:deploy": "tsx scripts/notebook/deploy-token.ts",
+    "notebook:reconnect": "tsx scripts/notebook/reconnect.ts",
     "sync": "tsx scripts/projects/sync.ts",
     "sync:status": "tsx scripts/projects/sync-status.ts",
     "verify:sync": "tsx scripts/verify/sync.ts",

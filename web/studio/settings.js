@@ -712,7 +712,7 @@ export const ROUTES = {
     // The button opens the provider's sign-in page. Signing in there does not reconnect Team HQ: that step is not built yet (#502).
     url: 'https://notebooklm.google.com',
     urlLabel: 'Open NotebookLM',
-    why: 'Opens NotebookLM in a new tab, to sign in as the team’s account. That does not reconnect Team HQ yet; reconnecting from here is not built (issue #502). Notebooks already attached to a project stay attached.',
+    why: 'To reconnect: on the computer that runs Team HQ, double-click "Reconnect NotebookLM.command" in scripts/notebook. It asks you to type YES, signs in as the team’s account, and saves the sign-in to the office. Opening NotebookLM here only signs you in in the browser. Notebooks already attached to a project stay attached.',
     expiredNote:
       'NotebookLM no longer accepts the saved sign-in. Opening NotebookLM signs in in your browser, but it does not reconnect Team HQ yet (issue #502); nothing already read is lost.',
     costs:
