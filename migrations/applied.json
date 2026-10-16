@@ -821,5 +821,7 @@
   "1072_archives_carry_each_documents_original_file.sql": "7cdeaa04fda193b2893e36ff447db60026b2a4677898f543cbe26f8957a263e0",
   "1073_a_sign_in_is_a_pin_the_person_chose.sql": "a03fb32d501e16c191ba7f2c82592434c6c81d31e2ad20f0367f9f4290e393d9",
   "1074_a_project_archive_can_be_in_progress_and_restored.sql": "3213eb98762863c2df60f2f336cd4d2f33ae8fe64b64d1b682166e9c1f5d8a5a",
-  "1075_an_export_refuses_a_project_the_office_does_not_hold.sql": "2fde2dd7e3034ed9d258aaeb40749fe6c1ddfd7ee622462e8a5c67eb85bcb722"
+  "1075_an_export_refuses_a_project_the_office_does_not_hold.sql": "2fde2dd7e3034ed9d258aaeb40749fe6c1ddfd7ee622462e8a5c67eb85bcb722",
+  "1076_the_complete_export_carries_the_project_calendar.sql": "4e7cf603364d35730ab6cbd5e03ad6ca105cc0b6dc7eedaf47c94e2f0b1dde02",
+  "1077_a_restored_project_has_the_calendar_it_was_exported_with.sql": "655b8bee13f1de9284695f58dd6707b55f2adf29590e825671b772c2f4623be9"
 }
