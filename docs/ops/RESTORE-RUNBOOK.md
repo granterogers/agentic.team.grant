@@ -21,7 +21,8 @@ There are three restore paths. They are not equal.
 |---|---|---|---|
 | **A. One project from its archive (ZIP)** | One project as a NEW project, never over an existing one | Round trip on a local replica, 10 of 10 checks (`scripts/isolated/project-roundtrip.ts`, 15 Oct 2026). Not yet on a real project. | Team HQ, project menu, Restore from archive (the gateway calls `app.project_restore`). |
 | **B. Rehearsal of the newest nightly backup** | Rows of every table, loaded into a scratch schema, then dropped | 8 of 8 checks, 15 Oct 2026: 362,468 rows, 131 tables, every count matched. | `npm run backup:rehearse` (below). |
-| **C. Full disaster recovery into a fresh database** | Schema from the migrations, then the rows from the archive | **Not automated and not rehearsed end to end.** The pieces exist: migrations (`npm run migrate`) and `npm run verify:restore`. | Section 4. |
+| **C. Typed restore into a built database** | Rows back into the real tables, with real column types, constraints, triggers and foreign keys, on a database built from the repository's migrations | **Replica-proven, 16 October 2026:** `ISOLATED_POST=post bash scripts/isolated/backup-restore-typed.sh`, 59 of 59 checks, 0 failures. Restores 121,015 rows into 167 tables in about 6 seconds. Includes controls that must turn it red. | `src/backup/restore.ts`, section 4. |
+| **D. Full disaster recovery into a new Supabase project** | Path C, run against a new hosted project, plus Storage files | **Not done.** Path C has only run against a local replica. A hosted project, and Storage files, are unverified. | Section 4. |
 
 What path B does NOT prove: the schema. It loads every column as text into a scratch schema. It shows the data
 survives a round trip. It does not show that the rows fit the real column types, which path C would need to show.
@@ -55,23 +56,29 @@ changed.
 
   If it's there, the rehearsal left it behind. It holds copies only. Dropping it is the only cleanup the rehearsal needs.
 
-## 4. Full disaster recovery into a fresh Supabase project (not yet rehearsed)
+## 4. Full disaster recovery into a fresh Supabase project (not yet done)
 
 This is the path to use if the production database is lost. Work on a NEW project, never on the live one.
 
-1. Create a new Supabase project. Note its reference. Keep its credentials in the Vault, not in the repository.
-2. Build the schema from the repository: `npm run migrate` against the new project, with `TARGET_ENVIRONMENT` and
-   the production flags NOT set (a new project is not production). The migration ledger must end at the highest number in
-   `migrations/`.
-3. Load the newest verified backup's rows into the matching tables. Use the rehearsal's loader as the model; it is the
-   tested code for reading the archive and inserting batches. Load with the real column types, not text.
-4. Run `verify:restore` against the restored database. It re-runs the append-only enforcement probes, which must fail on
-   the restored database exactly as they do on the original. A restore that brings back rows but loses the append-only
-   triggers is silent corruption.
-5. Restore Storage files separately, from the Storage bucket's objects. Not yet tested.
+What is already proven: the typed restore (`src/backup/restore.ts`) rebuilds the database from the repository's migrations
+and loads the archived rows into the real tables. Replica proof, 16 October 2026: 59 of 59 checks, including
+121,015 rows in 167 tables and controls that must turn it red. Reproduce it with:
 
-Step 3 is the gap: the loader currently writes text columns, and a full recovery needs typed columns. Closing it is the
-next piece of work on this path.
+    ISOLATED_POST=post bash scripts/isolated/backup-restore-typed.sh
+
+What is NOT proven: running the same restore against a hosted Supabase project, and restoring Storage files.
+
+1. Create a new Supabase project. Note its reference. Keep its credentials in the Vault, not in the repository. Creating
+   it is an owner decision.
+2. Build the schema from the repository against the new project, with the production flags NOT set (a new project is not
+   production). The migration ledger must end at the highest number in `migrations/`.
+3. Run the typed restore against it. It refuses any target that is not a marked local replica, so this step needs the
+   refusal relaxed for the new project. That is a deliberate change with its own review, not a flag to set in passing
+   (see the note at the top of `src/backup/restore.ts`).
+4. Run `verify:restore` against the restored database. It re-runs the append-only enforcement probes, which must fail on
+   the restored database exactly as they do on the original.
+5. Restore Storage files separately, from the Storage bucket's objects. Not yet tested. The replica proof used a storage
+   emulator, so it says nothing about real Storage.
 
 ## 5. Retention
 
