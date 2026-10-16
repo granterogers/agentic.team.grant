@@ -45,6 +45,12 @@ try {
       `insert into public.contacts (project_id, kind, name, email) values (${pid}::uuid, 'person', ${lit(n)}, ${lit(`${run}-${n.split(' ')[1]}@example.test`)})`,
     )
   }
+  const eventTitle = `roundtrip meeting ${run}`
+  await db.execute(
+    `select app.hq_event_add(p_office => ${office}::uuid, p_slug => ${lit(String(src.slug))}, p_title => ${lit(eventTitle)},
+       p_starts_at => now() + interval '3 day', p_ends_at => now() + interval '3 day 1 hour',
+       p_all_day => false, p_notes => null, p_location => null, p_channel => null, p_authority => null)`,
+  )
   const docTitle = `roundtrip brief ${run}`
   await db.execute(
     `insert into public.documents (office_id, project_id, title, origin, state, added_by)
@@ -67,6 +73,15 @@ try {
     'the package exports the three source tasks',
     (pkg.tasks as unknown[]).length >= 3,
     `${String((pkg.tasks as unknown[]).length)} tasks`,
+  )
+
+  // The complete package carries the project's calendar events (migration 1076). The control is that the event added
+  // above is present, by title, so an export that dropped the section could not pass.
+  const events = (pkg.events as { summary?: string }[] | undefined) ?? []
+  check(
+    'the package carries the project calendar, with the event added above',
+    Array.isArray(pkg.events) && events.some((e) => e.summary === eventTitle),
+    `${String(events.length)} event(s) in the package`,
   )
 
   // A malformed key is refused before anything is written (the control for the key rule).
