@@ -325,7 +325,9 @@ try {
         })
         .join(', ')})`
 
-    const BATCH_BYTES = 400_000
+    // Each batch is one Management API round trip, so with a large archive the wall clock is the number of batches.
+    // REHEARSE_BATCH_BYTES raises it for a run that must finish inside a foreground command; the default is unchanged.
+    const BATCH_BYTES = Number(process.env.REHEARSE_BATCH_BYTES ?? 400_000)
     const columnList = columns.map((c) => `"${c}"`).join(', ')
     let batch: string[] = []
     let batchRows = 0
@@ -334,13 +336,29 @@ try {
     const flush = async (): Promise<boolean> => {
       if (batch.length === 0) return true
       attempted += batchRows
-      try {
-        await db.execute(`insert into ${target} (${columnList}) values ${batch.join(', ')}`)
-        loaded += batchRows
-      } catch (error) {
-        failures.push(`${qualified}: ${(error as Error).message.slice(0, 100)}`)
+      // A batch the API refuses as too large is split in half and each half retried, down to one row. Any other error
+      // is reported as it was before. A split is a retry of the same rows, so nothing is loaded twice.
+      const insertSplit = async (tuples: string[]): Promise<string | null> => {
+        try {
+          await db.execute(`insert into ${target} (${columnList}) values ${tuples.join(', ')}`)
+          return null
+        } catch (error) {
+          const message = (error as Error).message
+          if (/too large/i.test(message) && tuples.length > 1) {
+            const mid = Math.ceil(tuples.length / 2)
+            const first = await insertSplit(tuples.slice(0, mid))
+            if (first !== null) return first
+            return insertSplit(tuples.slice(mid))
+          }
+          return message.slice(0, 100)
+        }
+      }
+      const failure = await insertSplit(batch)
+      if (failure !== null) {
+        failures.push(`${qualified}: ${failure}`)
         return false
       }
+      loaded += batchRows
       batch = []
       batchRows = 0
       bytes = 0
