@@ -111,12 +111,23 @@ describe('the decision about a returning address', () => {
     expect(flow.pending(store, NOW)).toHaveLength(1)
   })
 
-  it('a pending flow does not make a token WITHOUT its nonce adoptable', () => {
+  // OWNER DECISION (15 October 2026, single-person office): a return that lost its flow marker in transit is adopted
+  // against the newest pending link this browser asked for. The trade-off is that an attacker's link opened in a
+  // browser that has a request of its own pending is accepted. The control below is the one that must still hold.
+  it('a token WITHOUT a flow marker is adopted only against this browser’s newest pending link, once', () => {
     const store = memory()
     started(store)
     const d = flow.decide({ hash: frag(TOKENS), search: '', store, now: NOW })
+    expect(d.session).not.toBeNull()
+    expect(flow.pending(store, NOW)).toHaveLength(0)
+    expect(flow.decide({ hash: frag(TOKENS), search: '', store, now: NOW }).session).toBeNull()
+  })
+
+  it('a token WITHOUT a flow marker is refused when this browser has no pending link', () => {
+    const store = memory()
+    const d = flow.decide({ hash: frag(TOKENS), search: '', store, now: NOW })
     expect(d.session).toBeNull()
-    expect(flow.pending(store, NOW)).toHaveLength(1)
+    expect(d.problem).not.toBe('')
   })
 
   it('an expired flow is refused', () => {
@@ -257,6 +268,50 @@ describe('the decision about a returning address', () => {
       'https://x.example/p?flow=abc',
     )
     expect(flow.returnAddress('https://x.example', '/p', '')).toBe('https://x.example/p')
+  })
+})
+
+describe('a password reset return', () => {
+  type Reset = { session?: { recovery?: boolean; email?: string } | null; problem?: string }
+  const decideReset = (
+    store: Store,
+    search: string,
+    hash = frag({ ...TOKENS, type: 'recovery' }),
+  ) => flow.decide({ hash, search, store, now: NOW }) as Reset
+
+  it('POSITIVE CONTROL: a reset this browser asked for is adopted as a recovery session carrying the account email', () => {
+    const store = memory()
+    const nonce = started(store, 3)
+    const d = decideReset(store, `?flow=${nonce}`)
+    expect(d.session).not.toBeNull()
+    expect(d.session?.recovery).toBe(true)
+    expect(d.session?.email).toBe('me@example.com')
+  })
+
+  it('a reset is adopted once: a second use of the same return is refused', () => {
+    const store = memory()
+    const nonce = started(store, 4)
+    decideReset(store, `?flow=${nonce}`)
+    expect(decideReset(store, `?flow=${nonce}`).session ?? null).toBeNull()
+  })
+
+  it('a reset return with no pending request in this browser is refused', () => {
+    const store = memory()
+    const d = decideReset(store, '')
+    expect(d.session ?? null).toBeNull()
+    expect(d.problem).not.toBe('')
+  })
+
+  it('a sign-in link is not marked as a reset', () => {
+    const store = memory()
+    const nonce = started(store, 5)
+    const d = flow.decide({
+      hash: frag(TOKENS),
+      search: `?flow=${nonce}`,
+      store,
+      now: NOW,
+    }) as Reset
+    expect(d.session?.recovery).not.toBe(true)
   })
 })
 

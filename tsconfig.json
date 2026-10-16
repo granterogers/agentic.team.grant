@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "types": ["node"],
@@ -25,5 +25,9 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "*.config.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "*.config.ts"],
+  // The verify probes are hand-run diagnostics that no gate or npm script calls. They index DOM results without the
+  // bounds checks noUncheckedIndexedAccess asks for, and typing each one would change nothing they do. They are
+  // excluded here, on purpose, and nothing else is excluded.
+  "exclude": ["scripts/verify/probe-*.ts"]
 }

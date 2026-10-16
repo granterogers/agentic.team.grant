@@ -66,7 +66,12 @@ import {
   SIGN_UP_SENT,
   UNAVAILABLE,
 } from '../../../src/auth/password.ts'
+import { isLocked, nextAttempt, PIN_PATTERN, pinMatches } from '../../../src/auth/pin.ts'
 import { safeRedirectTarget } from '../../../src/auth/redirect-target.ts'
+
+// The sentences for a PIN sign-in. A refusal never says whether the login exists.
+const PIN_REFUSED = 'That PIN is not right. Check it and try again.'
+const PIN_LOCKED = 'Too many wrong PINs. Try again in fifteen minutes.'
 
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const ANON = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
@@ -440,12 +445,133 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return json(
       {
         ok: true,
+        // Sign-in by the PIN the person chose: the way in.
+        pin: true,
         password: passwordSignInEnabled(Deno.env.get('PASSWORD_SIGN_IN')),
         google: googleOffered(Deno.env.get('GOOGLE_SIGN_IN')),
       },
       200,
       request,
     )
+  }
+
+  // Sign in with email and the PIN the person chose (owner decision, 15 October 2026). No email is sent. The PIN is
+  // compared as a salted hash; five wrong tries lock the login for fifteen minutes. A right PIN gets a session through
+  // Auth's own verification of a link this function makes, so the session is Auth's, not ours.
+  if (action === 'pin_sign_in') {
+    const email = normaliseEmail(String(body.email ?? ''))
+    const pin = String(body.pin ?? '')
+    if (email === null || !PIN_PATTERN.test(pin))
+      return json({ ok: false, said: PIN_REFUSED }, 400, request)
+
+    const rowsResponse = await upstream(
+      `${DB_URL}/rest/v1/sign_in_pins?email=eq.${encodeURIComponent(email)}&select=salt,hash,fails,locked_until`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+    ).catch(() => null)
+    if (rowsResponse === null || !rowsResponse.ok)
+      return json({ ok: false, said: UNAVAILABLE }, 503, request)
+    const row = (
+      (await rowsResponse.json()) as {
+        salt: string
+        hash: string
+        fails: number
+        locked_until: string | null
+      }[]
+    )[0]
+    if (row === undefined) return json({ ok: false, said: PIN_REFUSED }, 200, request)
+
+    const lockedUntil = row.locked_until === null ? null : Date.parse(row.locked_until)
+    const now = Date.now()
+    if (isLocked({ fails: row.fails, lockedUntil }, now))
+      return json({ ok: false, said: PIN_LOCKED }, 200, request)
+
+    const ok = await pinMatches(pin, row.salt, row.hash)
+    const next = nextAttempt({ fails: row.fails, lockedUntil }, ok, now)
+    await upstream(`${DB_URL}/rest/v1/sign_in_pins?email=eq.${encodeURIComponent(email)}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'content-type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        fails: next.fails,
+        locked_until: next.lockedUntil === null ? null : new Date(next.lockedUntil).toISOString(),
+        updated_at: new Date(now).toISOString(),
+      }),
+    }).catch(() => null)
+    if (!ok) return json({ ok: false, said: PIN_REFUSED }, 200, request)
+
+    const made = await upstream(`${DB_URL}/auth/v1/admin/generate_link`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ type: 'magiclink', email }),
+    }).catch(() => null)
+    if (made === null || !made.ok) return json({ ok: false, said: UNAVAILABLE }, 503, request)
+    const link = (await made.json()) as { hashed_token?: string }
+    if (typeof link.hashed_token !== 'string' || link.hashed_token === '')
+      return json({ ok: false, said: UNAVAILABLE }, 503, request)
+
+    const signed = await upstream(`${DB_URL}/auth/v1/verify`, {
+      method: 'POST',
+      headers: { apikey: ANON, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'magiclink', token_hash: link.hashed_token }),
+    }).catch(() => null)
+    if (signed === null || !signed.ok) return json({ ok: false, said: UNAVAILABLE }, 503, request)
+    const session = passwordSessionFrom(await signed.json(), Date.now())
+    if (session === null) return json({ ok: false, said: UNAVAILABLE }, 503, request)
+    return json({ ok: true, session }, 200, request)
+  }
+
+  // Choose a new password after a reset link. The person's own reset session is the proof; Auth checks it.
+  if (action === 'password_set') {
+    if (!passwordSignInEnabled(Deno.env.get('PASSWORD_SIGN_IN'))) {
+      return json({ ok: false, said: NOT_SWITCHED_ON }, 404, request)
+    }
+    const accessToken = String(body.access_token ?? '')
+    const password = String(body.password ?? '')
+    const email = normaliseEmail(String(body.email ?? '')) ?? ''
+    if (accessToken === '' || accessToken.length > 4096) {
+      return json(
+        { ok: false, said: 'That reset has ended. Ask for a new link and try again.' },
+        401,
+        request,
+      )
+    }
+    const problem = passwordProblem(password, email)
+    if (problem !== null) return json({ ok: false, said: problem }, 400, request)
+    const changed = await upstream(`${DB_URL}/auth/v1/user`, {
+      method: 'PUT',
+      headers: {
+        apikey: ANON,
+        Authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ password }),
+    }).catch(() => null)
+    if (changed === null || changed.status >= 500)
+      return json({ ok: false, said: UNAVAILABLE }, 503, request)
+    if (changed.status === 401 || changed.status === 403) {
+      return json(
+        { ok: false, said: 'That reset has ended. Ask for a new link and try again.' },
+        401,
+        request,
+      )
+    }
+    if (changed.status === 422) {
+      return json(
+        { ok: false, said: 'That password is not strong enough for this office.' },
+        400,
+        request,
+      )
+    }
+    if (!changed.ok) return json({ ok: false, said: UNAVAILABLE }, 503, request)
+    return json({ ok: true, said: 'Your new password is saved. You are signed in.' }, 200, request)
   }
 
   if (
@@ -461,11 +587,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json({ ok: false, said: 'That does not look like an email address.' }, 400, request)
 
     if (action === 'password_reset') {
-      const asked = await upstream(`${DB_URL}/auth/v1/recover`, {
-        method: 'POST',
-        headers: { apikey: ANON, 'content-type': 'application/json' },
-        body: JSON.stringify({ email }),
-      }).catch(() => null)
+      // The reset comes back to the page that asked, carrying its flow marker (checked as a sign-in link is).
+      const back = safeRedirectTarget(String(body.back ?? ''), ALLOWED_ORIGINS, origin)
+      const asked = await upstream(
+        `${DB_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(back)}`,
+        {
+          method: 'POST',
+          headers: { apikey: ANON, 'content-type': 'application/json' },
+          body: JSON.stringify({ email }),
+        },
+      ).catch(() => null)
       if (asked === null || asked.status >= 500)
         return json({ ok: false, said: UNAVAILABLE }, 503, request)
       return json({ ok: true, said: RESET_SENT }, 200, request)

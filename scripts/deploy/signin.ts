@@ -60,6 +60,8 @@ const setSecrets = await fetch(`${api}/secrets`, {
   body: JSON.stringify([
     { name: 'HQ_API_TOKEN', value: token },
     { name: 'SIGNIN_ALLOWED_ORIGIN', value: PAGE_ORIGINS.join(',') },
+    // Passwords are off (owner decision, 15 October 2026): sign-in is by the PIN the person chose.
+    { name: 'PASSWORD_SIGN_IN', value: '0' },
   ]),
 })
 console.log(`function secrets set: http ${String(setSecrets.status)}`)

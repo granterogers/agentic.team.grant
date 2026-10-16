@@ -324,6 +324,9 @@ const menuPanel = () => {
   const here = state().view === 'project' ? state().project : null
   const projects = listed()
   const mine = canWrite()
+  /* The module's own icon and colour, from the same identity table the dashboard draws its modules from (no second list). */
+  const rowMark = (id) =>
+    identity.known(id) ? `<span class="bcmenuicon" style="--bc-tint:${identity.hue(id)}">${identity.svg(id, 16)}</span>` : ''
   const item = (to, label, mark = '') =>
     `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-go="${esc(to)}"
       aria-current="${isHere(to) ? 'page' : 'false'}">${mark}<span class="bcmenuname">${esc(label)}</span></button>`
@@ -381,9 +384,9 @@ const menuPanel = () => {
     <div class="bcmenulist" data-bc-menu-modules>${Object.entries(compose.NAMES)
       .map(
         ([id, name]) =>
-          `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-expand="${esc(id)}"><span class="bcmenuname">${esc(name)}</span></button>`,
+          `<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-expand="${esc(id)}">${rowMark(id)}<span class="bcmenuname">${esc(name)}</span></button>`,
       )
-      .join('')}${item(at(`/p/${here}/chat`), 'Team Chat')}<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-sources="1"><span class="bcmenuname">Sources</span></button></div>`
+      .join('')}${item(at(`/p/${here}/chat`), 'Team Chat', rowMark('chat'))}<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-sources="1">${rowMark('sources')}<span class="bcmenuname">Sources</span></button></div>`
     }
     <hr class="bcmenusep">
     <button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem bcmenuglobal" data-bc-global-menu="1"

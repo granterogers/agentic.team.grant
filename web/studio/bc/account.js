@@ -141,17 +141,15 @@ const sentCard = () => `<div class="bcentrysent" role="status">
 const passwordPanel = () => `<form class="bcentryform" data-bc-password-form novalidate>
     ${emailField('bc-entry-email-pw', form.email)}
     <div class="bcfield">
-      <label class="bclabel" for="bc-entry-password">Password</label>
+      <label class="bclabel" for="bc-entry-pin">Your PIN (4 to 8 digits)</label>
       <div class="bcpwrow">
-        <input class="bcinput" id="bc-entry-password" type="password" name="password"
-          autocomplete="current-password" autocapitalize="off" spellcheck="false" required>
-        <button type="button" class="bcbtn bcbtn--outline" data-bc-password-toggle aria-controls="bc-entry-password" aria-pressed="false">Show</button>
+        <input class="bcinput" id="bc-entry-pin" type="password" name="pin" inputmode="numeric"
+          autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="8" required>
+        <button type="button" class="bcbtn bcbtn--outline" data-bc-password-toggle aria-controls="bc-entry-pin" aria-pressed="false">Show</button>
       </div>
     </div>
-    <button type="submit" class="bcbtn bcbtn--primary bcentrygo">Sign in with password</button>
-    <div class="bcentryrow">
-      <button type="button" class="bcbtn bcbtn--outline" data-bc-password-reset>Forgot the password?</button>
-    </div>
+    <button type="submit" class="bcbtn bcbtn--primary bcentrygo">Sign in with PIN</button>
+    <p class="bcentrysmall">No email is sent. Five wrong PINs lock the login for fifteen minutes.</p>
     <p class="bcentrysaid" data-bc-password-said role="status" aria-live="polite"></p>
   </form>`
 
@@ -161,12 +159,12 @@ const googlePanel = () => `<div class="bcentrygoogle">
     <p class="bcentrysaid" data-bc-google-said role="status" aria-live="polite"></p>
   </div>`
 
-const signinPanel = () => `${googleOn === true ? googlePanel() : ''}${passwordOffered === true ? passwordPanel() : ''}<form class="bcentryform" data-bc-entry-form="signin" novalidate>
+const signinPanel = () => `${googleOn === true ? googlePanel() : ''}${passwordOffered === true ? passwordPanel() : ''}${passwordOffered === true ? '' : `<form class="bcentryform" data-bc-entry-form="signin" novalidate>
     ${passwordOffered === true ? '' : emailField('bc-entry-email-in', form.email)}
     <p class="bcentrysmall">${passwordOffered === true ? 'Or, with no password, we email you a link that signs you in on this device.' : 'No password. We email you a link that signs you in on this device.'}</p>
     <button type="submit" class="bcbtn bcbtn--primary bcentrygo${passwordOffered === true ? ' bcbtn--outline' : ''}">Email me a sign-in link</button>
     <p class="bcentrysaid" data-bc-entry-said role="status" aria-live="polite"></p>
-  </form>`
+  </form>`}`
 
 const createPanel = () => `<form class="bcentryform" data-bc-entry-form="create" novalidate>
     <div class="bcfield">
@@ -421,44 +419,27 @@ export function wire(root) {
     f.addEventListener('submit', async (e) => {
       e.preventDefault()
       const email = String(f.querySelector('[name=email]')?.value ?? '').trim()
-      const password = String(f.querySelector('[name=password]')?.value ?? '')
+      const pin = String(f.querySelector('[name=pin]')?.value ?? '')
       form.email = email
       if (!looksLikeEmail(email)) {
         say(said, 'That does not look like an email address.')
         f.querySelector('[name=email]')?.focus()
         return
       }
-      if (password === '') {
-        say(said, 'Enter your password.')
-        f.querySelector('[name=password]')?.focus()
+      if (pin === '') {
+        say(said, 'Enter your PIN.')
+        f.querySelector('[name=pin]')?.focus()
         return
       }
       const go = f.querySelector('button[type=submit]')
       if (go !== null) go.disabled = true
       say(said, 'Signing you in…')
       try {
-        await session.passwordSignIn(email, password)
+        await session.passwordSignIn(email, pin)
         // A fresh start reads the new session the way any page load does, as the Sample sign-in does.
         globalThis.location.replace(String(globalThis.location?.pathname ?? '/'))
       } catch (error) {
         if (go !== null) go.disabled = false
-        say(said, error instanceof Error ? error.message : String(error))
-      }
-    })
-  }
-  for (const b of root.querySelectorAll('[data-bc-password-reset]')) {
-    b.addEventListener('click', async () => {
-      const f = b.closest('[data-bc-password-form]')
-      const said = f?.querySelector('[data-bc-password-said]')
-      const email = String(f?.querySelector('[name=email]')?.value ?? '').trim()
-      if (!looksLikeEmail(email)) {
-        say(said, 'Type your email address first, then ask again.')
-        f?.querySelector('[name=email]')?.focus()
-        return
-      }
-      try {
-        say(said, await session.passwordReset(email))
-      } catch (error) {
         say(said, error instanceof Error ? error.message : String(error))
       }
     })

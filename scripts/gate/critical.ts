@@ -36,6 +36,16 @@ export const CRITICAL: readonly Proof[] = [
   ),
   p('p1-operator', 21, 'a second person reaches none of the operator-only actions and sections'),
   p(
+    'project-roundtrip',
+    10,
+    'a project exports and restores as a new project with its tasks, contacts and documents, another office cannot export it, and a repeat restore writes nothing',
+  ),
+  p(
+    'archive-lifecycle',
+    10,
+    'a project being archived or restored takes no task or event, and an active or paused one still does',
+  ),
+  p(
     'p1-storage-order',
     15,
     'a storage read or write by an unknown or officeless caller is refused BEFORE any storage call is made',

@@ -3,6 +3,10 @@
   "baseline": "41de1965",
   "generated_from": "production catalogue read-only, 1 October 2026; derivation rule: a table derives only through a foreign key whose columns are NOT NULL in the schema",
   "tables": {
+    "sign_in_pins": {
+      "class": "GLOBAL",
+      "why": "One sign-in PIN per login (1073): a salted PBKDF2 hash and a wrong-try counter, never the PIN. Keyed by the login's email, which is how the sign-in function finds it. A login can own an office, so the row cannot name one; row security is on and no browser role has any privilege, so only the sign-in function, with the service role, reads or writes it."
+    },
     "activity_event_types": {
       "class": "GLOBAL",
       "why": "The activity taxonomy (1060): which event types exist, their category, default visibility and severity, and which an external worker may report. One vocabulary for every office; a per-office copy would let an office widen what a diagnostic type may show."

@@ -90,9 +90,13 @@ check(
       () => true,
       async (e: unknown) => {
         const strip = await page
-          .evaluate("(document.querySelector('.bcnotlive')?.innerText || 'no strip').replace(/\\n/g, ' | ').slice(0, 240)")
+          .evaluate(
+            "(document.querySelector('.bcnotlive')?.innerText || 'no strip').replace(/\\n/g, ' | ').slice(0, 240)",
+          )
           .catch(() => 'strip unreadable')
-        console.log(`  live-page wait rejected (${String(e instanceof Error ? e.message : e).slice(0, 60)}); strip: ${strip}`)
+        console.log(
+          `  live-page wait rejected (${String(e instanceof Error ? e.message : e).slice(0, 60)}); strip: ${strip}`,
+        )
         return false
       },
     ),

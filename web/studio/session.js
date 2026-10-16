@@ -282,26 +282,59 @@ export async function startSample() {
 */
 
 /** Whether this deployment offers a password. Any failure reads as "no", so the link path is never hidden by an outage. */
+/** Whether the office offers sign-in by the PIN the person chose (the name predates the change to PINs). */
 export async function passwordOffered() {
   try {
     const { body } = await post({ action: 'methods' })
-    return body.password === true
+    return body.pin === true
   } catch {
     return false
   }
 }
 
-/** Sign in with an address and a password. Resolves when the session is held; throws the office's sentence otherwise. */
-export async function passwordSignIn(email, password) {
-  const { body } = await post({ action: 'password_sign_in', email, password })
+/** Sign in with an address and the PIN the person chose. Resolves when the session is held; throws the office's sentence otherwise. */
+export async function passwordSignIn(email, pin) {
+  const { body } = await post({ action: 'pin_sign_in', email, pin })
   if (body.ok === true && body.session !== undefined && write(body.session)) return true
   throw new Error(String(body.said ?? 'Sign-in is not reachable just now. Try again shortly.'))
 }
 
-/** Ask for a link to choose a new password. It answers the same way for any address. */
+/**
+ * Ask for a link to choose a new password. This browser remembers the request (the same binding a sign-in link uses), so
+ * the link comes back here and is accepted; it answers the same way for any address.
+ */
 export async function passwordReset(email) {
-  const { body } = await post({ action: 'password_reset', email })
+  let nonce = ''
+  try {
+    nonce = beginFlow(localStorage, { email }, Date.now(), crypto.getRandomValues(new Uint8Array(24)))
+  } catch {
+    nonce = ''
+  }
+  if (nonce === '') throw new Error('This browser is blocking the storage sign-in needs. Allow site data for this page and try again.')
+  const { body } = await post({
+    action: 'password_reset',
+    email,
+    back: returnAddress(window.location.origin, window.location.pathname, nonce),
+  })
   if (body.ok !== true) throw new Error(String(body.said ?? 'The reset could not be asked just now. Try again shortly.'))
+  return String(body.said)
+}
+
+/** True when the session came from a password reset and no new password has been chosen yet. */
+export const mustSetPassword = () => read()?.recovery === true
+
+/** Save the new password for the reset session this browser holds. Resolves with the office's sentence. */
+export async function setPassword(password) {
+  const held = read()
+  if (held === null || held.recovery !== true) throw new Error('That reset has ended. Ask for a new link and try again.')
+  const { body } = await post({
+    action: 'password_set',
+    access_token: held.access_token,
+    email: held.email ?? '',
+    password,
+  })
+  if (body.ok !== true) throw new Error(String(body.said ?? 'The password could not be saved just now. Try again shortly.'))
+  write({ ...held, recovery: false })
   return String(body.said)
 }
 

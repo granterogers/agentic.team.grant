@@ -385,13 +385,19 @@ export async function cases(c: Ctx): Promise<void> {
     'only-b-has-this',
   )
   // the package, apart from the moment it was made
+  // A refusal is an answer too: the export refuses a project the office does not hold with the same sentence it gives a
+  // project that does not exist (migration 1075). So the refusal's TEXT is what is compared, and a crash is not an answer.
   const pkg = async (id: string) => {
-    const r = (await svc(`select public.project_export(${q(A)}, '${id}')`)) as Record<
-      string,
-      unknown
-    >
-    r.exported_at = null
-    return c.json(r)
+    try {
+      const r = (await svc(`select public.project_export(${q(A)}, '${id}')`)) as Record<
+        string,
+        unknown
+      >
+      r.exported_at = null
+      return c.json(r)
+    } catch (error) {
+      return `refused: ${(error as Error).message}`
+    }
   }
   const ex = await pkg(b.project)
   const em = await pkg(nobody)

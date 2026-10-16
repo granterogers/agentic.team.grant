@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "revision": 0,
+  "updatedAt": "2026-10-14T09:20:00.000Z",
+  "mission": {
+    "id": "P0-CONTINUITY-2026-10-14",
+    "title": "Autonomous development continuity repair",
+    "status": "active",
+    "startedAt": "2026-10-14T08:14:00.000Z",
+    "deadline": "2026-10-14T16:14:00.000Z",
+    "authorisedHours": 8,
+    "branch": "claude/continuity-repair-2026-10-14",
+    "baseline": "origin/main 65bc7b0",
+    "commit": null,
+    "owner": "Grant",
+    "scope": "Stop premature session endings. Repository instructions, execution ledger, stop gate, supervisor, tests. Nothing else.",
+    "authorised": [
+      "Create and push claude/continuity-repair-2026-10-14 and open or update a DRAFT pull request for it",
+      "Edit repository instruction files, scripts, tests and docs on that branch",
+      "Create one GitHub issue for this repair"
+    ],
+    "prohibited": [
+      "Merge to main, or any branch other than claude/continuity-repair-2026-10-14",
+      "Deploy, migrate or touch production data",
+      "Start a model-consuming session (claude -p, routines, scheduled triggers) without Grant's explicit approval",
+      "Create or enable a scheduled trigger or routine",
+      "Modify feature/auth-storage-portability-ui or PR #465",
+      "Read or print secret values"
+    ],
+    "requirements": [
+      {
+        "id": "R1",
+        "title": "Establish termination evidence from transcripts, hooks and configuration",
+        "status": "done",
+        "evidence": "docs/agent/history/TERMINATION-EVIDENCE-2026-10-14.md"
+      },
+      {
+        "id": "R2",
+        "title": "Precedence model, concise CLAUDE.md, current mission and history archive",
+        "status": "done",
+        "evidence": "CLAUDE.md (496 lines, was 4,929); docs/agent/history/; docs/AUTONOMOUS-RUN.md is a pointer"
+      },
+      {
+        "id": "R3",
+        "title": "Durable execution ledger with atomic writes, compare-and-swap and stale-lock recovery",
+        "status": "done",
+        "evidence": "scripts/agent/lib/state.mjs; tests/agent/ledger.test.ts (15, including a six-process race)"
+      },
+      {
+        "id": "R4",
+        "title": "Stop gate registered as a project Stop hook, scoped to its own branch",
+        "status": "done",
+        "evidence": ".claude/settings.json; scripts/agent/stop-gate.mjs; tests/agent/gate.test.ts (26)"
+      },
+      {
+        "id": "R5",
+        "title": "Supervisor: restart, backoff, crash-loop detection, budgets, duplicate prevention, graceful stop",
+        "status": "done",
+        "evidence": "scripts/agent/supervise.mjs; tests/agent/supervisor.test.ts (real child process)"
+      },
+      {
+        "id": "R6",
+        "title": "Regression tests for gate rules, ledger races and the real supervisor against a stub launcher",
+        "status": "done",
+        "evidence": "tests/agent/*.test.ts; sabotage of the gate block rule (8 red), of the lock (cross-process race red); both restored"
+      },
+      {
+        "id": "R7",
+        "title": "Live continuity trial across real session restarts",
+        "status": "done",
+        "evidence": "docs/agent/history/LIVE-RESTART-TRIAL-2026-10-14.md: one controlled trial, two sessions, one restart, PASS for that trial only"
+      },
+      {
+        "id": "R8",
+        "title": "Operator runbook: start, monitor, stop and resume an eight-hour run",
+        "status": "done",
+        "evidence": "docs/agent/CONTINUITY.md; scripts/agent/mission.mjs (8 tests)"
+      },
+      {
+        "id": "R9",
+        "title": "Push branch, open or update draft PR, record verification in the ledger",
+        "status": "done",
+        "evidence": "draft pull request #475; verification in its body"
+      }
+    ],
+    "nextAction": "Owner decision on R7 (live trial). Nothing else is actionable; the mission ends as blocked on that decision.",
+    "issues": ["#474"],
+    "pullRequest": "#475 (draft)",
+    "lastCheckpoint": {
+      "at": "2026-10-14T09:20:00.000Z",
+      "commit": null,
+      "summary": "R1 to R6 and R8 done with tests; each suite shown able to fail by sabotage; R2 archive and concise CLAUDE.md in place. Not yet committed."
+    }
+  },
+  "sessions": [
+    {
+      "id": "owner-session-1",
+      "parent": null,
+      "startedAt": "2026-10-14T08:14:02.000Z",
+      "endedAt": null,
+      "lastActivityAt": "2026-10-14T09:20:00.000Z",
+      "terminationReason": null,
+      "resumeEligible": true
+    }
+  ],
+  "stopGate": { "blocksTotal": 0, "lastBlockAt": null, "blocksBySession": {} }
+}

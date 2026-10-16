@@ -144,16 +144,23 @@ export const decide = ({ hash, search, store, now, kind = KIND_LINK }) => {
   const rest = params.toString()
   const clean = rest === '' ? '' : `?${rest}`
 
+  // A return that names its flow must match it exactly. A return with NO flow in its address (the provider or the
+  // sign-in service dropped it) is accepted only against the newest pending flow of this kind in THIS browser: the
+  // owner chose that trade-off (single-person office; a forwarded link is still refused unless this browser asked
+  // for one within the hour). A named flow that is wrong is always refused.
+  const open = pending(store, now).filter((f) => f.kind === kind)
   const match =
-    asked !== '' && NONCE_RE.test(asked)
-      ? pending(store, now).find((f) => f.nonce === asked && f.kind === kind)
-      : undefined
+    asked !== ''
+      ? NONCE_RE.test(asked)
+        ? open.find((f) => f.nonce === asked)
+        : undefined
+      : open[open.length - 1]
 
   if (match === undefined) {
     return { touched: true, search: clean, session: null, problem: OTHER_BROWSER }
   }
   // A flow this browser started, returning. It is spent whatever the outcome: a link is one use.
-  consume(store, asked, now)
+  consume(store, match.nonce, now)
 
   if (failed !== '') {
     // A token beside an error is not a success. A Google cancellation is named as one; every other provider error is
@@ -178,6 +185,9 @@ export const decide = ({ hash, search, store, now, kind = KIND_LINK }) => {
       access_token: access,
       refresh_token: refresh,
       expires_at: now + Math.max(60, Number.isFinite(seconds) ? seconds : 3600) * 1000,
+      // A password reset's return (type=recovery): the person must choose a password before the session is used.
+      recovery: q.get('type') === 'recovery',
+      email: typeof match.email === 'string' ? match.email : '',
     },
   }
 }

@@ -18,9 +18,30 @@ const AXE = await readFile('node_modules/axe-core/axe.min.js', 'utf8')
 const runAxe = async (page: Page): Promise<Violation[]> => {
   await page.addScriptTag({ content: AXE })
   const result = await page.evaluate(async () => {
-    const axe = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<{ violations: Array<{ id: string; impact?: string | null; nodes: unknown[]; help: string }> }> } }).axe
+    const axe = (
+      window as unknown as {
+        axe: {
+          run: (
+            c: unknown,
+            o: unknown,
+          ) => Promise<{
+            violations: Array<{
+              id: string
+              impact?: string | null
+              nodes: unknown[]
+              help: string
+            }>
+          }>
+        }
+      }
+    ).axe
     const r = await axe.run(document, { resultTypes: ['violations'] })
-    return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, help: v.help }))
+    return r.violations.map((v) => ({
+      id: v.id,
+      impact: v.impact,
+      nodes: v.nodes.length,
+      help: v.help,
+    }))
   })
   return result
 }
@@ -51,10 +72,16 @@ try {
     await page.waitForTimeout(1500)
     report.overview = await runAxe(page)
 
-    await page.getByRole('button', { name: /chat with team/i }).first().click({ force: true })
+    await page
+      .getByRole('button', { name: /chat with team/i })
+      .first()
+      .click({ force: true })
     await page.waitForTimeout(800)
     report.chat = await runAxe(page)
-    await page.getByRole('button', { name: /chat with team/i }).first().click({ force: true })
+    await page
+      .getByRole('button', { name: /chat with team/i })
+      .first()
+      .click({ force: true })
     await page.waitForTimeout(500)
 
     await page.locator('[data-bc-settings]').first().click({ force: true })
