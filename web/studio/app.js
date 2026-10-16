@@ -6580,11 +6580,14 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
   const unreachable = !connected && action === '' && !sub
   const whyNot = !op && route.how === 'oauth' ? 'Connected by whoever runs this Team HQ.' : route.why
   // An expired permission is not a missing one: say so, and say that nothing already read is lost.
-  const expiredNote = expired
-    ? op
-      ? 'Google no longer accepts the permission that was saved, which happens when it expires or is withdrawn. Reconnecting takes one consent screen; nothing already read is lost.'
-      : 'Google needs to be reconnected by whoever runs this Team HQ. Nothing already read is lost.'
-    : ''
+  // A route that says what expiry means for its own service says it; only Google's own words are written here.
+  const expiredNote = !expired
+    ? ''
+    : route.expiredNote
+      ? route.expiredNote
+      : op
+        ? 'Google no longer accepts the permission that was saved, which happens when it expires or is withdrawn. Reconnecting takes one consent screen; nothing already read is lost.'
+        : 'Google needs to be reconnected by whoever runs this Team HQ. Nothing already read is lost.'
   return `<div class="st-svc" data-saidwrap>
     <span class="st-logo"${c.tint ? ` style="--tint:${esc(c.tint)}"` : ''}>${c.svg ?? ''}</span>
     <div class="st-text">

@@ -709,6 +709,10 @@ export const ROUTES = {
   },
   notebooklm: {
     how: 'tab', to: 'setup', label: 'Set up in Setting up', off: 'notebooklm',
+    // Not a setup pane: nothing in Team HQ signs NotebookLM in yet, so the card must not say it is set up outside (#502).
+    why: 'Reconnecting NotebookLM is not in Team HQ yet (issue #502). Notebooks already attached to a project stay attached.',
+    expiredNote:
+      'NotebookLM no longer accepts the saved sign-in. Reconnecting is not in Team HQ yet (issue #502); nothing already read is lost.',
     costs:
       'Audio overviews, mind maps and briefings stop being made, and generation ' +
       'switches off. Notebooks already attached to a dashboard project stay ' +
