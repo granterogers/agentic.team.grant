@@ -34,6 +34,15 @@ function definitions that the migration and the page deploy needed.
   predicate, none names only `archived`).
 - Proof: `scripts/isolated/archive-lifecycle.ts`, 10 of 10.
 
+### Update after migrations 1076 and 1077 (applied to production, not re-verified in this update)
+
+- Migration `1076` adds an `events` section to `app.project_export`. It reads the project's own events through
+  `app.project_records`, so it is bounded by the same office check as the other sections.
+- Migration `1077` makes `app.project_restore` insert calendar events. Restored events get origin `archive`, created by
+  `restore`, authority `person`, and sync state `local`. Events filed from Google are skipped and counted, not copied.
+- Not verified for these: row-level security on `project_events` for the restore path, and cross-office restore of
+  events. The round-trip proof covers the event on a replica only and was not re-run for this update.
+
 ## Checked, no defect found
 
 - Restore requires a 64-character SHA-256 key and refuses a malformed one before writing anything.
@@ -56,6 +65,8 @@ function definitions that the migration and the page deploy needed.
 - Google sign-in and account linking. Not built.
 - Session expiry and sign-out across browsers. Not tested.
 - Export of conversations, activity and artifacts: coverage not verified, so their exclusion of secrets is unknown.
+- Cross-office restore of calendar events (added with 1077).
+- Row-level security on `project_events` as it applies to the restore path.
 
 ## Unresolved high-risk issues
 
