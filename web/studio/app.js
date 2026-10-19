@@ -5838,9 +5838,34 @@ const HELP_TOPICS = [
   },
 ]
 
+/*
+  Direct links: every place in Team HQ has an address that opens it, so a page can be bookmarked, shared with yourself
+  or pasted into a note. Only addresses the page already serves are listed.
+*/
+function directLinks() {
+  const views = [
+    ['Home', '/'],
+    ['Tasks', '/tasks'],
+    ['Activity', '/activity'],
+    ['Search', '/search'],
+  ]
+  const settings = config.TABS.map((t) => [`Settings: ${t.name}`, `/settings/${t.id}`])
+  const projects = PROJECTS.filter((x) => x.slug !== 'unnamed').map((x) => [`Project: ${x.name}`, `/p/${x.slug}`])
+  const rows = [...views, ...settings, ...projects]
+  return `<section class="st-sec">
+      <h3 class="st-sectitle">Direct links</h3>
+      <div class="st-card"><ul class="st-links">${rows
+        .map(
+          ([name, path]) =>
+            `<li><a href="${esc(path)}">${esc(name)}</a> <span class="st-meta">${esc(`${location.origin}${path}`)}</span></li>`,
+        )
+        .join('')}</ul></div>
+    </section>`
+}
+
 function helpTab() {
   const ui = settingsUi
-  return HELP_TOPICS.map(
+  return directLinks() + HELP_TOPICS.map(
     (h) => `<section class="st-sec">
       <h3 class="st-sectitle">${esc(h.title)}</h3>
       <div class="st-card"><div class="st-help">
@@ -6586,7 +6611,8 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
   // The NotebookLM master token, uploaded from this page (issue #502). Operators only: the gateway refuses anyone else.
   const tokenUpload =
     route.token_upload && op && !connected
-      ? `<div class="st-upload"><input type="file" accept="application/json,.json" data-nb-token-file aria-label="The master_token.json file"> <button class="btn small" data-nb-token-save>Upload token</button></div>`
+      ? `<div class="st-upload"><input type="file" accept="application/json,.json" data-nb-token-file aria-label="The master_token.json file"> <button class="btn small" data-nb-token-save>Upload token</button></div>
+        <p class="st-meta">Make the token file on your Mac: download <a href="/downloads/Make-NotebookLM-Token.command" download>Make-NotebookLM-Token.command</a> and <a href="/downloads/notebook-token-maker.mjs" download>notebook-token-maker.mjs</a> into one folder, then double-click the .command. You need Node.js and the NotebookLM tool once (pip install "notebooklm-py[headless,browser]").</p>`
       : ''
   const expiredNote = !expired
     ? ''
@@ -13884,9 +13910,16 @@ function cameBackFromGoogle() {
       Anything else is ignored. Signing in is still required to see anything on the tab, so a link does not widen what
       anybody can read.
     */
-    const wanted = said.get('settings')
-    if (wanted === null || !['connections', 'channels', 'health'].includes(wanted)) return false
-    state.setting = wanted
+    /*
+      Every Settings tab has an address of its own: /settings/<tab> (the Help tab lists them). The older ?settings=<tab>
+      form still works. Any name that is not a tab, an alias or `health` is ignored.
+    */
+    const fromPath = /^\/settings\/([a-z]+)\/?$/.exec(location.pathname)
+    const wanted = fromPath !== null ? fromPath[1] : said.get('settings')
+    const known =
+      wanted !== null && (wanted === 'health' || config.TABS.some((t) => t.id === (config.TAB_ALIAS[wanted] ?? wanted)))
+    if (!known) return false
+    state.setting = wanted === 'health' ? 'models' : (config.TAB_ALIAS[wanted] ?? wanted)
     // On a phone a section replaces the menu: land on the section itself, not on the list of sections.
     state.settingsPane = 'detail'
     /*
