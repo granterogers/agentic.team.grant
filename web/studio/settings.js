@@ -570,30 +570,6 @@ export async function hydrateSettings(read) {
     MAIL_BODIES.unread = typeof bodies?.never_looked === 'number' ? bodies.never_looked : 0
     replace(CHANNELS, d.channels ?? [])
 
-    /*
-      Its own call for the same reason `studio_setup` is: the named actions are
-      a vocabulary the whole product uses, not a preference on a settings page,
-      and folding them into this payload would make every asset card depend on
-      the settings pane having loaded.
-    */
-    try {
-      const actions = await read('actions')
-      if (Array.isArray(actions) && actions.length > 0) replace(ACTIONS, actions)
-    } catch {
-      // The six from the specification stay. A menu is better than no menu.
-    }
-
-    // Its own call: `hq_setup` is a different function with a different job,
-    // and folding it into the settings payload would couple a checklist about
-    // credentials to a page about preferences.
-    try {
-      const setup = await read('studio_setup')
-      for (const k of Object.keys(SETUP)) delete SETUP[k]
-      Object.assign(SETUP, setup ?? {})
-    } catch {
-      // A settings page that cannot show a checklist is still a settings page.
-    }
-
     settingsSource.live = true
     settingsSource.why = ''
     settingsSource.state = 'ready'
@@ -619,6 +595,31 @@ export async function hydrateSettings(read) {
   Google publishes no usage API", a summariser produced "35/40 left" and an estimate became a fact on Grant's phone. So the
   caveat is part of the string here, not a footnote somebody may drop.
 */
+/*
+  The two reads the settings page needs on top of its payload: the named actions (a vocabulary the whole product uses)
+  and the set-up checklist (a different function with a different job). They run TOGETHER, and neither holds up the
+  Team page, which draws from the payload alone. The page redraws when they land.
+*/
+export async function hydrateExtras(read, done) {
+  const actions = read('actions')
+    .then((a) => {
+      if (Array.isArray(a) && a.length > 0) replace(ACTIONS, a)
+    })
+    .catch(() => {
+      // The six from the specification stay. A menu is better than no menu.
+    })
+  const setup = read('studio_setup')
+    .then((s) => {
+      for (const k of Object.keys(SETUP)) delete SETUP[k]
+      Object.assign(SETUP, s ?? {})
+    })
+    .catch(() => {
+      // A settings page that cannot show a checklist is still a settings page.
+    })
+  await Promise.allSettled([actions, setup])
+  done?.()
+}
+
 export function applySpend(usage, headroom) {
   const u = usage ?? {}
   const head = headroom ?? {}

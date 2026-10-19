@@ -6608,16 +6608,14 @@ function notebookSteps() {
 }
 
 // Notion's integration secret, pasted here and stored in the vault (migration 1090). A password box, so it is not shown.
-function notionPanel() {
-  return `<div class="svc-panel" data-saidwrap>
-    <p class="st-steps-title">Connect Notion in two steps</p>
+function notionBody() {
+  return `<p class="st-steps-title">Connect Notion in two steps</p>
     <ol class="st-steps">
       <li>Open <a href="https://www.notion.so/profile/integrations" target="_blank" rel="noopener">notion.so/profile/integrations</a>, choose New integration, give it a name, and copy its secret. It starts with secret_ or ntn_.</li>
       <li>In Notion, share the pages the team should read with that integration (the ⋯ menu, then Connections), then paste the secret below.</li>
     </ol>
     <div class="st-upload"><input type="password" autocomplete="off" spellcheck="false" data-notion-token aria-label="The Notion integration secret"> <button class="btn small" data-notion-save>Save Notion token</button></div>
-    <p class="st-meta">It is stored in the vault and is never shown again.</p>
-  </div>`
+    <p class="st-meta">It is stored in the vault and is never shown again.</p>`
 }
 
 function serviceRow(c, { showDetail = true, sub = false } = {}) {
@@ -6879,11 +6877,13 @@ function connectionsTab() {
     shows several in a row, a narrow one stacks them, and nothing is left as empty width. Each tile carries an LED in its
     state's colour. Gmail, Drive and Calendar are three tiles over ONE Google sign-in (one consent covers all three), so
     they share its state, and only Gmail carries the Connect and Disconnect buttons. NotebookLM is checked live when the
-    page opens. The set-up panels (NotebookLM's steps, Notion's token box) sit under the grid, and only when they are
-    needed.
+    page opens. A tile that needs set-up opens to show it, inside the service it belongs to (NotebookLM's steps, Notion's
+    token box), and takes two columns while it is open.
   */
-  const tile = ({ key, name, svg = '', tint = '', tone, word, detail = '', action = '' }) => `
-    <article class="svc-tile" data-tile="${esc(key)}">
+  // A tile can open to hold its own configuration (`body`) and then takes two columns (`wide`), so the set-up sits in the
+  // service it belongs to rather than in a panel of its own below the grid.
+  const tile = ({ key, name, svg = '', tint = '', tone, word, detail = '', action = '', body = '', wide = false }) => `
+    <article class="svc-tile${wide ? ' svc-tile--wide' : ''}" data-tile="${esc(key)}" data-saidwrap>
       <div class="svc-tile__top">
         <span class="st-logo"${tint ? ` style="--tint:${esc(tint)}"` : ''}>${svg}</span>
         <span class="svc-led svc-led--${esc(tone)}" aria-hidden="true"></span>
@@ -6892,6 +6892,7 @@ function connectionsTab() {
       <p class="svc-tile__word svc-tile__word--${esc(tone)}">${esc(word)}</p>
       ${detail ? `<p class="svc-tile__detail">${esc(detail)}</p>` : ''}
       ${action ? `<div class="svc-tile__action">${action}</div>` : ''}
+      ${body ? `<div class="svc-tile__body">${body}</div>` : ''}
     </article>`
   const tileAction = (c) => {
     const route = config.routeFor(c.key)
@@ -6932,24 +6933,31 @@ function connectionsTab() {
       tone: nbTone[0],
       word: nbTone[1],
       detail: ledNotebook?.detail ?? (ledNotebook === null ? 'Checking the reader…' : ''),
+      // Not connected: the tile opens to show the reconnect steps, in the service itself.
+      body: !nbOk && operator && canWrite() ? notebookSteps() : '',
+      wide: !nbOk && operator && canWrite(),
     }),
     ...others.map((c) => {
       const [t, w] = copy.state[c.state] ?? ['off', c.state]
-      return tile({ key: c.key, name: c.name, svg: c.svg ?? '', tint: c.tint ?? '', tone: t, word: w, detail: String(c.detail ?? ''), action: tileAction(c) })
+      // Notion's token box belongs to Notion: the tile opens to show it when Notion is not connected.
+      const setUp = c.key === 'notion' && !config.isConnected(c.state) && operator && canWrite()
+      return tile({
+        key: c.key,
+        name: c.name,
+        svg: c.svg ?? '',
+        tint: c.tint ?? '',
+        tone: t,
+        word: w,
+        detail: String(c.detail ?? ''),
+        action: tileAction(c),
+        body: setUp ? notionBody() : '',
+        wide: setUp,
+      })
     }),
   ]
-  const panels = []
-  if (!nbOk && operator && canWrite()) panels.push(`<div class="svc-panel" data-saidwrap>${notebookSteps()}</div>`)
-  const notionRow = main.find((c) => c.key === 'notion')
-  if (notionRow && !config.isConnected(notionRow.state) && operator && canWrite()) panels.push(notionPanel())
-  const servicesTiles = ui.section({
-    title: 'Services',
-    count: tiles.length,
-    body: `<div class="svc-grid">${tiles.join('')}</div>${panels.join('')}`,
-  })
-  return [
+  // Everything else on this page sits in the same grid, as a full-width cell, so no block is left outside it.
+  const spanned = [
     said,
-    servicesTiles,
     stillToDo,
     googleNeedsSetup
       ? ui.section({ title: 'Set up Google', body: ui.card([googleSetupPanel()]) })
@@ -6971,7 +6979,13 @@ function connectionsTab() {
         }) +
         (mcp === '' ? '' : ui.section({ title: 'Connecting another app', body: mcp })),
     }),
-  ].join('')
+  ]
+  // One grid: the tiles, then every other block as a full-width cell. The tiles set their own width (see .svc-tile--wide).
+  return `<div class="svc-board">
+    <p class="svc-head">Services <span class="st-meta">${tiles.length}</span></p>
+    ${tiles.join('')}
+    ${spanned.filter((h) => h !== '').map((h) => `<div class="svc-span">${h}</div>`).join('')}
+  </div>`
 }
 
 /*
@@ -15868,6 +15882,8 @@ function needSettings(retry = false) {
     if (isOpenNow($('#settings'))) settingsSheet()
   }
   void config.hydrateConnections(read, redrawSettings)
+  // The action vocabulary and the set-up checklist arrive beside the payload, never in front of it (see hydrateExtras).
+  void config.hydrateExtras(read, redrawSettings)
   // The Google sign-in and NotebookLM's live check: the tiles' LEDs (see loadServiceLeds).
   void loadServiceLeds(redrawSettings)
   // The usage overview is slow, and the Settings sheet does not wait for it: the spend card and the Usage tab redraw when it lands.
@@ -15990,7 +16006,9 @@ async function refresh() {
     // Both, together, and only once something has asked for them (needSettings): a visit that never opened Settings or the
     // Sources tab has nothing of theirs to keep fresh. A write can change either, so once asked a refresh re-reads both
     // rather than leaving one stale behind a tab.
-    ...(settingsAsked === null ? [] : [config.hydrateSettings(read), loadSpend(render), loadServiceLeds(render)]),
+    ...(settingsAsked === null
+      ? []
+      : [config.hydrateSettings(read), config.hydrateExtras(read, render), loadSpend(render), loadServiceLeds(render)]),
   ])
   /*
     Notes another device wrote since this one loaded (ADR-0068, P0 persistence): the board folds them in rather than
