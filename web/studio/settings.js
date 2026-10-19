@@ -718,7 +718,7 @@ export const ROUTES = {
     urlLabel: 'Open NotebookLM',
     // The operator can upload the master_token.json made on their computer, here, with no terminal (issue #502).
     token_upload: true,
-    why: 'To reconnect: 1) on your computer, double-click "Make NotebookLM Token.command" in scripts/notebook. It signs in as the team’s account and saves notebook-master-token.json to your Desktop. 2) Choose that file with Upload token below. Then delete the file. Opening NotebookLM here only signs you in in the browser. Notebooks already attached to a project stay attached.',
+    why: 'To reconnect: 1) download the token maker (NotebookLM-Token-Maker.zip, below), unzip it and double-click "Make NotebookLM Token.bat". It signs in as the team’s account and saves notebook-master-token.json to your Desktop. 2) Choose that file with Upload token below, then delete it. Opening NotebookLM here only signs you in in the browser. Notebooks already attached to a project stay attached.',
     expiredNote:
       'NotebookLM no longer accepts the saved sign-in. Opening NotebookLM signs in in your browser, but it does not reconnect Team HQ yet (issue #502); nothing already read is lost.',
     costs:

@@ -6612,7 +6612,7 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
   const tokenUpload =
     route.token_upload && op && !connected
       ? `<div class="st-upload"><input type="file" accept="application/json,.json" data-nb-token-file aria-label="The master_token.json file"> <button class="btn small" data-nb-token-save>Upload token</button></div>
-        <p class="st-meta">Make the token file on your Mac: download <a href="/downloads/Make-NotebookLM-Token.command" download>Make-NotebookLM-Token.command</a> and <a href="/downloads/notebook-token-maker.mjs" download>notebook-token-maker.mjs</a> into one folder, then double-click the .command. You need Node.js and the NotebookLM tool once (pip install "notebooklm-py[headless,browser]").</p>`
+        <p class="st-meta">Make the token file on this Windows PC: <a href="/downloads/NotebookLM-Token-Maker.zip" download>download NotebookLM-Token-Maker.zip</a>, unzip it, and double-click <strong>Make NotebookLM Token.bat</strong>. Python 3.9 or newer is needed once (python.org, tick "Add to PATH"). The README in the zip has the steps.</p>`
       : ''
   const expiredNote = !expired
     ? ''
