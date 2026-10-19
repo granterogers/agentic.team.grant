@@ -742,7 +742,7 @@ export const ROUTES = {
     urlLabel: 'Open NotebookLM',
     // The operator can upload the master_token.json made on their computer, here, with no terminal (issue #502).
     token_upload: true,
-    why: 'To reconnect: 1) download the token maker (the button below), unzip it and double-click "Make NotebookLM Token.bat". It asks which Google account holds your notebooks, signs in with it, and saves notebook-master-token.json to your Desktop. 2) Choose that file with Upload token below, then delete it. Opening NotebookLM here only signs you in in the browser. Notebooks already attached to a project stay attached.',
+    why: 'Reconnecting NotebookLM takes three steps, listed below.',
     expiredNote:
       'NotebookLM no longer accepts the saved sign-in. Opening NotebookLM signs in in your browser, but it does not reconnect Team HQ yet (issue #502); nothing already read is lost.',
     costs:

@@ -6611,9 +6611,19 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
   // The NotebookLM master token, uploaded from this page (issue #502). Operators only: the gateway refuses anyone else.
   const tokenUpload =
     route.token_upload && op && !connected
-      ? `<div class="st-upload"><input type="file" accept="application/json,.json" data-nb-token-file aria-label="The master_token.json file"> <button class="btn small" data-nb-token-save>Upload token</button></div>
-        <p class="st-meta"><a class="btn primary" href="/downloads/NotebookLM-Token-Maker.zip" download>Download the token maker (Windows)</a></p>
-        <p class="st-meta">Unzip it, and double-click <strong>Make NotebookLM Token.bat</strong>. It asks which Google account holds your notebooks, which is not necessarily the team's address. Python 3.9 or newer is needed once (python.org, tick "Add to PATH"). The README in the zip has the steps.</p>`
+      ? `<p class="st-steps-title">Reconnect NotebookLM in three steps</p>
+        <ol class="st-steps">
+          <li>Download the token maker and unzip it.<br><a class="btn primary" href="/downloads/NotebookLM-Token-Maker.zip" download>Download the token maker (Windows)</a></li>
+          <li>Double-click <strong>Make NotebookLM Token.bat</strong>. It asks which Google account holds your notebooks, which is not necessarily the team's address. It signs in with that account and saves <strong>notebook-master-token.json</strong> to your Desktop.</li>
+          <li>Choose that file here, press Upload token, then delete the file from your Desktop.
+            <div class="st-upload"><input type="file" accept="application/json,.json" data-nb-token-file aria-label="The master_token.json file"> <button class="btn small" data-nb-token-save>Upload token</button></div>
+          </li>
+        </ol>
+        <ul class="st-notes">
+          <li>Python 3.9 or newer is needed once. Install it from python.org and tick "Add to PATH". The README in the zip has the same steps.</li>
+          <li>Opening NotebookLM here only signs you in in the browser.</li>
+          <li>Notebooks attached to a project stay attached.</li>
+        </ul>`
       : ''
   const expiredNote = !expired
     ? ''
@@ -6629,7 +6639,7 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
       <p class="st-desc">${esc(c.used ?? '')}</p>
       ${showDetail && detail && !expired ? `<p class="st-meta">${esc(detail)}</p>` : ''}
       ${expiredNote ? `<p class="st-meta">${esc(expiredNote)}</p>` : ''}
-      ${route.url && !connected && !expired ? `<p class="st-meta">${esc(route.why ?? '')}</p>` : ''}
+      ${route.url && !connected && !expired && !route.token_upload ? `<p class="st-meta">${esc(route.why ?? '')}</p>` : ''}
       ${unreachable && !expired ? `<p class="st-meta">${esc(whyNot ?? 'Set up outside Team HQ.')}</p>` : ''}
       ${tokenUpload}
       <span class="st-said" data-said role="status" aria-live="polite"></span>

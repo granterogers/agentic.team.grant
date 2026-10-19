@@ -867,6 +867,56 @@
   font: 400 13px/19px var(--st-font);
   color: var(--st-text-2);
 }
+/* The reconnect steps: a numbered list, each step with its own space, and a short list of notes under it. */
+#settings .st-steps-title {
+  margin: 16px 0 0;
+  font: 600 14px/22px var(--st-font);
+  color: var(--st-text);
+}
+#settings .st-steps {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: grid;
+  gap: 16px;
+}
+#settings .st-svc .st-text {
+  min-width: 0;
+}
+#settings .st-steps > li {
+  position: relative;
+  counter-increment: step;
+  min-width: 0;
+  padding-left: 40px;
+  font: 400 14px/22px var(--st-font);
+  color: var(--st-text-2);
+}
+#settings .st-steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--st-line-3);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 600 12px/1 var(--st-font);
+  color: var(--st-text);
+}
+#settings .st-steps > li .btn {
+  margin-top: 8px;
+}
+#settings .st-notes {
+  margin: 16px 0 0;
+  padding: 0 0 0 18px;
+  display: grid;
+  gap: 8px;
+  font: 400 13px/20px var(--st-font);
+  color: var(--st-text-3);
+}
 
 /* a person on the team */
 #settings .st-people {
