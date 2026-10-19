@@ -834,5 +834,7 @@
   "1085_a_notebook_token_can_be_uploaded_from_the_page.sql": "423ac8496ecf63d1f245950fcbc031cb10c585c3f0f8b17f1513f153dc8ed83b",
   "1086_a_status_that_is_not_recent_says_it_was_not_checked.sql": "d0ffb33633bcea8368349ae3b082b651300ef2e54b16295eeef044e2c03389d1",
   "1087_the_services_list_is_read_on_its_own.sql": "9a6cfc26da33e96ee0d87d5a235ed685b8e6e1dc68049383dca8c02c0abf093d",
-  "1088_the_spend_card_is_read_beside_settings_not_inside_it.sql": "f0803f8344b2f2d1f3c46f29264429d3595977d989f3494ae3c05d17b4daa94f"
+  "1088_the_spend_card_is_read_beside_settings_not_inside_it.sql": "f0803f8344b2f2d1f3c46f29264429d3595977d989f3494ae3c05d17b4daa94f",
+  "1089_the_google_sign_in_is_read_once_for_the_services_tiles.sql": "38ac8ab4d6a657a12cc0fa93387510c693359ce393a571b80ce4c35b1adb8f07",
+  "1090_a_notion_token_can_be_pasted_from_the_page.sql": "0fe0668c944465bee055eef32da82f8ade20327605e8f0b9c53c80a97e9124ee"
 }
