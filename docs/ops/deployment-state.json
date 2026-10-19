@@ -13,8 +13,9 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 835,
-    "highestAppliedAtRecord": "1087",
+    "appliedAtRecord": 836,
+    "highestAppliedAtRecord": "1088",
+    "note1088": "On 19 October 2026 migration 1088 (the spend card is read beside Settings, not inside it) was applied to production with npm run migrate:one. It removes the usage, headroom and self_improvement keys from the live hq_studio_settings; the usage overview is read by its own gateway section and the headroom by the new free_tier_headroom section. deploy:hq then published hq-api v942 and the page: hq-api unauthenticated 401, authenticated 200; page 200, deep link 200; notebook reader 502 as before, until its token is uploaded.",
     "note1087": "On 19 October 2026 migration 1087 (the Services list is read on its own) was applied to production with npm run migrate:one. It adds app.hq_studio_connections, copied from the live hq_studio_settings, and its public wrapper. hq-api v940 adds the studio_connections section, and the page loads Services first. Read-only after it: Services read in about 2 seconds end to end (the whole Settings read took 3 to 14 seconds).",
     "note1086": "On 19 October 2026 migration 1086 (a status that is not recent says it was not checked) was applied to production with npm run migrate:one. It unlinks the NotebookLM connector from the Google sign-in's health row and shows any health row older than 24 hours as unchecked. Read-only after it: NotebookLM unchecked, Notion unchecked (last checked 18 Sep, detail blank).",
     "deployed19Oct": "hq-api v922 and the page (deploy:hq from 8bbe0571, digest upload) went live on 19 October 2026 with the upload action set_notebook_token. Probes: hq-api unauthenticated 401, authenticated 200; page 200, deep link 200; live app.js carries the upload control. The notebook reader still answers 502 until a token is uploaded and the session is minted.",
