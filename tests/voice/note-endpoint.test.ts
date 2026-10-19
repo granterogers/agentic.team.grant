@@ -50,8 +50,8 @@ describe('the browser voice note and the Telegram voice note reach the same serv
   })
 
   it('authorises with a bearer and never puts the key anywhere else', () => {
-    expect(nodeCall).toContain('Authorization: `Bearer ${key}`')
-    expect(edgeCall).toContain('Authorization: `Bearer ${key}`')
+    expect(nodeCall).toContain(`Authorization: \`Bearer \${key}\``)
+    expect(edgeCall).toContain(`Authorization: \`Bearer \${key}\``)
   })
 
   /*
@@ -74,8 +74,8 @@ describe('the endpoint refuses honestly', () => {
       edgeCall.indexOf('the office has no speech service configured') - 200,
       edgeCall.indexOf('the office has no speech service configured') + 120,
     )
-    expect(refusal).not.toContain('${key}')
-    expect(refusal).not.toContain('${baseUrl}')
+    expect(refusal).not.toContain(`\${key}`)
+    expect(refusal).not.toContain(`\${baseUrl}`)
   })
 
   it('refuses a recording that is empty, too short or too large rather than sending it', () => {

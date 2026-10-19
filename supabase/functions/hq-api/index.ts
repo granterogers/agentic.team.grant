@@ -286,15 +286,23 @@ const notebookProbe = async (
   try {
     parsed = JSON.parse(master) as typeof parsed
   } catch {
-    return { state: 'dead', detail: 'the stored NotebookLM file is not readable. Upload it again.', checked_at }
+    return {
+      state: 'dead',
+      detail: 'the stored NotebookLM file is not readable. Upload it again.',
+      checked_at,
+    }
   }
   const secret = await held('notebook.reader_secret')
-  const urlRows = await fetch(`${DB_URL}/rest/v1/system_config?key=eq.notebook.reader_url&select=value`, {
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-  })
+  const urlRows = await fetch(
+    `${DB_URL}/rest/v1/system_config?key=eq.notebook.reader_url&select=value`,
+    {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    },
+  )
     .then((r) => r.json())
     .catch(() => [])
-  const url = Array.isArray(urlRows) && typeof urlRows[0]?.value === 'string' ? urlRows[0].value : ''
+  const url =
+    Array.isArray(urlRows) && typeof urlRows[0]?.value === 'string' ? urlRows[0].value : ''
   if (secret === '' || url === '') {
     return { state: 'off', detail: 'the NotebookLM reader is not configured', checked_at }
   }
@@ -315,10 +323,18 @@ const notebookProbe = async (
     const body = (await r.json().catch(() => ({}))) as { error?: unknown; notebook_count?: unknown }
     if (!r.ok) {
       // The reader's own sentence (a constant or a library message), never the request.
-      return { state: 'dead', detail: String(body.error ?? 'NotebookLM refused the sign-in').slice(0, 160), checked_at }
+      return {
+        state: 'dead',
+        detail: String(body.error ?? 'NotebookLM refused the sign-in').slice(0, 160),
+        checked_at,
+      }
     }
     const count = typeof body.notebook_count === 'number' ? body.notebook_count : 0
-    return { state: 'ok', detail: `${count} notebook${count === 1 ? '' : 's'} can be read`, checked_at }
+    return {
+      state: 'ok',
+      detail: `${count} notebook${count === 1 ? '' : 's'} can be read`,
+      checked_at,
+    }
   } catch {
     return { state: 'degraded', detail: 'the NotebookLM reader did not answer in time', checked_at }
   }
@@ -4238,7 +4254,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
     token is the deployment's. Anyone else is told it is not checked from here, rather than being refused the page.
   */
   if (name === 'notebook_check') {
-    if (!(kind === 'person' && principal !== null && principal !== '' && (await isOperator(principal)))) {
+    if (
+      !(
+        kind === 'person' &&
+        principal !== null &&
+        principal !== '' &&
+        (await isOperator(principal))
+      )
+    ) {
       return json({ data: { state: 'not_checked', detail: '', checked_at: null } })
     }
     if (office === null) return json({ error: 'no_office' }, 403)
