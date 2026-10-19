@@ -329,8 +329,29 @@ const html = await readFile('web/studio/index.html', 'utf8')
 
   `.webp` was missing, and #206's six materials were the first WebP this
   project has ever served.
+
+  `.zip` and `.wav` were missing too: the Windows token maker arrived as a
+  "Compressed Folder is invalid" error, because its bytes were read as UTF-8
+  and every non-text byte became U+FFFD. The list now covers the other common
+  binary types as well, so the next one does not fail the same way.
 */
-const BINARY = new Set(['.woff2', '.pdf', '.png', '.jpg', '.jpeg', '.ico', '.webp'])
+const BINARY = new Set([
+  '.woff2',
+  '.woff',
+  '.ttf',
+  '.otf',
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.ico',
+  '.webp',
+  '.zip',
+  '.wav',
+  '.mp3',
+  '.mp4',
+])
 /*
   Not everything under `web/studio` belongs on the internet.
 
