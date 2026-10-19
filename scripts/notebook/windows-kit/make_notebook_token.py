@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ACCOUNT = "agentic.team.grant@gmail.com"
+DEFAULT_ACCOUNT = "agentic.team.grant@gmail.com"
 PACKAGE = "notebooklm-py[headless,browser]"
 OUT_NAME = "notebook-master-token.json"
 
@@ -46,6 +46,18 @@ def desktop() -> Path:
     return Path.home()
 
 
+def ask_account():
+    """The Google account that holds the NotebookLM notebooks. It is not necessarily the team's address."""
+    say("Which Google account holds your NotebookLM notebooks?")
+    say("Type its email address, or press Enter to use " + DEFAULT_ACCOUNT + ".")
+    typed = input("Google account: ").strip()
+    account = typed or DEFAULT_ACCOUNT
+    if "@" not in account or " " in account:
+        say("That does not look like an email address.")
+        return None
+    return account
+
+
 def main() -> int:
     say("Team HQ: making the NotebookLM token file")
     say("")
@@ -61,10 +73,16 @@ def main() -> int:
         return 1
 
     say("")
-    say(f"Step 2 of 3: a browser window opens. Sign in as {ACCOUNT}, complete any two-step check,")
+    account = ask_account()
+    if account is None:
+        say("No account was given. Nothing was changed. Run this again.")
+        return 1
+
+    say("")
+    say(f"Step 2 of 3: a browser window opens. Sign in as {account}, complete any two-step check,")
     say("then come back to this window. (The first time, the tool also downloads its browser: about 170 MB.)")
     login = subprocess.run(
-        [sys.executable, "-m", "notebooklm", "login", "--master-token", "--account", ACCOUNT]
+        [sys.executable, "-m", "notebooklm", "login", "--master-token", "--account", account]
     )
     made = token_path()
     if login.returncode != 0 or not made.is_file():

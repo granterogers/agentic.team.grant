@@ -11,11 +11,14 @@ ONE-TIME SETUP
 EACH TIME
   2. Unzip NotebookLM-Token-Maker.zip into any folder.
   3. Double-click "Make NotebookLM Token.bat".
-  4. A browser opens. Sign in as agentic.team.grant@gmail.com and complete any
-     two-step check. Then come back to the black window.
-  5. The file notebook-master-token.json is saved to your Desktop.
-  6. In Team HQ go to Settings -> Connections -> NotebookLM, choose that file,
+  4. The window asks which Google account holds your NotebookLM notebooks. Type
+     its email address (it is not necessarily the team's address), or press Enter
+     for the default.
+  5. A browser opens. Sign in with that account and complete any two-step check.
+     Then come back to the black window.
+  6. The file notebook-master-token.json is saved to your Desktop.
+  7. In Team HQ go to Settings -> Connections -> NotebookLM, choose that file,
      and press "Upload token".
-  7. Delete notebook-master-token.json from your Desktop.
+  8. Delete notebook-master-token.json from your Desktop.
 
 The file is a full-account credential. Do not email it or paste it anywhere.
