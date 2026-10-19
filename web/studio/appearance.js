@@ -191,7 +191,7 @@ export function resetToRecommended() {
   look, scheme, texture and an uploaded texture), so a returning person sees the latest design rather than one saved before
   it. Density, glass and depth are spacing and effect choices and are kept. Bump this when the recommended look changes.
 */
-export const APPEARANCE_REVISION = 3
+export const APPEARANCE_REVISION = 4
 const LOOK_FIELDS = ['palette', 'look', 'scheme', 'texture', 'own', 'ownName']
 export function currentRevision(saved) {
   if (saved === null || typeof saved !== 'object') return {}

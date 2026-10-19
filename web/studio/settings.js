@@ -88,16 +88,20 @@ export const tabId = (id) => {
 }
 
 /** Shaped like `connection_health` joined to `knowledge_connectors`. */
+/*
+  Shown only when the office has not answered, so a signed-out visitor or a failed read. These are NOT real states, and
+  they must not say a service is connected: a sample that reads "Connected" for NotebookLM told a visitor it was working
+  when it was not (issue #502). Every row says it is unknown until the office reports it.
+*/
 const FALLBACK_CONNECTIONS = [
-  { key: 'notion', state: 'ok', last: '2 days ago', used: 'Module pages, project mirrors', detail: '6 documents written' },
-  { key: 'notebooklm', state: 'ok', last: '4 hours ago', used: 'The interview corpus', detail: '13 sources indexed' },
-  { key: 'drive', state: 'ok', last: '1 day ago', used: 'Source documents', detail: '41 files visible' },
-  { key: 'telegram', state: 'ok', last: 'live', used: 'Claire reaches you here', detail: 'Pager + chief bots' },
-  { key: 'slack', state: 'ok', last: 'live', used: 'The office talks here', detail: '1 workspace, 6 channels' },
-  { key: 'github', state: 'degraded', last: '1 day ago', used: 'Code and issues',
-    detail: 'Read token flagged for rotation', fix: 'Rotate it' },
-  { key: 'openrouter', state: 'ok', last: 'live', used: 'Inference for all eight', detail: '3 free models routed' },
-  { key: 'supabase', state: 'ok', last: 'live', used: 'The database and the vault', detail: '170 migrations applied' },
+  { key: 'notion', state: 'unknown', last: 'not checked', used: 'Module pages, project mirrors', detail: 'Sign in to see the real state' },
+  { key: 'notebooklm', state: 'unknown', last: 'not checked', used: 'The interview corpus', detail: 'Sign in to see the real state' },
+  { key: 'drive', state: 'unknown', last: 'not checked', used: 'Source documents', detail: 'Sign in to see the real state' },
+  { key: 'telegram', state: 'unknown', last: 'not checked', used: 'Claire reaches you here', detail: 'Sign in to see the real state' },
+  { key: 'slack', state: 'unknown', last: 'not checked', used: 'The office talks here', detail: 'Sign in to see the real state' },
+  { key: 'github', state: 'unknown', last: 'not checked', used: 'Code and issues', detail: 'Sign in to see the real state' },
+  { key: 'openrouter', state: 'unknown', last: 'not checked', used: 'Inference for all eight', detail: 'Sign in to see the real state' },
+  { key: 'supabase', state: 'unknown', last: 'not checked', used: 'The database and the vault', detail: 'Sign in to see the real state' },
   { key: 'zoom', state: 'off', last: 'never', used: 'Interview recordings', detail: 'Not connected',
     fix: 'Connect it' },
 ]
