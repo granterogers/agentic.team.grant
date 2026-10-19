@@ -1268,6 +1268,21 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
 @media (max-width: 480px) {
   [data-experience='basecamp'] .bcwho { display: none; }
 }
+/* The same label inside Settings' own top bar. */
+.stg-who {
+  font-size: 12px;
+  color: var(--ink-3);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  align-self: center;
+  margin-left: auto;
+  margin-right: 8px;
+}
+@media (max-width: 480px) {
+  .stg-who { display: none; }
+}
 @media (max-width: 640px) {
   [data-experience='basecamp'] .bcnoproj { padding: 32px 16px 28px; }
   [data-experience='basecamp'] .bcnoproj-grid { grid-template-columns: 1fr; }

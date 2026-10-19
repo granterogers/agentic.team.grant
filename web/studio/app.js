@@ -7373,6 +7373,9 @@ function importSheet(p) {
   sheet(v, true)
 }
 
+// The signed-in address shown in Settings' top bar, asked for once (see settingsSheet).
+let settingsWhoEmail = ''
+let settingsWhoAsked = false
 function settingsSheet() {
   const v = $('#settings')
   // A redraw replaces the sheet's controls, and with them whichever one had focus. Remember whether focus was in the sheet.
@@ -7437,7 +7440,21 @@ function settingsSheet() {
     lead: here.lead,
     body,
     backLabel: phone && pane === 'detail' ? 'Settings' : 'Back to workspace',
+    // Who is signed in, in the corner: the Sample says so; anyone else gets the address, filled in once it is asked for below.
+    who: bcSession.signedIn() ? (bcSession.isSample() ? 'Sample office · read only' : settingsWhoEmail) : '',
   })
+  // Asked for once per page load, then remembered: Settings redraws often and the address does not change under a session.
+  if (bcSession.signedIn() && !bcSession.isSample() && settingsWhoEmail === '' && !settingsWhoAsked) {
+    settingsWhoAsked = true
+    void bcSession.whoami().then((email) => {
+      settingsWhoEmail = email
+      const el = v.querySelector('[data-stg-who]')
+      if (el !== null && email !== '') {
+        el.textContent = email
+        el.title = email
+      }
+    })
+  }
   const main = v.querySelector('.stg-main')
   if (main !== null) main.scrollTop = keptTop
   /*
