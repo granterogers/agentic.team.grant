@@ -4,7 +4,10 @@
     Authorization: Bearer <NOTEBOOK_READER_SECRET>
     {"action": "add_text" | "generate" | "poll" | ...,
      "args": {...},
+     "master_token": {"email": "...", "android_id": "...", "master_token": "aas_et/..."},
      "storage_state": "<the cookie jar, as JSON text>"}
+
+When a master token is sent it is used, and a fresh cookie jar is minted from it for the call.
 
 The read side moved to `api/notebook.py` first (0138). This is the other half,
 and it is the harder half, so it is worth saying exactly how little it does.
@@ -49,6 +52,7 @@ lives on disk here only as a 0600 file in a per-invocation temp directory.
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import os
@@ -57,6 +61,21 @@ import sys
 import tempfile
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+
+
+async def mint_storage_state(master: dict) -> str:
+    """A fresh cookie jar from the durable master token, with no browser (the same mint as api/notebook.py).
+
+    The master token does not go stale the way a stored jar does, so each write mints its own jar from it.
+    """
+    from notebooklm._auth.master_token import storage_state_from_jar
+    from notebooklm.auth import mint_cookies
+
+    email = str(master.get("email", ""))
+    jar = await mint_cookies(
+        email, str(master.get("master_token", "")), str(master.get("android_id", ""))
+    )
+    return json.dumps(storage_state_from_jar(jar, email=email or None))
 
 SECRET = os.environ.get("NOTEBOOK_READER_SECRET", "")
 
@@ -136,16 +155,25 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - Vercel requires this name
 
         action = str(request.get("action", ""))
         storage_state = str(request.get("storage_state", ""))
+        master = request.get("master_token")
         args = request.get("args", {})
         if action not in ACTIONS:
             self._send(400, {"ok": False, "error": "unknown action"})
             return
-        if storage_state == "":
-            self._send(400, {"ok": False, "error": "a storage state is required"})
+        if storage_state == "" and not isinstance(master, dict):
+            self._send(400, {"ok": False, "error": "a storage state or a master token is required"})
             return
         if not isinstance(args, dict):
             self._send(400, {"ok": False, "error": "args must be an object"})
             return
+
+        # The master token is preferred, as in api/notebook.py: a fresh jar is minted for this call.
+        if isinstance(master, dict):
+            try:
+                storage_state = asyncio.run(mint_storage_state(master))
+            except Exception as error:
+                self._send(502, {"ok": False, "error": f"{type(error).__name__}: {str(error)[:300]}"})
+                return
 
         self._send(*run(action, args, storage_state))
 

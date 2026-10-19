@@ -547,6 +547,17 @@ console.log(
   `  reader: http ${String(readerLive.status)} configured=${String(readerLiveBody.configured)}`,
 )
 
+// The probe checks the reader the way the product reads it: with the durable master token, which mints a fresh cookie
+// jar on each call. The stored jar is only a fallback, because a jar goes stale while the master token does not (issue
+// #502: the probe used to report 502 for a jar that had expired, while the product could read notebooks).
+const masterJson = String(
+  (
+    await db.execute(
+      `select decrypted_secret as v from vault.decrypted_secrets
+        where name = 'notebook.master_token_json'`,
+    )
+  ).rows[0]?.v ?? '',
+)
 const jar = String(
   (
     await db.execute(
@@ -555,13 +566,34 @@ const jar = String(
     )
   ).rows[0]?.v ?? '',
 )
-if (jar === '') {
-  console.log('  reader: no cookie jar in the vault, so the read was not attempted')
+const credential: Record<string, unknown> | null = (() => {
+  try {
+    const m = JSON.parse(masterJson) as {
+      email?: unknown
+      android_id?: unknown
+      master_token?: unknown
+    }
+    if (typeof m.master_token === 'string' && m.master_token.startsWith('aas_et/')) {
+      return {
+        master_token: {
+          email: String(m.email ?? ''),
+          android_id: String(m.android_id ?? ''),
+          master_token: m.master_token,
+        },
+      }
+    }
+  } catch {
+    // Not JSON: there is no master token, so the stored jar is the only credential left to try.
+  }
+  return jar === '' ? null : { storage_state: jar }
+})()
+if (credential === null) {
+  console.log('  reader: no master token or cookie jar in the vault, so the read was not attempted')
 } else {
   const read = await fetch(readerBase, {
     method: 'POST',
     headers: { Authorization: `Bearer ${readerSecret}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ op: 'notebooks', storage_state: jar }),
+    body: JSON.stringify({ op: 'notebooks', ...credential }),
   })
   const list = (await read.json().catch(() => ({}))) as { error?: string } | { id: string }[]
   const count = Array.isArray(list) ? list.length : -1
@@ -589,11 +621,11 @@ const writerLiveBody = (await writerLive.json().catch(() => ({}))) as { configur
 console.log(
   `  writer: http ${String(writerLive.status)} configured=${String(writerLiveBody.configured)}`,
 )
-if (jar !== '') {
+if (credential !== null) {
   const acted = await fetch(writerBase, {
     method: 'POST',
     headers: { Authorization: `Bearer ${readerSecret}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'notebooks', args: { notebook_id: 'any' }, storage_state: jar }),
+    body: JSON.stringify({ action: 'notebooks', args: { notebook_id: 'any' }, ...credential }),
   })
   const actedBody = (await acted.json().catch(() => ({}))) as {
     ok?: boolean
