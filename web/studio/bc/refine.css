@@ -1253,6 +1253,21 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
 [data-experience='basecamp'] .bcnoproj-open { margin-top: auto; font: 600 13px/18px var(--bc-font); color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bcnoproj-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px; }
 [data-experience='basecamp'] .bcnoproj-actions .bcbtn { min-height: 44px; padding: 0 18px; }
+
+/* The signed-in person, in the corner: quiet, and cut short rather than pushing the project's name. Hidden on phones,
+   where the name needs the room. */
+[data-experience='basecamp'] .bcwho {
+  font-size: 12px;
+  color: var(--ink-3);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  align-self: center;
+}
+@media (max-width: 480px) {
+  [data-experience='basecamp'] .bcwho { display: none; }
+}
 @media (max-width: 640px) {
   [data-experience='basecamp'] .bcnoproj { padding: 32px 16px 28px; }
   [data-experience='basecamp'] .bcnoproj-grid { grid-template-columns: 1fr; }

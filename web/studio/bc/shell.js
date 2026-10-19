@@ -42,6 +42,7 @@ import * as docsrc from './docsources.js'
 import * as finder from './finder.js'
 import * as websrc from './websources.js'
 import * as when from '../when.js'
+import * as session from '../session.js'
 import * as bcDocOrder from './docorder.js'
 import * as stopping from './stopping.js'
 import * as contacts from './contacts.js'
@@ -413,8 +414,29 @@ const workTools = () => {
   return compose.chosen() === 'c' ? compose.workTools(p) : ''
 }
 
+/*
+  Who is signed in, in the corner. A signed-in person sees their address; the Sample Office says so, because it has no
+  address of its own. The address is asked for once per page load and written into the label in place, so the header is
+  not redrawn to show it.
+*/
+let whoAsked = false
+const askWho = () => {
+  if (whoAsked || !session.signedIn() || session.isSample()) return
+  whoAsked = true
+  void session.whoami().then((email) => {
+    const el = document.querySelector('[data-bc-who]')
+    if (el !== null && email !== '') {
+      el.textContent = email
+      el.title = email
+    }
+  })
+}
+const whoLabel = () => (session.isSample() ? 'Sample office · read only' : '')
+
 const topRow = () => {
   const waiting = PROJECTS.reduce((n, p) => n + (p.waiting?.length ?? 0), 0)
+  askWho()
+  const who = session.signedIn() ? whoLabel() : ''
   /*
     Where Attention would take you, computed here so the control can say
     whether you are already standing in it. With nothing waiting there is
@@ -477,6 +499,7 @@ const topRow = () => {
         <svg class="bcschemeicon bcschemeicon--sun" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
       </button>
       ${source.state === 'prototype' ? '<a class="bcsignlink" href="?welcome">Sign in</a>' : ''}
+      ${session.signedIn() ? `<span class="bcwho" data-bc-who title="${esc(who)}">${esc(who)}</span>` : ''}
       <button type="button" class="bcbtn" data-bc-attention
         ${attentionTo === null ? 'disabled' : ''}
         aria-current="${attentionTo !== null && isHere(attentionTo) ? 'page' : 'false'}"
