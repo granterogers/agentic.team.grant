@@ -14,11 +14,17 @@ EACH TIME
   4. The window asks which Google account holds your NotebookLM notebooks. Type
      its email address (it is not necessarily the team's address), or press Enter
      for the default.
-  5. A browser opens. Sign in with that account and complete any two-step check.
-     Then come back to the black window.
-  6. The file notebook-master-token.json is saved to your Desktop.
-  7. In Team HQ go to Settings -> Connections -> NotebookLM, choose that file,
+  5. A Google Chrome window opens on the Google sign-in page. Sign in with that
+     account in THAT window and complete any two-step check.
+  6. Keep that Chrome window open. The black window says when the sign-in is
+     done, and then the Chrome window can be closed.
+  7. The file notebook-master-token.json is saved to your Desktop.
+  8. In Team HQ go to Settings -> Services -> NotebookLM, choose that file,
      and press "Upload token".
-  8. Delete notebook-master-token.json from your Desktop.
+  9. Delete notebook-master-token.json from your Desktop.
+
+If Google Chrome is not installed, the tool opens its own browser instead. If
+that window closes before the sign-in is done, install Google Chrome from
+https://www.google.com/chrome/ and run the batch file again.
 
 The file is a full-account credential. Do not email it or paste it anywhere.
