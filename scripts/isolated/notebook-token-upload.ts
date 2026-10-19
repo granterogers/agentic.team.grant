@@ -59,7 +59,7 @@ try {
 
   const good = await call(
     JSON.stringify({
-      master_token: 'aas_et/FIXTURE-NOT-A-CREDENTIAL',
+      master_token: 'aas_et/PLACEHOLDER',
       email: 'agentic.team.grant@gmail.com',
     }),
   )
