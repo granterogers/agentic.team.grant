@@ -28,6 +28,7 @@ import { promisify } from 'node:util'
 import { credentialSql } from '../credentials/deployment.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { AmbiguousWriteError } from './adapter.ts'
+import { type MasterToken, masterTokenFrom } from './master-token.ts'
 
 const run = promisify(execFile)
 
@@ -238,6 +239,9 @@ class HttpActionTransport implements ActionTransport {
     private readonly endpoint: string,
     private readonly secret: string,
     private readonly storageState: string,
+    // The durable token, when the vault holds one. The writer mints a fresh jar from it for each action, so a stored
+    // jar that has gone stale stops nothing (the same rule as the reader; see master-token.ts).
+    private readonly master: MasterToken | null = null,
   ) {}
 
   async perform(action: string, args: Record<string, unknown>) {
@@ -248,7 +252,11 @@ class HttpActionTransport implements ActionTransport {
       response = await fetch(this.endpoint, {
         method: 'POST',
         headers: { Authorization: `Bearer ${this.secret}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, args, storage_state: this.storageState }),
+        body: JSON.stringify(
+          this.master === null
+            ? { action, args, storage_state: this.storageState }
+            : { action, args, master_token: this.master },
+        ),
         signal: controller.signal,
       })
     } catch (error) {
@@ -312,21 +320,30 @@ export class NotebookActions {
     const { rows } = await db.execute(`
       select
         ${credentialSql('notebook.storage_state')} as jar,
+        ${credentialSql('notebook.master_token_json')} as master,
         ${credentialSql('notebook.reader_secret')} as secret,
         (select value #>> '{}' from public.system_config
           where key = 'notebook.writer_url') as url
     `)
-    const row = rows[0] as { jar?: string | null; secret?: string | null; url?: string | null }
+    const row = rows[0] as {
+      jar?: string | null
+      master?: string | null
+      secret?: string | null
+      url?: string | null
+    }
     const state = String(row?.jar ?? '')
-    if (state === '') return null
+    const master = masterTokenFrom(String(row?.master ?? ''))
+    // A master token is a credential on its own: the writer mints the jar from it. Without one, the stored jar is all
+    // there is, and without that there is no credential at all.
+    if (state === '' && master === null) return null
 
     const secret = String(row?.secret ?? '')
     const url = String(row?.url ?? '')
-    return new NotebookActions(
-      secret === '' || url === ''
-        ? new SubprocessTransport(state)
-        : new HttpActionTransport(url, secret, state),
-    )
+    if (secret === '' || url === '') {
+      // The subprocess has only the stored jar to go on, so without one there is nothing to run it with.
+      return state === '' ? null : new NotebookActions(new SubprocessTransport(state))
+    }
+    return new NotebookActions(new HttpActionTransport(url, secret, state, master))
   }
 
   /**
