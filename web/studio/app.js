@@ -6643,6 +6643,13 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
 
 function connectionsTab() {
   const ui = settingsUi
+  /*
+    Nobody signed in means nothing to show. The services are the office's, so a visitor with no session sees a sentence
+    saying so, never a list of services (not even "unknown" ones).
+  */
+  if (!bcSession.signedIn()) {
+    return ui.note({ tone: '', ic: 'info', text: 'Sign in to see which connections the office has, and whether each one is working.' })
+  }
   const all = config.services()
   const isGoogleSvc = (c) => config.routeFor(c.key).family === 'google'
   const main = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key) && !isGoogleSvc(c))
