@@ -1575,6 +1575,9 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     required: ['p_project_id', 'p_name', 'p_base64'],
   },
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
+  // The NotebookLM master token, uploaded from Settings (issue #502). The file is made on the owner's computer; the
+  // function checks it is that file, stores it in the vault, and answers with the account only.
+  set_notebook_token: { fn: 'hq_set_notebook_token', required: ['p_token'] },
   /*
     Both Google values at once (§35, 0377).
 
@@ -2222,6 +2225,7 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
 const OPERATOR_ONLY: ReadonlySet<string> = new Set([
   'set_setting',
   'set_google_secret',
+  'set_notebook_token',
   'set_google_credentials',
   'set_slack_credentials',
   'forget_google',

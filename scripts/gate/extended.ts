@@ -49,6 +49,11 @@ export const EXTENDED: readonly Proof[] = [
     'a failed piece nobody took on is counted for its own turn and said in the status prompt; the Chief of Staff taking it on removes exactly that one from the count, and the prompt agrees with the reader',
   ),
   p(
+    'notebook-token-upload',
+    6,
+    'an uploaded NotebookLM master token is checked (empty, not JSON, a storage_state and a wrong prefix are refused with nothing stored) and a real one is stored, answered by account only (issue #502)',
+  ),
+  p(
     'duplicate-while-stalled',
     2,
     'a repeat of work whose first attempt has stalled (lease lapsed) starts nothing; a repeat the matcher calls different work starts a new piece (the control)',

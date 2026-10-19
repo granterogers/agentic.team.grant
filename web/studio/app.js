@@ -6583,6 +6583,11 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
   const whyNot = !op && route.how === 'oauth' ? 'Connected by whoever runs this Team HQ.' : route.why
   // An expired permission is not a missing one: say so, and say that nothing already read is lost.
   // A route that says what expiry means for its own service says it; only Google's own words are written here.
+  // The NotebookLM master token, uploaded from this page (issue #502). Operators only: the gateway refuses anyone else.
+  const tokenUpload =
+    route.token_upload && op && !connected
+      ? `<div class="st-upload"><input type="file" accept="application/json,.json" data-nb-token-file aria-label="The master_token.json file"> <button class="btn small" data-nb-token-save>Upload token</button></div>`
+      : ''
   const expiredNote = !expired
     ? ''
     : route.expiredNote
@@ -6599,6 +6604,7 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
       ${expiredNote ? `<p class="st-meta">${esc(expiredNote)}</p>` : ''}
       ${route.url && !connected && !expired ? `<p class="st-meta">${esc(route.why ?? '')}</p>` : ''}
       ${unreachable && !expired ? `<p class="st-meta">${esc(whyNot ?? 'Set up outside Team HQ.')}</p>` : ''}
+      ${tokenUpload}
       <span class="st-said" data-said role="status" aria-live="polite"></span>
     </div>
     <div class="st-state">
@@ -8106,6 +8112,36 @@ function settingsSheet() {
       if (secretBox) secretBox.value = ''
       const idBox = wrap?.querySelector('[data-g-id]')
       if (idBox) idBox.value = ''
+      if (done) await afterWrite()
+    })
+  }
+
+  for (const b of v.querySelectorAll('[data-nb-token-save]')) {
+    b.addEventListener('click', async () => {
+      /*
+        The file is read in the page and sent once, to the gateway, which checks it is the master token file before it
+        is stored (migration 1085). Nothing here keeps the text: the input is cleared whatever happens.
+      */
+      const wrap = b.closest('[data-saidwrap]')
+      const input = wrap?.querySelector('[data-nb-token-file]')
+      const file = input?.files?.[0]
+      if (!file) {
+        say(b, 'Choose the master_token.json file first.', 'warn')
+        return
+      }
+      const text = await file.text()
+      if (!/"master_token"\s*:\s*"aas_et\//.test(text)) {
+        if (input) input.value = ''
+        say(b, 'That is not the master token file. It is master_token.json, not storage_state.json.', 'warn')
+        return
+      }
+      const done = await attempt(
+        b,
+        'Uploading…',
+        async () => await act('set_notebook_token', { p_token: text }),
+        'NotebookLM is connected. The office can read notebooks again.',
+      )
+      if (input) input.value = ''
       if (done) await afterWrite()
     })
   }
