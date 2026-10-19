@@ -440,6 +440,9 @@ const SECTIONS: Readonly<
     `web/studio/usage.js` was written in its exact shape.
   */
   usage_overview: { fn: 'usage_overview', office: true, args: { p_days: 30 } },
+  // The free tier's headroom on its own (migration 1088 took it out of studio_settings), read beside the usage overview by
+  // the spend card. Not per office: the database and storage figures belong to the project.
+  free_tier_headroom: { fn: 'free_tier_headroom' },
   /*
     One document, in full (#95).
 

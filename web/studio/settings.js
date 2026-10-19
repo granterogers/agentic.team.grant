@@ -594,62 +594,6 @@ export async function hydrateSettings(read) {
       // A settings page that cannot show a checklist is still a settings page.
     }
 
-    /*
-      Spend, from `usage_overview` — which distinguishes what a provider
-      reported from what we counted ourselves, and that distinction survives
-      into the sentence.
-
-      `capacity.ts` established the rule and the morning briefing then broke it
-      once: handed "35 of 40 by our own count, because Google publishes no usage
-      API", a summariser produced "35/40 left" and an estimate became a fact on
-      Grant's phone. So the caveat is part of the string here, not a footnote
-      somebody may drop.
-    */
-    const u = d.usage ?? {}
-    const head = d.headroom ?? {}
-    const rows = []
-    if (u.inference) {
-      rows.push({
-        name: 'Inference — OpenRouter free tier',
-        cost: `£${Number(u.inference.cost_gbp ?? 0).toFixed(2)}`,
-        note: `${readable(u.inference.calls)} calls · ${readable(u.inference.tokens)} tokens this month`,
-      })
-    }
-    if (head.database) {
-      rows.push({
-        name: 'Supabase',
-        cost: '£0.00',
-        note: `${head.database.used_human ?? '?'} of ${head.database.limit_human ?? '500 MB'} database` +
-          (head.storage ? ` · ${head.storage.used_human} of ${head.storage.limit_human} storage` : ''),
-      })
-    }
-    if (u.notebook) {
-      rows.push({
-        name: 'NotebookLM',
-        cost: '£0.00',
-        // The hedge, in the row rather than in a note nobody reads.
-        note: `${u.notebook.used ?? 0} of ${u.notebook.limit ?? 0} units today, by our own count — ` +
-          'Google publishes no usage API',
-      })
-    }
-    if (u.tts) {
-      rows.push({
-        name: 'Speech',
-        cost: `£${Number(u.tts.cost_gbp ?? 0).toFixed(2)}`,
-        note: `${u.tts.characters ? `${readable(u.tts.characters)} characters` : 'nothing spoken'} this month`,
-      })
-    }
-    SPEND.rows = rows.length > 0 ? rows : FALLBACK_SPEND.rows
-    SPEND.month = `£${Number(u.total_gbp ?? 0).toFixed(2)}`
-    SPEND.target = 'about £0 / month'
-    SPEND.headroom =
-      head.database && head.storage
-        ? `${head.database.percent ?? '?'}% of the database and ${head.storage.percent ?? '?'}% of storage.`
-        : ''
-    // Empty means nothing is wrong, and the page must then show nothing rather
-    // than an empty warning box with a warning icon in it.
-    SPEND.warn = u.warn ?? ''
-
     settingsSource.live = true
     settingsSource.why = ''
     settingsSource.state = 'ready'
@@ -662,6 +606,64 @@ export async function hydrateSettings(read) {
     if (typeof document !== 'undefined') document.dispatchEvent(new CustomEvent('hq:viewer'))
     return false
   }
+}
+
+/*
+  Spend, from `usage_overview` (the usage tab's own read, handed in) and `free_tier_headroom`. Neither is in the settings payload
+  any more (migration 1088): they are slow, and the Settings sheet should not wait for them.
+
+  `usage_overview` distinguishes what a provider reported from what we counted ourselves, and that distinction survives into
+  the sentence.
+
+  `capacity.ts` established the rule and the morning briefing then broke it once: handed "35 of 40 by our own count, because
+  Google publishes no usage API", a summariser produced "35/40 left" and an estimate became a fact on Grant's phone. So the
+  caveat is part of the string here, not a footnote somebody may drop.
+*/
+export function applySpend(usage, headroom) {
+  const u = usage ?? {}
+  const head = headroom ?? {}
+  const rows = []
+  if (u.inference) {
+    rows.push({
+      name: 'Inference — OpenRouter free tier',
+      cost: `£${Number(u.inference.cost_gbp ?? 0).toFixed(2)}`,
+      note: `${readable(u.inference.calls)} calls · ${readable(u.inference.tokens)} tokens this month`,
+    })
+  }
+  if (head.database) {
+    rows.push({
+      name: 'Supabase',
+      cost: '£0.00',
+      note: `${head.database.used_human ?? '?'} of ${head.database.limit_human ?? '500 MB'} database` +
+        (head.storage ? ` · ${head.storage.used_human} of ${head.storage.limit_human} storage` : ''),
+    })
+  }
+  if (u.notebook) {
+    rows.push({
+      name: 'NotebookLM',
+      cost: '£0.00',
+      // The hedge, in the row rather than in a note nobody reads.
+      note: `${u.notebook.used ?? 0} of ${u.notebook.limit ?? 0} units today, by our own count — ` +
+        'Google publishes no usage API',
+    })
+  }
+  if (u.tts) {
+    rows.push({
+      name: 'Speech',
+      cost: `£${Number(u.tts.cost_gbp ?? 0).toFixed(2)}`,
+      note: `${u.tts.characters ? `${readable(u.tts.characters)} characters` : 'nothing spoken'} this month`,
+    })
+  }
+  SPEND.rows = rows.length > 0 ? rows : FALLBACK_SPEND.rows
+  SPEND.month = `£${Number(u.total_gbp ?? 0).toFixed(2)}`
+  SPEND.target = 'about £0 / month'
+  SPEND.headroom =
+    head.database && head.storage
+      ? `${head.database.percent ?? '?'}% of the database and ${head.storage.percent ?? '?'}% of storage.`
+      : ''
+  // Empty means nothing is wrong, and the page must then show nothing rather
+  // than an empty warning box with a warning icon in it.
+  SPEND.warn = u.warn ?? ''
 }
 
 export const services = () => CONNECTIONS.map((c) => ({ ...c, ...(MARKS[c.key] ?? {}) }))

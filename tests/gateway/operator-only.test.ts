@@ -147,6 +147,8 @@ describe('the gateway enforces it', () => {
     const NOT_OPERATOR_SECTION: Readonly<Record<string, string>> = {
       actions:
         'the static catalogue of what an asset can be asked to do; no office or deployment data in it',
+      free_tier_headroom:
+        "the project's database and storage percentages against the free tier; studio_settings already returned them to any signed-in office member, so moving them out of that payload does not widen who can read them",
     }
     const unclassified = sections
       .filter((s) => !s.scoped)

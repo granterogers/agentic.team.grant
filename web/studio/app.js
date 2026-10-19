@@ -15769,11 +15769,23 @@ function needSettings(retry = false) {
     if (isOpenNow($('#settings'))) settingsSheet()
   }
   void config.hydrateConnections(read, redrawSettings)
-  settingsAsked = Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
+  // The usage overview is slow, and the Settings sheet does not wait for it: the spend card and the Usage tab redraw when it lands.
+  void loadSpend(redrawSettings)
+  settingsAsked = config.hydrateSettings(read).then(() => {
     render()
     if (isOpenNow($('#settings'))) settingsSheet()
   })
   return settingsAsked
+}
+
+// The usage overview and the free-tier headroom, for the spend card and the Usage tab. Neither is in the settings payload, so
+// neither holds up the rest of Settings. Either can fail on its own: the card then says what it can, and the headroom is
+// simply absent when its read fails.
+function loadSpend(done) {
+  return Promise.allSettled([hydrateUsage(read), read('free_tier_headroom')]).then(([, headroom]) => {
+    config.applySpend(USAGE, headroom.status === 'fulfilled' ? headroom.value : null)
+    done()
+  })
 }
 
 // The unified activity ledger's rows (docs/activity-ledger/), or null when there is nothing trustworthy to put in their place.
@@ -15877,7 +15889,7 @@ async function refresh() {
     // Both, together, and only once something has asked for them (needSettings): a visit that never opened Settings or the
     // Sources tab has nothing of theirs to keep fresh. A write can change either, so once asked a refresh re-reads both
     // rather than leaving one stale behind a tab.
-    ...(settingsAsked === null ? [] : [config.hydrateSettings(read), hydrateUsage(read)]),
+    ...(settingsAsked === null ? [] : [config.hydrateSettings(read), loadSpend(render)]),
   ])
   /*
     Notes another device wrote since this one loaded (ADR-0068, P0 persistence): the board folds them in rather than
