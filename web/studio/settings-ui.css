@@ -932,6 +932,35 @@
   gap: 12px;
   align-items: stretch;
 }
+/*
+  Every other Settings page is a board too (.svc-board--auto). A section takes one column while it is short, and the full
+  width once it grows: four or more rows, a form, a text box or an editor. Nothing is sized by hand for a particular page,
+  so a page that changes shape keeps fitting the space it has.
+*/
+#settings .svc-board--auto {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+#settings .svc-board--auto > .st-sec {
+  min-width: 0;
+}
+#settings .svc-board--auto > .st-sec:has(.st-row:nth-child(n + 4)),
+#settings .svc-board--auto > .st-sec:has(.st-form),
+#settings .svc-board--auto > .st-sec:has(textarea),
+#settings .svc-board--auto > .st-sec:has(.st-editor),
+#settings .svc-board--auto > :not(.st-sec) {
+  grid-column: 1 / -1;
+}
+
+/* A board of people: the same grid, with wider columns because a person's card carries more words. */
+#settings .svc-board--people {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+#settings .svc-board .svc-head .btn {
+  margin-left: 8px;
+  vertical-align: middle;
+}
 #settings .svc-head {
   grid-column: 1 / -1;
   margin: 0 0 4px;

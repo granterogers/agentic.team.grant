@@ -5709,8 +5709,8 @@ function teamTabSettings() {
   const retired = people.filter((c) => c.active === false)
   const card = (c) =>
     state.person === c.slug
-      ? `<div class="st-editor">${personEditor(c)}</div>`
-      : `<article class="st-person${c.active === false ? ' retired' : ''}">
+      ? `<div class="svc-span st-editor">${personEditor(c)}</div>`
+      : `<article class="svc-tile st-person${c.active === false ? ' retired' : ''}">
           <div class="st-top">
           <span class="st-face">${face(c, 52)}</span>
           <div class="st-text">
@@ -5740,25 +5740,28 @@ function teamTabSettings() {
         </div>
       </div>`
     : ''
-  return [
-    ui.section({
-      title: 'Your team',
-      note: config.VIEWER.operator
-        ? 'Permanent members of the team. Choose Configure to change what someone does, who they are allowed to act as and what they may use.'
-        : 'Permanent members of the team. Who is on the team, and what each of them may use, is set by whoever runs this Team HQ.',
-      count: `${active.length} ${active.length === 1 ? 'person' : 'people'}`,
-      action: canWrite() && config.VIEWER.operator ? ui.button({ label: 'Bring someone in', tone: 'primary', a: { 'data-hire': true } }) : '',
-      body: hire + `<div class="st-people">${active.map(card).join('')}</div>`,
-    }),
-    retired.length === 0
+  // The same board as Services: each person is one tile, and the things that are not a person (the hire form, the editor
+  // open on someone, the retired list) take the full width of the grid.
+  const note = config.VIEWER.operator
+    ? 'Permanent members of the team. Choose Configure to change what someone does, who they are allowed to act as and what they may use.'
+    : 'Permanent members of the team. Who is on the team, and what each of them may use, is set by whoever runs this Team HQ.'
+  const bringIn = canWrite() && config.VIEWER.operator
+    ? ui.button({ label: 'Bring someone in', tone: 'primary', a: { 'data-hire': true } })
+    : ''
+  return `<div class="svc-board svc-board--people">
+    <p class="svc-head">Your team <span class="st-meta">${active.length} ${active.length === 1 ? 'person' : 'people'}</span> ${bringIn}</p>
+    <p class="svc-span st-desc">${note}</p>
+    ${hire === '' ? '' : `<div class="svc-span">${hire}</div>`}
+    ${active.map(card).join('')}
+    ${retired.length === 0
       ? ''
-      : ui.advanced({
+      : `<div class="svc-span">${ui.advanced({
           title: 'Retired',
           hint: `${retired.length} no longer taking work`,
-          body: `<div class="st-people">${retired.map(card).join('')}</div>
+          body: `<div class="svc-board svc-board--people">${retired.map(card).join('')}</div>
             <p class="st-meta">Retiring someone is reversible. Nobody is ever deleted: what they wrote, decided and delivered stays under their name.</p>`,
-        }),
-  ].join('')
+        })}</div>`}
+  </div>`
 }
 
 /*
@@ -7530,7 +7533,11 @@ function settingsSheet() {
     pane,
     tabTitle: here.name,
     lead: here.lead,
-    body,
+    // Every tab is one board, so its modules size themselves to the width (see .svc-board--auto). Services and Team
+    // already draw their own board.
+    body: String(body).trimStart().startsWith('<div class="svc-board')
+      ? body
+      : `<div class="svc-board svc-board--auto">${body}</div>`,
     backLabel: phone && pane === 'detail' ? 'Settings' : 'Back to workspace',
     // Who is signed in, in the corner: the Sample says so; anyone else gets the address, filled in once it is asked for below.
     who: bcSession.signedIn() ? (bcSession.isSample() ? 'Sample office · read only' : settingsWhoEmail) : '',
