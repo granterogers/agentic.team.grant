@@ -6622,7 +6622,7 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
       : op
         ? 'Google no longer accepts the permission that was saved, which happens when it expires or is withdrawn. Reconnecting takes one consent screen; nothing already read is lost.'
         : 'Google needs to be reconnected by whoever runs this Team HQ. Nothing already read is lost.'
-  return `<div class="st-svc" data-saidwrap>
+  return `<div class="st-svc${route.token_upload ? ' st-svc--wide' : ''}" data-saidwrap>
     <span class="st-logo"${c.tint ? ` style="--tint:${esc(c.tint)}"` : ''}>${c.svg ?? ''}</span>
     <div class="st-text">
       <p class="st-name">${esc(c.name)}</p>

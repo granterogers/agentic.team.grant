@@ -841,6 +841,33 @@
   gap: 8px 12px;
 }
 
+/* A card with a long explanation and its own controls (NotebookLM): the text takes the full width, and the actions sit
+   below it, so the words and the buttons never share a line. */
+#settings .st-svc.st-svc--wide {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+#settings .st-svc.st-svc--wide .st-state {
+  grid-column: 2 / -1;
+  justify-content: flex-start;
+  margin-top: 6px;
+}
+#settings .st-svc--wide .st-text > .st-meta {
+  margin: 8px 0 0;
+  max-width: 70ch;
+}
+#settings .st-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+}
+#settings .st-upload input[type='file'] {
+  max-width: 100%;
+  font: 400 13px/19px var(--st-font);
+  color: var(--st-text-2);
+}
+
 /* a person on the team */
 #settings .st-people {
   display: grid;

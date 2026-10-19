@@ -1278,7 +1278,7 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   white-space: nowrap;
   align-self: center;
   margin-left: auto;
-  margin-right: 8px;
+  margin-right: 64px;
 }
 @media (max-width: 480px) {
   .stg-who { display: none; }
