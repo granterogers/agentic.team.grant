@@ -247,6 +247,84 @@ const kickWorker = (): void => {
 }
 
 /*
+  NOTEBOOKLM, CHECKED LIVE (issue #502).
+
+  The reader is asked to list the account's notebooks with the master token, and it mints its own cookie jar from that
+  token on each call. That is the only honest check of the connection: a stored jar can be stale while the master token
+  is fine. The answer is a fact for the Services tile and is stored nowhere. The secrets are read HERE, with the service
+  key, and never returned. Operator-only: the master token is the deployment's, so the caller decides before this runs.
+*/
+const notebookProbe = async (
+  operator: string,
+  office: string,
+): Promise<{ state: string; detail: string; checked_at: string }> => {
+  const checked_at = new Date().toISOString()
+  const ask = async (fn: string, body: unknown): Promise<unknown> => {
+    const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+    return await r.json().catch(() => null)
+  }
+  const held = async (p_name: string): Promise<string> => {
+    const v = await ask('deployment_credential', {
+      p_office: office,
+      p_name,
+      p_operator: operator,
+      p_job: null,
+    })
+    return typeof v === 'string' ? v : ''
+  }
+  const master = await held('notebook.master_token_json')
+  if (master === '') return { state: 'off', detail: '', checked_at }
+  let parsed: { email?: unknown; android_id?: unknown; master_token?: unknown }
+  try {
+    parsed = JSON.parse(master) as typeof parsed
+  } catch {
+    return { state: 'dead', detail: 'the stored NotebookLM file is not readable. Upload it again.', checked_at }
+  }
+  const secret = await held('notebook.reader_secret')
+  const urlRows = await fetch(`${DB_URL}/rest/v1/system_config?key=eq.notebook.reader_url&select=value`, {
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+  })
+    .then((r) => r.json())
+    .catch(() => [])
+  const url = Array.isArray(urlRows) && typeof urlRows[0]?.value === 'string' ? urlRows[0].value : ''
+  if (secret === '' || url === '') {
+    return { state: 'off', detail: 'the NotebookLM reader is not configured', checked_at }
+  }
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        op: 'probe',
+        master_token: {
+          email: String(parsed.email ?? ''),
+          android_id: String(parsed.android_id ?? ''),
+          master_token: String(parsed.master_token ?? ''),
+        },
+      }),
+      signal: AbortSignal.timeout(25000),
+    })
+    const body = (await r.json().catch(() => ({}))) as { error?: unknown; notebook_count?: unknown }
+    if (!r.ok) {
+      // The reader's own sentence (a constant or a library message), never the request.
+      return { state: 'dead', detail: String(body.error ?? 'NotebookLM refused the sign-in').slice(0, 160), checked_at }
+    }
+    const count = typeof body.notebook_count === 'number' ? body.notebook_count : 0
+    return { state: 'ok', detail: `${count} notebook${count === 1 ? '' : 's'} can be read`, checked_at }
+  } catch {
+    return { state: 'degraded', detail: 'the NotebookLM reader did not answer in time', checked_at }
+  }
+}
+
+/*
   A GOOGLE ACCESS TOKEN, minted here and never sent anywhere near the browser.
 
   `google-oauth` does this same exchange for the same reason, and its comment
@@ -430,6 +508,8 @@ const SECTIONS: Readonly<
   studio_settings: { fn: 'hq_studio_settings', office: true },
   // The Services list on its own (migration 1087), so the Connections tab does not wait for the whole Settings read.
   studio_connections: { fn: 'hq_studio_connections', office: true },
+  // The one Google sign-in, as the Gmail, Drive and Calendar tiles show it (migration 1089).
+  google_connection: { fn: 'hq_google_connection', office: true },
   /*
     The usage dashboard (#61), from `usage_overview` rather than `hq_usage`.
 
@@ -1583,6 +1663,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // The NotebookLM master token, uploaded from Settings (issue #502). The file is made on the owner's computer; the
   // function checks it is that file, stores it in the vault, and answers with the account only.
   set_notebook_token: { fn: 'hq_set_notebook_token', required: ['p_token'] },
+  // The Notion integration token, pasted in Settings -> Services (migration 1090). Stored in the vault, never returned.
+  set_notion_token: { fn: 'hq_set_notion_token', required: ['p_token'] },
   /*
     Both Google values at once (§35, 0377).
 
@@ -2231,6 +2313,7 @@ const OPERATOR_ONLY: ReadonlySet<string> = new Set([
   'set_setting',
   'set_google_secret',
   'set_notebook_token',
+  'set_notion_token',
   'set_google_credentials',
   'set_slack_credentials',
   'forget_google',
@@ -4148,6 +4231,18 @@ Deno.serve(async (request: Request): Promise<Response> => {
         })),
       },
     })
+  }
+
+  /*
+    NotebookLM's live check (issue #502, Services tiles). Only the operator's page asks the reader, because the master
+    token is the deployment's. Anyone else is told it is not checked from here, rather than being refused the page.
+  */
+  if (name === 'notebook_check') {
+    if (!(kind === 'person' && principal !== null && principal !== '' && (await isOperator(principal)))) {
+      return json({ data: { state: 'not_checked', detail: '', checked_at: null } })
+    }
+    if (office === null) return json({ error: 'no_office' }, 403)
+    return json({ data: await notebookProbe(String(principal), office) })
   }
 
   const section = Object.hasOwn(SECTIONS, name) ? SECTIONS[name] : undefined

@@ -917,6 +917,102 @@
   font: 400 13px/20px var(--st-font);
   color: var(--st-text-3);
 }
+/*
+  The services as square tiles (Grant, 19 October). The grid fills the width, so a wide window shows several in a row and
+  a narrow one stacks them. Each tile has its LED, its name, its state in words, and one line of detail.
+*/
+#settings .svc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+#settings .svc-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 188px;
+  padding: 14px;
+  border: 1px solid var(--st-line-2);
+  border-radius: var(--st-r);
+  background: var(--st-panel);
+}
+#settings .svc-tile__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+#settings .svc-tile .st-logo {
+  width: 40px;
+  height: 40px;
+}
+#settings .svc-led {
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #6e7681;
+}
+#settings .svc-led--ok {
+  background: #2fb356;
+  box-shadow: 0 0 0 3px rgba(47, 179, 86, 0.25), 0 0 10px rgba(47, 179, 86, 0.6);
+}
+#settings .svc-led--warn {
+  background: #d9a22b;
+  box-shadow: 0 0 0 3px rgba(217, 162, 43, 0.25), 0 0 10px rgba(217, 162, 43, 0.5);
+}
+#settings .svc-led--bad {
+  background: #e5534b;
+  box-shadow: 0 0 0 3px rgba(229, 83, 75, 0.25), 0 0 10px rgba(229, 83, 75, 0.5);
+}
+#settings .svc-tile__name {
+  margin: 4px 0 0;
+  font: 600 14px/20px var(--st-font);
+  color: var(--st-text);
+}
+#settings .svc-tile__word {
+  margin: 0;
+  font: 500 12px/18px var(--st-font);
+  color: var(--st-text-2);
+}
+#settings .svc-tile__word--ok {
+  color: #2fb356;
+}
+#settings .svc-tile__word--warn {
+  color: #d9a22b;
+}
+#settings .svc-tile__word--bad {
+  color: #e5534b;
+}
+#settings .svc-tile__detail {
+  margin: 0;
+  font: 400 12px/18px var(--st-font);
+  color: var(--st-text-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+#settings .svc-tile__action {
+  margin-top: auto;
+  padding-top: 6px;
+}
+#settings .svc-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--st-line-2);
+  border-radius: var(--st-r);
+  background: var(--st-panel);
+}
+#settings .svc-panel input[type='password'] {
+  width: min(360px, 100%);
+  padding: 8px 10px;
+  font: 400 16px/22px var(--st-font);
+  color: var(--st-text);
+  background: var(--st-panel-2);
+  border: 1px solid var(--st-line-3);
+  border-radius: 8px;
+}
 
 /* a person on the team */
 #settings .st-people {

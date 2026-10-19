@@ -53,6 +53,7 @@ import * as dictate from './dictate.js'
 import * as command from './command.js'
 import * as config from './settings.js'
 import * as copy from './settings-copy.js'
+import { mark as markFor } from './logos/marks.js'
 import * as settingsUi from './settings-ui.js'
 import { wireCall, unwireCall, syncCallButtons, callIsLive, toggleCall } from './call.js'
 import { GROWTH, hydrateUsage, say as sayAmount, USAGE, usageSource } from './usage.js'
@@ -6573,6 +6574,52 @@ function slackSetupPanel() {
 }
 
 /** One connection: logo, words, state, next step. `detail` is shown when it adds something. */
+/*
+  Two LEDs that no connection row carries (migration 1089 and the notebook_check section, issue #502). One Google sign-in
+  covers Gmail, Drive and Calendar, so its state is shown once and the three tiles read it. NotebookLM is checked live
+  when Services opens. Both are null until their answer lands, and the tiles say "Checking…" until then.
+*/
+let ledGoogle = null
+let ledNotebook = null
+
+function loadServiceLeds(done) {
+  return Promise.allSettled([read('google_connection'), read('notebook_check')]).then(([g, n]) => {
+    ledGoogle = g.status === 'fulfilled' ? g.value : null
+    ledNotebook = n.status === 'fulfilled' ? n.value : null
+    done()
+  })
+}
+
+// The NotebookLM reconnect steps, as one numbered list with its notes under it (the reading is the card's, not the tile's).
+function notebookSteps() {
+  return `<p class="st-steps-title">Reconnect NotebookLM in three steps</p>
+        <ol class="st-steps">
+          <li>Download the token maker and unzip it.<br><a class="btn primary" href="/downloads/NotebookLM-Token-Maker.zip" download>Download the token maker (Windows)</a></li>
+          <li>Double-click <strong>Make NotebookLM Token.bat</strong>. It asks which Google account holds your notebooks, which is not necessarily the team's address. It signs in with that account and saves <strong>notebook-master-token.json</strong> to your Desktop.</li>
+          <li>Choose that file here, press Upload token, then delete the file from your Desktop.
+            <div class="st-upload"><input type="file" accept="application/json,.json" data-nb-token-file aria-label="The master_token.json file"> <button class="btn small" data-nb-token-save>Upload token</button></div>
+          </li>
+        </ol>
+        <ul class="st-notes">
+          <li>Python 3.9 or newer is needed once. Install it from python.org and tick "Add to PATH". The README in the zip has the same steps.</li>
+          <li>Opening NotebookLM here only signs you in in the browser.</li>
+          <li>Notebooks attached to a project stay attached.</li>
+        </ul>`
+}
+
+// Notion's integration secret, pasted here and stored in the vault (migration 1090). A password box, so it is not shown.
+function notionPanel() {
+  return `<div class="svc-panel" data-saidwrap>
+    <p class="st-steps-title">Connect Notion in two steps</p>
+    <ol class="st-steps">
+      <li>Open <a href="https://www.notion.so/profile/integrations" target="_blank" rel="noopener">notion.so/profile/integrations</a>, choose New integration, give it a name, and copy its secret. It starts with secret_ or ntn_.</li>
+      <li>In Notion, share the pages the team should read with that integration (the ⋯ menu, then Connections), then paste the secret below.</li>
+    </ol>
+    <div class="st-upload"><input type="password" autocomplete="off" spellcheck="false" data-notion-token aria-label="The Notion integration secret"> <button class="btn small" data-notion-save>Save Notion token</button></div>
+    <p class="st-meta">It is stored in the vault and is never shown again.</p>
+  </div>`
+}
+
 function serviceRow(c, { showDetail = true, sub = false } = {}) {
   const ui = settingsUi
   const [tone, word] = copy.state[c.state] ?? ['off', c.state]
@@ -6611,19 +6658,7 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
   // The NotebookLM master token, uploaded from this page (issue #502). Operators only: the gateway refuses anyone else.
   const tokenUpload =
     route.token_upload && op && !connected
-      ? `<p class="st-steps-title">Reconnect NotebookLM in three steps</p>
-        <ol class="st-steps">
-          <li>Download the token maker and unzip it.<br><a class="btn primary" href="/downloads/NotebookLM-Token-Maker.zip" download>Download the token maker (Windows)</a></li>
-          <li>Double-click <strong>Make NotebookLM Token.bat</strong>. It asks which Google account holds your notebooks, which is not necessarily the team's address. It signs in with that account and saves <strong>notebook-master-token.json</strong> to your Desktop.</li>
-          <li>Choose that file here, press Upload token, then delete the file from your Desktop.
-            <div class="st-upload"><input type="file" accept="application/json,.json" data-nb-token-file aria-label="The master_token.json file"> <button class="btn small" data-nb-token-save>Upload token</button></div>
-          </li>
-        </ol>
-        <ul class="st-notes">
-          <li>Python 3.9 or newer is needed once. Install it from python.org and tick "Add to PATH". The README in the zip has the same steps.</li>
-          <li>Opening NotebookLM here only signs you in in the browser.</li>
-          <li>Notebooks attached to a project stay attached.</li>
-        </ul>`
+      ? notebookSteps()
       : ''
   const expiredNote = !expired
     ? ''
@@ -6664,11 +6699,7 @@ function connectionsTab() {
   const all = config.services()
   const isGoogleSvc = (c) => config.routeFor(c.key).family === 'google'
   const main = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key) && !isGoogleSvc(c))
-  const googleRows = all.filter((c) => !MESSAGING_KEYS.has(c.key) && !MACHINERY_KEYS.has(c.key) && isGoogleSvc(c))
   const machinery = all.filter((c) => MACHINERY_KEYS.has(c.key))
-  const attention = main.filter((c) => ['degraded', 'dead'].includes(String(c.state)))
-  const working = main.filter((c) => !attention.includes(c) && config.isConnected(c.state))
-  const idle = main.filter((c) => !attention.includes(c) && !config.isConnected(c.state))
   const operator = config.VIEWER.operator
   const googleNeedsSetup = operator && ((config.SETUP ?? {}).google ?? {}).ready === false
 
@@ -6843,48 +6874,82 @@ function connectionsTab() {
         })
 
   const machineryRows = machinery.map((c) => serviceRow(c))
-  const sectionFor = (title, list, note) =>
-    list.length === 0 ? '' : ui.section({ title, note, count: list.length, body: ui.card(list.map((c) => serviceRow(c))) })
-
   /*
-    ONE GOOGLE, NOT THREE (4 October; made a single card on 5 October). Drive, Calendar and Gmail are one connection
-    made by one consent screen, and all three rows already pointed at the SAME disconnect ("google"), so three rows
-    with three Connect buttons were one account presented as three onboardings. There is now one card: one Connect
-    (or Reconnect), one Disconnect, and under it the state of each part, because each can be in a different state (a
-    scope withdrawn). The parts carry no buttons of their own. NotebookLM is not part of this card: Google offers no
-    API for it, so it is set up separately and is never ticked here.
+    THE SERVICES AS TILES (Grant, 19 October). One square tile per service, in a grid that fills the width: a wide window
+    shows several in a row, a narrow one stacks them, and nothing is left as empty width. Each tile carries an LED in its
+    state's colour. Gmail, Drive and Calendar are three tiles over ONE Google sign-in (one consent covers all three), so
+    they share its state, and only Gmail carries the Connect and Disconnect buttons. NotebookLM is checked live when the
+    page opens. The set-up panels (NotebookLM's steps, Notion's token box) sit under the grid, and only when they are
+    needed.
   */
-  const googleCard = (() => {
-    if (googleRows.length === 0) return ''
-    const on = googleRows.filter((c) => config.isConnected(c.state))
-    const dead = googleRows.some((c) => c.state === 'dead')
-    const degraded = googleRows.some((c) => c.state === 'degraded')
-    const op = config.VIEWER.operator
-    const [tone, word] = on.length === googleRows.length ? (degraded || dead ? ['warn', 'Needs attention'] : ['ok', 'Connected']) : on.length > 0 ? ['warn', 'Partly connected'] : dead ? ['bad', 'Needs reconnecting'] : ['off', 'Not connected']
-    const head = ui.row({
-      name: 'Google',
-      desc: 'One sign-in covers Drive, Calendar and Gmail. Notebook is connected separately and is not covered by this sign-in.',
-      kind: 'stack',
-      control: `<span data-google-summary>${ui.chip(tone, word)}</span>
-        ${on.length < googleRows.length && op ? ui.button({ label: dead ? 'Reconnect Google' : 'Connect Google', tone: 'primary', a: { 'data-google-connect': true } }) : ''}
-        ${on.length > 0 && canWrite() && op ? ui.button({ label: 'Disconnect Google', tone: 'quiet', a: { 'data-disconnect': 'google', 'data-service': 'Google' } }) : ''}
-        ${on.length < googleRows.length && !op ? '<span class="st-meta">Connected by whoever runs this Team HQ.</span>' : ''}`,
-    })
-    return ui.section({
-      title: 'Google',
-      body: ui.card([
-        head,
-        ...googleRows.map((c) => serviceRow(c, { sub: true })),
-      ]),
-    })
-  })()
-  const googleLine = googleCard
+  const tile = ({ key, name, svg = '', tint = '', tone, word, detail = '', action = '' }) => `
+    <article class="svc-tile" data-tile="${esc(key)}">
+      <div class="svc-tile__top">
+        <span class="st-logo"${tint ? ` style="--tint:${esc(tint)}"` : ''}>${svg}</span>
+        <span class="svc-led svc-led--${esc(tone)}" aria-hidden="true"></span>
+      </div>
+      <p class="svc-tile__name">${esc(name)}</p>
+      <p class="svc-tile__word svc-tile__word--${esc(tone)}">${esc(word)}</p>
+      ${detail ? `<p class="svc-tile__detail">${esc(detail)}</p>` : ''}
+      ${action ? `<div class="svc-tile__action">${action}</div>` : ''}
+    </article>`
+  const tileAction = (c) => {
+    const route = config.routeFor(c.key)
+    if (config.isConnected(c.state)) {
+      return route.off !== undefined && canWrite() && operator
+        ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-disconnect': route.off, 'data-service': c.name } })
+        : ''
+    }
+    if (route.how === 'tab' && route.to !== 'setup') return ui.button({ label: 'Set up', tone: 'primary', a: { 'data-goto-setting': route.to } })
+    if (route.how === 'mcp') return ui.button({ label: route.label, tone: 'primary', a: { 'data-mcp-open': true } })
+    if (route.url) return `<a class="btn primary" href="${esc(route.url)}" target="_blank" rel="noopener">${esc(route.urlLabel ?? 'Open')}</a>`
+    return ''
+  }
+  const gTone = ledGoogle === null ? ['off', 'Checking…'] : copy.state[ledGoogle.state] ?? ['off', 'Not checked']
+  const gOn = ledGoogle?.state === 'ok'
+  const gAction = !canWrite() || !operator
+    ? ''
+    : gOn
+      ? ui.button({ label: 'Disconnect Google', tone: 'quiet', a: { 'data-disconnect': 'google', 'data-service': 'Google' } })
+      : ui.button({ label: ledGoogle?.state === 'dead' ? 'Reconnect Google' : 'Connect Google', tone: 'primary', a: { 'data-google-connect': true } })
+  const sharedGoogle = 'The same Google sign-in as Gmail.'
+  const nbTone = ledNotebook === null ? ['off', 'Checking…'] : copy.state[ledNotebook.state] ?? ['off', 'Not checked']
+  const nbOk = ledNotebook?.state === 'ok'
+  const gmailMark = markFor('gmail')
+  const driveMark = markFor('drive')
+  const calendarMark = markFor('calendar')
+  const notebookMark = markFor('notebooklm')
+  const others = main.filter((c) => c.key !== 'notebooklm')
+  const tiles = [
+    tile({ key: 'gmail', name: 'Gmail', svg: gmailMark.svg, tint: gmailMark.tint, tone: gTone[0], word: gTone[1], detail: ledGoogle?.detail ?? '', action: gAction }),
+    tile({ key: 'drive', name: 'Google Drive', svg: driveMark.svg, tint: driveMark.tint, tone: gTone[0], word: gTone[1], detail: sharedGoogle }),
+    tile({ key: 'calendar', name: 'Google Calendar', svg: calendarMark.svg, tint: calendarMark.tint, tone: gTone[0], word: gTone[1], detail: sharedGoogle }),
+    tile({
+      key: 'notebooklm',
+      name: 'NotebookLM',
+      svg: notebookMark.svg,
+      tint: notebookMark.tint,
+      tone: nbTone[0],
+      word: nbTone[1],
+      detail: ledNotebook?.detail ?? (ledNotebook === null ? 'Checking the reader…' : ''),
+    }),
+    ...others.map((c) => {
+      const [t, w] = copy.state[c.state] ?? ['off', c.state]
+      return tile({ key: c.key, name: c.name, svg: c.svg ?? '', tint: c.tint ?? '', tone: t, word: w, detail: String(c.detail ?? ''), action: tileAction(c) })
+    }),
+  ]
+  const panels = []
+  if (!nbOk && operator && canWrite()) panels.push(`<div class="svc-panel" data-saidwrap>${notebookSteps()}</div>`)
+  const notionRow = main.find((c) => c.key === 'notion')
+  if (notionRow && !config.isConnected(notionRow.state) && operator && canWrite()) panels.push(notionPanel())
+  const servicesTiles = ui.section({
+    title: 'Services',
+    count: tiles.length,
+    body: `<div class="svc-grid">${tiles.join('')}</div>${panels.join('')}`,
+  })
   return [
     said,
-    googleLine,
-    sectionFor('Needs attention', attention, 'These were connected and are not working properly.'),
-    sectionFor('Connected', working),
-    sectionFor('Not connected', idle),
+    servicesTiles,
     stillToDo,
     googleNeedsSetup
       ? ui.section({ title: 'Set up Google', body: ui.card([googleSetupPanel()]) })
@@ -8205,6 +8270,30 @@ function settingsSheet() {
         'NotebookLM is connected. The office can read notebooks again.',
       )
       if (input) input.value = ''
+      if (done) await afterWrite()
+    })
+  }
+
+  for (const b of v.querySelectorAll('[data-notion-save]')) {
+    b.addEventListener('click', async () => {
+      /*
+        The token is read once, sent once to the gateway (migration 1090 checks its shape), and the box is cleared whatever
+        happens, so the secret is not left in the page.
+      */
+      const wrap = b.closest('[data-saidwrap]')
+      const input = wrap?.querySelector('[data-notion-token]')
+      const value = (input?.value ?? '').trim()
+      if (input) input.value = ''
+      if (value === '') {
+        say(b, 'Paste the Notion integration secret first.', 'warn')
+        return
+      }
+      const done = await attempt(
+        b,
+        'Saving…',
+        async () => await act('set_notion_token', { p_token: value }),
+        'Notion is connected. The office can read your pages again.',
+      )
       if (done) await afterWrite()
     })
   }
@@ -15779,6 +15868,8 @@ function needSettings(retry = false) {
     if (isOpenNow($('#settings'))) settingsSheet()
   }
   void config.hydrateConnections(read, redrawSettings)
+  // The Google sign-in and NotebookLM's live check: the tiles' LEDs (see loadServiceLeds).
+  void loadServiceLeds(redrawSettings)
   // The usage overview is slow, and the Settings sheet does not wait for it: the spend card and the Usage tab redraw when it lands.
   void loadSpend(redrawSettings)
   settingsAsked = config.hydrateSettings(read).then(() => {
@@ -15899,7 +15990,7 @@ async function refresh() {
     // Both, together, and only once something has asked for them (needSettings): a visit that never opened Settings or the
     // Sources tab has nothing of theirs to keep fresh. A write can change either, so once asked a refresh re-reads both
     // rather than leaving one stale behind a tab.
-    ...(settingsAsked === null ? [] : [config.hydrateSettings(read), loadSpend(render)]),
+    ...(settingsAsked === null ? [] : [config.hydrateSettings(read), loadSpend(render), loadServiceLeds(render)]),
   ])
   /*
     Notes another device wrote since this one loaded (ADR-0068, P0 persistence): the board folds them in rather than
