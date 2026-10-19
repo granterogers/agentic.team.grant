@@ -166,34 +166,34 @@ describe('the appearance module', () => {
   ;(globalThis as Record<string, unknown>).document = { documentElement: root }
   ;(globalThis as Record<string, unknown>).window = { matchMedia: () => ({ matches: false }) }
 
-  it('defaults to Porcelain & Teal, soft glass, soft depth, the deep-teal accent', async () => {
+  it('defaults to Slate & Silver, dark, soft glass, soft depth, the neutral cool-grey accent', async () => {
     const m = await loadAppearance()
     store.clear()
     const a = m.appearance()
-    expect([a.look, a.palette, a.glass, a.depth]).toEqual(['porcelain', 'slate', 'soft', 'soft'])
+    expect([a.look, a.palette, a.scheme, a.glass, a.depth]).toEqual(['silver', 'paper', 'dark', 'soft', 'soft'])
   })
 
   it('apply writes all three on the document and remembers them', async () => {
     const m = await loadAppearance()
     store.clear()
     m.apply({ ...m.appearance(), glass: 'rich', depth: 'deep' })
-    expect([root.dataset.look, root.dataset.glass, root.dataset.depth]).toEqual(['porcelain', 'rich', 'deep'])
+    expect([root.dataset.look, root.dataset.glass, root.dataset.depth]).toEqual(['silver', 'rich', 'deep'])
     const again = m.appearance()
-    expect([again.look, again.glass, again.depth]).toEqual(['porcelain', 'rich', 'deep'])
+    expect([again.look, again.glass, again.depth]).toEqual(['silver', 'rich', 'deep'])
   })
 
   it('a value nobody offers falls back to the default rather than to nothing', async () => {
     const m = await loadAppearance()
     store.set('studio.appearance', JSON.stringify({ v: m.APPEARANCE_REVISION, look: 'neon', glass: 'max', depth: 9 }))
     const a = m.appearance()
-    expect([a.look, a.glass, a.depth]).toEqual(['porcelain', 'soft', 'soft'])
+    expect([a.look, a.glass, a.depth]).toEqual(['silver', 'soft', 'soft'])
   })
 
-  it('a saved look from an earlier design is read as Porcelain & Teal, and its spacing and effect choices are kept', async () => {
+  it('a saved look from an earlier design is read as the current default, and its spacing and effect choices are kept', async () => {
     const m = await loadAppearance()
     store.set('studio.appearance', JSON.stringify({ look: 'original', palette: 'clay', glass: 'rich', depth: 'deep' }))
     const a = m.appearance()
-    expect([a.look, a.palette, a.glass, a.depth]).toEqual(['porcelain', 'slate', 'rich', 'deep'])
+    expect([a.look, a.palette, a.glass, a.depth]).toEqual(['silver', 'paper', 'rich', 'deep'])
     expect(m.LOOKS.map((l) => l.id)).toEqual(['porcelain', 'silver', 'graphite', 'midnight', 'forest'])
   })
 
@@ -204,7 +204,7 @@ describe('the appearance module', () => {
       JSON.stringify({ palette: 'clay', texture: 'oak', scheme: 'dark', look: 'graphite', density: 'compact', glass: 'rich', depth: 'deep' }),
     )
     const a = m.appearance()
-    expect([a.palette, a.texture, a.scheme, a.look]).toEqual(['slate', 'none', 'light', 'porcelain'])
+    expect([a.palette, a.texture, a.scheme, a.look]).toEqual(['paper', 'none', 'dark', 'silver'])
     expect([a.density, a.glass, a.depth]).toEqual(['compact', 'rich', 'deep'])
   })
 
@@ -212,7 +212,7 @@ describe('the appearance module', () => {
     const m = await loadAppearance()
     store.set('studio.appearance', JSON.stringify({ v: 2, palette: 'clay', scheme: 'dark', look: 'graphite', density: 'compact' }))
     const a = m.appearance()
-    expect([a.palette, a.scheme, a.look]).toEqual(['slate', 'light', 'porcelain'])
+    expect([a.palette, a.scheme, a.look]).toEqual(['paper', 'dark', 'silver'])
     expect(a.density).toBe('compact')
   })
 

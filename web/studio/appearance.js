@@ -122,13 +122,14 @@ export const DEPTHS = [
   Appearance tab restores it. The project's own grid and module opacity are reset in that project's appearance sheet.
 */
 const DEFAULTS = {
-  palette: 'slate',
+  // Slate & Silver, dark, with a neutral cool-grey accent rather than the teal one (issue: the default the owner asked for).
+  palette: 'paper',
   texture: 'none',
   own: null,
   ownName: '',
-  scheme: 'light',
+  scheme: 'dark',
   density: 'comfortable',
-  look: 'porcelain',
+  look: 'silver',
   glass: 'soft',
   depth: 'soft',
 }
@@ -191,7 +192,7 @@ export function resetToRecommended() {
   look, scheme, texture and an uploaded texture), so a returning person sees the latest design rather than one saved before
   it. Density, glass and depth are spacing and effect choices and are kept. Bump this when the recommended look changes.
 */
-export const APPEARANCE_REVISION = 4
+export const APPEARANCE_REVISION = 5
 const LOOK_FIELDS = ['palette', 'look', 'scheme', 'texture', 'own', 'ownName']
 export function currentRevision(saved) {
   if (saved === null || typeof saved !== 'object') return {}
