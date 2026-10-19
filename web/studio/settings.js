@@ -529,7 +529,11 @@ export async function hydrateSettings(read) {
     */
     read('task_sync')
       .then((d2) => {
-        if (d2 === null || typeof d2 !== 'object') return
+        // An answer that is not the shape we expect is "not configured", never "still asking" (the card would wait forever).
+        if (d2 === null || typeof d2 !== 'object') {
+          TASK_SYNC.configured = false
+          return
+        }
         TASK_SYNC.configured = d2.configured === true
         TASK_SYNC.url = typeof d2.base_url === 'string' ? d2.base_url : null
         TASK_SYNC.project = typeof d2.project_id === 'number' ? d2.project_id : null
@@ -547,7 +551,10 @@ export async function hydrateSettings(read) {
               }
             : null
       })
-      .catch(() => undefined)
+      .catch(() => {
+        // A read that fails is not configured, so the card stops asking and offers the set-up it would offer anyway.
+        TASK_SYNC.configured = false
+      })
 
     // And the decision log, the same way and for the same reason (#129).
     read('decisions')

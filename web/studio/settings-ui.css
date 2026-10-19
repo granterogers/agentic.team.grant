@@ -948,6 +948,9 @@
 #settings .svc-board--auto > .st-sec:has(.st-row:nth-child(n + 4)),
 #settings .svc-board--auto > .st-sec:has(.st-form),
 #settings .svc-board--auto > .st-sec:has(textarea),
+#settings .svc-board--auto > .st-sec:has([type='radio']),
+/* Where you can reach the team: each channel is a row with a word or two beside it, so it needs the full width. */
+#settings .svc-board--auto > #reach-the-team,
 #settings .svc-board--auto > .st-sec:has(.st-editor),
 #settings .svc-board--auto > :not(.st-sec) {
   grid-column: 1 / -1;
@@ -1049,6 +1052,16 @@
 #settings .svc-tile__action {
   margin-top: auto;
   padding-top: 6px;
+}
+/* A button inside a tile wraps its words rather than running past the tile's edge. */
+#settings .svc-tile__action .btn {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+/* A person's tile is only as tall as their name and role; the service tiles keep a common height. */
+#settings .svc-tile.st-person {
+  min-height: 0;
 }
 #settings .svc-tile__body input[type='password'] {
   width: min(360px, 100%);

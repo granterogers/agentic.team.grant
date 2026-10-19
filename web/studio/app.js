@@ -7191,6 +7191,7 @@ function channelsTab() {
           ]),
         }),
     ui.section({
+      id: 'reach-the-team',
       title: 'Where you can reach the team',
       note: operator
         ? 'Team Chat is always available inside Team HQ. The others need a connection.'
