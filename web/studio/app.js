@@ -7393,13 +7393,15 @@ function settingsSheet() {
     The examples name things that resemble real projects, and a second person briefly read one of them as their own
     standing permissions. Help and Appearance read nothing from the office, so they draw at once.
   */
+  // The Services list answers on its own (migration 1087); every other tab waits for the whole Settings read.
+  const answer = state.setting === 'connections' ? config.CONNECTIONS_SOURCE : config.settingsSource
   const unanswered =
-    canWrite() && config.settingsSource.state !== 'ready' && !['help', 'appearance'].includes(state.setting)
+    canWrite() && answer.state !== 'ready' && !['help', 'appearance'].includes(state.setting)
   const body =
     unanswered
       ? settingsUi.card([
           settingsUi.empty(
-            config.settingsSource.state === 'failed'
+            answer.state === 'failed'
               ? 'Settings could not be read just now. Close this and open it again in a moment.'
               : 'Asking Team HQ…',
           ),
@@ -15761,6 +15763,12 @@ function needSettings(retry = false) {
   // sends the six reads again and again for as long as the office cannot answer, which is when it can least afford them.
   if (retry && settingsAsked !== null && config.settingsSource.state === 'failed') settingsAsked = null
   if (settingsAsked !== null || !canWrite()) return settingsAsked
+  // The Services list first, and it redraws the moment it lands: it does not wait for the rest of Settings.
+  const redrawSettings = () => {
+    render()
+    if (isOpenNow($('#settings'))) settingsSheet()
+  }
+  void config.hydrateConnections(read, redrawSettings)
   settingsAsked = Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
     render()
     if (isOpenNow($('#settings'))) settingsSheet()

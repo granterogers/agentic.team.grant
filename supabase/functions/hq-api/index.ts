@@ -428,6 +428,8 @@ const SECTIONS: Readonly<
   pulse: { fn: 'hq_pulse', office: true },
   // The Settings viewer, in the shapes settings.js already exports (#68).
   studio_settings: { fn: 'hq_studio_settings', office: true },
+  // The Services list on its own (migration 1087), so the Connections tab does not wait for the whole Settings read.
+  studio_connections: { fn: 'hq_studio_connections', office: true },
   /*
     The usage dashboard (#61), from `usage_overview` rather than `hq_usage`.
 
@@ -4543,7 +4545,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     reads, from the same fact the refusal uses. It only decides what is DRAWN; the gateway still refuses.
   */
   if (
-    name === 'studio_settings' &&
+    (name === 'studio_settings' || name === 'studio_connections') &&
     data !== null &&
     typeof data === 'object' &&
     !Array.isArray(data)

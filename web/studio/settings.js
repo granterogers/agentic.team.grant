@@ -415,6 +415,28 @@ export const VIEWER = { operator: true }
 */
 export const LINK = { telegram: null, pending: null, slack: null, slackPending: null, slackSaid: null }
 
+/*
+  The Services list on its own (migration 1087). The Connections tab waits for this, not for the whole Settings read,
+  and `done` redraws the moment it lands. A failed or unreadable answer is said, never shown as an empty list.
+*/
+export const CONNECTIONS_SOURCE = { state: 'pending' }
+export function hydrateConnections(read, done) {
+  return read('studio_connections')
+    .then((d) => {
+      if (d && typeof d === 'object' && Array.isArray(d.connections)) {
+        replace(CONNECTIONS, d.connections)
+        VIEWER.operator = d.viewer?.operator !== false
+        CONNECTIONS_SOURCE.state = 'ready'
+      } else {
+        CONNECTIONS_SOURCE.state = 'failed'
+      }
+    })
+    .catch(() => {
+      CONNECTIONS_SOURCE.state = 'failed'
+    })
+    .then(() => done())
+}
+
 export async function hydrateSettings(read) {
   // Whether THIS person's own Slack workspace is installed (ADR-0065). Null until the office has answered.
   void read('slack_link')
