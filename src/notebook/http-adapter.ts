@@ -68,6 +68,42 @@ const STATES = [
   'auth_required',
 ] as const
 
+/**
+ * The durable credential the reader mints from: the fields of the
+ * `master_token.json` the Windows token maker produces. Full-account, so it
+ * goes only to the reader, over TLS, for the life of one request, and is never
+ * logged or echoed.
+ */
+export interface MasterToken {
+  email: string
+  android_id: string
+  master_token: string
+}
+
+/** The vault's `notebook.master_token_json`, or null when it is absent or not a master token. */
+export function masterTokenFrom(raw: string): MasterToken | null {
+  if (raw === '') return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (parsed === null || typeof parsed !== 'object') return null
+  const { email, android_id, master_token } = parsed as Record<string, unknown>
+  if (
+    typeof email !== 'string' ||
+    typeof android_id !== 'string' ||
+    typeof master_token !== 'string' ||
+    email === '' ||
+    android_id === '' ||
+    !master_token.startsWith('aas_et/')
+  ) {
+    return null
+  }
+  return { email, android_id, master_token }
+}
+
 export class HttpNotebookAdapter implements NotebookAdapter {
   /**
    * @param endpoint The reader's URL, e.g. `https://…/api/notebook`.
@@ -80,6 +116,9 @@ export class HttpNotebookAdapter implements NotebookAdapter {
     private readonly endpoint: string,
     private readonly secret: string,
     private readonly storageState: string,
+    // The durable master token, when the vault holds one. The reader mints a fresh jar from it per call,
+    // so a stored jar that has gone stale no longer stops the reads.
+    private readonly master: MasterToken | null = null,
   ) {}
 
   /**
@@ -94,15 +133,23 @@ export class HttpNotebookAdapter implements NotebookAdapter {
       select
         ${credentialSql('notebook.reader_secret')} as secret,
         ${credentialSql('notebook.storage_state')} as jar,
+        ${credentialSql('notebook.master_token_json')} as master,
         (select value #>> '{}' from public.system_config
           where key = 'notebook.reader_url') as url
     `)
-    const row = rows[0] as { secret?: string | null; jar?: string | null; url?: string | null }
+    const row = rows[0] as {
+      secret?: string | null
+      jar?: string | null
+      master?: string | null
+      url?: string | null
+    }
     const secret = String(row?.secret ?? '')
     const jar = String(row?.jar ?? '')
+    const master = masterTokenFrom(String(row?.master ?? ''))
     const url = endpoint ?? String(row?.url ?? '')
-    if (secret === '' || jar === '' || url === '') return null
-    return new HttpNotebookAdapter(url, secret, jar)
+    // A master token is enough on its own: the reader mints the jar from it.
+    if (secret === '' || url === '' || (jar === '' && master === null)) return null
+    return new HttpNotebookAdapter(url, secret, jar, master)
   }
 
   private async call(op: string, extra: Record<string, string> = {}): Promise<unknown> {
@@ -116,7 +163,12 @@ export class HttpNotebookAdapter implements NotebookAdapter {
           Authorization: `Bearer ${this.secret}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ op, storage_state: this.storageState, ...extra }),
+        body: JSON.stringify({
+          op,
+          storage_state: this.storageState,
+          ...(this.master === null ? {} : { master_token: this.master }),
+          ...extra,
+        }),
         signal: controller.signal,
       })
     } catch (error) {

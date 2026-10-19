@@ -3,8 +3,12 @@
     POST /api/notebook
     Authorization: Bearer <NOTEBOOK_READER_SECRET>
     {"op": "notebooks" | "sources" | "fulltext" | "probe",
+     "master_token": {"email": "...", "android_id": "...", "master_token": "aas_et/..."},
      "storage_state": "<the cookie jar, as JSON text>",
      "notebook_id": "...", "source_id": "..."}
+
+The master token is preferred: when it is present a fresh jar is minted from it
+for this call, and `storage_state` is used only when there is no master token.
 
 ## Why this exists
 
@@ -112,8 +116,8 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - Vercel requires this name
 
         op = str(request.get("op", ""))
         storage_state = str(request.get("storage_state", ""))
-        if storage_state == "":
-            self._fail(400, "a storage state is required")
+        if storage_state == "" and not isinstance(request.get("master_token"), dict):
+            self._fail(400, "a storage state or a master token is required")
             return
         if op not in {"notebooks", "sources", "fulltext", "probe"}:
             self._fail(400, "unknown operation")
@@ -134,8 +138,31 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - Vercel requires this name
             )
 
 
+async def mint_storage_state(master: dict) -> str:
+    """A fresh cookie jar from the durable master token, with no browser.
+
+    A stored jar goes stale, and on 19 October Google served its signed-out page
+    to the stored one. The master token does not go stale, and the library mints
+    from it in a few HTTPS calls, so each read mints its own jar.
+    """
+    from notebooklm._auth.master_token import storage_state_from_jar
+    from notebooklm.auth import mint_cookies
+
+    email = str(master.get("email", ""))
+    jar = await mint_cookies(
+        email, str(master.get("master_token", "")), str(master.get("android_id", ""))
+    )
+    return json.dumps(storage_state_from_jar(jar, email=email or None))
+
+
 async def run(op: str, request: dict, storage_state: str) -> object:
     from notebooklm import NotebookLMClient
+
+    # Present, the master token wins over any stored jar. A mint failure is
+    # raised as it is, so the caller sees why instead of a stale jar's sign-in page.
+    master = request.get("master_token")
+    if isinstance(master, dict):
+        storage_state = await mint_storage_state(master)
 
     # The library wants a path. `/tmp` is the only writable place in a
     # serverless function and is per-invocation; 0600 because the file is a

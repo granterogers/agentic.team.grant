@@ -1,5 +1,6 @@
 # The Vercel Python function in `api/`. Read-only Gemini Notebook access, no
-# browser: `notebooklm-py` pulls click, filelock, httpx and rich, and Playwright
-# only on the login path this system never takes (the cookie jar is captured
-# once, by hand, and lives in the Supabase Vault).
-notebooklm-py
+# browser: `notebooklm-py` pulls click, filelock, httpx and rich. The `headless`
+# extra adds gpsoauth, which mints a fresh cookie jar from the durable master
+# token on each read (api/notebook.py `mint_storage_state`). Pinned: the mint
+# uses the library's internal `_auth.master_token` module.
+notebooklm-py[headless]==0.8.5
