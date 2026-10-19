@@ -7541,7 +7541,7 @@ function settingsSheet() {
       : `<div class="svc-board svc-board--auto">${body}</div>`,
     backLabel: phone && pane === 'detail' ? 'Settings' : 'Back to workspace',
     // Who is signed in, in the corner: the Sample says so; anyone else gets the address, filled in once it is asked for below.
-    who: bcSession.signedIn() ? (bcSession.isSample() ? 'Sample office · read only' : settingsWhoEmail) : '',
+    who: bcSession.signedIn() ? (bcSession.isSample() ? 'Sample office · read only' : settingsWhoEmail || bcSession.knownEmail()) : '',
   })
   // Asked for once per page load, then remembered: Settings redraws often and the address does not change under a session.
   if (bcSession.signedIn() && !bcSession.isSample() && settingsWhoEmail === '' && !settingsWhoAsked) {

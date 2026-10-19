@@ -141,6 +141,16 @@
   min-width: 0;
 }
 [data-experience='basecamp'] .bcmodbody { min-width: 0; }
+/* The schedule always shows every item it has: it takes the height its items need, and its body does not scroll them away.
+   The other modules keep their own size and scroll inside it. */
+[data-experience='basecamp'] .bcmod--placed[data-mod='schedule'] {
+  height: auto !important;
+  min-height: fit-content;
+}
+[data-experience='basecamp'] .bcmod--placed[data-mod='schedule'] .bcmodbody {
+  flex: 0 0 auto;
+  overflow: visible;
+}
 [data-experience='basecamp'] .bctaskwho { display: inline-flex; flex: 0 0 auto; }
 [data-experience='basecamp'] .bcmodhead {
   display: flex;
@@ -635,7 +645,8 @@
 
 [data-experience='basecamp'] .bcwork {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 306px);
+  /* The rail grows with the window instead of holding a fixed 306px, so a wide screen is filled, not left empty. */
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 22vw, 420px);
   gap: 24px;
   align-items: start;
 }
@@ -1040,7 +1051,7 @@
   position: sticky;
   bottom: 16px;
   z-index: 2;
-  max-width: 860px;
+  max-width: 1120px;
   padding-top: 8px;
 }
 [data-experience='basecamp'] .bcsaybox {

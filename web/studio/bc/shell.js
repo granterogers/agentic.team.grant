@@ -392,9 +392,6 @@ const menuPanel = () => {
     <hr class="bcmenusep">
     <button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem bcmenuglobal" data-bc-global-menu="1"
       title="Global Settings: the whole office, outside any project"><span class="bcmenuname">Global Settings</span></button>
-    ${item(at('/search'), 'Search')}
-    ${item(at('/tasks'), 'My Tasks')}
-    ${item(at('/activity'), 'Activity')}
   </div>`
 }
 
@@ -431,7 +428,7 @@ const askWho = () => {
     }
   })
 }
-const whoLabel = () => (session.isSample() ? 'Sample office · read only' : '')
+const whoLabel = () => (session.isSample() ? 'Sample office · read only' : session.knownEmail())
 
 const topRow = () => {
   const waiting = PROJECTS.reduce((n, p) => n + (p.waiting?.length ?? 0), 0)
@@ -482,8 +479,12 @@ const topRow = () => {
     </div>
     <div class="bchere${here === null ? ' bchere--none' : ''}" role="status"
       aria-label="${esc(here === null ? 'No project selected' : `You are in ${here.name}`)}">
-      ${here === null ? '' : `<span class="bcjumpmark" aria-hidden="true">${compose.projectMark(here, 18)}</span>`}
-      <span class="bcjumpname">${esc(here === null ? 'No project open' : here.name)}</span>
+      ${here === null
+        ? '<span class="bcjumpname">No project open</span>'
+        : `<a class="bchere-link" href="${esc(at(`/p/${here.slug}`))}" title="Open the ${esc(here.name)} overview, with all its modules">
+            <span class="bcjumpmark" aria-hidden="true">${compose.projectMark(here, 18)}</span>
+            <span class="bcjumpname">${esc(here.name)}</span>
+          </a>`}
     </div>
     ${work}
     <div class="bcright">

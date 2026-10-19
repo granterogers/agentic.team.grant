@@ -1347,6 +1347,13 @@ body::after {
               top .22s cubic-bezier(.2,.8,.3,1), width .22s cubic-bezier(.2,.8,.3,1);
 }
 .panel:hover { box-shadow: var(--lift-2); }
+/* Each module's title: 20% larger than the label size, centred across the top of the module. It sits above the controls
+   (which keep their corners), and it never pushes them. */
+.panel > h3.t-label {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  max-width: 56%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 14.4px; text-align: center; pointer-events: none; z-index: 1;
+}
 /* While held, no transition — the panel must track the pointer exactly, and
    easing a dragged thing makes it feel like it is on elastic. */
 .panel.lifted {

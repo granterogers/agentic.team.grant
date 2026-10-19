@@ -83,10 +83,27 @@ export const bump = () => {
 export const forget = () => {
   try {
     localStorage.removeItem(KEY)
+    localStorage.removeItem(WHO_KEY)
   } catch {
     /* nothing to do */
   }
 }
+
+/*
+  The address last read from the sign-in service, kept in this browser so every screen can show who is signed in on its
+  first paint rather than after a round trip. It is a convenience only: whoami() still asks the service on each page load
+  and corrects it, and sign-out clears it.
+*/
+const WHO_KEY = 'hq.who_email'
+let knownWho = (() => {
+  try {
+    return localStorage.getItem(WHO_KEY) ?? ''
+  } catch {
+    return ''
+  }
+})()
+/** The signed-in address as last known, for drawing a label synchronously. '' when not known yet. */
+export const knownEmail = () => knownWho
 
 export const signedIn = () => read() !== null
 
@@ -410,7 +427,16 @@ export async function whoami() {
     const token = await presentable()
     if (token === '') return ''
     const { body } = await post({ action: 'whoami' }, token)
-    return body.ok === true ? String(body.email ?? '') : ''
+    const email = body.ok === true ? String(body.email ?? '') : ''
+    if (email !== '') {
+      knownWho = email
+      try {
+        localStorage.setItem(WHO_KEY, email)
+      } catch {
+        /* the label is still drawn after the round trip */
+      }
+    }
+    return email
   } catch {
     return ''
   }
