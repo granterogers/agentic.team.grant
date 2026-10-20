@@ -64,6 +64,7 @@ import * as live from './livevoice.js'
 import * as stopping from './stopping.js'
 import * as notes from './notestore.js'
 import * as recorder from './voicenote.js'
+import * as docbytes from '../docbytes.js'
 import * as pdf from '../pdf.js'
 import * as bcMini from './miniatures.js'
 import {
@@ -2398,7 +2399,9 @@ const paintThumb = async (host, ref) => {
   if (file.url === '') return
   const isPdf = file.mime === 'application/pdf' || /\.pdf$/i.test(file.url)
   if (isPdf) {
-    await pdf.paint(host, file.url, 220)
+    // The first page is drawn from the kept bytes when they are here, so a card's picture survives a reload.
+    const bytes = await docbytes.pdfBytes(ref, file.url).catch(() => null)
+    await pdf.paint(host, bytes ?? file.url, 220, ref)
     return
   }
   if (face === undefined) return

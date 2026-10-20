@@ -334,6 +334,12 @@ const menuPanel = () => {
   const firstRunShown = projects.length === 0 && source.live === true && mine && state().view === 'home'
   /* Always in the page, hidden until opened: the button's aria-controls always names something that exists. */
   return `<div class="bcmenupanel" id="bc-menu" role="${menu.isMaking() ? 'dialog' : 'menu'}" aria-label="${menu.isMaking() ? 'New project' : 'Projects and navigation'}"${menu.isOpen() ? '' : ' hidden'}>
+    ${
+      /* On a phone the top bar has no room for the address, so the menu, which every screen can open, says who is signed in. */
+      session.signedIn() && !session.isSample() && session.knownEmail() !== ''
+        ? `<p class="bcmenuwho" title="${esc(session.knownEmail())}">Signed in as <span data-bc-menuwho>${esc(session.knownEmail())}</span></p>`
+        : ''
+    }
     <div class="bcmenuprojgroup">
     <button type="button" class="bcmenuprojects" aria-expanded="${menu.projectsExpanded() ? 'true' : 'false'}" aria-controls="bc-menu-projects" data-bc-menu-projects>
       <span class="bcmenuhead">Projects</span><span class="bcmenucount" aria-label="${projects.length} projects">${projects.length}</span><span class="bcmenuchev" aria-hidden="true">${menu.projectsExpanded() ? '−' : '+'}</span>
@@ -426,6 +432,8 @@ const askWho = () => {
       el.textContent = email
       el.title = email
     }
+    const menuEl = document.querySelector('[data-bc-menuwho]')
+    if (menuEl !== null && email !== '') menuEl.textContent = email
   })
 }
 const whoLabel = () => (session.isSample() ? 'Sample office · read only' : session.knownEmail())

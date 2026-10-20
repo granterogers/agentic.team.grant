@@ -49,13 +49,13 @@ async function library() {
  * and a 1× canvas on a retina screen is visibly soft — which would undo the
  * entire point of rendering the real thing.
  */
-export async function firstPage(url, width = 420) {
-  const key = `${url}@${width}`
-  if (rendered.has(key)) return rendered.get(key)
+export async function firstPage(source, width = 420, key = typeof source === 'string' ? source : '') {
+  const memo = `${key}@${width}`
+  if (rendered.has(memo)) return rendered.get(memo)
 
   const job = (async () => {
     const lib = await library()
-    const doc = await lib.getDocument({ url, disableAutoFetch: true, disableStream: true }).promise
+    const doc = await lib.getDocument(loadable(source)).promise
     const page = await doc.getPage(1)
     const base = page.getViewport({ scale: 1 })
     const viewport = page.getViewport({ scale: (width * 2) / base.width })
@@ -75,12 +75,21 @@ export async function firstPage(url, width = 420) {
     return { src: canvas.toDataURL('image/jpeg', 0.86), ratio: base.width / base.height }
   })()
 
-  rendered.set(key, job)
+  rendered.set(memo, job)
   // A rejected promise left in the cache would make one bad file permanently
   // bad; drop it so a retry is possible.
-  job.catch(() => rendered.delete(key))
+  job.catch(() => rendered.delete(memo))
   return job
 }
+
+/*
+  A PDF can be given as an address or as its bytes. Bytes are copied first: the library takes ownership of what it is
+  given, and the kept copy has to survive for the next time.
+*/
+const loadable = (source) =>
+  typeof source === 'string'
+    ? { url: source, disableAutoFetch: true, disableStream: true }
+    : { data: new Uint8Array(source.slice(0)), disableAutoFetch: true }
 
 /**
  * Put a real page into an element, or leave what is already there.
@@ -89,9 +98,9 @@ export async function firstPage(url, width = 420) {
  * this, and the real one replaces it when it arrives. So the gallery is never
  * empty, never jumps, and a failure is invisible rather than broken.
  */
-export async function paint(host, url, width) {
+export async function paint(host, source, width, key) {
   try {
-    const { src } = await firstPage(url, width)
+    const { src } = await firstPage(source, width, key)
     const img = document.createElement('img')
     img.className = 'realpage'
     img.alt = ''
@@ -116,12 +125,12 @@ export async function paint(host, url, width) {
  * press away - and because decoding a 400-page report to show a person its
  * cover would be a cost with nothing to show for it.
  */
-export async function pages(url, width = 760, max = 6) {
-  const key = `${url}@${width}x${max}`
-  if (rendered.has(key)) return rendered.get(key)
+export async function pages(source, width = 760, max = 6, key = typeof source === 'string' ? source : '') {
+  const memo = `${key}@${width}x${max}`
+  if (rendered.has(memo)) return rendered.get(memo)
   const job = (async () => {
     const lib = await library()
-    const doc = await lib.getDocument({ url, disableAutoFetch: true, disableStream: true }).promise
+    const doc = await lib.getDocument(loadable(source)).promise
     const total = doc.numPages
     const out = []
     for (let n = 1; n <= Math.min(total, max); n += 1) {
@@ -140,7 +149,7 @@ export async function pages(url, width = 760, max = 6) {
     doc.destroy()
     return { pages: out, total }
   })()
-  rendered.set(key, job)
-  job.catch(() => rendered.delete(key))
+  rendered.set(memo, job)
+  job.catch(() => rendered.delete(memo))
   return job
 }

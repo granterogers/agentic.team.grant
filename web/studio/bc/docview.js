@@ -27,6 +27,7 @@
 */
 
 import { act, read, readFile } from '../office.js'
+import * as docbytes from '../docbytes.js'
 import * as pdf from '../pdf.js'
 import * as docsrc from './docsources.js'
 import * as thumbs from './docthumbs.js'
@@ -68,13 +69,19 @@ const paintPreview = async (host, fileFor) => {
   const isImage = mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(url)
   if (url !== '' && isPdf) {
     try {
-      const { pages, total } = await pdf.pages(url, 760, 6)
+      // The bytes are kept on this device, so a PDF that was drawn once is drawn again without its address.
+      const bytes = await docbytes.pdfBytes(ref, url)
+      const { pages, total } = await pdf.pages(bytes, 760, 6, ref)
       host.innerHTML = `<div class="bcdocpages">${pages
         .map((p, i) => `<img class="bcdocpage" alt="${esc(`Page ${String(i + 1)} of ${String(total)}`)}" src="${esc(p.src)}" loading="lazy">`)
         .join('')}</div>${total > pages.length ? `<p class="bcpmeta">${esc(`Showing the first ${String(pages.length)} of ${String(total)} pages. Open the file for the rest.`)}</p>` : ''}`
       return
     } catch {
-      /* Fall through to the text, then to the honest "no preview". */
+      // Not the indexed text: that is the office's own reading of the file, and showing it as the document is what made the
+      // Illumina deck look garbled. Say the page did not draw, and where the file is.
+      if (note !== null) note.remove()
+      none('Team HQ could not draw this PDF just now. Open the file to read it, or try again later.')
+      return
     }
   }
   if (url !== '' && isImage) {
