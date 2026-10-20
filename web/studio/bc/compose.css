@@ -155,6 +155,11 @@
 [data-experience='basecamp'] .bcmod--placed[data-mod='schedule'] .bccal2 {
   height: auto;
 }
+/* The small calendar shares its module's height by basis (flex: 1 1 0), so with nothing to share it drew at 0px too. */
+[data-experience='basecamp'] .bcmod--placed[data-mod='schedule'] .bccal2compact {
+  flex: none;
+  overflow: visible;
+}
 [data-experience='basecamp'] .bctaskwho { display: inline-flex; flex: 0 0 auto; }
 [data-experience='basecamp'] .bcmodhead {
   display: flex;
