@@ -6586,9 +6586,12 @@ let ledGoogle = null
 let ledNotebook = null
 
 function loadServiceLeds(done) {
+  // A read that fails, or answers with nothing, is said to be unknown. Leaving it null would draw "Checking…" for ever.
+  const unknown = (why) => ({ state: 'unknown', detail: why })
   return Promise.allSettled([read('google_connection'), read('notebook_check')]).then(([g, n]) => {
-    ledGoogle = g.status === 'fulfilled' ? g.value : null
-    ledNotebook = n.status === 'fulfilled' ? n.value : null
+    ledGoogle = g.status === 'fulfilled' && g.value ? g.value : unknown('The sign-in check did not answer. Reopen Settings to check again.')
+    ledNotebook =
+      n.status === 'fulfilled' && n.value ? n.value : unknown('The reader did not answer. Reopen Settings to check again.')
     done()
   })
 }
