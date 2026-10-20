@@ -151,6 +151,10 @@
   flex: 0 0 auto;
   overflow: visible;
 }
+/* The calendar is sized as a share of its module (height: 100%), and a module that takes its height from its items has no share to give: it drew at 0px. */
+[data-experience='basecamp'] .bcmod--placed[data-mod='schedule'] .bccal2 {
+  height: auto;
+}
 [data-experience='basecamp'] .bctaskwho { display: inline-flex; flex: 0 0 auto; }
 [data-experience='basecamp'] .bcmodhead {
   display: flex;
@@ -4116,6 +4120,25 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   margin-bottom: 7px;
 }
 [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodtitle { flex: none; margin: 0; }
+/*
+  The module's name sits in the top centre of its own header (Grant, 19 October 2026), one step up the scale from the 13px it was (16px, the nearest whole size to 20% larger). It is
+  taken out of the flow so the counts on the left and the controls on the right keep their places, and it is capped so a long
+  name ends in an ellipsis instead of running under them.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead { position: relative; }
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead h2 {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 56%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 16px;
+  pointer-events: none;
+}
 [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodmeta {
   min-width: 0;
   flex: 0 1 auto;
