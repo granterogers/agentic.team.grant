@@ -1546,7 +1546,7 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
 }
 /* The grid starts below the "+", so the button has its own space and never sits over a module's heading. */
 @media (min-width: 761px) {
-  [data-experience='basecamp'] .bcworkspace { padding-top: 46px; }
+  [data-experience='basecamp'] .bcpanes { margin-top: 46px; }
 }
 [data-experience='basecamp'] .bcplusbtn {
   width: 36px;
