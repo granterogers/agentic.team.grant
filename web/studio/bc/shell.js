@@ -440,7 +440,6 @@ const askWho = () => {
 const whoLabel = () => (session.isSample() ? 'Sample office · read only' : session.knownEmail())
 
 const topRow = () => {
-  const waiting = PROJECTS.reduce((n, p) => n + (p.waiting?.length ?? 0), 0)
   askWho()
   const who = session.signedIn() ? whoLabel() : ''
   /*
@@ -466,8 +465,6 @@ const topRow = () => {
     one that should say where you are now.
   */
   const here = state().view === 'project' && state().project !== null ? project() : null
-  const firstWaiting = PROJECTS.find((p) => (p.waiting ?? []).length > 0)
-  const attentionTo = firstWaiting === undefined ? null : at(`/p/${firstWaiting.slug}/team`)
   /*
     ONE ROW. On the freeform workspace the project's counters, workspace tools, Chat with Team, the microphone and the
     project menu are drawn here, between the project's name and the office controls, instead of as a second band
@@ -500,7 +497,6 @@ const topRow = () => {
     ${work}
     <div class="bcright">
       <!-- The build's version, on every screen and in the Sample: the one place a person can always see what they are running. -->
-      ${buildVersionMark()}
       <!--
         Light or dark, on every screen, always at the top right (Grant, 14 October 2026). Both glyphs are drawn and the CSS
         shows the one that switches to the OTHER scheme, so the button needs no state from the render. It writes the same
@@ -512,26 +508,6 @@ const topRow = () => {
       </button>
       ${source.state === 'prototype' ? '<a class="bcsignlink" href="?welcome">Sign in</a>' : ''}
       ${session.signedIn() ? `<span class="bcwho" data-bc-who title="${esc(who)}">${esc(who)}</span>` : ''}
-      <button type="button" class="bcbtn" data-bc-attention
-        ${attentionTo === null ? 'disabled' : ''}
-        aria-current="${attentionTo !== null && isHere(attentionTo) ? 'page' : 'false'}"
-        aria-label="${esc(
-          waiting === 0
-            ? 'Attention: nothing is waiting on you'
-            : attentionTo !== null && isHere(attentionTo)
-              ? `Attention: ${waiting} waiting on you, and you are looking at it`
-              : `Attention: ${waiting} waiting on you`,
-        )}">
-        <!--
-          The word gives way to a bell on the narrowest phones, where it was
-          taking the room the project's own name needed (the name was cut to
-          one letter at 320 wide). The accessible name above is unchanged.
-        -->
-        <svg class="bcattbell" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
-          stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>
-        </svg><span class="bcattword">Attention</span>${waiting === 0 ? '' : ` <span class="bcstatus bcstatus--waiting">${waiting}</span>`}
-      </button>
       <!--
         THE OFFICE'S OWN SETTINGS, OUTSIDE ANY PROJECT.
 
@@ -549,18 +525,6 @@ const topRow = () => {
 
         Plain words in this comment: it sits inside a template literal.
       -->
-      <span class="bcmenuwrap bcofficemenu">
-        <button type="button" class="bcbtn bcicon" data-bc-settings="1"
-          aria-haspopup="dialog"
-          title="Global Settings: the whole office, outside any project"
-          aria-label="Global Settings — the team, connections, appearance and how it works, for the whole office">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
-            <circle cx="12" cy="5" r="1.7"></circle>
-            <circle cx="12" cy="12" r="1.7"></circle>
-            <circle cx="12" cy="19" r="1.7"></circle>
-          </svg>
-        </button>
-      </span>
       ${
         canWrite()
           ? `<button type="button" class="bcbtn bcsignout" data-bc-signout="1"

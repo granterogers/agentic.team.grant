@@ -340,7 +340,6 @@ export const setRestoreRefused = (words) => {
 */
 const headRow = (p, extra = '') => {
   return `<div class="bcheadrow">
-      ${needsYouLine(p)}
       ${extra}
       <span class="bcheadacts">
         <!--
@@ -452,6 +451,7 @@ const headRow = (p, extra = '') => {
             <button type="button" role="menuitem" data-bc-expand="team">The team</button>
             <button type="button" role="menuitem" data-bc-sources="1">Sources</button>
             <button type="button" role="menuitem" data-bc-go="${esc(at(`/p/${p.slug}/settings`))}">Project settings</button>
+            <button type="button" role="menuitem" data-bc-settings="1" title="Global Settings: the whole office, outside any project">Global Settings</button>
             <!--
               THE OFFICE'S OWN SETTINGS ARE NOT IN HERE ANY MORE.
 
@@ -579,27 +579,33 @@ export const arrangeReset = (slug) => {
 */
 const dock = (p) => {
   const z = grid.zoomOf(p.slug)
-  const ic = (d) =>
-    `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor"
-      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
-  return `<div class="bcdock" role="toolbar" aria-label="Workspace">
-    <button type="button" class="bcdockbtn" data-bc-tidy aria-label="Tidy" title="Lightly tidy the arrangement">
-      ${ic('<path d="M4 6h7M4 12h16M13 18h7"/>')}<span>Tidy</span>
-    </button>
-    <button type="button" class="bcdockbtn" data-bc-layouts aria-haspopup="true" aria-expanded="false" aria-label="Layouts and presets" title="Layouts and presets">
-      ${ic('<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="4" rx="1"/><rect x="13" y="10" width="7" height="10" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/>')}<span>Layouts</span>
-    </button>
-    <button type="button" class="bcdockbtn" data-bc-viewreset aria-label="Reset view" title="Reset the view. Notes and everything in the modules are kept"${grid.customised(p.slug) ? '' : ' data-quiet="1"'}>
-      ${ic('<path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/>')}<span>Reset view</span>
-    </button>
-    <button type="button" class="bcdockbtn" data-bc-fit aria-label="Fit" title="Bring everything into view">
-      ${ic('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}<span>Fit</span>
-    </button>
+  return `<div class="bcdock" role="toolbar" aria-label="Zoom">
     <span class="bczoom" role="group" aria-label="Zoom">
       <button type="button" class="bcdockbtn bcdockicon" data-bc-zoom="out" aria-label="Zoom out">&minus;</button>
       <button type="button" class="bcdockbtn bczoomval" data-bc-zoom="reset" aria-label="Reset zoom to 100%" title="Reset zoom">${String(Math.round(z * 100))}%</button>
       <button type="button" class="bcdockbtn bcdockicon" data-bc-zoom="in" aria-label="Zoom in">+</button>
     </span>
+  </div>`
+}
+
+/*
+  THE ARRANGE MENU, top left of the grid (Grant, 20 October 2026). Tidy, Layouts, Reset view and Fit sit behind one plus, so
+  the top bar keeps its room. Its open state is on `plus`, so a redraw does not close it.
+*/
+export const plus = { open: false }
+const plusMenu = (p) => {
+  const ic = (d) =>
+    `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
+  return `<div class="bcplus">
+    <button type="button" class="bcplusbtn" data-bc-plus aria-haspopup="menu" aria-expanded="${plus.open ? 'true' : 'false'}"
+      aria-controls="bc-plus-menu" aria-label="Arrange the page" title="Arrange the page">${ic('<path d="M12 5v14M5 12h14"/>')}</button>
+    <div class="bcplusmenu" id="bc-plus-menu" role="menu" aria-label="Arrange the page"${plus.open ? '' : ' hidden'}>
+      <button type="button" role="menuitem" data-bc-tidy title="Lightly tidy the arrangement">${ic('<path d="M4 6h7M4 12h16M13 18h7"/>')}<span>Tidy</span></button>
+      <button type="button" role="menuitem" data-bc-layouts aria-haspopup="true" aria-expanded="false" title="Layouts and presets">${ic('<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="4" rx="1"/><rect x="13" y="10" width="7" height="10" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/>')}<span>Layouts</span></button>
+      <button type="button" role="menuitem" data-bc-viewreset title="Reset the view. Notes and everything in the modules are kept"${grid.customised(p.slug) ? '' : ' data-quiet="1"'}>${ic('<path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/>')}<span>Reset view</span></button>
+      <button type="button" role="menuitem" data-bc-fit title="Bring everything into view">${ic('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}<span>Fit</span></button>
+    </div>
   </div>`
 }
 
@@ -797,6 +803,8 @@ export const compositionC = (p) => {
     <div class="bcworkspace">
     <div class="bcpanes" data-bc-board="${esc(p.slug)}" ${backdrop.attrsFor(grid.bgOf(p.slug), p.slug)} style="height:${String(st.h)}px;--bc-gx:${String(view.x)}px;--bc-gy:${String(view.y)}px;--bc-gz:${String(view.zoom)};--bc-gstep:${String(grid.gridStep(view.zoom))}px;${backdrop.styleFor(grid.bgOf(p.slug), p.slug)}">
       <canvas class="bcgridcv" aria-hidden="true"></canvas>
+      ${plusMenu(p)}
+      <span class="bcstagever" aria-hidden="true">${esc(typeof window.HQ_VERSION === 'string' ? `v${window.HQ_VERSION}` : '')}</span>
       <div class="bcstage" style="width:${String(st.w)}px;height:${String(st.h)}px;--bc-zoom:${String(view.zoom)};transform:translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})">
         ${place
           .map((r) => {

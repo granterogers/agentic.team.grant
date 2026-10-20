@@ -1514,3 +1514,101 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   font-size: 12px;
   opacity: 0.6;
 }
+
+/*
+  The project's name sits in the top centre of the bar (20 October 2026), 20% larger than the 15px it was, so it reads as the
+  page's heading. It is taken out of the flow, so the controls on either side keep their places.
+*/
+[data-experience='basecamp'] .bctop.bctop--work { position: relative; }
+[data-experience='basecamp'] .bctop--work .bchere {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(46vw, 520px);
+  flex: none;
+  pointer-events: auto;
+}
+[data-experience='basecamp'] .bctop--work .bchere .bcjumpname,
+[data-experience='basecamp'] .bctop--work .bchere-link .bcjumpname {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+/*
+  The arrange menu: one plus at the top left of the grid (20 October 2026). The menu hangs from it, and sits above the grid.
+*/
+[data-experience='basecamp'] .bcplus {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 6;
+}
+[data-experience='basecamp'] .bcplusbtn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--bc-border-control);
+  background: var(--bc-surface);
+  color: var(--bc-text-strong);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcplusmenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 190px;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--bc-border-control);
+  border-radius: 12px;
+  background: var(--bc-surface);
+  box-shadow: var(--bc-sh-2);
+}
+[data-experience='basecamp'] .bcplusmenu[hidden] {
+  display: none;
+}
+[data-experience='basecamp'] .bcplusmenu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bc-text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcplusmenu button:hover,
+[data-experience='basecamp'] .bcplusmenu button:focus-visible {
+  background: var(--bc-surface-hover, color-mix(in srgb, var(--bc-text) 8%, transparent));
+}
+
+/*
+  Chat with Team opens INSIDE the grid (20 October 2026). The drawer sits below the top bar, and it is the grid that gives
+  up its right-hand edge, so the top bar does not move when the chat is shown. Phones keep their own layout.
+*/
+@media (min-width: 761px) {
+  [data-experience='basecamp'] body.docked { padding-right: 0; }
+  [data-experience='basecamp'] .dock { top: 60px; }
+  [data-experience='basecamp'] body.docked .bcworkspace { margin-right: min(var(--dock-w, 340px), 100vw); }
+}
+
+/* The version, in the grid's bottom right corner, where a person looking at the page can always see which build it is. */
+[data-experience='basecamp'] .bcstagever {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  z-index: 6;
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  pointer-events: none;
+}

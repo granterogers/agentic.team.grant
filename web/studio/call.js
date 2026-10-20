@@ -626,9 +626,19 @@ export async function startCall() {
     conn.ontrack = (e) => { out.srcObject = e.streams[0] }
     conn.addTrack(mic.getTracks()[0])
     // A dropped connection must not leave the button saying "on a call".
+    // 'disconnected' is often brief: the connection is recovering on its own (a moment of network, or the page losing and regaining
+    // focus), and ending the call at once cut conversations short. Only 'failed', or a connection still down after a few
+    // seconds, counts as a drop.
+    const dropped = 'The call dropped. Press the phone to try again.'
     conn.onconnectionstatechange = () => {
-      if (onCall && (conn?.connectionState === 'failed' || conn?.connectionState === 'disconnected')) {
-        endCall('The call dropped. Press the phone to try again.')
+      if (!onCall) return
+      if (conn?.connectionState === 'failed') {
+        endCall(dropped)
+      } else if (conn?.connectionState === 'disconnected') {
+        const attempt = conn
+        globalThis.setTimeout(() => {
+          if (onCall && conn === attempt && attempt.connectionState === 'disconnected') endCall(dropped)
+        }, 5000)
       }
     }
 

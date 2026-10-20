@@ -504,13 +504,14 @@ export const BG_MODES = ['tile', 'cover', 'fit', 'center']
 const BG_ID = /^[a-z0-9][a-z0-9-]{0,47}$/
 const num = (v, lo, hi, dflt) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt)
 /** Appearance: the range of each slider (0 to 1) and what a project that never chose gets. dots 0.6 and tex 0.4 are exactly the look before the sliders existed. */
-export const LOOK_RANGE = { dots: [0, 1], tex: [0, 1], mod: [0.2, 1] }
+// The dots never go below 0.3: a grid with no visible points made the page look unfinished (20 October 2026).
+export const LOOK_RANGE = { dots: [0.3, 1], tex: [0, 1], mod: [0.2, 1] }
 /*
   The recommended project look (October 2026 redesign): no dot grid on the standard view (the grid is for arranging, and the
   board draws it while a module is moved), and module surfaces at 92% so they sit clearly on the canvas. A project that saved
   its own look keeps it; only a project that never chose draws this.
 */
-export const LOOK_DEFAULT = { dots: 0, tex: 0.4, mod: 0.92 }
+export const LOOK_DEFAULT = { dots: 0.6, tex: 0.4, mod: 0.92 }
 export const MOD_MODES = ['card', 'edge']
 export const cleanBg = (raw) => {
   if (raw === null || typeof raw !== 'object') return null

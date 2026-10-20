@@ -107,6 +107,10 @@ export const mount = (c) => {
   document.addEventListener('pointerdown', (e) => {
     if (ctx.state.experience !== 'basecamp') return
     const target = e.target instanceof Element ? e.target : null
+    if (compose.plus.open && target?.closest('.bcplus') === null) {
+      compose.plus.open = false
+      c.render()
+    }
     if (menu.isSwitching() && target?.closest('.bcswitch, [data-bc-switch]') === null) {
       menu.setSwitching(false)
       c.render()
@@ -787,6 +791,22 @@ export const wire = (root) => {
       } else menu.closeAnimated(settle)
     })
   }
+  /* The arrange menu (top left of the grid): one plus opens Tidy, Layouts, Reset view and Fit. A pick closes it. */
+  for (const b of root.querySelectorAll('[data-bc-plus]')) {
+    b.addEventListener('click', () => {
+      compose.plus.open = !compose.plus.open
+      ctx.render()
+      if (compose.plus.open) root.ownerDocument.querySelector('#bc-plus-menu [role="menuitem"]')?.focus()
+    })
+  }
+  for (const item of root.querySelectorAll('#bc-plus-menu [role="menuitem"]')) {
+    item.addEventListener('click', () => {
+      globalThis.setTimeout(() => {
+        compose.plus.open = false
+        ctx.render()
+      }, 0)
+    })
+  }
   /* The project's title opens the list of projects. A press on it again closes the list, and so does a press outside it. */
   for (const b of root.querySelectorAll('[data-bc-switch]')) {
     b.addEventListener('click', () => {
@@ -938,18 +958,6 @@ export const wire = (root) => {
     })
   }
 
-  for (const b of root.querySelectorAll('[data-bc-attention]')) {
-    b.addEventListener('click', () => {
-      /*
-        The attention queue is the team surface of whichever project has
-        something waiting - §6.1 says this control must not become a permanent
-        sidebar, and a control that opens the place the work actually is beats
-        a panel that lists it a second time.
-      */
-      const p = ctx.projects().find((x) => (x.waiting ?? []).length > 0)
-      ctx.goAnywhere(p === undefined ? '/' : `/p/${p.slug}/team`)
-    })
-  }
 
   wireTasks(root)
   wireOutputs(root)
