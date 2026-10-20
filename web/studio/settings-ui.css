@@ -1030,7 +1030,31 @@
   font: 800 18px/1 var(--st-font);
   color: var(--bc-text-strong, var(--st-text));
 }
-/* A connector's set-up, opened from its tile: one card across the whole board, above the grid. */
+/*
+  A connector's set-up opens as a pop-up over the page, the way a module opens in the workspace: a dialog shown as a modal,
+  on the module surface, scrolling inside itself when it is taller than the window.
+*/
+#settings .svc-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(86vh, 900px);
+  overflow: auto;
+  margin: auto;
+  padding: 18px 20px 20px;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--bc-border-subtle, var(--st-line-2));
+  border-radius: var(--bc-r-sheet, var(--st-r));
+  background: var(--bc-surface, var(--st-panel));
+  color: var(--bc-text, var(--st-text));
+  box-shadow: var(--bc-sh-2, 0 24px 60px rgba(0, 0, 0, 0.35));
+}
+#settings .svc-dialog:not([open]) {
+  display: none;
+}
+#settings .svc-dialog::backdrop {
+  background: rgba(4, 8, 12, 0.55);
+}
+/* A connector's set-up, opened from its tile: its own card above the grid. */
 #settings .svc-detail {
   padding: 16px 18px 18px;
   border: 1px solid var(--bc-border-subtle, var(--st-line-2));

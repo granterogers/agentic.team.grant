@@ -7016,11 +7016,11 @@ function connectionsTab() {
     ${
       openSetup === null
         ? ''
-        : `<div class="svc-span svc-detail" data-svc-detail>
-            <div class="svc-detail__head"><p class="svc-detail__title">Set up ${esc(openSetup.name)}</p>
-            <button type="button" class="btn quiet small" data-svc-close>Close</button></div>
+        : `<dialog class="svc-dialog" data-svc-dialog aria-labelledby="svc-dialog-title">
+            <div class="svc-detail__head"><p class="svc-detail__title" id="svc-dialog-title">Set up ${esc(openSetup.name)}</p>
+            <button type="button" class="btn quiet small" data-svc-close aria-label="Close ${esc(openSetup.name)}">Close</button></div>
             ${openSetup.body}
-          </div>`
+          </dialog>`
     }
     ${tiles.join('')}
     ${spanned.filter((h) => h !== '').map((h) => `<div class="svc-span">${h}</div>`).join('')}
@@ -7720,7 +7720,6 @@ function settingsSheet() {
         settingsSheet()
         sheet(v, true)
       }
-      if (state.svcOpen !== null) v.querySelector('[data-svc-detail]')?.scrollIntoView({ block: 'nearest' })
     })
   }
   for (const b of v.querySelectorAll('[data-svc-close]')) {
@@ -7729,6 +7728,17 @@ function settingsSheet() {
       settingsSheet()
       sheet(v, true)
     })
+  }
+  // The set-up is a dialog over the page, opened as a modal (so the page behind it is inert and Escape closes it). Any way
+  // of closing it clears the open state, so the next draw does not bring it back.
+  for (const d of v.querySelectorAll('[data-svc-dialog]')) {
+    d.addEventListener('close', () => {
+      if (state.svcOpen === null) return
+      state.svcOpen = null
+      settingsSheet()
+      sheet(v, true)
+    })
+    if (!d.open) d.showModal()
   }
   for (const el of v.querySelectorAll('[data-lift]')) {
     tiltable(el, { max: Number(el.dataset.tilt ?? 3), scale: 1.006 })
