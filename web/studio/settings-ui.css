@@ -960,6 +960,15 @@
 #settings .svc-board--people {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
+/*
+  A tile may shrink to its column. Left alone, a grid item takes at least the width of its longest word, and a step with a
+  long file name or a button pushed the last tile off the right-hand edge of the page (20 October 2026).
+*/
+#settings .svc-board > *,
+#settings .svc-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 #settings .svc-board .svc-head .btn {
   margin-left: 8px;
   vertical-align: middle;

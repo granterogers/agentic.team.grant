@@ -8289,10 +8289,17 @@ function settingsSheet() {
         b,
         'Uploading…',
         async () => await act('set_notebook_token', { p_token: text }),
-        'NotebookLM is connected. The office can read notebooks again.',
+        'Saved. Checking the token with Google…',
       )
       if (input) input.value = ''
-      if (done) await afterWrite()
+      /*
+        Saved is not connected. The gateway checks the file's shape, not whether Google accepts it, so the reader is asked
+        again before the tiles are drawn: the NotebookLM tile then says what the reader found.
+      */
+      if (done) {
+        await new Promise((resolve) => loadServiceLeds(resolve))
+        await afterWrite()
+      }
     })
   }
 
