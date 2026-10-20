@@ -4130,19 +4130,32 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   taken out of the flow so the counts on the left and the controls on the right keep their places, and it is capped so a long
   name ends in an ellipsis instead of running under them.
 */
-[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead { position: relative; }
+/*
+  Three columns, so the name is centred on the module whatever the counts on its left are. The counts take the left column and
+  end in an ellipsis; the controls are already out of the flow on the right.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
 [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead h2 {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  max-width: 56%;
+  grid-column: 2;
+  justify-self: center;
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  text-align: center;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodmeta {
+  grid-column: 1;
+  justify-self: start;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
-  font-size: 16px;
-  pointer-events: none;
 }
 [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodmeta {
   min-width: 0;
