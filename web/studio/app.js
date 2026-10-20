@@ -37,6 +37,7 @@ import * as bcSession from './session.js'
 import { mountSetPassword } from './set-password.js'
 import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
+import { connectorFor } from './source-kind.js'
 import * as backdropUi from './bc/backdrop-ui.js'
 import * as backdropStore from './bc/backdrop.js'
 import * as bcDocOrder from './bc/docorder.js'
@@ -10612,17 +10613,14 @@ function drawShell() {
         registry is the thing that knows which links are claimed and this page
         would be a second copy of that knowledge, drifting.
       */
-      const done = await attempt(b, 'Adding…', async () => {
-        try {
-          return await act('attach', { p_slug: b.dataset.addSource, p_ref: ref })
-        } catch (error) {
-          const why = error instanceof Error ? error.message : String(error)
-          // Only fall through when the refusal was "nothing here recognises
-          // this". A connector that IS recognised and failed for its own
-          // reason — a bad token, a page we cannot see — must keep saying so.
-          if (!/not (?:a )?recognis|no connector|could not tell|unrecognis/i.test(why)) throw error
-          return await act('reference_add', { p_slug: b.dataset.addSource, p_url: ref })
-        }
+      /*
+        The page names the connector it recognised (source-kind.js), because the office's attach needs it named. A link no
+        connector claims is a reference. A recognised connector's refusal is shown as the office worded it.
+      */
+      const done = await attempt(b, 'Adding…', () => {
+        const connector = connectorFor(ref)
+        if (connector === null) return act('reference_add', { p_slug: b.dataset.addSource, p_url: ref })
+        return act('attach', { p_slug: b.dataset.addSource, p_connector: connector, p_ref: ref })
       }, (r) => (r?.kind === undefined ? 'Connected.' : `Added as ${String(r.kind)}.`))
       if (done) {
         if (field) field.value = ''
