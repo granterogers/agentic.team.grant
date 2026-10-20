@@ -215,6 +215,9 @@ for (const tool of [
 */
 await pg.goto(`http://127.0.0.1:4418${PROJECT}`, { waitUntil: 'domcontentloaded' })
 await pg.waitForTimeout(900)
+/* Global Settings lives in the project menu (20 October 2026: the top bar's button was merged into it). */
+await pg.locator('[data-bc-pagemenu]:visible').first().click({ force: true })
+await pg.waitForTimeout(300)
 await pg.locator('[data-bc-settings]:visible').first().click({ force: true })
 await pg.waitForTimeout(900)
 await scan('settings/open')

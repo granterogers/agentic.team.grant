@@ -1560,6 +1560,12 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   color: var(--bc-text-strong);
   cursor: pointer;
 }
+/* Phone: the arrange plus, the project switcher and the module titles meet the 44px touch floor (20 October 2026). */
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcplusbtn { width: 44px; height: 44px; }
+  [data-experience='basecamp'] .bchere-link { min-height: 44px; }
+  [data-experience='basecamp'] .bcmodopen { min-height: 44px; }
+}
 [data-experience='basecamp'] .bcplusmenu {
   position: absolute;
   top: calc(100% + 8px);
