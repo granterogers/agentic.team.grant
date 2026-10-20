@@ -4131,23 +4131,22 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   name ends in an ellipsis instead of running under them.
 */
 /*
-  Three columns, so the name is centred on the module whatever the counts on its left are. The counts take the left column and
-  end in an ellipsis; the controls are already out of the flow on the right.
+  The name on the first line, centred; the counts on the second, centred under it, so a narrow module has the full width for
+  them rather than a side column they overflow. The controls are already out of the flow at the top right.
 */
 [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
   align-items: center;
-  gap: 8px;
-  /* Taller than one line of the counts, and not clipping them or the title's icon at the top edge. */
-  min-height: 28px;
+  row-gap: 2px;
   overflow: visible;
-  /* The controls sit over the right-hand column already, so the padding that reserved room for them would push the name off centre. The padding is set at several widths further down, hence the !important. */
+  /* The controls sit over the right-hand edge already, so the padding that reserved room for them would push the name off centre. The padding is set at several widths further down, hence the !important. */
   padding-right: 0 !important;
 }
 [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead h2 {
-  grid-column: 2;
-  justify-self: center;
+  grid-column: 1;
+  grid-row: 1;
   margin: 0;
   font-size: 16px;
   line-height: 22px;
@@ -4156,7 +4155,9 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 }
 [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodmeta {
   grid-column: 1;
-  justify-self: start;
+  grid-row: 2;
+  justify-self: center;
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
