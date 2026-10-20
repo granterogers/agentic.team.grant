@@ -7,8 +7,9 @@
      "storage_state": "<the cookie jar, as JSON text>",
      "notebook_id": "...", "source_id": "..."}
 
-The master token is preferred: when it is present a fresh jar is minted from it
-for this call, and `storage_state` is used only when there is no master token.
+The master token is preferred: a jar minted from it is kept for a while and reused,
+and it is minted again only when Google refuses the kept one. `storage_state` is used
+only when there is no master token.
 
 ## Why this exists
 
@@ -45,6 +46,7 @@ see `fail` below.
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import os
@@ -142,8 +144,8 @@ async def mint_storage_state(master: dict) -> str:
     """A fresh cookie jar from the durable master token, with no browser.
 
     A stored jar goes stale, and on 19 October Google served its signed-out page
-    to the stored one. The master token does not go stale, and the library mints
-    from it in a few HTTPS calls, so each read mints its own jar.
+    to the stored one. The master token does not go stale, so a jar is minted from
+    it when none is kept (see `jar_for`).
     """
     from notebooklm._auth.master_token import storage_state_from_jar
     from notebooklm.auth import mint_cookies
@@ -156,13 +158,60 @@ async def mint_storage_state(master: dict) -> str:
 
 
 async def run(op: str, request: dict, storage_state: str) -> object:
-    from notebooklm import NotebookLMClient
-
     # Present, the master token wins over any stored jar. A mint failure is
     # raised as it is, so the caller sees why instead of a stale jar's sign-in page.
     master = request.get("master_token")
-    if isinstance(master, dict):
-        storage_state = await mint_storage_state(master)
+    if not isinstance(master, dict):
+        return await with_client(op, request, storage_state)
+
+    # Google was asked for a fresh jar on every read until 20 October, and it
+    # began refusing the master token (the 502 MasterTokenError). A jar kept
+    # for a while answers without asking again. When it is refused as signed
+    # out, one fresh mint is tried before the call fails.
+    jar = await jar_for(master)
+    try:
+        return await with_client(op, request, jar)
+    except Exception as error:
+        if not signed_out(error):
+            raise
+    return await with_client(op, request, await jar_for(master, fresh=True))
+
+
+# How long a minted jar is kept in this function's memory. A warm instance
+# reuses it; a cold start mints again, as before.
+JAR_TTL_SECONDS = 20 * 60
+_jars: dict[str, tuple[float, str]] = {}
+
+
+def _jar_key(master: dict) -> str:
+    # A digest, so the token itself is not held as a dictionary key.
+    return hashlib.sha256(str(master.get("master_token", "")).encode()).hexdigest()
+
+
+async def jar_for(master: dict, fresh: bool = False) -> str:
+    key = _jar_key(master)
+    kept = _jars.get(key)
+    if not fresh and kept is not None and time.monotonic() - kept[0] < JAR_TTL_SECONDS:
+        return kept[1]
+    jar = await mint_storage_state(master)
+    _jars[key] = (time.monotonic(), jar)
+    return jar
+
+
+def signed_out(error: Exception) -> bool:
+    """Whether the call was refused because the jar no longer signs in.
+
+    Only the library's auth errors and its sign-in wording count. A missing
+    notebook or a network fault is not a reason to mint again.
+    """
+    if type(error).__name__ in {"AuthError", "AuthExtractionError", "HeadlessLoginRequiredError"}:
+        return True
+    words = str(error).lower()
+    return "sign in" in words or "signed out" in words
+
+
+async def with_client(op: str, request: dict, storage_state: str) -> object:
+    from notebooklm import NotebookLMClient
 
     # The library wants a path. `/tmp` is the only writable place in a
     # serverless function and is per-invocation; 0600 because the file is a
