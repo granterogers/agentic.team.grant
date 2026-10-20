@@ -4139,6 +4139,8 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
+  /* The controls sit over the right-hand column already, so the padding that reserved room for them would push the name off centre. The padding is set at several widths further down, hence the !important. */
+  padding-right: 0 !important;
 }
 [data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead h2 {
   grid-column: 2;
