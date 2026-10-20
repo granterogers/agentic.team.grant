@@ -29,21 +29,40 @@ export const toggleProjects = () => {
 export const isOpen = () => open
 export const isMaking = () => making
 
+/*
+  The list of projects opens from the title of the project you are in, not from the burger (Grant, 20 October 2026). It is
+  its own panel and its own state, and the two never open together: opening one closes the other.
+*/
+let switching = false
+export const isSwitching = () => switching
+export const setSwitching = (v) => {
+  switching = v === true
+  if (switching) {
+    open = false
+    making = false
+  }
+}
+
 export const setOpen = (v) => {
   open = v === true
+  if (open) switching = false
   if (!open) making = false
 }
 export const setMaking = (v) => {
   making = v === true
-  if (making) open = true
+  if (making) {
+    open = true
+    switching = false
+  }
 }
 
-/** Called on every draw with the current address: a navigation closes the menu. */
+/** Called on every draw with the current address: a navigation closes the menu and the list. */
 export const sync = (path) => {
   if (path !== lastPath) {
     lastPath = path
     open = false
     making = false
+    switching = false
   }
 }
 

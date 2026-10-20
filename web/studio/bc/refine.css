@@ -143,7 +143,8 @@
 /* Only on the canvas (wider than a phone): size containment lets a module collapse to nothing in the stacked phone layout. */
 @media (min-width: 861px) {
   [data-experience='basecamp'] .bccomp--c .bcstage .bcmod.bcmod--placed { container-type: inline-size; container-name: bcmod; }
-  @container bcmod (max-width: 300px) {
+  /* 200px, not 300: "6 yours | 9 team's" needs about 170px, and a 260px To-dos module was losing its words for no reason. */
+  @container bcmod (max-width: 200px) {
     [data-experience='basecamp'] .bcsplitbtn .bcsplitlab { display: none; }
   }
 }
@@ -1496,4 +1497,20 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
 }
 [data-experience='basecamp'] .bcmod--tinted .bcmodicon {
   color: var(--bc-tint);
+}
+
+/*
+  The project title opens the list of projects (20 October 2026). The list hangs from the title, centred under it, with the
+  same look as the burger menu. `translate` is used for the centring because the panel's entrance animation owns `transform`.
+*/
+[data-experience='basecamp'] .bchere { position: relative; }
+[data-experience='basecamp'] .bcswitch {
+  left: 50%;
+  translate: -50% 0;
+  width: min(300px, calc(100vw - 16px));
+}
+[data-experience='basecamp'] .bcswitchchev {
+  margin-left: 2px;
+  font-size: 12px;
+  opacity: 0.6;
 }

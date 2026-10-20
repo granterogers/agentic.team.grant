@@ -124,7 +124,7 @@ export const KINDS = [
   { id: 'documents', name: 'Documents', note: 'A shelf of covers', w: 2, h: 380, tone: 'k-make' },
   { id: 'tasks', name: 'Tasks', note: 'What is open', w: 1, h: 340, tone: 'k-do' },
   { id: 'contacts', name: 'People', note: 'Who it is about', w: 1, h: 320, tone: 'k-who' },
-  { id: 'activity', name: 'Recent activity', note: 'What the team did, most recent first', w: 1, h: 520, tone: 'k-past' },
+  { id: 'activity', name: 'Recent activity', note: 'What the team did, most recent first', w: 1, h: 260, tone: 'k-past' },
   { id: 'links', name: 'Connections', note: 'What it is joined to', w: 1, h: 180, tone: 'k-join' },
   /*
     How it got here (#156).
@@ -164,7 +164,7 @@ export const HOME_KINDS = [
   { id: 'tasks', name: 'Tasks', note: 'Everything open, across every project', w: 2, h: 420, tone: 'k-do' },
   { id: 'projects', name: 'Projects', note: 'All of them, and how each is doing', w: 1, h: 420, tone: 'k-join' },
   { id: 'team', name: 'The team', note: 'Who is working now', w: 1, h: 280, tone: 'k-who' },
-  { id: 'activity', name: 'Recent activity', note: 'What the office did, most recent first', w: 1, h: 640, tone: 'k-past' },
+  { id: 'activity', name: 'Recent activity', note: 'What the office did, most recent first', w: 1, h: 320, tone: 'k-past' },
 ]
 
 /*
@@ -181,7 +181,7 @@ const HOME_DEFAULT = [
   { id: 'projects', x: 2, y: 0, w: 1, h: 420 },
   { id: 'tasks', x: 0, y: 244, w: 2, h: 420 },
   { id: 'team', x: 2, y: 444, w: 1, h: 300 },
-  { id: 'activity', x: 0, y: 688, w: 3, h: 640 },
+  { id: 'activity', x: 0, y: 688, w: 3, h: 320 },
 ]
 
 const HOME_KEY = 'home'
@@ -244,7 +244,7 @@ const defaultFor = (project) => {
   let ry = 0
   if (has.tasks) { out.push({ id: 'tasks', x: 2, y: ry, w: 1, h: 340 }); ry += 364 }
   if (has.contacts) { out.push({ id: 'contacts', x: 2, y: ry, w: 1, h: 320 }); ry += 344 }
-  if (has.activity) { out.push({ id: 'activity', x: 2, y: ry, w: 1, h: 520 }) }
+  if (has.activity) { out.push({ id: 'activity', x: 2, y: ry, w: 1, h: 260 }) }
   /*
     How it got here, on every board (#156).
 

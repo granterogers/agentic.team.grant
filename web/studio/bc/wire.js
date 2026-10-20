@@ -105,13 +105,24 @@ export const mount = (c) => {
     flag rather than assuming.
   */
   document.addEventListener('pointerdown', (e) => {
-    if (ctx.state.experience !== 'basecamp' || !menu.isOpen()) return
-    if (e.target instanceof Element && e.target.closest('.bcmenupanel, [data-bc-menu], [data-bc-menu-open]')) return
+    if (ctx.state.experience !== 'basecamp') return
+    const target = e.target instanceof Element ? e.target : null
+    if (menu.isSwitching() && target?.closest('.bcswitch, [data-bc-switch]') === null) {
+      menu.setSwitching(false)
+      c.render()
+    }
+    if (!menu.isOpen()) return
+    if (target?.closest('.bcmenupanel, [data-bc-menu], [data-bc-menu-open]') !== null) return
     menu.closeAnimated(() => c.render())
   })
   document.addEventListener('keydown', (e) => {
     if (ctx.state.experience !== 'basecamp') return
     jump.onKey(e)
+    if (e.key === 'Escape' && menu.isSwitching()) {
+      menu.setSwitching(false)
+      c.render()
+      document.querySelector('[data-bc-switch]')?.focus()
+    }
     if (e.key === 'Escape' && menu.isOpen()) {
       menu.closeAnimated(() => {
         c.render()
@@ -774,6 +785,16 @@ export const wire = (root) => {
         menu.setOpen(true)
         settle()
       } else menu.closeAnimated(settle)
+    })
+  }
+  /* The project's title opens the list of projects. A press on it again closes the list, and so does a press outside it. */
+  for (const b of root.querySelectorAll('[data-bc-switch]')) {
+    b.addEventListener('click', () => {
+      const opening = !menu.isSwitching()
+      menu.setSwitching(opening)
+      ctx.render()
+      if (opening) root.ownerDocument.querySelector('#bc-switch .bcmenuitem')?.focus()
+      else root.ownerDocument.querySelector('[data-bc-switch]')?.focus()
     })
   }
   /* The menu is a role=menu, so the arrow keys, Home and End move between its entries. */

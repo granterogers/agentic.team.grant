@@ -4139,7 +4139,10 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   align-items: center;
-  row-gap: 2px;
+  row-gap: 4px;
+  /* Room above and below the name, so the heading reads as a heading rather than as the top edge of the body. */
+  padding-top: 10px;
+  padding-bottom: 8px;
   overflow: visible;
   /* The controls sit over the right-hand edge already, so the padding that reserved room for them would push the name off centre. The padding is set at several widths further down, hence the !important. */
   padding-right: 0 !important;
@@ -4150,6 +4153,7 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   margin: 0;
   font-size: 16px;
   line-height: 22px;
+  letter-spacing: 0.02em;
   text-align: center;
   white-space: nowrap;
 }

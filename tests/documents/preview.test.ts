@@ -586,6 +586,55 @@ describe('the preview contract: failed', () => {
   })
 })
 
+describe('a PDF or picture is shown as itself, not as the text indexed from it', () => {
+  it('a Drive PDF with indexed text is drawn as a stream, and the text is not the answer', async () => {
+    const c = cacheRow({
+      kind: 'text',
+      source_mime: 'application/pdf',
+      last_checked_at: new Date(NOW).toISOString(),
+    })
+    const out = await previewDocument({
+      plan: plan({}, 'f1', c, 'Garbled words from the deck'),
+      provider: never,
+      extractText: pdfExtract,
+      record: recorder().record,
+      now: NOW,
+    })
+    expect(out.kind).toBe('pdf')
+    expect(out.payload).toMatchObject({ type: 'stream', mime: 'application/pdf' })
+  })
+
+  it('a PDF from a source with no on-demand reader is unsupported, not its indexed text', async () => {
+    const out = await previewDocument({
+      plan: plan(
+        {
+          document: {
+            id: 'doc-1',
+            title: 'Deck',
+            connector: 'notion',
+            origin: 'source',
+            state: 'approved',
+            external_ref: 'x',
+            mime_type: 'application/pdf',
+            has_file: false,
+            project_slug: 'p',
+          },
+        },
+        'x',
+        null,
+        'Garbled words from the deck',
+      ),
+      provider: never,
+      extractText: pdfExtract,
+      record: recorder().record,
+      now: NOW,
+    })
+    expect(out.state).toBe('unsupported')
+    expect(out.reason_code).toBe('no_on_demand_reader')
+    expect(out.payload).toBeUndefined()
+  })
+})
+
 describe('the stale rule', () => {
   it('compares modified time and checksum, not wall-clock strings', () => {
     const meta = {

@@ -321,6 +321,30 @@ const isHere = (to) => currentPath() === to
   portfolio screen, the Jump dialog and the tray are gone: this is the one
   place to move between projects.
 */
+/*
+  The projects, from the title of the project you are in. Pressing that title opens them, and the list ends with the way to
+  this project's overview, which the title itself used to be (Grant, 20 October 2026). The burger keeps the moves inside a
+  project.
+*/
+const switcherPanel = (here) => {
+  const projects = listed()
+  const row = (p) =>
+    `<button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(at(`/p/${p.slug}`))}" aria-current="${here !== null && here.slug === p.slug ? 'page' : 'false'}"><span class="bcmenumark" aria-hidden="true">${compose.projectMark(p, 18)}</span><span class="bcmenuname">${esc(p.name)}</span></button>`
+  return `<div class="bcmenupanel bcswitch" id="bc-switch" role="menu" aria-label="Projects"${menu.isSwitching() ? '' : ' hidden'}>
+    <p class="bcmenuhead">Projects</p>
+    ${
+      projects.length === 0
+        ? `<p class="bcmenunone">${source.state === 'unreachable' ? 'Your projects could not be loaded.' : 'No projects yet.'}</p>`
+        : `<div class="bcmenulist">${projects.map(row).join('')}</div>`
+    }
+    ${
+      here === null
+        ? ''
+        : `<hr class="bcmenusep"><button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(at(`/p/${here.slug}`))}"><span class="bcmenuname">Overview of ${esc(here.name)}</span></button>`
+    }
+  </div>`
+}
+
 const menuPanel = () => {
   const here = state().view === 'project' ? state().project : null
   const projects = listed()
@@ -340,29 +364,6 @@ const menuPanel = () => {
         ? `<p class="bcmenuwho" title="${esc(session.knownEmail())}">Signed in as <span data-bc-menuwho>${esc(session.knownEmail())}</span></p>`
         : ''
     }
-    <div class="bcmenuprojgroup">
-    <button type="button" class="bcmenuprojects" aria-expanded="${menu.projectsExpanded() ? 'true' : 'false'}" aria-controls="bc-menu-projects" data-bc-menu-projects>
-      <span class="bcmenuhead">Projects</span><span class="bcmenucount" aria-label="${projects.length} projects">${projects.length}</span><span class="bcmenuchev" aria-hidden="true">${menu.projectsExpanded() ? '−' : '+'}</span>
-    </button>
-    <div id="bc-menu-projects" class="bcmenuprojectlist${menu.projectsExpanded() ? '' : ' is-collapsed'}">
-    ${
-      projects.length === 0
-        ? `<p class="bcmenunone">${source.state === 'unreachable' ? 'Your projects could not be loaded.' : 'No projects yet.'}</p>`
-        : `<div class="bcmenulist">${projects
-            .map((p) =>
-              item(
-                at(`/p/${p.slug}`),
-                p.name,
-                `<span class="bcmenumark" aria-hidden="true">${compose.projectMark(p, 18)}</span>`,
-              ).replace(
-                'aria-current="false"',
-                `aria-current="${here === p.slug ? 'page' : 'false'}"`,
-              ),
-            )
-            .join('')}</div>`
-    }
-    </div>
-    </div>
     ${
       firstRunShown
         ? ''
@@ -489,10 +490,12 @@ const topRow = () => {
       aria-label="${esc(here === null ? 'No project selected' : `You are in ${here.name}`)}">
       ${here === null
         ? '<span class="bcjumpname">No project open</span>'
-        : `<a class="bchere-link" href="${esc(at(`/p/${here.slug}`))}" title="Open the ${esc(here.name)} overview, with all its modules">
+        : `<button type="button" class="bchere-link" data-bc-switch aria-haspopup="menu" aria-controls="bc-switch"
+            aria-expanded="${menu.isSwitching() ? 'true' : 'false'}" title="Switch project, or open ${esc(here.name)}'s overview">
             <span class="bcjumpmark" aria-hidden="true">${compose.projectMark(here, 18)}</span>
             <span class="bcjumpname">${esc(here.name)}</span>
-          </a>`}
+            <span class="bcswitchchev" aria-hidden="true">▾</span>
+          </button>${switcherPanel(here)}`}
     </div>
     ${work}
     <div class="bcright">

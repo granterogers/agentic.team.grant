@@ -1819,6 +1819,10 @@
   min-width: 0;
   max-width: 100%;
   color: inherit;
+  font: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
   text-decoration: none;
   border-radius: 8px;
 }

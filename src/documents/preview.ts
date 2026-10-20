@@ -142,6 +142,17 @@ const PLAIN_TEXT = new Set([
   'application/json',
 ])
 
+/*
+  A PDF or a picture is shown as itself, never as the text indexed from it. That text is the source's own reading of the
+  file, with its layout gone, so a deck read back as words came out garbled (the Illumina deck, October 2026). The media type
+  decides this before any cached text is looked at.
+*/
+const drawableKind = (mime: string | null | undefined): 'pdf' | 'image' | null => {
+  if (mime === 'application/pdf') return 'pdf'
+  if (mime !== undefined && mime !== null && IMAGES.has(mime)) return 'image'
+  return null
+}
+
 const kindOfMime = (mime: string): string => {
   if (mime === 'application/vnd.google-apps.folder') return 'folder'
   if (mime === 'application/vnd.google-apps.form') return 'Google Form'
@@ -606,6 +617,16 @@ export async function previewDocument(input: PreviewInput): Promise<PreviewResul
 
   // Anything but Drive: Team HQ reads only what the source's own sync already indexed. No on-demand read exists for it.
   if (connector !== 'drive') {
+    const picture = drawableKind(plan.document.mime_type)
+    if (picture !== null) {
+      return {
+        ...base,
+        state: 'unsupported',
+        reason_code: 'no_on_demand_reader',
+        reason: `Team HQ cannot draw this ${picture === 'pdf' ? 'PDF' : 'picture'} from ${connector === null ? 'its source' : `a ${connector}`} here. Open the source to see its pages. The text Team HQ indexed from it is kept for search, not shown as the document.`,
+        alternatives: ALTS_BASE,
+      }
+    }
     const text = (plan.text ?? '').trim()
     if (text !== '') {
       const capped = capText(text)
@@ -656,7 +677,8 @@ export async function previewDocument(input: PreviewInput): Promise<PreviewResul
     retryable: boolean
   }): PreviewResult | null => {
     if (cache === null) return null
-    if (cache.kind === 'text' && cachedText !== '') {
+    const picture = drawableKind(cache.source_mime ?? plan.document?.mime_type)
+    if (cache.kind === 'text' && cachedText !== '' && picture === null) {
       const capped = capText(cachedText)
       return {
         ...base,
@@ -682,11 +704,11 @@ export async function previewDocument(input: PreviewInput): Promise<PreviewResul
         source: { connector: 'drive', url: null, modified: cache.source_modified_time },
       }
     }
-    if (cache.kind === 'pdf' || cache.kind === 'image') {
+    if (cache.kind === 'pdf' || cache.kind === 'image' || picture !== null) {
       return {
         ...base,
         state: stale === undefined ? 'ready' : 'stale',
-        kind: cache.kind,
+        kind: picture ?? (cache.kind === 'image' ? 'image' : 'pdf'),
         mode: 'on_demand',
         alternatives: stale?.retryable === true ? (['retry', ...ALTS_BASE] as const) : ALTS_BASE,
         payload: { type: 'stream', mime: cache.source_mime ?? '', size: null, name: doc.title },
