@@ -992,28 +992,50 @@
   padding-top: 12px;
   border-top: 1px solid var(--st-line-2);
 }
-/* Every connector is the same size, so the grid is even; the action sits on the bottom edge of its tile. */
+/*
+  Every connector is a module, drawn the way the project's own modules are: the same surface, border and corner radius, the
+  name centred at the top. Every tile is the same size, so the grid is even; the action sits on the bottom edge of its tile.
+*/
 #settings .svc-tile {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 6px;
   min-width: 0;
   min-height: 156px;
-  padding: 14px;
-  border: 1px solid var(--st-line-2);
-  border-radius: var(--st-r);
-  background: var(--st-panel);
+  padding: 16px 18px 18px;
+  text-align: center;
+  border: 1px solid var(--bc-border-subtle, var(--st-line-2));
+  border-radius: var(--bc-r-sheet, var(--st-r));
+  background: var(--bc-surface, var(--st-panel));
 }
 #settings .svc-tile__action {
   margin-top: auto;
-  padding-top: 6px;
+  padding-top: 8px;
+  width: 100%;
+}
+/* The buttons stay inside their tile: full width, the words allowed to wrap, so none runs over the border. */
+#settings .svc-tile__action .btn,
+#settings .svc-tile__action button,
+#settings .svc-tile__action a {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+#settings .svc-tile .st-initial {
+  font: 800 18px/1 var(--st-font);
+  color: var(--bc-text-strong, var(--st-text));
 }
 /* A connector's set-up, opened from its tile: one card across the whole board, above the grid. */
 #settings .svc-detail {
-  padding: 16px 18px;
-  border: 1px solid var(--st-line-2);
-  border-radius: var(--st-r);
-  background: var(--st-panel);
+  padding: 16px 18px 18px;
+  border: 1px solid var(--bc-border-subtle, var(--st-line-2));
+  border-radius: var(--bc-r-sheet, var(--st-r));
+  background: var(--bc-surface, var(--st-panel));
   display: grid;
   gap: 12px;
 }

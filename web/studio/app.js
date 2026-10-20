@@ -6647,7 +6647,7 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
     // A link out to the provider's own sign-in page. It does not connect Team HQ by itself; the route's why says so.
     else if (route.url) action = `<a class="btn primary" href="${esc(route.url)}" target="_blank" rel="noopener">${esc(route.urlLabel ?? 'Open')}</a>`
   } else if (route.how === 'mcp') {
-    action = ui.button({ label: 'How to connect an app', tone: 'quiet', a: { 'data-mcp-open': true } })
+    action = ui.button({ label: 'How to connect an app', tone: 'quiet', a: { 'data-svc-open': 'mcp' } })
   } else if (route.off !== undefined && canWrite() && op) {
     action = ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-disconnect': route.off, 'data-service': c.name } })
   } else if (route.how === 'tab' && route.to !== 'setup') {
@@ -6842,9 +6842,8 @@ function connectionsTab() {
         <div class="st-ctl" style="justify-content:flex-start">${ui.button({ label: 'Add it', a: { 'data-register-provider': true } })}<span class="st-said" data-said role="status" aria-live="polite"></span></div>
       </div>`
     : ''
-  const mcp = !state.mcp
-    ? ''
-    : !config.MCP.loaded
+  // The MCP client's set-up is the body of its own tile, opened from it (see tile below), not a block under Behind the scenes.
+  const mcpBody = !config.MCP.loaded
       ? ui.card([ui.empty('Asking…')])
       : ui.card([
           ui.row({ name: 'Server address', desc: 'Give this to the other app.', kind: 'stack', control: `<code class="st-code" style="width:100%">${esc(config.MCP.url)}</code>` }),
@@ -6915,7 +6914,8 @@ function connectionsTab() {
         : ''
     }
     if (route.how === 'tab' && route.to !== 'setup') return ui.button({ label: 'Set up', tone: 'primary', a: { 'data-goto-setting': route.to } })
-    if (route.how === 'mcp') return ui.button({ label: route.label, tone: 'primary', a: { 'data-mcp-open': true } })
+    // The MCP client opens its own set-up from the tile (its body), so the tile offers the Set up button.
+    if (route.how === 'mcp') return ''
     if (route.url) return `<a class="btn primary" href="${esc(route.url)}" target="_blank" rel="noopener">${esc(route.urlLabel ?? 'Open')}</a>`
     return ''
   }
@@ -6929,6 +6929,16 @@ function connectionsTab() {
   const sharedGoogle = 'The same Google sign-in as Gmail.'
   const nbTone = ledNotebook === null ? ['off', 'Checking…'] : copy.state[ledNotebook.state] ?? ['off', 'Not checked']
   const nbOk = ledNotebook?.state === 'ok'
+  // Vikunja's word, from the task sync's own reading: asking, not set up, not working, or connected.
+  const vk = config.TASK_SYNC
+  const vikunjaTone =
+    vk.configured === null || vk.configured === undefined
+      ? ['off', 'Checking…']
+      : vk.configured !== true
+        ? ['off', 'Not connected']
+        : vk.health?.state === 'down'
+          ? ['bad', 'Not working']
+          : ['ok', 'Connected']
   const gmailMark = markFor('gmail')
   const driveMark = markFor('drive')
   const calendarMark = markFor('calendar')
@@ -6962,8 +6972,18 @@ function connectionsTab() {
         word: w,
         detail: String(c.detail ?? ''),
         action: tileAction(c),
-        body: setUp ? notionBody() : '',
+        body: setUp ? notionBody() : c.key === 'mcp' ? mcpBody : '',
       })
+    }),
+    // Vikunja is a connector of its own: its tile opens its set-up and status, like every other connector.
+    tile({
+      key: 'vikunja',
+      name: 'Vikunja',
+      svg: '<span class="st-initial" aria-hidden="true">V</span>',
+      tone: vikunjaTone[0],
+      word: vikunjaTone[1],
+      detail: config.TASK_SYNC.configured === true ? String(config.TASK_SYNC.url ?? '') : 'Keeps your tasks in step with a copy in Vikunja.',
+      body: tasks,
     }),
   ]
   // Everything else on this page sits in the same grid, as a full-width cell, so no block is left outside it.
@@ -6973,7 +6993,6 @@ function connectionsTab() {
     googleNeedsSetup
       ? ui.section({ title: 'Set up Google', body: ui.card([googleSetupPanel()]) })
       : '',
-    tasks,
     mail === '' ? '' : ui.section({ title: 'Your email', body: mail }),
     // the database, the AI provider and tool providers are the deployment's own, not a person's
     !operator
@@ -6987,8 +7006,7 @@ function connectionsTab() {
           title: 'Tool providers',
           note: 'Outside services the team can ask what they can do.',
           body: ui.card(providers.length === 0 ? [ui.empty('None added.')] : providers) + addProvider,
-        }) +
-        (mcp === '' ? '' : ui.section({ title: 'Connecting another app', body: mcp })),
+        }),
     }),
   ]
   // One grid: the tiles, then every other block as a full-width cell. Every tile is the same width.
@@ -7692,11 +7710,16 @@ function settingsSheet() {
   }
   // A connector's set-up opens in one panel above the grid: pressing its tile again, or Close, puts it away.
   for (const b of v.querySelectorAll('[data-svc-open]')) {
-    b.addEventListener('click', () => {
+    b.addEventListener('click', async () => {
       const key = b.dataset.svcOpen
       state.svcOpen = state.svcOpen === key ? null : key
       settingsSheet()
       sheet(v, true)
+      if (state.svcOpen === 'mcp' && !config.MCP.loaded) {
+        await config.hydrateMcp(read)
+        settingsSheet()
+        sheet(v, true)
+      }
       if (state.svcOpen !== null) v.querySelector('[data-svc-detail]')?.scrollIntoView({ block: 'nearest' })
     })
   }
