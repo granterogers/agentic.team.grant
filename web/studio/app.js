@@ -6888,8 +6888,15 @@ function connectionsTab() {
   */
   // A tile can open to hold its own configuration (`body`) and then takes two columns (`wide`), so the set-up sits in the
   // service it belongs to rather than in a panel of its own below the grid.
-  const tile = ({ key, name, svg = '', tint = '', tone, word, detail = '', action = '', body = '', wide = false }) => `
-    <article class="svc-tile${wide ? ' svc-tile--wide' : ''}" data-tile="${esc(key)}" data-saidwrap>
+  // Every tile is the same size. A tile with set-up steps shows a Set up button; the steps open in one panel above the grid
+  // (see `setups` below), so no tile grows to fit them.
+  const setups = {}
+  const tile = ({ key, name, svg = '', tint = '', tone, word, detail = '', action = '', body = '' }) => {
+    if (body !== '') setups[key] = { name, body }
+    const setUpAction =
+      body !== '' && action === '' ? ui.button({ label: state.svcOpen === key ? 'Hide set-up' : 'Set up', tone: 'primary', a: { 'data-svc-open': key } }) : ''
+    return `
+    <article class="svc-tile" data-tile="${esc(key)}" data-saidwrap>
       <div class="svc-tile__top">
         <span class="st-logo"${tint ? ` style="--tint:${esc(tint)}"` : ''}>${svg}</span>
         <span class="svc-led svc-led--${esc(tone)}" aria-hidden="true"></span>
@@ -6897,9 +6904,9 @@ function connectionsTab() {
       <p class="svc-tile__name">${esc(name)}</p>
       <p class="svc-tile__word svc-tile__word--${esc(tone)}">${esc(word)}</p>
       ${detail ? `<p class="svc-tile__detail">${esc(detail)}</p>` : ''}
-      ${action ? `<div class="svc-tile__action">${action}</div>` : ''}
-      ${body ? `<div class="svc-tile__body">${body}</div>` : ''}
+      ${action || setUpAction ? `<div class="svc-tile__action">${action || setUpAction}</div>` : ''}
     </article>`
+  }
   const tileAction = (c) => {
     const route = config.routeFor(c.key)
     if (config.isConnected(c.state)) {
@@ -6941,7 +6948,6 @@ function connectionsTab() {
       detail: ledNotebook?.detail ?? (ledNotebook === null ? 'Checking the reader…' : ''),
       // Not connected: the tile opens to show the reconnect steps, in the service itself.
       body: !nbOk && operator && canWrite() ? notebookSteps() : '',
-      wide: !nbOk && operator && canWrite(),
     }),
     ...others.map((c) => {
       const [t, w] = copy.state[c.state] ?? ['off', c.state]
@@ -6957,7 +6963,6 @@ function connectionsTab() {
         detail: String(c.detail ?? ''),
         action: tileAction(c),
         body: setUp ? notionBody() : '',
-        wide: setUp,
       })
     }),
   ]
@@ -6986,9 +6991,19 @@ function connectionsTab() {
         (mcp === '' ? '' : ui.section({ title: 'Connecting another app', body: mcp })),
     }),
   ]
-  // One grid: the tiles, then every other block as a full-width cell. The tiles set their own width (see .svc-tile--wide).
+  // One grid: the tiles, then every other block as a full-width cell. Every tile is the same width.
+  const openSetup = state.svcOpen && setups[state.svcOpen] ? setups[state.svcOpen] : null
   return `<div class="svc-board">
     <p class="svc-head">Services <span class="st-meta">${tiles.length}</span></p>
+    ${
+      openSetup === null
+        ? ''
+        : `<div class="svc-span svc-detail" data-svc-detail>
+            <div class="svc-detail__head"><p class="svc-detail__title">Set up ${esc(openSetup.name)}</p>
+            <button type="button" class="btn quiet small" data-svc-close>Close</button></div>
+            ${openSetup.body}
+          </div>`
+    }
     ${tiles.join('')}
     ${spanned.filter((h) => h !== '').map((h) => `<div class="svc-span">${h}</div>`).join('')}
   </div>`
@@ -7671,6 +7686,23 @@ function settingsSheet() {
   for (const b of v.querySelectorAll('[data-goto-setting]')) {
     b.addEventListener('click', () => {
       state.setting = b.dataset.gotoSetting
+      settingsSheet()
+      sheet(v, true)
+    })
+  }
+  // A connector's set-up opens in one panel above the grid: pressing its tile again, or Close, puts it away.
+  for (const b of v.querySelectorAll('[data-svc-open]')) {
+    b.addEventListener('click', () => {
+      const key = b.dataset.svcOpen
+      state.svcOpen = state.svcOpen === key ? null : key
+      settingsSheet()
+      sheet(v, true)
+      if (state.svcOpen !== null) v.querySelector('[data-svc-detail]')?.scrollIntoView({ block: 'nearest' })
+    })
+  }
+  for (const b of v.querySelectorAll('[data-svc-close]')) {
+    b.addEventListener('click', () => {
+      state.svcOpen = null
       settingsSheet()
       sheet(v, true)
     })

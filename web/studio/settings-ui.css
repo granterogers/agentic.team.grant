@@ -927,11 +927,11 @@
 */
 #settings .svc-board {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   grid-auto-flow: dense;
   gap: 12px;
-  /* Each tile is as tall as its own words. Stretching them made the short ones hollow, with a tall empty panel under a line of text (20 October 2026). */
-  align-items: start;
+  /* Each row is as tall as its tallest tile, so the grid reads as even rows. Tiles share one minimum height (see .svc-tile). */
+  align-items: stretch;
 }
 /*
   Every other Settings page is a board too (.svc-board--auto). A section takes one column while it is short, and the full
@@ -992,15 +992,41 @@
   padding-top: 12px;
   border-top: 1px solid var(--st-line-2);
 }
+/* Every connector is the same size, so the grid is even; the action sits on the bottom edge of its tile. */
 #settings .svc-tile {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  min-height: 156px;
   padding: 14px;
   border: 1px solid var(--st-line-2);
   border-radius: var(--st-r);
   background: var(--st-panel);
+}
+#settings .svc-tile__action {
+  margin-top: auto;
+  padding-top: 6px;
+}
+/* A connector's set-up, opened from its tile: one card across the whole board, above the grid. */
+#settings .svc-detail {
+  padding: 16px 18px;
+  border: 1px solid var(--st-line-2);
+  border-radius: var(--st-r);
+  background: var(--st-panel);
+  display: grid;
+  gap: 12px;
+}
+#settings .svc-detail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#settings .svc-detail__title {
+  margin: 0;
+  font: 700 16px/22px var(--st-font);
+  color: var(--st-text);
 }
 #settings .svc-tile__top {
   display: flex;
