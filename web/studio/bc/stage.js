@@ -54,7 +54,7 @@ export const wireStage = (root, ctx) => {
   if (board === null) return
   const slug = board.dataset.bcBoard ?? ctx.state.project
   /* The dock lives in the shell's top bar (the project's tools), not in the board; the page's own head row is the older home. */
-  const dock = document.querySelector('.bcgridtools') ?? document.querySelector('.bcworktools') ?? board.closest('.bchome') ?? root
+  const dock = document.querySelector('.bcdock') ?? board.closest('.bchome') ?? root
   const stageEl = board.querySelector('.bcstage')
   const guides = board.querySelector('.bcguides')
   if (stageEl === null) return
@@ -551,12 +551,12 @@ export const wireStage = (root, ctx) => {
       }
       const unit = e.deltaMode === 1 ? 33 : 1
       /*
-        The wheel zooms in 12px of travel: every 12px moves the zoom by 2%, so a notch is a run of small, even steps
-        rather than one lurch. A pinch keeps its own rate, because a trackpad pinch already arrives in small pieces.
+        The wheel zooms in 12px of travel: every 12px moves the zoom by 1%, so a notch is a run of small, even steps
+        rather than a jump. A pinch keeps its own rate, because a trackpad pinch already arrives in small pieces.
       */
       const factor = pinch
         ? Math.exp(-e.deltaY * unit * (notch ? 0.0015 : 0.01))
-        : Math.exp(-((e.deltaY * unit) / 12) * 0.02)
+        : Math.exp(-((e.deltaY * unit) / 12) * 0.01)
       zoomTo(factor, boardPoint(e))
     },
     { passive: false },

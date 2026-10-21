@@ -446,12 +446,15 @@ const headRow = (p, extra = '') => {
               hidden on the board itself; a second way in was a menu entry that
               opened a panel to do what the page does.
             -->
-            <button type="button" role="menuitem" data-bc-look="1">How this project looks</button>
-            <button type="button" role="menuitem" data-bc-style="1">Document style</button>
-            <button type="button" role="menuitem" data-bc-expand="team">The team</button>
-            <button type="button" role="menuitem" data-bc-sources="1">Sources</button>
-            <button type="button" role="menuitem" data-bc-go="${esc(at(`/p/${p.slug}/settings`))}">Project settings</button>
-            <button type="button" role="menuitem" data-bc-settings="1" title="Global Settings: the whole office, outside any project">Global Settings</button>
+            <div class="bcmenuzoom" role="none">
+              <span class="bcmi-t">Zoom</span>
+              ${dock(p)}
+            </div>
+            <button type="button" role="menuitem" data-bc-look="1"><span class="bcmi-t">Appearance</span><span class="bcmi-d">Colours, theme and how this page looks</span></button>
+            <button type="button" role="menuitem" data-bc-expand="team"><span class="bcmi-t">The team</span><span class="bcmi-d">Who works on this project, and their roles</span></button>
+            <button type="button" role="menuitem" data-bc-sources="1"><span class="bcmi-t">Sources</span><span class="bcmi-d">Where the material comes from: Drive, Notion, notebooks and links</span></button>
+            <button type="button" role="menuitem" data-bc-go="${esc(at(`/p/${p.slug}/settings`))}"><span class="bcmi-t">Project settings</span><span class="bcmi-d">This project's name, icon and what it switches on</span></button>
+            <button type="button" role="menuitem" data-bc-settings="1" title="Global Settings: the whole office, outside any project"><span class="bcmi-t">Global Settings</span><span class="bcmi-d">The whole office: connections, text size and how it works</span></button>
             <!--
               THE OFFICE'S OWN SETTINGS ARE NOT IN HERE ANY MORE.
 
@@ -804,7 +807,6 @@ export const compositionC = (p) => {
     <div class="bcpanes" data-bc-board="${esc(p.slug)}" ${backdrop.attrsFor(grid.bgOf(p.slug), p.slug)} style="height:${String(st.h)}px;--bc-gx:${String(view.x)}px;--bc-gy:${String(view.y)}px;--bc-gz:${String(view.zoom)};--bc-gstep:${String(grid.gridStep(view.zoom))}px;${backdrop.styleFor(grid.bgOf(p.slug), p.slug)}">
       <canvas class="bcgridcv" aria-hidden="true"></canvas>
       ${plusMenu(p)}
-      <div class="bcgridtools">${dock(p)}</div>
       <span class="bcstagever" aria-hidden="true">${esc(typeof window.HQ_VERSION === 'string' ? `v${window.HQ_VERSION}` : '')}</span>
       <div class="bcstage" style="width:${String(st.w)}px;height:${String(st.h)}px;--bc-zoom:${String(view.zoom)};transform:translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})">
         ${place

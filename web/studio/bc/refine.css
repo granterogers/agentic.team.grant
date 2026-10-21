@@ -1545,13 +1545,32 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   right: 8px;
   z-index: 6;
 }
-[data-experience='basecamp'] .bcgridtools {
-  position: absolute;
-  top: 6px;
-  right: 56px;
-  z-index: 6;
+/*
+  The Appearance sheet (21 October 2026): its close button belongs INSIDE the sheet's top-right corner. The sheet had no
+  position of its own, so the button was placed against the whole viewer and sat outside the box.
+*/
+[data-experience='basecamp'] #viewer .sheet { position: relative; }
+[data-experience='basecamp'] #viewer .sheet > .close { top: 14px; right: 14px; }
+[data-experience='basecamp'] #viewer .sheet > .chead { padding-right: 60px; }
+
+/* The three-dot menu: each item says what it opens, in words under its name (21 October 2026). */
+[data-experience='basecamp'] .bcmenu > [role='menuitem'] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: start;
 }
-[data-experience='basecamp'] .bcgridtools .bcdock { margin: 0; }
+[data-experience='basecamp'] .bcmi-t { font-weight: 600; }
+[data-experience='basecamp'] .bcmi-d { font-size: 13px; font-weight: 400; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcmenuzoom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+}
+[data-experience='basecamp'] .bcmenuzoom .bcdock { margin: 0; }
 /* The grid starts below the "+", so the button has its own space and never sits over a module's heading. */
 @media (min-width: 761px) {
   [data-experience='basecamp'] .bcpanes { margin-top: 46px; }

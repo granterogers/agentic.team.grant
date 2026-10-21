@@ -1716,8 +1716,8 @@
 [data-experience='basecamp'] .bcexpback {
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, var(--bc-canvas) 78%, transparent);
-  backdrop-filter: blur(3px);
+  background: color-mix(in srgb, var(--bc-canvas) 70%, transparent);
+  backdrop-filter: blur(8px);
   border: 0;
 }
 /*
@@ -4179,18 +4179,14 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 /* The maximised module takes nearly the whole usable screen (4 October). */
 [data-experience='basecamp'] .bcexp { padding: 14px; }
 [data-experience='basecamp'] .bcexpbox {
-  width: min(1680px, 100%);
+  width: min(960px, 100%);
   max-height: calc(100vh - 28px);
-  height: calc(100vh - 28px);
+  height: auto;
   padding: 22px 26px 26px;
 }
 @media (max-width: 860px) {
   [data-experience='basecamp'] .bcexp { padding: 0; }
   [data-experience='basecamp'] .bcexpbox { height: 100vh; max-height: none; border-radius: 0; padding: 18px 14px 22px; }
-}
-/* Sources is a short list, so on a desktop its sheet is as tall as what it holds (21 October 2026), not a full-height panel with empty space under the cards. */
-@media (min-width: 861px) {
-  [data-experience='basecamp'] .bcexpbox:has(.bcsources--full) { height: auto; }
 }
 /* The workspace owns its stacking so nothing in it can float above a dialog. */
 [data-experience='basecamp'] .bcworkspace { isolation: isolate; }

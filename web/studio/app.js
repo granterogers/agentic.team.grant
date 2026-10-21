@@ -12977,7 +12977,7 @@ function lookSheet(p, keepSearch = false) {
           ${look(p, { dense: true, facts: p })}
         </span>
         <span>
-          <h2 class="t-title" style="margin:0">How ${esc(p.name)} looks</h2>
+          <h2 class="t-title" style="margin:0">Appearance</h2>
           <p class="t-meta" style="margin:4px 0 0">A mark you pick, or a picture of
             your own. Leave it alone and it keeps the art the office generated.</p>
         </span>
@@ -13028,11 +13028,11 @@ function lookSheet(p, keepSearch = false) {
             photo off a phone costs about fifteen kilobytes rather than four megabytes.</span>
         </span>
       </div>
-    </div>
-    <button class="close" aria-label="Close" title="Close">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>`
+      <button class="close" aria-label="Close" title="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>`
 
   sheet(v, true)
   backdropUi.wire(v, p)
