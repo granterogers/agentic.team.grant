@@ -1129,14 +1129,29 @@ export const docsMini = (p, { items = 6 } = {}) => {
     control is a native select: compact, keyboard-operable for nothing, and
     §25 asked for no unnecessary chrome.
   */
+  /*
+    THE SOURCE FILTER, IN THIS VIEW TOO (21 October 2026). The same chips and the same state per project as the expanded
+    module, so the two views always agree; each chip is wired by wire.js like the expanded chips are.
+  */
+  const f = docsrc.filterOf(p.slug)
+  const filtered = docsrc.applyFilter(docs, f)
+  const by = docsrc.counts(docs)
+  const chip = (id, label, n) =>
+    `<button type="button" class="bcsrcchip${f.source === id ? ' is-on' : ''}" data-bc-docsrc="${esc(id)}"
+      aria-pressed="${f.source === id ? 'true' : 'false'}">${esc(label)} <span class="bcsrcn">${String(n)}</span></button>`
+  const chips = `<span class="bcsrcchips bcsrcchips--tile" role="group" aria-label="Where they came from">${chip('all', 'All', docs.length)}${docsrc.SOURCES.filter((s) => by.has(s.id))
+    .map((s) => chip(s.id, s.short, by.get(s.id)))
+    .join('')}</span>`
   const how = docorder.mode(p.slug)
-  const shown = docorder.ordered(p.slug, docs, how)
+  const shown = docorder.ordered(p.slug, filtered, how)
   return `<div class="bcdocs" data-bc-docdrop="${esc(p.slug)}">
+    ${chips}
+    ${shown.length === 0 ? '<p class="bcmore">No documents from this source in this project.</p>' : ''}
     ${shown.slice(0, items).map((d, i) => thumb(d, i, true)).join('')}
     <p class="bcmore bcdocsall">
       <a href="${esc(to)}" data-bc-go="${esc(to)}">${esc(
-        docs.length > items
-          ? `View all ${docs.length} Docs & Files`
+        filtered.length > items
+          ? `View all ${filtered.length} Docs & Files`
           : 'View all Docs & Files',
       )}</a>
       ${sortControl(p.slug, how, 'mini')}

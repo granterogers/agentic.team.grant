@@ -699,13 +699,30 @@ const runningOn = (p) => (p.requests ?? []).filter((r) => r.state === 'working')
 
 /** §8.3 Documents: latest document, title and what it is. */
 const documentsPreview = (p) => {
-  const docs = p.documents ?? []
-  if (docs.length === 0) return nothing('Nothing filed on this project yet.')
+  /*
+    The minimised tile shares the expanded view's filter (21 October 2026): the same chips, the same state per project, so
+    the two views always agree. Each row says where its document came from.
+  */
+  const all = p.documents ?? []
+  if (all.length === 0) return nothing('Nothing filed on this project yet.')
+  const f = docsrc.filterOf(p.slug)
+  const docs = f.source !== undefined && f.source !== 'all' ? all.filter((d) => docsrc.sourceOf(d) === f.source) : all
+  const by = new Map()
+  for (const d of all) by.set(docsrc.sourceOf(d), (by.get(docsrc.sourceOf(d)) ?? 0) + 1)
+  const chip = (id, label, n) =>
+    `<button type="button" class="bcsrcchip${f.source === id ? ' is-on' : ''}" data-bc-docsrc="${esc(id)}"
+      aria-pressed="${f.source === id ? 'true' : 'false'}">${esc(label)}${n === undefined ? '' : ` <span class="bcsrcn">${String(n)}</span>`}</button>`
+  const chips = `<span class="bcsrcchips bcsrcchips--tile" role="group" aria-label="Where they came from">${chip('all', 'All', all.length)}${docsrc.SOURCES.filter((s) => by.has(s.id))
+    .map((s) => chip(s.id, s.short, by.get(s.id)))
+    .join('')}</span>`
+  const rows = docs
+    .slice(0, 5)
+    .map((d) => row(d.title, [docsrc.nameOfSource(docsrc.sourceOf(d)), d.kind, d.size].filter(Boolean).join(' · ')))
+    .join('')
+  if (docs.length === 0) return `${chips}${nothing('No documents from this source in this project.')}`
   return (
-    docs
-      .slice(0, 5)
-      .map((d) => row(d.title, [d.kind, d.origin, d.size].filter(Boolean).join(' · ')))
-      .join('') +
+    chips +
+    rows +
     (docs.length > 5 ? `<div class="bcmore">${esc(`${docs.length - 5} more`)}</div>` : '')
   )
 }

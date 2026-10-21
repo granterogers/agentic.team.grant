@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error - a browser module with no type declarations
-import {
-  compareFiles,
-  exactFolders,
-  folderAddress,
-  localSummary,
-} from '../../web/studio/bc/drivepick.js'
+import * as drivepick from '../../web/studio/bc/drivepick.js'
+
+const { compareFiles, exactFolders, folderAddress, localSummary } = drivepick as {
+  compareFiles: (
+    local: string[],
+    drive: unknown[],
+  ) => { checked: number; found: number; missing: string[] }
+  exactFolders: (
+    found: unknown[],
+    name: string,
+  ) => Array<{ id: string; name: string; isFolder: boolean }>
+  folderAddress: (id: string) => string
+  localSummary: (
+    handle: unknown,
+    limit?: number,
+  ) => Promise<{ name: string; files: string[]; folders: string[] }>
+}
 
 // A fake folder handle: async-iterable entries, as the browser's directory handle is.
 const handle = (name: string, entries: Array<[string, 'file' | 'directory']>) => ({

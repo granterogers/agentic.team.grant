@@ -1545,6 +1545,16 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   right: 8px;
   z-index: 6;
 }
+/* The source filter on the Docs & Files tile (21 October 2026): one full-width row that wraps, each label on one line. */
+[data-experience='basecamp'] .bcdocs > .bcsrcchips--tile {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+[data-experience='basecamp'] .bcdocs > .bcsrcchips--tile .bcsrcchip { white-space: nowrap; }
+
 /* Text size (21 October 2026): Larger scales the whole page 25%, every fixed pixel with it. Set in Global Settings > Appearance. */
 html[data-text-size='large'] { zoom: 1.25; }
 
