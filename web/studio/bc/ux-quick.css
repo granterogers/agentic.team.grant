@@ -299,3 +299,13 @@
 }
 
 /* 100. The small labels and counters above are 12px or more; the calendar's day labels are 13px. */
+
+/*
+  CARD TABLE, ALWAYS FOUR COLUMNS (21 October 2026). Not started, In progress, Stuck and Done are always there, side by
+  side, in the dashboard module. A narrow module scrolls sideways rather than wrapping Stuck and Done onto a second row.
+*/
+[data-experience='basecamp'] .bcminiboard {
+  grid-template-columns: repeat(4, minmax(96px, 1fr));
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
