@@ -62,8 +62,9 @@ describe('the default', () => {
       expect(list.length).toBe(L.ALL.length)
       for (const m of list) {
         expect(m.x).toBeGreaterThanOrEqual(0)
-        expect(m.x + m.w).toBeLessThanOrEqual(st.w)
-        expect(m.y + m.h).toBeLessThanOrEqual(st.h)
+        // 21 October 2026: an automatic layout is as tall as its content, so the page scrolls to it; it is never clipped.
+        if (st.w >= 600) expect(m.x + m.w).toBeLessThanOrEqual(st.w)
+        expect(m.y + m.h).toBeLessThanOrEqual(L.contentBottom('p'))
       }
       for (let i = 0; i < list.length; i += 1)
         for (let j = i + 1; j < list.length; j += 1)
@@ -442,16 +443,14 @@ describe('a press is not an arrangement (9 October 2026)', () => {
       for (let j = i + 1; j < list.length; j += 1)
         expect(overlaps(list[i] as Rect, list[j] as Rect)).toBe(false)
   })
-  it('a raise still changes the stacking order, and a tint still sticks, without freezing the geometry', () => {
+  it('a tint still sticks, and neither a raise nor a tint freezes the geometry (21 October 2026: an automatic layout has no stacking to change)', () => {
     L.raise('p', 'tasks')
     L.setTint('p', 'board', L.TINTS[0].id)
     const list = L.layout('p') as Rect[]
-    const z = (id: string) => list.find((m) => m.id === id)?.z ?? 0
-    expect(z('tasks')).toBeGreaterThan(z('board'))
+    expect(L.isAutomatic('p')).toBe(true)
     expect(list.find((m) => m.id === 'board')?.tint).toBe(L.TINTS[0].id)
     L.setStage(NARROW.w, NARROW.h)
     const narrow = L.layout('p') as Rect[]
-    expect(narrow.find((m) => m.id === 'tasks')?.z).toBe(z('tasks'))
     expect(narrow.find((m) => m.id === 'board')?.tint).toBe(L.TINTS[0].id)
     expect(narrow.every((m) => m.x + m.w <= NARROW.w)).toBe(true)
   })
@@ -476,8 +475,9 @@ describe('a press is not an arrangement (9 October 2026)', () => {
     expect(box(L.layout('q') as Rect[])).toBe(before)
     expect(L.customised('q')).toBe(true)
   })
-  it('a legacy document that is only the default arrangement for this window follows the window again', () => {
-    const snapshot = (L.layout('p') as Rect[]).map((m) => ({ ...m, z: m.z ?? 1 }))
+  it('a document that holds only a snapshot of the automatic arrangement follows the window again', () => {
+    // 21 October 2026: a snapshot written without a person's move carries placed: false, and is automatic.
+    const snapshot = (L.layout('p') as Rect[]).map((m) => ({ ...m, z: m.z ?? 1, placed: false }))
     L.forgetAll()
     localStorage.setItem(
       'bc.stage.q',

@@ -1175,10 +1175,139 @@ const frozen = (d) => {
 }
 
 /** The modules on the page, in pixels for the current stage, clamped. */
+/*
+  AUTOMATIC ARRANGEMENT (21 October 2026, Option A).
+
+  A project nobody has arranged by hand has no saved rectangles (`mods` is null), and is laid out here from what each module
+  holds: its height follows its content, the Card Table is two columns wide when three fit, and the columns follow the
+  window. A project with a saved manual layout keeps it until someone chooses "Arrange automatically", which keeps the
+  manual layout as a named backup. A move or a resize is a manual arrangement.
+*/
+const contentOf = new Map()
+/** What each module holds, from the page: { open, maxStage, docs, contacts, activity }. */
+export const setContent = (slug, counts) => {
+  contentOf.set(slugOf(slug), counts ?? {})
+}
+const countsOf = (slug) => contentOf.get(slugOf(slug)) ?? {}
+
+const clampN = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+/* An empty module: its title and its one action. Measured at about 170px, so it is given 180 to keep clear of the next. */
+const EMPTY_H = 180
+/** A module's height from its content. Nothing in it is a title and its one action. */
+const autoHeight = (id, c) => {
+  switch (id) {
+    case 'tasks': {
+      const n = c.open ?? 0
+      return n === 0 ? EMPTY_H : clampN(120 + Math.min(n, 10) * 44, 200, 560)
+    }
+    case 'board': {
+      const n = c.maxStage ?? 0
+      return n === 0 ? EMPTY_H : clampN(120 + Math.min(n, 6) * 70, 200, 520)
+    }
+    case 'documents': {
+      const n = c.docs ?? 0
+      return n === 0 ? EMPTY_H : clampN(120 + Math.ceil(Math.min(n, 9) / 3) * 200, 220, 640)
+    }
+    case 'schedule':
+      // The month calendar needs about this much to draw its weeks without cutting them off (measured, 21 October 2026).
+      return 500
+    case 'contacts': {
+      const n = c.contacts ?? 0
+      return n === 0 ? EMPTY_H : clampN(110 + Math.min(n, 6) * 62, 190, 460)
+    }
+    case 'activity': {
+      const n = c.activity ?? 0
+      return n === 0 ? EMPTY_H : clampN(110 + Math.min(n, 6) * 56, 190, 460)
+    }
+    default:
+      return 200
+  }
+}
+
+/** The strip on the right of a three-column layout, kept for the starter note (a note is 176px and a margin). */
+const NOTE_STRIP = 200
+
+/** How many columns the window holds: one on a phone, two on a tablet, three on a laptop or a desktop. */
+const columnsFor = (w) => (w < 640 ? 1 : w < 980 ? 2 : 3)
+
+/**
+ * The automatic rectangles: the modules in their fixed reading order, each in the place where it sits highest, with the
+ * Card Table two columns wide when three columns fit. The order never changes with content, so a module does not move
+ * because another one filled up.
+ */
+const autoRects = (slug, on = null) => {
+  const c = countsOf(slug)
+  const cols = columnsFor(stage.w)
+  // Three columns leave a strip on the right for the starter note, as the fixed default always did.
+  const usable = cols === 3 ? stage.w - NOTE_STRIP : stage.w
+  const colW = (usable - GAP * (cols + 1)) / cols
+  const tops = Array(cols).fill(GAP)
+  const out = []
+  for (const id of ALL) {
+    // A module taken off the page is not placed, so the rest close up with no gap where it was.
+    if (on !== null && !on.has(id)) continue
+    const span = id === 'board' && cols >= 3 ? 2 : 1
+    let best = 0
+    let bestY = Infinity
+    for (let s = 0; s + span <= cols; s += 1) {
+      const y = Math.max(...tops.slice(s, s + span))
+      if (y < bestY) {
+        bestY = y
+        best = s
+      }
+    }
+    const h = autoHeight(id, c)
+    const w = span * colW + (span - 1) * GAP
+    const x = GAP + best * (colW + GAP)
+    // No stage here: the layout may be taller than the window, and clamping to the window would pull modules into each other.
+    out.push(clampRect({ id, x: Math.round(x), y: Math.round(bestY), w: Math.round(w), h, z: 1, tint: null }))
+    for (let k = best; k < best + span; k += 1) tops[k] = bestY + h + GAP
+  }
+  return out
+}
+
+/**
+ * Is this project laid out automatically? Yes unless a person has moved or resized its modules (`frozen`). A press, a raise
+ * or a tint is not an arrangement, so a project that has only had those is automatic too (the migration from the old
+ * defaults, 9 October 2026).
+ */
+export const isAutomatic = (slug) => {
+  const d = doc(slug)
+  return d.mods === null || !frozen(d)
+}
+
+/** How tall the automatic layout is, so the page can scroll to all of it. Zero when the layout is manual. */
+export const contentBottom = (slug) => {
+  if (!isAutomatic(slug)) return 0
+  const d = doc(slug)
+  const on = d.mods === null ? null : new Set(d.mods.map((m) => m.id))
+  return Math.max(0, ...autoRects(slug, on).map((m) => m.y + m.h)) + GAP
+}
+
+/**
+ * "Arrange automatically": the manual layout, if there is one, is kept as a named backup, and the modules go back to the
+ * automatic arrangement. Returns false when the project is already automatic.
+ */
+export const arrangeAutomatically = (slug) => {
+  const d = doc(slug)
+  if (isAutomatic(slug)) return false
+  const layouts = { ...d.layouts, 'Before automatic arrangement': { mods: d.mods, zoom: d.zoom } }
+  commit(slug, { ...d, mods: null, layouts })
+  return true
+}
+
 export const layout = (slug) => {
   const d = doc(slug)
+  if (isAutomatic(slug)) {
+    /* The person's colour and stacking order still apply to the automatic geometry. */
+    const saved = new Map((d.mods ?? []).map((m) => [m.id, m]))
+    const on = d.mods === null ? null : new Set(d.mods.map((m) => m.id))
+    return autoRects(slug, on).map((m) => {
+      const s = saved.get(m.id)
+      return s === undefined ? m : { ...m, z: s.z ?? m.z, tint: s.tint ?? null }
+    })
+  }
   const was = fromFractions(THIRDS, stage)
-  if (d.mods === null) return was.map((m) => clampRect(m))
   if (frozen(d)) return d.mods.map((m) => clampRect(m))
   /* Following the window: the default rectangle for each module that is on the page, with the person's stacking and colour. */
   return d.mods.map((m) => {
@@ -1234,6 +1363,8 @@ export const place = (slug, id, rect) => {
 
 /** Bring a module to the front without moving it. */
 export const raise = (slug, id) => {
+  /* An automatic layout never overlaps, so bringing a module forward changes nothing and makes no manual arrangement. */
+  if (isAutomatic(slug)) return
   const d = materialised(slug)
   const z = topZ(d) + 1
   d.mods = d.mods.map((m) => (m.id === id ? { ...m, z } : m))
@@ -1299,22 +1430,9 @@ export const reset = (slug) => {
 export const customised = (slug) => {
   const d = doc(slug)
   if (d.zoom !== 1 || d.pan.x !== 0 || d.pan.y !== 0) return true
-  if (d.mods === null) return false
-  const was = fromFractions(THIRDS, stage)
-  if (d.mods.length !== was.length) return true
-  /* Following the window is the default arrangement whatever the stored snapshot says: only a colour makes it different. */
-  if (!frozen(d)) return d.mods.some((m) => m.tint !== null)
-  return d.mods.some((m) => {
-    const w = was.find((x) => x.id === m.id)
-    return (
-      w === undefined ||
-      m.tint !== null ||
-      Math.abs(w.x - m.x) > 1 ||
-      Math.abs(w.y - m.y) > 1 ||
-      Math.abs(w.w - m.w) > 1 ||
-      Math.abs(w.h - m.h) > 1
-    )
-  })
+  /* A manual arrangement is customised. An automatic one is not, whatever a stored snapshot says: only a colour is. */
+  if (!isAutomatic(slug)) return true
+  return d.mods !== null && d.mods.some((m) => m.tint !== null)
 }
 
 /* ------------------------------------------------------------------- zoom --- */
@@ -1515,7 +1633,7 @@ export const postits = (slug) => {
     */
     // Judged against the arrangement the page is GIVEN, not the one a person has since made: a note that vanished the moment
     // somebody rearranged their modules would be stranger than one that was never offered.
-    const mods = fromFractions(THIRDS, stage)
+    const mods = isAutomatic(slug) ? autoRects(slug) : fromFractions(THIRDS, stage)
     const right = mods.reduce((n, m) => Math.max(n, m.x + m.w), 0)
     const bottom = mods.reduce((n, m) => Math.max(n, m.y + m.h), 0)
     const beside = stage.w - right - GAP - 8

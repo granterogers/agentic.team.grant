@@ -255,7 +255,8 @@ export const wireStage = (root, ctx) => {
     const st = grid.stageSize()
     board.style.height = `${String(boxH)}px`
     stageEl.style.width = `${String(st.w)}px`
-    stageEl.style.height = `${String(st.h)}px`
+    // An automatic layout can be taller than the window: the stage is as tall as its content, and the board scrolls.
+    stageEl.style.height = `${String(Math.max(st.h, grid.contentBottom(slug)))}px`
     paintView()
     paintAll()
   }
@@ -645,6 +646,10 @@ export const wireStage = (root, ctx) => {
     glide()
     grid.autoArrange(slug)
     paintAll()
+  })
+  /* Automatic arrangement (21 October 2026): the modules are laid out from their content again; the manual one is kept. */
+  dock.querySelector('[data-bc-autoarrange]')?.addEventListener('click', () => {
+    if (grid.arrangeAutomatically(slug)) ctx.render()
   })
   dock.querySelector('[data-bc-viewreset]')?.addEventListener('click', () => {
     grid.reset(slug)

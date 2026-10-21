@@ -41,6 +41,27 @@ import * as icons from '../icons.js'
 import * as backdrop from './backdrop.js'
 import * as identity from './identity.js'
 import * as grid from './layout.js'
+
+/**
+ * What each module holds, counted from the project (21 October 2026): the open to-dos, the most cards in one column of the
+ * Card Table, and how many documents, contacts and activity lines there are. The automatic layout sizes from these.
+ */
+const contentCounts = (p) => {
+  const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
+  const stageOf = (t) => t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')
+  const perStage = new Map()
+  for (const t of tasks) {
+    const st = t.blocked === true && stageOf(t) !== 'done' ? 'blocked' : stageOf(t)
+    perStage.set(st, (perStage.get(st) ?? 0) + 1)
+  }
+  return {
+    open: tasks.filter((t) => stageOf(t) !== 'done').length,
+    maxStage: Math.max(0, ...perStage.values()),
+    docs: (p.documents ?? []).length,
+    contacts: (p.contacts ?? []).length,
+    activity: (p.activity ?? []).length,
+  }
+}
 import * as live from './livevoice.js'
 import { button, esc } from './parts.js'
 import {
@@ -605,6 +626,7 @@ const plusMenu = (p) => {
       aria-controls="bc-plus-menu" aria-label="Arrange this page: tidy, layouts, reset view, fit" title="Arrange this page: tidy, layouts, reset view, fit">${ic('<path d="M12 5v14M5 12h14"/>')}</button>
     <div class="bcplusmenu" id="bc-plus-menu" role="menu" aria-label="Arrange the page"${plus.open ? '' : ' hidden'}>
       <button type="button" role="menuitem" data-bc-tidy title="Lightly tidy the arrangement">${ic('<path d="M4 6h7M4 12h16M13 18h7"/>')}<span>Tidy</span></button>
+      <button type="button" role="menuitem" data-bc-autoarrange title="Arrange the modules from what each holds. A manual layout is kept as a backup.">${ic('<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/>')}<span>Arrange automatically</span></button>
       <button type="button" role="menuitem" data-bc-layouts aria-haspopup="true" aria-expanded="false" title="Layouts and presets">${ic('<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="4" rx="1"/><rect x="13" y="10" width="7" height="10" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/>')}<span>Layouts</span></button>
       <button type="button" role="menuitem" data-bc-viewreset title="Reset the view. Notes and everything in the modules are kept"${grid.customised(p.slug) ? '' : ' data-quiet="1"'}>${ic('<path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/>')}<span>Reset view</span></button>
       <button type="button" role="menuitem" data-bc-fit title="Bring everything into view">${ic('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}<span>Fit</span></button>
@@ -799,7 +821,10 @@ export const compositionC = (p) => {
     grid.setStage(innerWidth - 170, innerHeight - 330)
   }
   const st = grid.stageSize()
+  /* What each module holds, so an automatic layout can size itself to it (21 October 2026). */
+  grid.setContent(p.slug, contentCounts(p))
   const place = grid.layout(p.slug)
+  const tall = Math.max(st.h, grid.contentBottom(p.slug))
   const by = new Map(boardMods(p).map((m) => [m.id, m]))
   return `<div class="bchome bccomp bccomp--c">
     ${head(p, '', true)}
@@ -808,7 +833,7 @@ export const compositionC = (p) => {
       <canvas class="bcgridcv" aria-hidden="true"></canvas>
       ${plusMenu(p)}
       <span class="bcstagever" aria-hidden="true">${esc(typeof window.HQ_VERSION === 'string' ? `v${window.HQ_VERSION}` : '')}</span>
-      <div class="bcstage" style="width:${String(st.w)}px;height:${String(st.h)}px;--bc-zoom:${String(view.zoom)};transform:translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})">
+      <div class="bcstage" style="width:${String(st.w)}px;height:${String(tall)}px;--bc-zoom:${String(view.zoom)};transform:translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})">
         ${place
           .map((r) => {
             const m = by.get(r.id)
