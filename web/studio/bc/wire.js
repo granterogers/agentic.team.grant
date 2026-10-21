@@ -346,7 +346,7 @@ const voiceNote = (getScope, projectOf = () => ctx.state.project) => {
       <div class="bcnoterow">
         <button type="button" class="bcbtn bcbtn--primary" data-bc-notesend>Send to the team</button>
         <button type="button" class="bcbtn" data-bc-noteagain>Record again</button>
-        <button type="button" class="bcbtn" data-bc-notecancel>Delete</button>
+        <button type="button" class="bcbtn bcbtn--danger" data-bc-notecancel>Delete</button>
       </div>
       <p class="bcnotesaid">The team is sent what you said, in words. The recording itself stays in this browser.</p>`,
     )
@@ -435,7 +435,7 @@ const voiceNote = (getScope, projectOf = () => ctx.state.project) => {
            Your recording is still here.</p>
          <div class="bcnoterow">
            <button type="button" class="bcbtn bcbtn--primary" data-bc-notesend>Try sending again</button>
-           <button type="button" class="bcbtn" data-bc-notecancel>Delete it</button>
+           <button type="button" class="bcbtn bcbtn--danger" data-bc-notecancel>Delete it</button>
          </div>`,
       )
       return

@@ -203,3 +203,33 @@
     overflow: hidden;
   }
 }
+
+/*
+  QUICK UX FIXES, 41–60 (21 October 2026). Spacing, states and text only. Drag, resize, collapse and saved layouts are not
+  touched.
+*/
+
+/* 47. The Schedule's empty line is short, so an empty Schedule does not hold a tall gap. */
+[data-experience='basecamp'] .bccal2empty { margin: 0; padding: 6px 0; }
+
+/* 53. A to-do's row eases when it is ticked off, so the change reads as a change. */
+[data-experience='basecamp'] .bcprow { transition: opacity 0.15s ease, background-color 0.15s ease; align-items: center; }
+
+/* 54. Long names, titles and descriptions wrap inside their row instead of pushing the module wider. */
+[data-experience='basecamp'] .bcptitle,
+[data-experience='basecamp'] .bcsourcename,
+[data-experience='basecamp'] .bcvisname {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 58. A destructive control has a red edge as well as red text, so it is not mistaken for an ordinary button. */
+[data-experience='basecamp'] .bcbtn--danger:not([disabled]) {
+  border-color: color-mix(in srgb, var(--bc-danger) 45%, transparent);
+}
+
+/* 59. On a phone, modules use less padding; on a desktop they keep their comfortable spacing. */
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcmod { padding: 10px 10px 12px; }
+  [data-experience='basecamp'] .bcmodhead { margin-bottom: 8px; padding-bottom: 8px; }
+}
