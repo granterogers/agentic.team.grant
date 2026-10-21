@@ -2623,6 +2623,19 @@ const addSourceSurface = (p) => {
     <p class="bcpmeta bcprose bcgap-l">
       The team watches the folder for new files, and asks before it reads any of them. Google Drive has to be connected first.
     </p>
+    <div class="bcrow bcgap-l">
+      ${button('Choose a folder on this PC', {
+        kind: 'primary',
+        'data-bc-drive-choose': '1',
+        disabled: driveFolder.connected !== true,
+        title: driveFolder.connected === true ? 'Pick your Google Drive folder, for example your Google Drive desktop folder' : 'Connect Google Drive first, in Settings',
+      })}
+    </div>
+    <p class="bcpmeta bcprose" data-bc-drive-note>
+      Pick the folder in your Google Drive desktop app. Team HQ checks its files against Google Drive before it watches anything. Chrome and Edge only.
+    </p>
+    <div class="bcdrivecheck" data-bc-drive-result role="status" aria-live="polite"></div>
+    <p class="bcpmeta bcprose bcgap-l">Or paste the folder's address:</p>
     <form class="bcaddform bcgap-l" data-bc-drivefolderform="1">
       ${input({ id: 'bc-drive-folder', label: 'The folder address', name: 'folder', autocomplete: 'off', hint: 'Open the folder in Google Drive and copy the address from the browser bar' })}
       <div class="bcrow">

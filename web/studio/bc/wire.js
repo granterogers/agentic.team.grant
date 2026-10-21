@@ -28,9 +28,10 @@ import {
 } from '../office.js'
 import * as session from '../session.js'
 import { signOut } from '../signout.js'
-import { esc } from './parts.js'
+import { button, esc } from './parts.js'
 import * as bcDrive from './drive.js'
 import { driveFolder, loadDriveFolder } from './drivefolder.js'
+import { canPickFolder, compareFiles, exactFolders, folderAddress, localSummary, pickLocalFolder } from './drivepick.js'
 import { connectorFor } from '../source-kind.js'
 
 /*
@@ -1758,6 +1759,77 @@ const wireSources = (root) => {
     WATCHING A FOLDER names the connector: the office's attach needs `drive` said outright. The address is checked here
     first, so a file or a website is said so in words rather than refused by the office.
   */
+  /*
+    CHOOSING A FOLDER ON THIS PC. The folder is read, its name searched in Drive, and each exact match's files compared
+    with Drive's. Nothing is saved here: a match that holds every file is offered for the person to confirm.
+  */
+  /* The confirm buttons are drawn by the check itself, so they are wired as they are drawn, not by the page's wiring. */
+  const bindConfirm = (b) =>
+    b.addEventListener('click', async () => {
+      const done = await attempt(
+        b,
+        'Watching…',
+        () => act('attach', { p_slug: ctx.state.project, p_connector: 'drive', p_ref: folderAddress(b.dataset.bcDriveConfirm) }),
+        'Watching this folder.',
+      )
+      if (done !== null) {
+        ctx.closeSource?.()
+        await ctx.refresh()
+      }
+    })
+  for (const b of root.querySelectorAll('[data-bc-drive-choose]')) {
+    b.addEventListener('click', async () => {
+      if (driveFolder.connected !== true) return
+      const show = (html) => {
+        const el = root.querySelector('[data-bc-drive-result]')
+        if (el !== null) el.innerHTML = html
+      }
+      if (!canPickFolder()) {
+        show('<p class="bcpmeta">This browser cannot choose a folder. Use Chrome or Edge, or paste the folder address below.</p>')
+        return
+      }
+      let handle
+      try {
+        handle = await pickLocalFolder()
+      } catch (e) {
+        show(`<p class="bcpmeta">${esc(e instanceof Error ? e.message : String(e))}</p>`)
+        return
+      }
+      if (handle === null) return
+      show(`<p class="bcpmeta">Checking “${esc(handle.name)}” against Google Drive…</p>`)
+      try {
+        const local = await localSummary(handle)
+        const found = await read('drive', undefined, { q: handle.name })
+        const candidates = exactFolders(found?.files ?? [], handle.name)
+        if (candidates.length === 0) {
+          show(`<p class="bcpmeta">There is no folder called “${esc(handle.name)}” in your Google Drive. Check it is in My Drive, and that Google Drive is connected in Settings.</p>`)
+          return
+        }
+        const rows = []
+        for (const c of candidates) {
+          const children = await read('drive', undefined, { folder: c.id })
+          const cmp = compareFiles(local.files, children?.files ?? [])
+          const ok = cmp.missing.length === 0
+          const note =
+            local.files.length === 0
+              ? 'This folder has no files at its top level, so Drive cannot confirm it by its contents.'
+              : ok
+                ? `${cmp.found} of ${cmp.checked} files found in Drive.`
+                : `Not the same: ${cmp.missing.length} of ${cmp.checked} files are not in this Drive folder (${cmp.missing.slice(0, 3).map(esc).join(', ')}).`
+          rows.push(
+            `<li class="bcdrivecand${ok ? '' : ' bcdrivecand--no'}"><span class="bcdrivename">${esc(c.name)}</span>
+              <span class="bcpmeta">${note}</span>
+              ${ok ? button('Watch this folder', { kind: 'primary', 'data-bc-drive-confirm': esc(c.id) }) : ''}</li>`,
+          )
+        }
+        show(`<p class="bcpmeta">${candidates.length === 1 ? 'Found one folder' : `Found ${candidates.length} folders`} called “${esc(handle.name)}” in Google Drive:</p>
+          <ul class="bcdrivecands">${rows.join('')}</ul>`)
+        root.querySelectorAll('[data-bc-drive-result] [data-bc-drive-confirm]').forEach(bindConfirm)
+      } catch (e) {
+        show(`<p class="bcpmeta">Google Drive did not answer: ${esc(e instanceof Error ? e.message : String(e))}</p>`)
+      }
+    })
+  }
   for (const b of root.querySelectorAll('[data-bc-drive-save]')) {
     b.addEventListener('click', async () => {
       const field = root.querySelector('#bc-drive-folder')
