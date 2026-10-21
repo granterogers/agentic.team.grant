@@ -1244,6 +1244,39 @@ rather than rediscovery.
 
 ---
 
+## 22 October 2026 - Hybrid automatic dashboard layout, version 0.8.0 (DEPLOYED, page only)
+
+**Deployed:** the Team HQ page, `dpl_3r4jHvoMPbFvGUvj65MuaceejgvW`, from commit `1ad54eb8b4ac` on
+`claude/sleepy-mendel-tiodo0`, by `hq-page-delta.ts --go` under Grant's explicit approval. Rollback: promote
+`dpl_BjnniaNbNxU2TXHQipYG5jjUGdrm`. The record is in `docs/ops/deployment-state.json` (commit `28e5ef8ac`). No
+functions, secrets or settings were changed.
+
+**What changed:** a move or resize now pins only the module moved; every other module stays automatic and is laid out
+around it (ADR-0074). Each pinned module has a Return to automatic control. Arrange automatically keeps the manual
+layout as a backup. Version 0.8.0, shown in the page footer.
+
+**Checks run:** lint (0 errors), typecheck, the full unit suite (7,581 passed), `check:migrations`, `check:secrets`,
+`check:templates`, `check:branding`, `check:deployment-state`, `verify:wired`, `verify:ui`, `verify:talk` (36 of 36),
+`verify:critical` (71 of 72 green; the red one is `v1-acceptance-a`, a reminder-scheduling proof this release does not
+touch, recorded as red on main by an earlier session and not re-checked today), `npm run shots` (9 screens could not be
+captured, listed by the script).
+
+**Not run, and why:** `verify:hq` and `gate:safe` (all parts) both contact production and refuse without
+`ALLOW_PRODUCTION_CHECKS`. Grant did not authorise a production read for this cycle, so they are not run. The browser
+checks were on the Sample project only.
+
+**Still open:**
+- Not merged to `main`. `main` is at `fed79cb9b`. The merge is Grant's decision.
+- Requirement 10 is partial: a move or resize pins position and size together.
+- Requirement 7 is partial: no separate saved layouts per device.
+- No empty or fully populated project captured, and no signed-in office check of the live lists or the Drive picker.
+- The phone "+" button overlaps the To-dos header.
+- Card Table add, remove and rename columns: not built.
+- Stripe row deletion: waiting on a named production write.
+- UX items 25, 26, 41, 43, 44, 50, 51, 56, 60 and 84 from earlier briefs.
+
+---
+
 ## 8 October 2026 - Version 1 release candidate (local only; nothing deployed)
 
 Branch `claude/deep-systems-audit-3cwbtc`. Selective delegation on Telegram, Slack and Team HQ, #440 and #441 fixed (migration 1035), bounded Notion sync, real-model acceptance R1 to R17.
