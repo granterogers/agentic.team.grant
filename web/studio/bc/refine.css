@@ -1538,12 +1538,20 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
 /*
   The arrange menu: one plus at the top left of the grid (20 October 2026). The menu hangs from it, and sits above the grid.
 */
+/* The arrange plus and the zoom controls share the grid's top-right corner (21 October 2026): the plus at the edge, zoom beside it. */
 [data-experience='basecamp'] .bcplus {
   position: absolute;
   top: 6px;
-  left: 8px;
+  right: 8px;
   z-index: 6;
 }
+[data-experience='basecamp'] .bcgridtools {
+  position: absolute;
+  top: 6px;
+  right: 56px;
+  z-index: 6;
+}
+[data-experience='basecamp'] .bcgridtools .bcdock { margin: 0; }
 /* The grid starts below the "+", so the button has its own space and never sits over a module's heading. */
 @media (min-width: 761px) {
   [data-experience='basecamp'] .bcpanes { margin-top: 46px; }

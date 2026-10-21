@@ -30,6 +30,8 @@ import * as session from '../session.js'
 import { signOut } from '../signout.js'
 import { esc } from './parts.js'
 import * as bcDrive from './drive.js'
+import { driveFolder, loadDriveFolder } from './drivefolder.js'
+import { connectorFor } from '../source-kind.js'
 
 /*
   A PART OF A PROJECT SET (#471, item 5). The archive names its set and its place in it, so the page can order the parts it was
@@ -1736,9 +1738,50 @@ const wireSources = (root) => {
       ctx.openSource?.(b.dataset.bcSource)
     })
   }
+  loadDriveFolder(read)
   for (const b of root.querySelectorAll('[data-bc-source-add]')) {
     b.addEventListener('click', () => {
       ctx.openSourceAdd?.()
+    })
+  }
+  /*
+    THE GOOGLE DRIVE FOLDER BUTTON opens the Add Source page at its folder form. It does nothing until Google is connected,
+    because the button is drawn disabled until then.
+  */
+  for (const b of root.querySelectorAll('[data-bc-drive-folder]')) {
+    b.addEventListener('click', () => {
+      if (driveFolder.connected !== true) return
+      ctx.openSourceAdd?.()
+    })
+  }
+  /*
+    WATCHING A FOLDER names the connector: the office's attach needs `drive` said outright. The address is checked here
+    first, so a file or a website is said so in words rather than refused by the office.
+  */
+  for (const b of root.querySelectorAll('[data-bc-drive-save]')) {
+    b.addEventListener('click', async () => {
+      const field = root.querySelector('#bc-drive-folder')
+      const said = root.querySelector('[data-bc-drive-said]')
+      const ref = String(field?.value ?? '').trim()
+      if (connectorFor(ref) !== 'drive') {
+        if (said !== null) said.textContent = 'That is not a Google Drive folder address. Open the folder in Drive and copy its address.'
+        field?.focus()
+        return
+      }
+      if (canWrite() !== true) {
+        if (said !== null) said.textContent = 'Sign in first and this watches the folder.'
+        return
+      }
+      const done = await attempt(
+        b,
+        'Watching…',
+        () => act('attach', { p_slug: ctx.state.project, p_connector: 'drive', p_ref: ref }),
+        'Watching this folder.',
+      )
+      if (done !== null) {
+        ctx.closeSource?.()
+        await ctx.refresh()
+      }
     })
   }
   for (const b of root.querySelectorAll('[data-bc-source-close]')) {

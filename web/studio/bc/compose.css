@@ -4188,6 +4188,10 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
   [data-experience='basecamp'] .bcexp { padding: 0; }
   [data-experience='basecamp'] .bcexpbox { height: 100vh; max-height: none; border-radius: 0; padding: 18px 14px 22px; }
 }
+/* Sources is a short list, so on a desktop its sheet is as tall as what it holds (21 October 2026), not a full-height panel with empty space under the cards. */
+@media (min-width: 861px) {
+  [data-experience='basecamp'] .bcexpbox:has(.bcsources--full) { height: auto; }
+}
 /* The workspace owns its stacking so nothing in it can float above a dialog. */
 [data-experience='basecamp'] .bcworkspace { isolation: isolate; }
 [data-experience='basecamp'] .bcdock { z-index: 5; }

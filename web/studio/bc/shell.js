@@ -52,6 +52,7 @@ import * as todos from './todos.js'
 import * as account from './account.js'
 import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, tool } from './parts.js'
 import * as activity from './activity.js'
+import { driveFolder } from './drivefolder.js'
 
 /*
   What app.js hands us at boot. Set once; never reassigned, so a stale
@@ -2495,7 +2496,11 @@ const sourcesSurface = (p) => {
   return `${crumbFor(p, 'sources')}
     <div class="bcrecordhead">
       <h1>${esc(toolById('sources')?.name ?? 'Sources')}</h1>
-      <span class="bcactions">${button('Add Source', { kind: 'primary', 'data-bc-source-add': '1' })}</span>
+      <span class="bcactions">${button('Add Google Drive folder', {
+        'data-bc-drive-folder': '1',
+        disabled: driveFolder.connected !== true,
+        title: driveFolder.connected === true ? 'Watch a Google Drive folder for this project' : 'Connect Google Drive first, in Settings',
+      })}${button('Add Source', { kind: 'primary', 'data-bc-source-add': '1' })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
       Where this project's material comes from: services the team can read,
@@ -2610,6 +2615,20 @@ const addSourceSurface = (p) => {
       <div class="bcrow">
         ${button('Add it', { kind: 'primary', 'data-bc-source-save': '1' })}
         <span class="bcsaidhere" data-bc-source-said role="status" aria-live="polite"></span>
+      </div>
+    </form>
+
+    <h2 class="bcsubhead">A Google Drive folder</h2>
+    <p class="bcpmeta bcprose bcgap-l">
+      The team watches the folder for new files, and asks before it reads any of them. Google Drive has to be connected first.
+    </p>
+    <form class="bcaddform bcgap-l" data-bc-drivefolderform="1">
+      ${input({ id: 'bc-drive-folder', label: 'The folder address', name: 'folder', autocomplete: 'off', hint: 'Open the folder in Google Drive and copy the address from the browser bar' })}
+      <div class="bcrow">
+        ${button('Watch this folder', { kind: 'primary', 'data-bc-drive-save': '1', disabled: driveFolder.connected !== true })}
+        <span class="bcsaidhere" data-bc-drive-said role="status" aria-live="polite">${
+          driveFolder.connected === true ? '' : 'Connect Google Drive first, in Settings, then come back here.'
+        }</span>
       </div>
     </form>
 
