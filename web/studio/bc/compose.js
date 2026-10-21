@@ -584,9 +584,9 @@ const dock = (p) => {
   const z = grid.zoomOf(p.slug)
   return `<div class="bcdock" role="toolbar" aria-label="Zoom">
     <span class="bczoom" role="group" aria-label="Zoom">
-      <button type="button" class="bcdockbtn bcdockicon" data-bc-zoom="out" aria-label="Zoom out">&minus;</button>
-      <button type="button" class="bcdockbtn bczoomval" data-bc-zoom="reset" aria-label="Reset zoom to 100%" title="Reset zoom">${String(Math.round(z * 100))}%</button>
-      <button type="button" class="bcdockbtn bcdockicon" data-bc-zoom="in" aria-label="Zoom in">+</button>
+      <button type="button" class="bcdockbtn bcdockicon" data-bc-zoom="out" aria-label="Zoom out" title="Zoom out">&minus;</button>
+      <button type="button" class="bcdockbtn bczoomval" data-bc-zoom="reset" aria-label="Reset zoom to 100%" title="Reset zoom to 100%">${String(Math.round(z * 100))}%</button>
+      <button type="button" class="bcdockbtn bcdockicon" data-bc-zoom="in" aria-label="Zoom in" title="Zoom in">+</button>
     </span>
   </div>`
 }

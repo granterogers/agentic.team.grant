@@ -414,7 +414,7 @@ export const cardsCount = (p) => {
 
 export const cardsMini = (p) => {
   const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
-  if (tasks.length === 0) return emptyWith('Nothing on the board yet.', 'Add a to-do', `/p/${p.slug}/tasks`)
+  if (tasks.length === 0) return emptyWith('No to-dos yet. Add one to start this list.', 'Add a to-do', `/p/${p.slug}/tasks`)
   const at = (id) =>
     tasks.filter((t) => {
       const st = t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')
@@ -997,11 +997,19 @@ const drawnPage = (d, most = 9, small = false) => {
  * object in one view and a written page in the other - the row list built
  * twice, with a picture on it. `extra` is the only thing that differs.
  */
+/* A short file-type word for a thumbnail with no preview (21 October 2026): PDF, DOC, XLS and so on. */
+const SHORT_KIND = { Document: 'DOC', Written: 'DOC', PDF: 'PDF', Spreadsheet: 'XLS', Presentation: 'PPT', Note: 'NOTE', Image: 'IMG' }
+const shortKind = (d) => {
+  const word = kindWordOf(d)
+  return SHORT_KIND[word] ?? String(word || 'FILE').slice(0, 4).toUpperCase()
+}
+
 export const thumbFace = (d, i, extra = '') => {
   const object = faceOf(d)
   const ref = docRef(d)
   const tone = object === undefined ? '' : ` bcthumb--object bcthumb--${esc(object.tone)}`
-  return `<span class="bcthumb${tone}${extra === '' ? '' : ` ${esc(extra)}`}"
+  const typed = object === undefined ? ` data-filekind="${esc(shortKind(d))}"` : ''
+  return `<span class="bcthumb${tone}${extra === '' ? '' : ` ${esc(extra)}`}"${typed}
     data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}" data-bc-thumbmod="${esc(String(d.modified ?? ''))}" data-bc-thumbext="${typeof d.external_ref === 'string' && d.external_ref !== '' ? '1' : ''}" data-bc-thumbtype="${esc(`${d.mime ?? ''} ${d.kind ?? ''} ${d.title ?? ''}`.trim())}">
     ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9, extra === 'bcrowthumb' || extra === 'bccompact') : (GLYPH[object.glyph] ?? '')}
   </span>`

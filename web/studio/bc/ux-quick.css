@@ -1,0 +1,109 @@
+/*
+  QUICK UX FIXES, 21 October 2026 (a small layer, loaded last).
+
+  Each block names the fix it makes. These only adjust spacing, sizes, contrast and text on the Team HQ dashboard: no
+  layout, drag or resize behaviour is changed. Empty modules keep their saved size in the layout; they are only drawn
+  compact while they have nothing in them.
+*/
+
+/* 2. Bring the dashboard up under the top bar: the grid no longer leaves a band for the arrange plus, which is top-right. */
+@media (min-width: 761px) {
+  [data-experience='basecamp'] .bcpanes { margin-top: 12px; }
+}
+
+/* 4. Coloured module accents stay, with a subtler glow and a thinner edge. */
+[data-experience='basecamp'] .bcmod.bcmod--tinted {
+  border-width: 1.5px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--bc-tint) 14%, transparent) inset,
+    0 0 12px -8px color-mix(in srgb, var(--bc-tint) 34%, transparent),
+    var(--bc-sh-2);
+}
+
+/* 5, 17. Module headers and bodies share one size, one padding, and one left edge. */
+[data-experience='basecamp'] .bcmod { padding: 12px 14px 14px; }
+[data-experience='basecamp'] .bcmodhead h2 { font-size: 13px; line-height: 1.2; }
+[data-experience='basecamp'] .bcmodhead { padding-inline: 2px; }
+[data-experience='basecamp'] .bcmodicon { width: 16px; height: 16px; }
+
+/* 1, 18. An empty module is as tall as its title and its Add button, not its saved size. */
+[data-experience='basecamp'] .bcmod--placed:has(.bcmptywrap) { height: auto !important; }
+[data-experience='basecamp'] .bcmod--placed:has(.bcmptywrap) .bcmodbody { flex: none; }
+
+/* 7. Tighter gaps inside the modules. */
+[data-experience='basecamp'] .bcmodbody > * + * { margin-top: 8px; }
+
+/* 8. A document with no preview says what kind of file it is, on a tinted face (not a bare grey box). */
+[data-experience='basecamp'] .bcthumb[data-filekind] { position: relative; }
+[data-experience='basecamp'] .bcthumb[data-filekind]::after {
+  content: attr(data-filekind);
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  background: var(--bc-surface);
+  color: var(--bc-text-strong);
+  font: 700 12px/1 var(--bc-font, inherit);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* 9. Titles read in up to two lines, then end in an ellipsis, rather than breaking mid-word. */
+[data-experience='basecamp'] .bcdoctitle {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+/* 10. Consistent gaps between a thumbnail, its name and its metadata. */
+[data-experience='basecamp'] .bcdocs { gap: 12px; }
+[data-experience='basecamp'] .bcdoc figcaption { display: grid; gap: 4px; }
+
+/* 11. Filter chips are the same height, with room to breathe. */
+[data-experience='basecamp'] .bcsrcchip {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcsrcchips { gap: 6px; }
+
+/* 12. The scrollbar is thin and quiet, and still scrolls. */
+[data-experience='basecamp'] .bcdocs,
+[data-experience='basecamp'] .bcmodbody {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--bc-text-muted) 40%, transparent) transparent;
+}
+
+/* 13. One button height, padding and text size across the dashboard. */
+[data-experience='basecamp'] .bcmod .bcbtn,
+[data-experience='basecamp'] .bcpanes .bcbtn {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* 14. Grey descriptions and metadata are easier to read on the dark background. */
+[data-experience='basecamp'][data-scheme='dark'] { --bc-text-muted: #b6c6c1; }
+
+/* 15. The right-hand toolbar: every control is the same size, evenly spaced. */
+[data-experience='basecamp'] .bcdockbtn { width: 32px; height: 32px; }
+[data-experience='basecamp'] .bcdock { gap: 4px; }
+
+/* On a phone every control keeps the 44px touch floor, whatever the desktop size above says. */
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcsrcchip,
+  [data-experience='basecamp'] .bcmod .bcbtn,
+  [data-experience='basecamp'] .bcpanes .bcbtn { min-height: 44px; }
+  [data-experience='basecamp'] .bcdockbtn { width: 44px; height: 44px; }
+}
+
+/* 19. Text and controls do not run out of their boxes. */
+[data-experience='basecamp'] .bcmod,
+[data-experience='basecamp'] .bcmodbody { min-width: 0; overflow-wrap: anywhere; }
+[data-experience='basecamp'] .bcdoc { min-width: 0; }

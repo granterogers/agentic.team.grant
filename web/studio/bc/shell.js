@@ -2876,8 +2876,8 @@ const boardSurface = (p) => {
       all.length === 0
         ? empty(
             {
-              title: 'Nothing on the board yet',
-              body: 'A card is a to-do, and the column it is in is how far it has got. Add the first to-do and it appears here.',
+              title: 'No cards yet',
+              body: 'A card is a to-do, and the column it sits in shows how far it has got. Add a to-do and it appears here as a card.',
             },
             button('Go to the to-dos', { kind: 'primary', 'data-bc-go': at(`/p/${p.slug}/tasks`) }),
           )
