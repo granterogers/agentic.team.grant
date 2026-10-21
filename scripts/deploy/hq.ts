@@ -130,6 +130,8 @@ for (const [src, name] of [
   // Project sets (#471, item 5): a project larger than one archive is carried in parts (set-store imports parts and originals).
   ['src/portability/parts.ts', 'parts.ts'],
   ['src/portability/set-store.ts', 'set-store.ts'],
+  // What a connection holds, as a list (21 October 2026): Notion's and NotebookLM's items, read with the office's own credentials.
+  ['supabase/functions/hq-api/connection-items.ts', 'connection-items.ts'],
 ] as const) {
   form.append(
     'file',

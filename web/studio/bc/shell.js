@@ -752,7 +752,7 @@ const contactsPreview = (p) => {
  * a healthy connector has nothing to say.
  */
 const sourcesPreview = (p) => {
-  const ss = p.sources ?? []
+  const ss = (p.sources ?? []).filter((s) => !hiddenFromSources(s))
   if (ss.length === 0) return nothing('No sources connected to this project.')
   return ss
     .slice(0, 5)
@@ -2503,7 +2503,7 @@ const sourceRow = (s, i) => {
 }
 
 const sourcesSurface = (p) => {
-  const ss = p.sources ?? []
+  const ss = (p.sources ?? []).filter((s) => !hiddenFromSources(s))
   if (state().bcSourceAdd === true) return addSourceSurface(p)
   const wanted = state().bcSource
   if (wanted !== null && wanted !== undefined) {
@@ -2571,7 +2571,9 @@ const sourceRecord = (p, s) => {
         ? `<p class="bcpmeta bcgap-l">${trouble ? esc(s.problem ?? 'Needs attention') : 'Connected'}${s.last ? ` · last read ${esc(s.last)}` : ''}</p>`
         : ''
     }
-    <h2 class="bcsubhead bcgap-l">Visible through this connection</h2>
+    <h2 class="bcsubhead bcgap-l">In this connection</h2>
+    ${liveItems(s)}
+    <h2 class="bcsubhead">In this project</h2>
     ${
       visible.length === 0
         ? s.gave !== undefined && s.gave !== null && Number(s.gave) > 0
@@ -2586,6 +2588,33 @@ const sourceRecord = (p, s) => {
             .join('')}</ul>`
     }`
 }
+
+/**
+ * What the connection itself holds, read live (21 October 2026). The page asks for it when the record is drawn
+ * (wire.js fills the placeholder), so the record opens at once and the list follows. Drive reads the watched folder;
+ * Notion and NotebookLM are asked of the office.
+ */
+const liveItems = (s) => {
+  const key = bcMini.markKeyFor(s)
+  if (key === 'drive') {
+    // A watched folder is named either by its address or by its bare id (the office's external_ref).
+    const named = String(s.external_url ?? s.url ?? s.external_ref ?? s.ref ?? '')
+    const folder = /folders\/([A-Za-z0-9_-]+)/.exec(named)?.[1] ?? (/^[A-Za-z0-9_-]{10,}$/.test(named) ? named : '')
+    return `<div class="bcconnitems" data-bc-conn-items data-connector="drive" data-folder="${esc(folder)}">
+      <p class="bcpmeta">Reading the watched folder…</p></div>`
+  }
+  if (key === 'notion' || key === 'notebooklm') {
+    return `<div class="bcconnitems" data-bc-conn-items data-connector="${esc(key)}">
+      <p class="bcpmeta">Asking ${esc(key === 'notion' ? 'Notion' : 'NotebookLM')} what it holds…</p></div>`
+  }
+  return '<p class="bcpmeta">This connection has no live list yet.</p>'
+}
+
+/**
+ * The Stripe reference is removed from the Sources views for now (21 October 2026): it is hidden, not deleted. The row
+ * is a stored reference, and deleting it is a production write that has not been named.
+ */
+const hiddenFromSources = (s) => /(^|\.)stripe\.com(\/|$)/i.test(String(s?.url ?? s?.name ?? s?.title ?? ''))
 
 /** The documents this project holds through one connection: the Docs & Files list, filtered to it. */
 const visibleThrough = (p, s) => {

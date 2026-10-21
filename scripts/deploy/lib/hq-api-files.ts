@@ -26,4 +26,5 @@ export const HQ_API_FILES: readonly { name: string; from: string }[] = [
   { name: 'links.ts', from: 'src/files/links.ts' },
   { name: 'parts.ts', from: 'src/portability/parts.ts' },
   { name: 'set-store.ts', from: 'src/portability/set-store.ts' },
+  { name: 'connection-items.ts', from: 'supabase/functions/hq-api/connection-items.ts' },
 ]

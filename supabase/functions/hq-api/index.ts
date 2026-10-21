@@ -49,6 +49,7 @@ import {
   revisionFromStamp,
   vetBackground,
 } from './background.ts'
+import { type ConnectionItem, fetchNotionItems, notebookItems } from './connection-items.ts'
 // The standard-format export (#470): uploaded beside the entrypoint by scripts/deploy/hq.ts, from src/portability.
 import { isStandardFormat, kindFor, renderStandardExport } from './export-route.ts'
 // Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
@@ -244,6 +245,91 @@ const kickWorker = (): void => {
     .EdgeRuntime?.waitUntil
   if (keepAlive === undefined) void kick
   else keepAlive(kick)
+}
+
+/*
+  A STORED CREDENTIAL, read HERE with the service key (21 October 2026). The same read the probe makes, named once for the
+  connection lists. It returns the value to this function only; nothing it reads is returned to a caller.
+*/
+const heldCredential = async (office: string, operator: string, name: string): Promise<string> => {
+  const r = await fetch(`${DB_URL}/rest/v1/rpc/deployment_credential`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_office: office, p_name: name, p_operator: operator, p_job: null }),
+  })
+  const v = await r.json().catch(() => null)
+  return typeof v === 'string' ? v : ''
+}
+
+/**
+ * The NotebookLM items: the notebooks the reader can list, with the deployment's master token. Operator-only, because the
+ * master token is the deployment's and not the office's. A failure is the reader's own sentence, never the request.
+ */
+const notebookList = async (
+  operator: string,
+  office: string,
+): Promise<{ state: string; detail: string; items: ConnectionItem[] }> => {
+  const master = await heldCredential(office, operator, 'notebook.master_token_json')
+  if (master === '') return { state: 'off', detail: 'NotebookLM is not connected.', items: [] }
+  let parsed: { email?: unknown; android_id?: unknown; master_token?: unknown }
+  try {
+    parsed = JSON.parse(master) as typeof parsed
+  } catch {
+    return {
+      state: 'dead',
+      detail: 'The stored NotebookLM file is not readable. Upload it again.',
+      items: [],
+    }
+  }
+  const secret = await heldCredential(office, operator, 'notebook.reader_secret')
+  const urlRows = await fetch(
+    `${DB_URL}/rest/v1/system_config?key=eq.notebook.reader_url&select=value`,
+    {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    },
+  )
+    .then((r) => r.json())
+    .catch(() => [])
+  const readerUrl =
+    Array.isArray(urlRows) && typeof urlRows[0]?.value === 'string' ? urlRows[0].value : ''
+  if (secret === '' || readerUrl === '')
+    return { state: 'off', detail: 'The NotebookLM reader is not configured.', items: [] }
+  try {
+    const r = await fetch(readerUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        op: 'notebooks',
+        master_token: {
+          email: String(parsed.email ?? ''),
+          android_id: String(parsed.android_id ?? ''),
+          master_token: String(parsed.master_token ?? ''),
+        },
+      }),
+      signal: AbortSignal.timeout(25000),
+    })
+    const body = (await r.json().catch(() => [])) as unknown
+    if (!r.ok) {
+      const message = (body as { error?: unknown } | null)?.error
+      return {
+        state: 'dead',
+        detail: String(message ?? 'NotebookLM refused the sign-in').slice(0, 160),
+        items: [],
+      }
+    }
+    const items = notebookItems(body)
+    return {
+      state: 'ok',
+      detail: `${items.length} notebook${items.length === 1 ? '' : 's'}`,
+      items,
+    }
+  } catch {
+    return { state: 'degraded', detail: 'The NotebookLM reader did not answer in time.', items: [] }
+  }
 }
 
 /*
@@ -4253,6 +4339,32 @@ Deno.serve(async (request: Request): Promise<Response> => {
     NotebookLM's live check (issue #502, Services tiles). Only the operator's page asks the reader, because the master
     token is the deployment's. Anyone else is told it is not checked from here, rather than being refused the page.
   */
+  /*
+    WHAT A CONNECTION HOLDS (21 October 2026). Notion's items are the office's: any person of the office may read them,
+    with the office's own integration token. NotebookLM's are the deployment's master token's, so only an operator may.
+    Only titles and kinds are returned.
+  */
+  if (name === 'connection_items') {
+    if (kind !== 'person' || principal === null || principal === '') {
+      return json({ data: { state: 'not_checked', detail: '', items: [] } })
+    }
+    if (office === null) return json({ error: 'no_office' }, 403)
+    const connector = url.searchParams.get('connector') ?? ''
+    if (connector === 'notion') {
+      const token = await heldCredential(office, String(principal), 'notion.integration_token')
+      if (token === '')
+        return json({ data: { state: 'off', detail: 'Notion is not connected.', items: [] } })
+      return json({ data: await fetchNotionItems(token, fetch) })
+    }
+    if (connector === 'notebooklm') {
+      if (!(await isOperator(String(principal)))) {
+        return json({ data: { state: 'not_checked', detail: '', items: [] } })
+      }
+      return json({ data: await notebookList(String(principal), office) })
+    }
+    return json({ error: 'that connection has no list here', connector }, 400)
+  }
+
   if (name === 'notebook_check') {
     if (
       !(

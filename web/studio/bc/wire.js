@@ -1763,6 +1763,50 @@ const wireSources = (root) => {
     CHOOSING A FOLDER ON THIS PC. The folder is read, its name searched in Drive, and each exact match's files compared
     with Drive's. Nothing is saved here: a match that holds every file is offered for the person to confirm.
   */
+  /*
+    WHAT A CONNECTION HOLDS, LIVE (21 October 2026). The record draws a placeholder; this fills it in place, so the record
+    opens at once. Drive reads the watched folder with the office's grant; Notion and NotebookLM are asked of the office,
+    which says in words when it cannot answer.
+  */
+  for (const el of root.querySelectorAll('[data-bc-conn-items]')) {
+    if (el.dataset.loaded === '1') continue
+    el.dataset.loaded = '1'
+    const tell = (t) => {
+      el.innerHTML = `<p class="bcpmeta">${esc(t)}</p>`
+    }
+    const list = (items) =>
+      items.length === 0
+        ? '<p class="bcpmeta">Nothing here yet.</p>'
+        : `<ul class="bcvislist">${items
+            .map(
+              (i) =>
+                `<li><span class="bcvisname">${esc(i.title)}</span> <span class="bcpmeta">${esc(i.kind)}</span></li>`,
+            )
+            .join('')}</ul>`
+    if (el.dataset.connector === 'drive') {
+      const folder = el.dataset.folder ?? ''
+      if (folder === '') {
+        tell('No Drive folder is watched for this connection yet.')
+      } else {
+        read('drive', undefined, { folder })
+          .then((a) => {
+            const files = (Array.isArray(a?.files) ? a.files : [])
+              .filter((f) => f?.isFolder !== true)
+              .map((f) => ({ kind: 'File', title: String(f.name ?? 'Untitled') }))
+            el.innerHTML = list(files)
+          })
+          .catch((e) => tell(e instanceof Error ? e.message : 'Google Drive did not answer.'))
+      }
+    } else {
+      read('connection_items', undefined, { connector: el.dataset.connector ?? '' })
+        .then((a) => {
+          if (a?.state === 'ok') el.innerHTML = list(Array.isArray(a.items) ? a.items : [])
+          else tell(String(a?.detail ?? 'Not checked yet.'))
+        })
+        .catch((e) => tell(e instanceof Error ? e.message : 'The office did not answer.'))
+    }
+  }
+
   /* The confirm buttons are drawn by the check itself, so they are wired as they are drawn, not by the page's wiring. */
   const bindConfirm = (b) =>
     b.addEventListener('click', async () => {
