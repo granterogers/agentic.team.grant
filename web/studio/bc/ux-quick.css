@@ -107,3 +107,99 @@
 [data-experience='basecamp'] .bcmod,
 [data-experience='basecamp'] .bcmodbody { min-width: 0; overflow-wrap: anywhere; }
 [data-experience='basecamp'] .bcdoc { min-width: 0; }
+
+/*
+  QUICK UX FIXES, 21–40 (21 October 2026). Same rule as above: spacing, sizes, states and text only. Nothing here moves a
+  module, changes a saved layout or a preference, or adds a dependency.
+*/
+
+/* 21, 36. The header controls share one row, one gap and one vertical centre. */
+[data-experience='basecamp'] .bctop .bcbtn,
+[data-experience='basecamp'] .bctop .bcicon { flex: none; }
+[data-experience='basecamp'] .bctop .bchere-link { gap: 6px; }
+
+/* 22. The project name is a clear control: a quiet field and a visible chevron. */
+[data-experience='basecamp'] .bchere-link {
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bc-text) 6%, transparent);
+}
+[data-experience='basecamp'] .bchere-link:hover {
+  background: color-mix(in srgb, var(--bc-text) 11%, transparent);
+}
+
+/* 24. Modules show a little more of their own colour on hover, and nothing more: no extra glow. */
+[data-experience='basecamp'] .bcmod:hover .bcmodhead h2 { color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcmod.bcmod--tinted:hover { border-color: color-mix(in srgb, var(--bc-tint) 70%, transparent); }
+
+/* 27. One corner radius for cards and popovers, one for controls, one for thumbnails. */
+[data-experience='basecamp'] .bcmod,
+[data-experience='basecamp'] .bcmenupanel,
+[data-experience='basecamp'] .bcswitch { border-radius: 12px; }
+[data-experience='basecamp'] .bcbtn,
+[data-experience='basecamp'] .bcdockbtn { border-radius: 8px; }
+[data-experience='basecamp'] .bcthumb,
+[data-experience='basecamp'] .bcdoc figcaption + * { border-radius: 8px; }
+
+/* 28. The selected document filter is filled with the accent, so it is recognisable at a glance. */
+[data-experience='basecamp'] .bcsrcchip.is-on {
+  background: var(--bc-accent);
+  border-color: var(--bc-accent);
+  color: var(--bc-canvas);
+  font-weight: 650;
+}
+
+/* 29. A document says it can be opened: a pointer, an underline on the name, and a small lift on the thumbnail. */
+[data-experience='basecamp'] .bcdocpress { cursor: pointer; }
+[data-experience='basecamp'] .bcdocpress:hover .bcdoctitle,
+[data-experience='basecamp'] .bcdocpress:focus-visible .bcdoctitle {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--bc-accent);
+}
+[data-experience='basecamp'] .bcdocpress:hover .bcthumb { transform: translateY(-2px); }
+[data-experience='basecamp'] .bcthumb { transition: transform 0.15s ease; }
+
+/* 31. The rule under a module title is low-contrast, the same in every module. */
+[data-experience='basecamp'] .bcmodhead { border-bottom-color: color-mix(in srgb, var(--bc-text) 10%, transparent); }
+
+/* 32. An empty module's one action sits in the same place in every empty module. */
+[data-experience='basecamp'] .bcmptywrap { justify-items: start; }
+[data-experience='basecamp'] .bcmptyact { margin-top: 6px; }
+
+/* 34. The same thin scrollbar wherever the dashboard has its own scrolling. */
+[data-experience='basecamp'] .bcexpbox,
+[data-experience='basecamp'] .bcmenupanel,
+[data-experience='basecamp'] .bcswitch {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--bc-text-muted) 40%, transparent) transparent;
+}
+
+/* 35. The grid's + has a clear hover and focus state. */
+[data-experience='basecamp'] .bcplusbtn:hover {
+  background: color-mix(in srgb, var(--bc-accent) 14%, var(--bc-surface));
+  border-color: var(--bc-accent);
+}
+[data-experience='basecamp'] .bcplusbtn:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 2px; }
+
+/* 38. Module titles are easier to scan: a little weight, a little space, a stronger colour. */
+[data-experience='basecamp'] .bcmodhead h2 {
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  color: var(--bc-text-strong);
+}
+
+/* 40. Two modules that look the same are drawn the same: the same edge and the same padding, tinted or not. */
+[data-experience='basecamp'] .bcmod:not(.bcmod--tinted) { border-width: 1px; }
+
+/* 37. On a narrow header the project title is part of the row, not floated over it: it takes the free width and gives way. */
+@container bartools (max-width: 1000px) {
+  [data-experience='basecamp'] .bctop--work .bchere {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    min-width: 0;
+    overflow: hidden;
+  }
+}

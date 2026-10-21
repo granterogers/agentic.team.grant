@@ -602,7 +602,7 @@ const plusMenu = (p) => {
       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
   return `<div class="bcplus">
     <button type="button" class="bcplusbtn" data-bc-plus aria-haspopup="menu" aria-expanded="${plus.open ? 'true' : 'false'}"
-      aria-controls="bc-plus-menu" aria-label="Arrange the page" title="Arrange the page">${ic('<path d="M12 5v14M5 12h14"/>')}</button>
+      aria-controls="bc-plus-menu" aria-label="Arrange this page: tidy, layouts, reset view, fit" title="Arrange this page: tidy, layouts, reset view, fit">${ic('<path d="M12 5v14M5 12h14"/>')}</button>
     <div class="bcplusmenu" id="bc-plus-menu" role="menu" aria-label="Arrange the page"${plus.open ? '' : ' hidden'}>
       <button type="button" role="menuitem" data-bc-tidy title="Lightly tidy the arrangement">${ic('<path d="M4 6h7M4 12h16M13 18h7"/>')}<span>Tidy</span></button>
       <button type="button" role="menuitem" data-bc-layouts aria-haspopup="true" aria-expanded="false" title="Layouts and presets">${ic('<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="4" rx="1"/><rect x="13" y="10" width="7" height="10" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/>')}<span>Layouts</span></button>

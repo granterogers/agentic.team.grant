@@ -1072,7 +1072,7 @@ const thumb = (d, i, compact = false) => {
       aria-label="${esc(`Open ${d.title ?? 'document'}`)}">
       ${thumbFace(d, i, compact ? 'bccompact' : '')}
       <figcaption>
-        <span class="bcdoctitle">${esc(d.title)}</span>
+        <span class="bcdoctitle" title="${esc(d.title ?? '')}">${esc(d.title)}</span>
         <span class="bcdocmeta">${docsrc.mark(d, esc)}${esc((compact ? [kindWordOf(d)] : [kindWordOf(d), d.size]).filter(Boolean).join(' · '))}</span>
         ${docsrc.versionChip(d, esc)}${docsrc.projectChip(d, esc)}
       </figcaption>
