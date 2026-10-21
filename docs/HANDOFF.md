@@ -1244,6 +1244,28 @@ rather than rediscovery.
 
 ---
 
+## 22 October 2026 - Card Table columns, dates, resize feedback, focus return; version 0.10.0 (on main, NOT deployed)
+
+**What changed:** the Card Table's four columns can be **renamed** and **hidden** from its Columns button (ADR-0075); the
+four task states themselves stay fixed. The Card Table takes the strip on the right once the starter note is settled
+(while it is pending, the strip still holds it). Due dates read "21 Oct 2026" everywhere in the modules (`when.day`), and
+`when.plain` gives "21 Oct 2026, 14:05" where a time matters. A resize shows a dashed outline. Focus returns to the control
+that opened a popover when the popover closes from inside it. The Columns popover's layout is fixed.
+
+**Checks run:** lint, typecheck, 584 studio and web tests, `verify:wired`, `verify:ui`, `verify:talk` (36 of 36). Browser
+check on the Sample at 1440 and 390 px: no overlaps, no page errors, the popover takes focus, Escape returns focus.
+
+**Not done, from the brief:** item 25 (a loading skeleton for modules: the activity page already has one, the modules do
+not), item 26 (concise error messages with a Retry action: not found in the places checked), item 41 (one background shade:
+needs a visual pass), item 60 (spacing and proportions: needs a visual pass). Item 51 (activity rows): the rows already split
+the actor, action, project and time; the times now align in one column. Item 50's format is applied to due dates; the
+activity audit keeps its precise format on purpose.
+
+**Not verified:** the empty and full states on screen (the Sample has only the partial state; the layout is proved in tests),
+and a signed-in office (Columns are saved to the project's layout, which needs the office to check).
+
+---
+
 ## 22 October 2026 - Hybrid automatic dashboard layout, version 0.8.0 (DEPLOYED, page only)
 
 **Deployed:** the Team HQ page, `dpl_3r4jHvoMPbFvGUvj65MuaceejgvW`, from commit `1ad54eb8b4ac` on

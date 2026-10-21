@@ -494,7 +494,51 @@ const emptyDoc = () => ({
   gone: {},
   seeded: false,
   bg: null,
+  columns: { names: {}, hidden: [] },
 })
+
+/*
+  THE CARD TABLE'S COLUMNS (22 October 2026, Option A). The four columns are the four task states the backend keeps, so a
+  column cannot be added or removed here (that would be a new state). What a person can change is what each column is called
+  and whether it is shown. A column that is hidden keeps its tasks, which return when it is shown again. At least one column
+  is always shown.
+*/
+export const COLUMN_IDS = ['todo', 'doing', 'blocked', 'done']
+const COLUMN_NAME_MAX = 24
+const cleanColumns = (raw) => {
+  const out = { names: {}, hidden: [] }
+  if (raw === null || typeof raw !== 'object') return out
+  if (raw.names !== null && typeof raw.names === 'object') {
+    for (const id of COLUMN_IDS) {
+      const n = typeof raw.names[id] === 'string' ? raw.names[id].trim().replace(/\s+/g, ' ').slice(0, COLUMN_NAME_MAX) : ''
+      // A name that is the default is not a rename, so it is not kept.
+      if (n !== '' && n !== COLUMN_DEFAULT[id]) out.names[id] = n
+    }
+  }
+  if (Array.isArray(raw.hidden)) {
+    out.hidden = COLUMN_IDS.filter((id) => raw.hidden.includes(id))
+    if (out.hidden.length === COLUMN_IDS.length) out.hidden = []
+  }
+  return out
+}
+/** The name each column has when nobody has renamed it: the words the backend's task states are shown under. */
+export const COLUMN_DEFAULT = { todo: 'Not started', doing: 'In progress', blocked: 'Stuck', done: 'Done' }
+/** The columns as the card table draws them: each id with its name (renamed or default) and whether it is shown. */
+export const columnsOf = (slug) => {
+  const c = doc(slug).columns ?? { names: {}, hidden: [] }
+  return COLUMN_IDS.map((id) => ({
+    id,
+    name: c.names[id] ?? COLUMN_DEFAULT[id],
+    renamed: c.names[id] !== undefined,
+    shown: !c.hidden.includes(id),
+  }))
+}
+/** Save the card table's column names and visibility. Keeps at least one column shown. */
+export const setColumns = (slug, cols) => {
+  const clean = cleanColumns(cols)
+  commit(slug, { ...doc(slug), columns: clean })
+  return clean
+}
 
 /*
   The canvas background a project chose (#445): a small REFERENCE, never image bytes. `id` names a library entry or 'custom'
@@ -623,6 +667,7 @@ export const normalise = (raw) => {
   }
   d.seeded = raw.seeded === true
   d.bg = cleanBg(raw.bg)
+  d.columns = cleanColumns(raw.columns)
   return d
 }
 
@@ -674,6 +719,7 @@ export const toPanels = (d) => [
     gone: d.gone,
     seeded: d.seeded,
     bg: d.bg,
+    columns: d.columns,
   },
 ]
 
@@ -691,6 +737,7 @@ export const fromPanels = (panels) => {
     gone: meta.gone,
     seeded: meta.seeded,
     bg: meta.bg,
+    columns: meta.columns,
   })
 }
 
@@ -704,7 +751,9 @@ const isBlank = (d) =>
   Object.keys(d.gone).length === 0 &&
   Object.keys(d.layouts).length === 0 &&
   d.bg === null &&
-  d.seeded === false
+  d.seeded === false &&
+  d.columns.hidden.length === 0 &&
+  Object.keys(d.columns.names).length === 0
 
 /* Where the browser keeps the document. Replaceable so a test can run two "devices" side by side in one process. */
 let storage = null
@@ -1241,8 +1290,12 @@ const columnsFor = (w) => (w < 640 ? 1 : w < 980 ? 2 : 3)
 const autoRects = (slug, on = null, pinned = []) => {
   const c = countsOf(slug)
   const cols = columnsFor(stage.w)
-  // Three columns leave a strip on the right for the starter note, as the fixed default always did.
-  const usable = cols === 3 ? stage.w - NOTE_STRIP : stage.w
+  /*
+    Three columns leave a strip on the right for the starter note, WHILE that note is still pending (no notes yet, and not
+    dismissed). Once it is settled the strip goes to the modules, so the Card Table fills it (22 October 2026, item 84).
+  */
+  const reserve = cols === 3 && doc(slug).postits.length === 0 && !doc(slug).seeded
+  const usable = reserve ? stage.w - NOTE_STRIP : stage.w
   const colW = (usable - GAP * (cols + 1)) / cols
   // What is already on the page and must not be covered: the pinned modules, then each automatic module as it is placed.
   const taken = pinned.map((m) => ({ ...m }))

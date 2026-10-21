@@ -133,7 +133,7 @@ const modIcon = (id) => (identity.known(id) ? identity.svg(id, 16) : '')
  * content, and pressing content does what the content says rather than
  * navigating somewhere plausible.
  */
-const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = null, pinned = false }) => {
+const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = null, pinned = false, ctl = '' }) => {
   /*
     THE WHOLE HEADER IS THE TARGET. Grant, 22 September:
 
@@ -192,7 +192,7 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
       ${
         rect === null
           ? ''
-          : `<span class="bcmodctl">
+          : `<span class="bcmodctl">${ctl}
               <button type="button" class="bcmodbtn" data-bc-tint="${esc(id)}"
                 aria-label="${esc(`Colour of ${name}`)}" aria-haspopup="true" title="Colour">
                 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none"
@@ -780,7 +780,14 @@ const boardMods = (p) => [
     satisfy. A summary belongs beside the heading anyway.
   */
   { id: 'tasks', name: toolName('tasks', 'To-dos'), meta: mineAndTeam(p), body: todosMini(p, { lists: 4, per: 6 }) },
-  { id: 'board', name: 'Card Table', meta: cardsCount(p), body: cardsMini(p) },
+  {
+    id: 'board',
+    name: 'Card Table',
+    meta: cardsCount(p),
+    ctl: `<button type="button" class="bcmodbtn bcmodbtn--cols" data-bc-columns="${esc(p.slug)}"
+      aria-label="Name and show the columns of the Card Table" title="Name and show the columns">Columns</button>`,
+    body: cardsMini(p),
+  },
   { id: 'documents', slot: 'documents', name: toolName('documents', 'Docs & Files'), body: docsMini(p, { items: 9 }) },
   { id: 'schedule', name: toolName('schedule', 'Schedule'), body: calendarMini(p, { items: 8 }) },
   /*

@@ -124,6 +124,24 @@ export function precise(iso) {
   return `${date} · ${time}`
 }
 
+/*
+  One format for the dashboard's dates (22 October 2026, Grant's brief item 50): "21 Oct 2026" for a day, and
+  "21 Oct 2026, 14:05" where the time matters. The Activity audit keeps `precise`, which carries the seconds.
+*/
+export function day(iso) {
+  const at = Date.parse(iso)
+  if (Number.isNaN(at)) return ''
+  return new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+export function plain(iso) {
+  const at = Date.parse(iso)
+  if (Number.isNaN(at)) return ''
+  const d = new Date(at)
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${day(iso)}, ${time}`
+}
+
 /**
  * A `<time>` element that can be re-made later.
  *

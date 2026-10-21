@@ -319,7 +319,8 @@ export const wireStage = (root, ctx) => {
     if (!live.moved) {
       live.moved = true
       board.classList.add('bcpanes--moving')
-      live.el.classList.add('bcmod--dragging')
+      /* A resize has its own mark (22 October 2026, item 43): the outline shows the module is changing size, not moving. */
+      live.el.classList.add(live.kind === 'size' ? 'bcmod--sizing' : 'bcmod--dragging')
     }
     const st = grid.stageSize()
     const want =
@@ -346,7 +347,7 @@ export const wireStage = (root, ctx) => {
     const was = live
     live = null
     board.classList.remove('bcpanes--moving')
-    was.el.classList.remove('bcmod--dragging')
+    was.el.classList.remove('bcmod--dragging', 'bcmod--sizing')
     document.documentElement.classList.remove('bc-dragging')
     drawGuides([])
     if (!was.moved) return
@@ -679,9 +680,17 @@ export const wireStage = (root, ctx) => {
   /* ------------------------------------------------------------ popovers */
 
   let pop = null
+  let popOpener = null
   const shut = () => {
+    /*
+      Focus goes back to the control that opened the popover, but only when focus was inside it (22 October 2026). A press
+      outside closes it and leaves focus where the person put it.
+    */
+    const hadFocus = pop !== null && pop.contains(document.activeElement)
     if (pop !== null) pop.remove()
     pop = null
+    if (hadFocus && popOpener?.isConnected === true) popOpener.focus()
+    popOpener = null
     dock.querySelector('[data-bc-layouts]')?.setAttribute('aria-expanded', 'false')
   }
   const outside = (e) => {
@@ -712,6 +721,7 @@ export const wireStage = (root, ctx) => {
 
   const popAt = (anchor, html, cls) => {
     shut()
+    popOpener = anchor
     pop = document.createElement('div')
     pop.className = `bcpop ${cls}`
     pop.innerHTML = html
@@ -729,6 +739,58 @@ export const wireStage = (root, ctx) => {
     pop.style.left = `${String(Math.round(left))}px`
     pop.style.top = `${String(Math.round(top))}px`
     return pop
+  }
+
+  /*
+    THE CARD TABLE'S COLUMNS (22 October 2026, Option A). Each column can be renamed and hidden; the four task states
+    themselves are fixed, so a column is never added or removed here. A hidden column keeps its tasks.
+  */
+  for (const b of stageEl.querySelectorAll('[data-bc-columns]')) {
+    b.addEventListener('pointerdown', (e) => {
+      e.stopPropagation()
+    })
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const cols = grid.columnsOf(slug)
+      const rows = cols
+        .map(
+          (c) => `<label class="bccols-row">
+            <input type="checkbox" data-col-show="${esc(c.id)}"${c.shown ? ' checked' : ''}>
+            <span>Show</span>
+            <input type="text" maxlength="24" data-col-name="${esc(c.id)}" value="${esc(c.renamed ? c.name : '')}"
+              placeholder="${esc(grid.COLUMN_DEFAULT[c.id])}" aria-label="Name of the column ${esc(grid.COLUMN_DEFAULT[c.id])}">
+          </label>`,
+        )
+        .join('')
+      const p = popAt(
+        b,
+        `<form class="bccols" aria-label="Card Table columns">
+          <p class="bccols-hint">Rename a column, or hide it. A hidden column keeps its tasks.</p>
+          ${rows}
+          <p class="bccols-err" role="alert" hidden>Keep at least one column shown.</p>
+          <div class="bccols-actions"><button type="submit" class="bcbtn">Save columns</button></div>
+        </form>`,
+        'bcpop--cols',
+      )
+      p.querySelector('input[data-col-name]')?.focus()
+      p.querySelector('form')?.addEventListener('submit', (ev) => {
+        ev.preventDefault()
+        const names = {}
+        const hidden = []
+        for (const c of cols) {
+          const name = p.querySelector(`[data-col-name="${c.id}"]`)?.value.trim() ?? ''
+          if (name !== '' && name !== grid.COLUMN_DEFAULT[c.id]) names[c.id] = name
+          if (p.querySelector(`[data-col-show="${c.id}"]`)?.checked !== true) hidden.push(c.id)
+        }
+        if (hidden.length === cols.length) {
+          p.querySelector('.bccols-err')?.removeAttribute('hidden')
+          return
+        }
+        grid.setColumns(slug, { names, hidden })
+        shut()
+        ctx.render()
+      })
+    })
   }
 
   /* ---- the colour of a module */

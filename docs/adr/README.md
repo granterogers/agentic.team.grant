@@ -33,6 +33,7 @@ a **new** ADR superseding the old one — records are never edited away.
 | [0072](0072-the-background-material-is-one-layer-fixed-to-the-window.md) | The background material is one layer fixed to the window; the board lets it show through (amends ADR-0069 decision 3) | Accepted (branch, not merged) |
 | [0073](0073-one-activity-ledger-reads-the-tables-that-own-the-facts.md) | One activity ledger reads the tables that already own each fact, plus one small native table for what has no other record (feature branch, default off, not applied) | Proposed |
 | [0074](0074-a-manual-change-pins-only-the-module-it-touched.md) | A manual change pins only the module it touched; the rest stay automatic around it (supersedes the whole-project pin of Option A, 21 October) | Accepted |
+| [0075](0075-the-card-table-renames-and-hides-columns-it-does-not-add-them.md) | The Card Table renames and hides its four task-state columns; it does not add or remove them (a new state would be a backend change) | Accepted |
 | [0018](0018-an-approval-is-a-record-with-limits.md) | An approval is a record with limits; a decline is durable and specific | Accepted |
 | [0019](0019-the-studio-becomes-the-product.md) | The studio becomes the product; `web/hq/index.html` is retired | Accepted |
 | [0020](0020-tasks-reach-the-diary-one-way.md) | Tasks reach the diary one way, and only ever touch events we made | Accepted |

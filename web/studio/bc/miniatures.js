@@ -46,6 +46,7 @@ import * as cal from './calendar.js'
 import * as docsrc from './docsources.js'
 import * as docorder from './docorder.js'
 import { esc, status } from './parts.js'
+import { columnsOf } from './layout.js'
 
 let ctx = null
 export const mount = (c) => {
@@ -132,7 +133,7 @@ export const dueWords = (t) => {
   if (Number.isNaN(d.getTime())) return t.due ?? ''
   const today = new Date()
   const days = Math.round((d.getTime() - Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())) / 86_400_000)
-  const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   // A finished task is not late. isLate() already says so; the words have to agree with it.
   if (days < 0) return isDone(t) ? label : `${label} · overdue`
   if (days === 0) return 'today'
@@ -369,12 +370,6 @@ export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
  * Card table: a compressed workflow state  (§10)
  * ======================================================================== */
 
-const STAGES = [
-  { id: 'todo', name: 'Not started' },
-  { id: 'doing', name: 'In progress' },
-  { id: 'blocked', name: 'Stuck' },
-  { id: 'done', name: 'Done' },
-]
 
 /**
  * §10. A COMPRESSED WORKFLOW STATE, which is a different drawing from a board.
@@ -409,7 +404,10 @@ export const cardsCount = (p) => {
       if (id === 'todo') return st === 'todo' && !t.blocked
       return st === id
     }).length
-  return STAGES.map((st) => `${String(at(st.id))} ${st.name.toLowerCase()}`).join(' · ')
+  return columnsOf(p.slug)
+    .filter((c) => c.shown)
+    .map((c) => `${String(at(c.id))} ${c.name.toLowerCase()}`)
+    .join(' · ')
 }
 
 export const cardsMini = (p) => {
@@ -432,8 +430,10 @@ export const cardsMini = (p) => {
     colours, the same cards, fewer of them. Every card opens its to-do and
     the whole thing scrolls, so a busy column is not a summary line.
   */
-  return `<div class="bcminiboard">
-    ${STAGES.map((st) => {
+  /* What the person has chosen: the shown columns, each under its own name (Option A, 22 October 2026). */
+  const shown = columnsOf(p.slug).filter((c) => c.shown)
+  return `<div class="bcminiboard" style="grid-template-columns:repeat(${String(shown.length)}, minmax(96px,1fr))">
+    ${shown.map((st) => {
       const items = at(st.id)
       /*
         A DROP TARGET, the same one the full board uses.
