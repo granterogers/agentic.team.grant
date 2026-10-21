@@ -89,6 +89,9 @@ export const wireStage = (root, ctx) => {
       const el = modEl(m.id)
       if (el === null) continue
       css(el, m)
+      /* "Return to automatic" shows only while this module is pinned. A drag pins it without a redraw, so it is kept up to date here. */
+      const back = el.querySelector('[data-bc-automod]')
+      if (back !== null) back.hidden = !grid.isPinned(slug, m.id)
       const hue = grid.hueFor(m.id, m.tint)
       if (hue === '') {
         el.style.removeProperty('--bc-tint')
@@ -476,6 +479,16 @@ export const wireStage = (root, ctx) => {
       e.stopPropagation()
       grid.remove(slug, b.dataset.bcModoff)
       ctx.render()
+    })
+    b.addEventListener('pointerdown', (e) => {
+      e.stopPropagation()
+    })
+  }
+  /* Returning one module to the automatic layout: its position and size only. Everything else keeps its arrangement. */
+  for (const b of stageEl.querySelectorAll('[data-bc-automod]')) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      if (grid.releaseModule(slug, b.dataset.bcAutomod)) ctx.render()
     })
     b.addEventListener('pointerdown', (e) => {
       e.stopPropagation()

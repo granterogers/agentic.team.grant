@@ -118,7 +118,7 @@ describe('a start that cannot fit the stage is wrapped, not piled up', () => {
     }
   })
 
-  it('CONTROL: a person who drags one module onto another makes room: the one in the way is pushed down, not covered', () => {
+  it('CONTROL: a person who drags one module onto another is never covered: the one in the way is laid out around it (21 October 2026)', () => {
     L.setStage(666, 560)
     const [a, b] = L.layout('p') as Rect[] as [Rect, Rect]
     L.place('p', a.id, { x: b.x + 10, y: b.y + 10, w: a.w, h: a.h })
@@ -126,7 +126,7 @@ describe('a start that cannot fit the stage is wrapped, not piled up', () => {
     const A = list.find((m) => m.id === a.id) as Rect
     const B = list.find((m) => m.id === b.id) as Rect
     expect(overlaps(A, B)).toBe(false)
-    expect(B.y).toBeGreaterThanOrEqual(A.y + A.h)
+    expect([A.x, A.y]).toEqual([b.x + 10, b.y + 10])
   })
 })
 
@@ -163,15 +163,15 @@ describe('free placement', () => {
     expect([t.x, t.y, t.w, t.h]).toEqual([13, 7, 301, 177])
   })
 
-  it('makes room: the module in the way is pushed below the one placed, and the placed one keeps its place', () => {
+  it('makes room: the module in the way is laid out around the one placed, and the placed one keeps its place', () => {
     const before = L.layout('p') as Rect[]
     const board = before.find((m) => m.id === 'board') as Rect
     const out = L.place('p', 'tasks', { x: board.x + 20, y: board.y + 20 }) as Rect[]
     const tasks = out.find((m) => m.id === 'tasks') as Rect
     const after = out.find((m) => m.id === 'board') as Rect
     expect(overlaps(tasks, after)).toBe(false)
-    expect([after.x, after.w, after.h]).toEqual([board.x, board.w, board.h])
-    expect(after.y).toBeGreaterThanOrEqual(tasks.y + tasks.h)
+    expect([tasks.x, tasks.y]).toEqual([board.x + 20, board.y + 20])
+    expect(L.isPinned('p', 'board')).toBe(false)
   })
 
   it('raises what was just placed above everything', () => {
@@ -454,12 +454,20 @@ describe('a press is not an arrangement (9 October 2026)', () => {
     expect(narrow.find((m) => m.id === 'board')?.tint).toBe(L.TINTS[0].id)
     expect(narrow.every((m) => m.x + m.w <= NARROW.w)).toBe(true)
   })
-  it('a move is an arrangement: every rectangle is kept to the pixel when the window changes', () => {
+  it('a move pins that module only: its rectangle is kept to the pixel when the window changes, and the rest stay automatic', () => {
     L.place('p', 'tasks', { x: 40, y: 30 })
-    const before = box(L.layout('p') as Rect[])
+    const moved = (L.layout('p') as Rect[]).find((m) => m.id === 'tasks') as Rect
     expect(L.customised('p')).toBe(true)
+    expect([L.isPinned('p', 'tasks'), L.isPinned('p', 'board')]).toEqual([true, false])
     L.setStage(NARROW.w, NARROW.h)
-    expect(box(L.layout('p') as Rect[])).toBe(before)
+    const narrow = L.layout('p') as Rect[]
+    expect([
+      narrow.find((m) => m.id === 'tasks')?.x,
+      narrow.find((m) => m.id === 'tasks')?.y,
+    ]).toEqual([moved.x, moved.y])
+    for (let i = 0; i < narrow.length; i += 1)
+      for (let j = i + 1; j < narrow.length; j += 1)
+        expect(overlaps(narrow[i] as Rect, narrow[j] as Rect)).toBe(false)
   })
   it('a document stored before the flag existed is kept exactly as it was', () => {
     const arranged = (L.layout('p') as Rect[]).map((m) =>

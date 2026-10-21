@@ -571,7 +571,7 @@ const cleanMod = (m) => ({
   /*
     WHO DECIDED THE GEOMETRY. true: the person arranged the board, so x, y, w and h are theirs and are kept to the pixel.
     false: the arrangement is the default one, computed from the window, and x, y, w and h are only a snapshot of it. Absent:
-    a document stored before this flag existed (see frozen()).
+    a document stored before this flag existed (see pinnedIds()).
   */
   ...(m.placed === true ? { placed: true } : m.placed === false ? { placed: false } : {}),
 })
@@ -1147,7 +1147,10 @@ const sameBox = (a, b) =>
   Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1 && Math.abs(a.w - b.w) <= 1 && Math.abs(a.h - b.h) <= 1
 
 /**
- * Has the person arranged this board, so that its geometry is theirs to keep?
+ * Which modules has the person arranged, so that their geometry is theirs to keep? Returns their ids.
+ *
+ * A module is pinned by its own flag (`placed: true`). Every other module on the page keeps following the automatic layout
+ * around the pinned ones (Grant's brief, 21 October 2026: a manual change overrides only what it touched).
  *
  * The defect this answers (9 October 2026): pressing anywhere inside a module raised it, and a raise stored EVERY module's
  * rectangle at the window width of that moment. From then on the arrangement was "customised", so opening the chat or
@@ -1158,20 +1161,20 @@ const sameBox = (a, b) =>
  * Documents written before the flag existed have neither value. They are kept exactly as they were, with one exception that
  * loses nothing: if every rectangle in one is the default arrangement for the window as it is now, it never was an
  * arrangement, it was a snapshot of the default, and it follows the window again. A document stored at some other width
- * cannot be told apart from a deliberate one, so it stays frozen and "Reset view" is the way back.
+ * cannot be told apart from a deliberate one, so every module in it stays pinned and "Reset view" is the way back.
  */
-const frozen = (d) => {
-  if (d.mods === null || d.mods.length === 0) return false
-  if (d.mods.some((m) => m.placed === true)) return true
-  if (d.mods.every((m) => m.placed === false)) return false
-  const was = fromFractions(THIRDS, stage)
-  const arranged = !d.mods.every((m) => {
-    const w = was.find((x) => x.id === m.id)
-    return w !== undefined && sameBox(w, m)
-  })
-  /* Decided once, when first asked, and remembered on the document: the verdict must not flip when the window changes later. */
-  for (const m of d.mods) m.placed = arranged
-  return arranged
+const pinnedIds = (d) => {
+  if (d.mods === null || d.mods.length === 0) return new Set()
+  if (!d.mods.some((m) => typeof m.placed === 'boolean')) {
+    const was = fromFractions(THIRDS, stage)
+    const arranged = !d.mods.every((m) => {
+      const w = was.find((x) => x.id === m.id)
+      return w !== undefined && sameBox(w, m)
+    })
+    /* Decided once, when first asked, and remembered on the document: the verdict must not flip when the window changes later. */
+    for (const m of d.mods) m.placed = arranged
+  }
+  return new Set(d.mods.filter((m) => m.placed === true).map((m) => m.id))
 }
 
 /** The modules on the page, in pixels for the current stage, clamped. */
@@ -1235,58 +1238,59 @@ const columnsFor = (w) => (w < 640 ? 1 : w < 980 ? 2 : 3)
  * Card Table two columns wide when three columns fit. The order never changes with content, so a module does not move
  * because another one filled up.
  */
-const autoRects = (slug, on = null) => {
+const autoRects = (slug, on = null, pinned = []) => {
   const c = countsOf(slug)
   const cols = columnsFor(stage.w)
   // Three columns leave a strip on the right for the starter note, as the fixed default always did.
   const usable = cols === 3 ? stage.w - NOTE_STRIP : stage.w
   const colW = (usable - GAP * (cols + 1)) / cols
-  const tops = Array(cols).fill(GAP)
+  // What is already on the page and must not be covered: the pinned modules, then each automatic module as it is placed.
+  const taken = pinned.map((m) => ({ ...m }))
   const out = []
   for (const id of ALL) {
     // A module taken off the page is not placed, so the rest close up with no gap where it was.
     if (on !== null && !on.has(id)) continue
+    if (pinned.some((m) => m.id === id)) continue
     const span = id === 'board' && cols >= 3 ? 2 : 1
-    let best = 0
-    let bestY = Infinity
-    for (let s = 0; s + span <= cols; s += 1) {
-      const y = Math.max(...tops.slice(s, s + span))
-      if (y < bestY) {
-        bestY = y
-        best = s
-      }
-    }
     const h = autoHeight(id, c)
     const w = span * colW + (span - 1) * GAP
-    const x = GAP + best * (colW + GAP)
+    // The highest place it fits, reading order first: a spot beside a pinned module, or in a gap, is taken before a lower one.
+    const tops = [GAP, ...taken.map((m) => m.y + m.h + GAP)].sort((a, b) => a - b)
+    let spot = null
+    for (const y of tops) {
+      for (let s = 0; s + span <= cols && spot === null; s += 1) {
+        const r = { x: GAP + s * (colW + GAP), y, w, h }
+        // The keep-clear margin is GAP on every side of what is already there, so nothing touches.
+        if (taken.every((o) => !meets(r, { x: o.x - GAP, y: o.y - GAP, w: o.w + 2 * GAP, h: o.h + 2 * GAP }))) spot = r
+      }
+      if (spot !== null) break
+    }
     // No stage here: the layout may be taller than the window, and clamping to the window would pull modules into each other.
-    out.push(clampRect({ id, x: Math.round(x), y: Math.round(bestY), w: Math.round(w), h, z: 1, tint: null }))
-    for (let k = best; k < best + span; k += 1) tops[k] = bestY + h + GAP
+    const rect = clampRect({ id, x: Math.round(spot.x), y: Math.round(spot.y), w: Math.round(w), h, z: 1, tint: null })
+    out.push(rect)
+    taken.push(rect)
   }
   return out
 }
 
+/** The ids of the modules a person has arranged (pinned). Every other module is automatic. */
+export const pinnedOf = (slug) => [...pinnedIds(doc(slug))]
+
+/** Is this module pinned by a person's move or resize? */
+export const isPinned = (slug, id) => pinnedIds(doc(slug)).has(id)
+
 /**
- * Is this project laid out automatically? Yes unless a person has moved or resized its modules (`frozen`). A press, a raise
- * or a tint is not an arrangement, so a project that has only had those is automatic too (the migration from the old
- * defaults, 9 October 2026).
+ * Is this project laid out entirely automatically, with nothing pinned? A press, a raise or a tint is not an arrangement, so a
+ * project that has only had those is automatic too (the migration from the old defaults, 9 October 2026).
  */
-export const isAutomatic = (slug) => {
-  const d = doc(slug)
-  return d.mods === null || !frozen(d)
-}
+export const isAutomatic = (slug) => pinnedIds(doc(slug)).size === 0
 
-/** How tall the automatic layout is, so the page can scroll to all of it. Zero when the layout is manual. */
-export const contentBottom = (slug) => {
-  if (!isAutomatic(slug)) return 0
-  const d = doc(slug)
-  const on = d.mods === null ? null : new Set(d.mods.map((m) => m.id))
-  return Math.max(0, ...autoRects(slug, on).map((m) => m.y + m.h)) + GAP
-}
+/** How tall the layout is, so the page can scroll to all of it. */
+export const contentBottom = (slug) => Math.max(0, ...layout(slug).map((m) => m.y + m.h)) + GAP
 
 /**
- * "Arrange automatically": the manual layout, if there is one, is kept as a named backup, and the modules go back to the
- * automatic arrangement. Returns false when the project is already automatic.
+ * "Arrange automatically": the manual layout, if there is one, is kept as a named backup, and every module goes back to the
+ * automatic arrangement. Returns false when nothing is pinned.
  */
 export const arrangeAutomatically = (slug) => {
   const d = doc(slug)
@@ -1296,33 +1300,43 @@ export const arrangeAutomatically = (slug) => {
   return true
 }
 
+/**
+ * "Return to automatic" for one module: its position and size go back to the automatic arrangement. Its colour and stacking
+ * stay. Every other module keeps what it had. Returns false when the module was not pinned.
+ */
+export const releaseModule = (slug, id) => {
+  const d = doc(slug)
+  if (!pinnedIds(d).has(id)) return false
+  commit(slug, { ...d, mods: d.mods.map((m) => (m.id === id ? { ...m, placed: false } : m)) })
+  return true
+}
+
+/*
+  The rectangles on the page now: each pinned module where the person put it (clamped, so a stored rectangle can never leave the
+  window), and each other module where the automatic layout puts it around them.
+*/
 export const layout = (slug) => {
   const d = doc(slug)
-  if (isAutomatic(slug)) {
-    /* The person's colour and stacking order still apply to the automatic geometry. */
-    const saved = new Map((d.mods ?? []).map((m) => [m.id, m]))
-    const on = d.mods === null ? null : new Set(d.mods.map((m) => m.id))
-    return autoRects(slug, on).map((m) => {
-      const s = saved.get(m.id)
-      return s === undefined ? m : { ...m, z: s.z ?? m.z, tint: s.tint ?? null }
-    })
-  }
-  const was = fromFractions(THIRDS, stage)
-  if (frozen(d)) return d.mods.map((m) => clampRect(m))
-  /* Following the window: the default rectangle for each module that is on the page, with the person's stacking and colour. */
-  return d.mods.map((m) => {
-    const w = was.find((x) => x.id === m.id) ?? m
-    return clampRect({ ...w, id: m.id, z: m.z, tint: m.tint ?? null })
+  const pins = pinnedIds(d)
+  const saved = new Map((d.mods ?? []).map((m) => [m.id, m]))
+  const on = d.mods === null ? null : new Set(d.mods.map((m) => m.id))
+  const pinned = (d.mods ?? []).filter((m) => pins.has(m.id)).map((m) => clampRect(m))
+  const rects = new Map([...pinned, ...autoRects(slug, on, pinned)].map((m) => [m.id, m]))
+  /* The person's colour and stacking order apply to every module, pinned or automatic. */
+  return ALL.filter((id) => rects.has(id)).map((id) => {
+    const r = rects.get(id)
+    const s = saved.get(id)
+    return s === undefined ? r : { ...r, z: s.z ?? r.z, tint: s.tint ?? null }
   })
 }
 
-/** The document with every module's rectangle written out, and who owns it recorded (`placed`). */
-const materialised = (slug, ownIt = false) => {
+/** The document with every module's rectangle written out. Who arranged each one (`placed`) is kept as it was. */
+const materialised = (slug) => {
   const d = doc(slug)
-  const owned = ownIt || frozen(d)
+  const pins = pinnedIds(d)
   return {
     ...d,
-    mods: layout(slug).map((m) => ({ ...m, placed: owned })),
+    mods: layout(slug).map((m) => ({ ...m, placed: pins.has(m.id) })),
   }
 }
 
@@ -1353,18 +1367,19 @@ export const makeRoom = (mods, id) => {
 
 /** Move or resize one module. Any module it lands on is pushed down to make room (makeRoom). */
 export const place = (slug, id, rect) => {
-  /* A move or a resize IS an arrangement: every rectangle is written down as the person's from here on. */
-  const d = materialised(slug, true)
+  /* A move or a resize pins THAT module. The others stay automatic and are laid out around it. */
+  const d = materialised(slug)
   const z = topZ(d) + 1
-  d.mods = makeRoom(d.mods.map((m) => (m.id === id ? clampRect({ ...m, ...rect, id, z }) : { ...m })), id)
+  d.mods = makeRoom(
+    d.mods.map((m) => (m.id === id ? { ...clampRect({ ...m, ...rect, id, z }), placed: true } : { ...m })),
+    id,
+  )
   commit(slug, d)
   return layout(slug)
 }
 
-/** Bring a module to the front without moving it. */
+/** Bring a module to the front without moving it. Changes no one's arrangement. */
 export const raise = (slug, id) => {
-  /* An automatic layout never overlaps, so bringing a module forward changes nothing and makes no manual arrangement. */
-  if (isAutomatic(slug)) return
   const d = materialised(slug)
   const z = topZ(d) + 1
   d.mods = d.mods.map((m) => (m.id === id ? { ...m, z } : m))
@@ -1392,7 +1407,8 @@ export const add = (slug, id) => {
   const d = materialised(slug)
   if (d.mods.some((m) => m.id === id)) return
   const [r] = fromFractions({ [id]: THIRDS[id] }, stage)
-  d.mods = [...d.mods, { ...r, z: topZ(d) + 1, placed: d.mods.some((m) => m.placed === true) }]
+  /* Put back on the page it is automatic: the automatic layout finds it a place around whatever is pinned. */
+  d.mods = [...d.mods, { ...r, z: topZ(d) + 1, placed: false }]
   commit(slug, d)
 }
 
@@ -1404,7 +1420,8 @@ export const off = (slug) => {
 
 /** Lightly tidy this page. */
 export const autoArrange = (slug) => {
-  const d = materialised(slug, true)
+  /* Tidy is a person's own choice to lay everything out, so every module is pinned to the tidy layout. */
+  const d = materialised(slug)
   d.mods = tidy(d.mods, stage).map((m) => ({ ...m, placed: true }))
   commit(slug, d)
   return layout(slug)
@@ -1531,7 +1548,8 @@ export const loadLayout = (slug, name) => {
   const d = doc(slug)
   const l = d.layouts[name]
   if (l === undefined) return false
-  commit(slug, { ...d, mods: l.mods.map((m) => ({ ...m, placed: true })), zoom: l.zoom })
+  /* A saved layout is the person's, so its modules are pinned, except one that was automatic when it was saved. */
+  commit(slug, { ...d, mods: l.mods.map((m) => ({ ...m, placed: m.placed === false ? false : true })), zoom: l.zoom })
   return true
 }
 
@@ -1578,10 +1596,11 @@ const spanOf = (mods) =>
  * version) arranged at another width does not, once its horizontal extent differs from the window's by more than 8%.
  */
 export const fitsWindow = (slug) => {
-  const d = doc(slug)
-  if (!frozen(d)) return true
-  const mods = layout(slug)
-  if (mods.length === 0) return true
+  /* Only pinned modules have a width of their own. The automatic ones always fill the window. */
+  const pins = pinnedIds(doc(slug))
+  const mods = layout(slug).filter((m) => pins.has(m.id))
+  /* One pinned module is one rectangle the person sized: there is no arrangement to fit, and stretching it would be wrong. */
+  if (mods.length < 2) return true
   return Math.abs(spanOf(mods) - stage.w) <= stage.w * 0.08
 }
 
@@ -1595,10 +1614,17 @@ export const fitToWindow = (slug) => {
   const names = new Set(layoutNames(slug))
   let kept = 'Before fitting'
   for (let i = 2; names.has(kept); i += 1) kept = `Before fitting ${String(i)}`
-  saveLayout(slug, kept)
   const d = doc(slug)
-  const mods = scaleToWidth(layout(slug), stage.w).map((m) => ({ ...m, placed: true }))
-  commit(slug, { ...d, mods, zoom: 1, pan: { x: 0, y: 0 } })
+  // The backup keeps who arranged each module, so restoring it gives the same pins. The automatic ones are not frozen at this width.
+  commit(slug, { ...d, layouts: { ...d.layouts, [kept]: { mods: d.mods, zoom: d.zoom } } })
+  // Only the pinned modules are scaled: the automatic ones follow the window already, and stay automatic.
+  const pins = pinnedIds(d)
+  const scaled = scaleToWidth(layout(slug).filter((m) => pins.has(m.id)), stage.w)
+  const mods = layout(slug).map((m) => {
+    const s = scaled.find((x) => x.id === m.id)
+    return s === undefined ? { ...m, placed: false } : { ...m, ...s, placed: true }
+  })
+  commit(slug, { ...doc(slug), mods, zoom: 1, pan: { x: 0, y: 0 } })
   return kept
 }
 
@@ -1633,7 +1659,7 @@ export const postits = (slug) => {
     */
     // Judged against the arrangement the page is GIVEN, not the one a person has since made: a note that vanished the moment
     // somebody rearranged their modules would be stranger than one that was never offered.
-    const mods = isAutomatic(slug) ? autoRects(slug) : fromFractions(THIRDS, stage)
+    const mods = layout(slug)
     const right = mods.reduce((n, m) => Math.max(n, m.x + m.w), 0)
     const bottom = mods.reduce((n, m) => Math.max(n, m.y + m.h), 0)
     const beside = stage.w - right - GAP - 8

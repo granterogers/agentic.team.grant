@@ -133,7 +133,7 @@ const modIcon = (id) => (identity.known(id) ? identity.svg(id, 16) : '')
  * content, and pressing content does what the content says rather than
  * navigating somewhere plausible.
  */
-const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = null }) => {
+const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = null, pinned = false }) => {
   /*
     THE WHOLE HEADER IS THE TARGET. Grant, 22 September:
 
@@ -205,6 +205,13 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
                 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none"
                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"></path>
+                </svg>
+              </button>
+              <button type="button" class="bcmodbtn bcmodbtn--auto" data-bc-automod="${esc(id)}"${pinned ? '' : ' hidden'}
+                aria-label="${esc(`Return ${name} to automatic size and position`)}" title="Return to automatic">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"></path>
                 </svg>
               </button>
               <button type="button" class="bcmodbtn" data-bc-modoff="${esc(id)}"
@@ -837,7 +844,7 @@ export const compositionC = (p) => {
         ${place
           .map((r) => {
             const m = by.get(r.id)
-            return m === undefined ? '' : mod(p, { ...m, rect: r })
+            return m === undefined ? '' : mod(p, { ...m, rect: r, pinned: grid.isPinned(p.slug, r.id) })
           })
           .join('')}
         ${grid

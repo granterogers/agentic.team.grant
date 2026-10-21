@@ -324,3 +324,8 @@
 @media (prefers-reduced-motion: reduce) {
   [data-experience='basecamp'] .bcmod--placed { transition: none; }
 }
+
+/* Return to automatic (21 October 2026): shown only on a module that is pinned. The button's own display would otherwise win. */
+.bcmodbtn--auto[hidden] {
+  display: none;
+}

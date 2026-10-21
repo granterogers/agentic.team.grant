@@ -72,9 +72,11 @@ describe('scaleToWidth (pure)', () => {
 })
 
 describe('fitToWindow', () => {
+  /* Two pinned modules make an arrangement: one alone has no width of its own to fit (fitsWindow). */
   const arrangedNarrow = (slug: string): void => {
     L.setStage(900, 620)
     L.place(slug, 'tasks', { x: 20, y: 20, w: 400, h: 300 })
+    L.place(slug, 'board', { x: 460, y: 20, w: 400, h: 300 })
     L.setTint(slug, 'tasks', 'mint')
   }
 
@@ -99,8 +101,13 @@ describe('fitToWindow', () => {
     expect(kept).toBe('Before fitting')
     expect(L.layoutNames('p')).toContain('Before fitting')
     L.loadLayout('p', 'Before fitting')
-    const restored = (L.layout('p') as Rect[]).map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))
-    expect(restored).toEqual(before.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })))
+    /* The modules the person arranged come back exactly. The automatic ones follow the window they are opened in. */
+    const restored = (L.layout('p') as Rect[]).filter((m) => L.isPinned('p', m.id))
+    const arranged = before.filter((m) => restored.some((r) => r.id === m.id))
+    expect(restored.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))).toEqual(
+      arranged.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })),
+    )
+    expect(restored.length).toBe(2)
   })
 
   it('afterwards the arrangement fits, still belongs to the person, and keeps colour and stacking', () => {
