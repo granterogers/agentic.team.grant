@@ -380,6 +380,12 @@ Deploys probe themselves and fail when the probe fails:
 
 ---
 
+## Versioning
+
+Grant, 21 October 2026: every change increases the minor version, from now on. The version is `version` in
+`package.json` (the page shows it, through `config:site`). Bump it in the same commit as the change, for example 0.4.0 to
+0.5.0; a patch number stays at 0 unless Grant asks otherwise.
+
 ## Visual standard
 
 `docs/spec/frontend-build-prompt-2026-09-10.md` §§14, 14A, 17–20 are binding.
