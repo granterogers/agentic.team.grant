@@ -47,7 +47,7 @@ import * as bcGrip from './bc/dockgrip.js'
 import * as bcDictate from './bc/dockdictate.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
-import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme, LOOKS, GLASS, DEPTHS, resetToRecommended } from './appearance.js'
+import { appearance, apply, hydrate as hydrateAppearance, saveWith, toggleScheme, activeScheme, LOOKS, GLASS, DEPTHS, TEXT_SIZES, resetToRecommended } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as dictate from './dictate.js'
@@ -7305,6 +7305,19 @@ function appearanceTab() {
       ]),
     }),
     ui.section({
+      title: 'Text size',
+      note: 'The whole page, text and controls alike. It is saved to this device.',
+      body: ui.card([
+        ui.row({
+          name: 'Size',
+          desc: 'Standard is the size the page has always been. Larger is 25% bigger.',
+          control: `<span class="st-seg" role="group" aria-label="Text size">${TEXT_SIZES.map(
+            (t) => `<button type="button" data-text-size-pick="${esc(t.id)}" aria-pressed="${now.textSize === t.id}" title="${esc(t.note)}">${esc(t.name)}</button>`,
+          ).join('')}</span>`,
+        }),
+      ]),
+    }),
+    ui.section({
       title: 'Materials',
       note: 'How menus and panels sit above the board. Text is always read against a solid face.',
       body: ui.card([
@@ -8784,6 +8797,9 @@ function wireAppearance(v) {
   }
   for (const b of v.querySelectorAll('[data-depth-pick]')) {
     b.addEventListener('click', () => pick('depth', b.dataset.depthPick))
+  }
+  for (const b of v.querySelectorAll('[data-text-size-pick]')) {
+    b.addEventListener('click', () => pick('textSize', b.dataset.textSizePick))
   }
   // One press restores the recommended appearance; the redraw shows the ticks moving to it.
   for (const b of v.querySelectorAll('[data-appearance-reset]')) {

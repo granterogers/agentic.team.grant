@@ -87,6 +87,15 @@ export const SCHEMES = [
   Two, not three. A middle setting would need a third scale nobody has a
   reason for, and the honest question is only "is there too much air".
 */
+/*
+  Text size (21 October 2026). Larger makes the whole page 25% bigger, text and controls alike: the shell applies it as a
+  zoom on the root, so every fixed pixel scales with it. Standard is the size the page has always been.
+*/
+export const TEXT_SIZES = [
+  { id: 'standard', name: 'Standard', note: 'The size the page has always been.' },
+  { id: 'large', name: 'Larger', note: '25% bigger, text and controls alike.' },
+]
+
 export const DENSITIES = [
   { id: 'comfortable', name: 'Comfortable', note: 'Room to breathe.' },
   { id: 'compact', name: 'Compact', note: 'More on the screen at once.' },
@@ -129,6 +138,7 @@ const DEFAULTS = {
   ownName: '',
   scheme: 'dark',
   density: 'comfortable',
+  textSize: 'standard',
   look: 'silver',
   glass: 'soft',
   depth: 'soft',
@@ -213,6 +223,7 @@ export function appearance() {
       ownName: saved.ownName ?? '',
       scheme: SCHEMES.some((x) => x.id === saved.scheme) ? saved.scheme : DEFAULTS.scheme,
       density: DENSITIES.some((d) => d.id === saved.density) ? saved.density : DEFAULTS.density,
+      textSize: TEXT_SIZES.some((t) => t.id === saved.textSize) ? saved.textSize : DEFAULTS.textSize,
       // The retired Original look maps to its successor; every other saved preference is read as it was.
       look: saved.look === 'original' ? 'silver' : LOOKS.some((x) => x.id === saved.look) ? saved.look : DEFAULTS.look,
       glass: GLASS.some((x) => x.id === saved.glass) ? saved.glass : DEFAULTS.glass,
@@ -240,6 +251,7 @@ export function apply(next = appearance()) {
     at.
   */
   document.documentElement.dataset.density = next.density
+  document.documentElement.dataset.textSize = next.textSize ?? DEFAULTS.textSize
   /* Always written, like density, so an audit can read which look, glass and depth it is looking at. */
   document.documentElement.dataset.look = next.look ?? DEFAULTS.look
   document.documentElement.dataset.glass = next.glass ?? DEFAULTS.glass

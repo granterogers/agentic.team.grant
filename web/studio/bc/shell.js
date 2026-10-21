@@ -2525,23 +2525,10 @@ const sourceRecord = (p, s) => {
   const connected = s.kind === 'connector'
   const trouble = s.health === 'blocked' || s.trouble === true
   /*
-    EVERY LINE HERE IS A FIELD THAT EXISTS. `gave` is how many documents this
-    source has contributed, `last` when it was read, `url` where a reference
-    points. A connector has no url and a reference has no last read, and
-    neither gets a row invented for it - which is the difference between a
-    detail page and a detail page that lies.
+    WHAT IS VISIBLE THROUGH THIS CONNECTION (21 October 2026): the documents this project holds from it, the same list Docs &
+    Files shows, filtered to this one connection. Nothing else is on the page; the facts that were here are not shown.
   */
-  const facts = [
-    /*
-      WHICH SERVICE, not "a connected service" -- §22's whole question. The
-      name above is the notebook or the database; this is what it lives in.
-    */
-    ['What it is', connected ? (s.via ?? 'A connected service') : (s.via ?? 'Something to read')],
-    ['What it gives this project', sourceSays(s, { withService: false })],
-    ['Documents it has contributed', s.gave === undefined || s.gave === null ? '' : String(s.gave)],
-    ['Last read', connected ? (s.last ?? 'not read yet') : ''],
-    ['State', trouble ? (s.problem ?? 'Needs attention') : connected ? 'Connected' : ''],
-  ].filter(([, v]) => v !== '' && v !== undefined && v !== null)
+  const visible = visibleThrough(p, s)
   const url = s.url ?? (s.kind === 'reference' ? (s.name ?? '') : '')
   return `${breadcrumb([
     { name: p.name, to: at(`/p/${p.slug}`) },
@@ -2562,17 +2549,31 @@ const sourceRecord = (p, s) => {
             ${button('Open it', { kind: 'primary', 'data-bc-doc-tab': esc(String(url)) })}
           </div>`
     }
-    <dl class="bcfacts bcgap-l">
-      ${facts.map(([k, v]) => `<div class="bcfact"><dt>${esc(k)}</dt><dd>${esc(String(v))}</dd></div>`).join('')}
-    </dl>
-    <h2 class="bcsubhead">Where this is managed</h2>
-    <p class="bcpmeta bcprose">
-      ${
-        connected
-          ? 'Connecting and disconnecting a service is the office\'s own setting, because one service serves every project. This page is what it gives THIS project.'
-          : 'A link belongs to this project alone. Removing it is on the office\'s Sources page.'
-      }
-    </p>`
+    ${
+      connected
+        ? `<p class="bcpmeta bcgap-l">${trouble ? esc(s.problem ?? 'Needs attention') : 'Connected'}${s.last ? ` · last read ${esc(s.last)}` : ''}</p>`
+        : ''
+    }
+    <h2 class="bcsubhead bcgap-l">Visible through this connection</h2>
+    ${
+      visible.length === 0
+        ? s.gave !== undefined && s.gave !== null && Number(s.gave) > 0
+          ? `<p class="bcpmeta bcprose">The office counts ${esc(String(s.gave))} documents from this connection. Their list is not on this page yet: it needs the connection's own read.</p>`
+          : '<p class="bcpmeta bcprose">Nothing from this connection is in this project yet.</p>'
+        : `<p class="bcpmeta">${esc(String(visible.length))} ${visible.length === 1 ? 'item' : 'items'}</p>
+          <ul class="bcvislist">${visible
+            .map(
+              (d) => `<li><span class="bcvisname">${esc(d.title ?? d.name ?? 'A document')}</span>
+                <span class="bcpmeta">${esc(String(docsrc.typeOf(d) ?? ''))}</span></li>`,
+            )
+            .join('')}</ul>`
+    }`
+}
+
+/** The documents this project holds through one connection: the Docs & Files list, filtered to it. */
+const visibleThrough = (p, s) => {
+  const want = docsrc.sourceOf({ connector: s.connector ?? '', origin: s.name ?? s.title ?? '' })
+  return (p.documents ?? []).filter((d) => docsrc.sourceOf(d) === want)
 }
 
 /*

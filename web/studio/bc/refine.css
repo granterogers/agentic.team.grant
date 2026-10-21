@@ -1545,6 +1545,9 @@ html[data-experience='basecamp'] { scroll-padding-top: 96px; }
   right: 8px;
   z-index: 6;
 }
+/* Text size (21 October 2026): Larger scales the whole page 25%, every fixed pixel with it. Set in Global Settings > Appearance. */
+html[data-text-size='large'] { zoom: 1.25; }
+
 /*
   The Appearance sheet (21 October 2026): its close button belongs INSIDE the sheet's top-right corner. The sheet had no
   position of its own, so the button was placed against the whole viewer and sat outside the box.
