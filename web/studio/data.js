@@ -622,6 +622,8 @@ export const SOURCE_STATE = {
 export const source = {
   live: false,
   at: null,
+  /* True while the office is being asked (22 October 2026, item 25): an empty module shows a skeleton, not "nothing yet". */
+  fetching: false,
   state: 'prototype',
   why: 'not asked yet',
   /** How many times in a row a fetch has failed. Drives the retry's wording. */
@@ -675,7 +677,17 @@ const replace = (target, rows) => {
  */
 export const FROM_OFFICE = { appearance: null }
 
+/** Ask the office for everything the page shows. `source.fetching` is true for exactly as long as the question is open. */
 export async function hydrate(endpoint, token) {
+  source.fetching = true
+  try {
+    return await hydrateOnce(endpoint, token)
+  } finally {
+    source.fetching = false
+  }
+}
+
+async function hydrateOnce(endpoint, token) {
   try {
     /*
       A timeout, because a fetch with none can hang for the browser's default

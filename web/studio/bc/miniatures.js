@@ -45,8 +45,13 @@ import * as todos from './todos.js'
 import * as cal from './calendar.js'
 import * as docsrc from './docsources.js'
 import * as docorder from './docorder.js'
-import { esc, status } from './parts.js'
+import { button, errorState, esc, skeleton, status } from './parts.js'
 import { columnsOf } from './layout.js'
+import { source } from '../data.js'
+
+/** A module whose office did not answer: what was not loaded, and the way to ask again (22 October 2026, item 26). */
+const unreachable = (what) =>
+  errorState(`Your ${what} could not be loaded just now.`, button('Try again', { 'data-bc-retry-office': '1' }))
 
 let ctx = null
 export const mount = (c) => {
@@ -296,6 +301,10 @@ export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
   const groups = listsOf(p)
   if (groups.length === 0) {
     const flat = (p.tasks ?? []).filter((t) => t.milestone !== true)
+    // Nothing yet while the office is still being asked: a skeleton, not "no to-dos" (22 October 2026, item 25).
+    if (flat.length === 0 && source.fetching === true) return skeleton(3)
+    // The office did not answer: say so, with a way to ask again, rather than claiming there is nothing (item 26).
+    if (flat.length === 0 && source.state === 'unreachable') return unreachable('to-dos')
     /*
       AN EMPTY FILTER IS NOT AN EMPTY PROJECT.
 
@@ -412,6 +421,8 @@ export const cardsCount = (p) => {
 
 export const cardsMini = (p) => {
   const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
+  if (tasks.length === 0 && source.fetching === true) return skeleton(4)
+  if (tasks.length === 0 && source.state === 'unreachable') return unreachable('to-dos')
   if (tasks.length === 0) return emptyWith('No to-dos yet. Add one to start this list.', 'Add a to-do', `/p/${p.slug}/tasks`)
   const at = (id) =>
     tasks.filter((t) => {

@@ -1244,6 +1244,23 @@ rather than rediscovery.
 
 ---
 
+## 22 October 2026 (later) - Loading and unreachable states on the Card Table and To-dos; version 0.11.0
+
+**What changed:** `source.fetching` is true for exactly as long as the office is being asked (`hydrate` wraps the
+request). A Card Table or To-dos list with nothing in it shows a skeleton while that is true (item 25), and "could not be
+loaded, Try again" when the office did not answer (item 26), instead of "No to-dos yet". Tests:
+`tests/studio/loading-and-errors.test.ts` (6). Other modules (documents, contacts, calendar) still show their empty notes
+during a load; the same pattern applies to them when someone takes it on.
+
+**Item 41 (one background shade):** measured, not changed. Modules are transparent on the one stage background, so the
+surfaces already match. The lighter tiles in Docs & Files are the document thumbnails, which is content. The Card Table
+header band seen in one capture was the hover after a click, not a surface.
+
+**Item 60 (balance):** not done. The layout is measured and has no overlaps, but a short module beside a tall one leaves
+blank space (for example under To-dos at 1440 px). Filling it is a visual decision and is left for a later pass.
+
+---
+
 ## 22 October 2026 - Card Table columns, dates, resize feedback, focus return; version 0.10.0 (on main, NOT deployed)
 
 **What changed:** the Card Table's four columns can be **renamed** and **hidden** from its Columns button (ADR-0075); the
