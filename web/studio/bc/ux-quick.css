@@ -233,3 +233,69 @@
   [data-experience='basecamp'] .bcmod { padding: 10px 10px 12px; }
   [data-experience='basecamp'] .bcmodhead { margin-bottom: 8px; padding-bottom: 8px; }
 }
+
+/*
+  QUICK UX FIXES, 81–100 (21 October 2026). Sizes, clamps, colours and spacing only. Module sizes are changed in
+  layout.js for a layout nobody has saved; a saved layout keeps its sizes.
+*/
+
+/* 88, 89. Kanban cards: a little larger, with more padding, and up to three lines of title before an ellipsis. */
+[data-experience='basecamp'] .bcminicard {
+  font: 500 13px/1.4 var(--bc-font);
+  padding: 7px 9px;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* 92. Column headings: the status name, and the count in a small pill of the same colour, so each reads apart. */
+[data-experience='basecamp'] .bcminicolname { font-size: 12px; font-weight: 650; }
+[data-experience='basecamp'] .bcminicoln {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--stage) 18%, transparent);
+  color: var(--bc-text-strong);
+  font-size: 12px;
+}
+
+/* 91. An empty column says so in a line, and takes no more room than that. */
+[data-experience='basecamp'] .bcminiempty { padding: 4px 0; font-size: 12px; }
+
+/* 93. To-do titles show up to two lines before they are cut, instead of one line and an ellipsis. */
+[data-experience='basecamp'] .bctasktitle {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* 94. A completed to-do is struck through and a little quieter, but still readable. */
+[data-experience='basecamp'] .bctask--done .bctasktitle {
+  color: color-mix(in srgb, var(--bc-text) 72%, transparent);
+}
+
+/* 95. A to-do row: the checkbox, the title and the due date share one centre line. */
+[data-experience='basecamp'] .bctask { align-items: center; gap: 10px; }
+[data-experience='basecamp'] .bctick { margin-top: 0; }
+
+/* 96. Calendar: the day labels and the navigation are a little larger. */
+[data-experience='basecamp'] .bcdaywhen { font-size: 13px; }
+
+/* 97, 98. Latest activity: the relative time is the one to read; the exact time and the source are quieter. */
+[data-experience='basecamp'] .bceventat { font-size: 13px; font-weight: 600; color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcvia { font-size: 12px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bceventwhat { font-size: 13px; color: var(--bc-text); }
+
+/* 99. A sticky note's grip bar says what it is. */
+[data-experience='basecamp'] .bcpostitbar::before {
+  content: 'Note';
+  margin-right: auto;
+  padding-left: 6px;
+  font: 600 12px/1 var(--bc-font);
+  color: color-mix(in srgb, var(--bc-text) 60%, transparent);
+  letter-spacing: 0.04em;
+}
+
+/* 100. The small labels and counters above are 12px or more; the calendar's day labels are 13px. */
