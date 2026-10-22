@@ -1262,6 +1262,8 @@ rather than rediscovery.
 
 **Environment:** `ALLOW_PRODUCTION_CHECKS=1` is set in the build sandbox, which means production reads can run without a deliberate choice. It should be cleared there.
 
+**Full safe gate, run at the close (on main at `81fc47795`):** static 25 of 25; production 8 of 10; identity 9 of 9. Office fingerprints unchanged for Grant and every other office. The two production failures are `sample:dock` and `sample:labels`, the older-studio checks deliberately left as they are.
+
 ## 22 October 2026 (later) - Loading and unreachable states on the Card Table and To-dos; version 0.11.0
 
 **What changed:** `source.fetching` is true for exactly as long as the office is being asked (`hydrate` wraps the
