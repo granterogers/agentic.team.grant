@@ -6857,6 +6857,28 @@ function connectionsTab() {
     }
     const canSet = canWrite() && operator
     const disconnect = canSet ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-mstodo-off': true } }) : ''
+    // The list the office keeps in step, and a test of the whole connection (1095). Operator-only, like Disconnect.
+    const msChoose = canSet
+      ? [
+          ui.row({
+            name: 'Which list',
+            desc: 'The office keeps your tasks in one Microsoft To Do list. Choose it here. To keep your own list out of it, first create a list named Team HQ in Microsoft To Do, then choose that one.',
+            wrap: true,
+            kind: 'wide',
+            status: '',
+            control: ui.button({ label: 'Choose a list', tone: 'quiet', a: { 'data-mstodo-lists': true } }),
+          }),
+          ui.row({
+            name: 'Test the connection',
+            desc: 'Makes one task called "Team HQ connection test (safe to delete)" in the chosen list, reads it back, deletes it and checks it is gone. Each step is shown below.',
+            wrap: true,
+            kind: 'wide',
+            status: '',
+            control: ui.button({ label: 'Test the connection', tone: 'quiet', a: { 'data-mstodo-test': true } }),
+          }),
+          '<div class="st-steps" data-mstodo-panel></div>',
+        ]
+      : []
     if (m.configured === true) {
       // The last round's reading (ok, or what Microsoft said). A down connection is the loudest thing on this card.
       const h = m.health
@@ -6884,6 +6906,7 @@ function connectionsTab() {
           ...(down
             ? [ui.row({ name: 'Why it stopped', desc: `What it said: ${String(h.detail ?? '')}. ${why}`, kind: 'fact', attr: { 'data-mstodo-down': h.kind ?? 'unreachable' } })]
             : []),
+          ...msChoose,
         ]),
       })
     }
@@ -6893,12 +6916,13 @@ function connectionsTab() {
         body: ui.card([
           ui.row({
             name: title,
-            desc: 'Microsoft To Do is connected. The office picks your default list on its next round, within 15 minutes, and then keeps it in step with your tasks here.',
+            desc: 'Microsoft To Do is connected. Choose the list the office keeps in step below. If you do not choose, it uses your default list on its next round, within 15 minutes.',
             wrap: true,
             kind: 'wide',
             status: '',
             control: ui.chip('warn', 'Choosing a list') + disconnect,
           }),
+          ...msChoose,
         ]),
       })
     }
@@ -8733,6 +8757,56 @@ function settingsSheet() {
       const done = await attempt(b, 'Disconnecting…', async () => await act('microsoft_todo_forget', {}))
       if (!done) return
       await afterWrite()
+    })
+  }
+  // The lists the account holds, then the one the office keeps. The panel is filled in place; nothing is saved until "Use this list".
+  for (const b of v.querySelectorAll('[data-mstodo-lists]')) {
+    b.addEventListener('click', async () => {
+      const panel = v.querySelector('[data-mstodo-panel]')
+      const got = await attempt(b, 'Reading your lists…', async () => await act('microsoft_todo_lists', {}), 'Your lists are below.')
+      if (!got || !panel) return
+      if (got.ok !== true) {
+        panel.textContent = String(got.error ?? 'Microsoft could not list your To Do lists just now. Nothing was changed.')
+        return
+      }
+      const lists = Array.isArray(got.lists) ? got.lists : []
+      if (lists.length === 0) {
+        panel.textContent = 'This Microsoft account has no To Do lists yet. Create one in Microsoft To Do, then press Choose a list again.'
+        return
+      }
+      panel.innerHTML = `<label class="st-field"><span>Your Microsoft To Do lists</span>
+          <select class="st-input" data-mstodo-pick aria-label="The Microsoft To Do list the office keeps in step">${lists
+            .map((l) => `<option value="${esc(l.id)}" data-name="${esc(l.name)}">${esc(l.name || 'Untitled list')}${l.default ? ' (default)' : ''}</option>`)
+            .join('')}</select></label>
+        <div class="st-ctl" style="justify-content:flex-start">
+          <button class="st-btn primary" type="button" data-mstodo-use>Use this list</button>
+          <span class="st-said" data-said role="status" aria-live="polite"></span>
+        </div>`
+      v.querySelector('[data-mstodo-use]')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget
+        const opt = v.querySelector('[data-mstodo-pick]')?.selectedOptions?.[0]
+        if (!opt) return
+        const saved = await attempt(btn, 'Saving…', async () => await act('microsoft_todo_set_list', { p_list_id: opt.value, p_list_name: opt.dataset.name ?? '' }), 'That list is now the one kept in step.')
+        if (!saved) return
+        if (saved.ok !== true) {
+          panel.textContent = String(saved.error ?? 'That list could not be saved. Nothing was changed.')
+          return
+        }
+        await afterWrite()
+      })
+    })
+  }
+  // The connection test: each step is shown as it was, pass or fail. It makes and removes one clearly named task.
+  for (const b of v.querySelectorAll('[data-mstodo-test]')) {
+    b.addEventListener('click', async () => {
+      const panel = v.querySelector('[data-mstodo-panel]')
+      const got = await attempt(b, 'Testing…', async () => await act('microsoft_todo_test', {}), 'The test has finished.')
+      if (!got || !panel) return
+      const steps = Array.isArray(got.steps) ? got.steps : []
+      panel.innerHTML = `<ol class="st-steps">${steps
+        .map((st) => `<li><strong>${esc(st.step)}:</strong> ${st.ok ? 'passed' : 'failed'}. ${esc(st.detail)}</li>`)
+        .join('')}</ol>
+        <p class="st-meta">${got.ok === true ? 'Every step passed, and the test task is gone.' : 'A step failed. Read it above. Nothing else was changed.'}</p>`
     })
   }
   for (const b of v.querySelectorAll('[data-disconnect]')) {

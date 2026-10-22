@@ -54,6 +54,7 @@ import { type ConnectionItem, fetchNotionItems, notebookItems } from './connecti
 import { isStandardFormat, kindFor, renderStandardExport } from './export-route.ts'
 // Uploaded beside this file by scripts/deploy/hq.ts, from src/text/file-text.ts (pure, no dependencies).
 import { fileText } from './file-text.ts'
+import { type MicrosoftContext, microsoftLists, microsoftTest } from './microsoft-todo.ts'
 // Who may be given a signed link (#468): judged from the owner the database records, never from the path alone.
 import { type LinkLookup, mayLinkDocument, mayLinkPhoto, mayLinkProjectFile } from './links.ts'
 import { authorizeUrl, revokeToken } from './oauth.ts'
@@ -2085,6 +2086,13 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   },
   vikunja_forget: { fn: 'hq_forget_vikunja', office: true, required: [] },
   /*
+    Microsoft To Do's list and test (1095, ADR-0076). The lists and the test are read in this function (`microsoft-todo.ts`), so
+    their `fn` is only the database function that describes the connection; the branch that answers them comes before the write.
+  */
+  microsoft_todo_lists: { fn: 'microsoft_todo_settings', office: true, required: [] },
+  microsoft_todo_test: { fn: 'microsoft_todo_settings', office: true, required: [] },
+  microsoft_todo_set_list: { fn: 'hq_microsoft_set_list', office: true, required: ['p_list_id', 'p_list_name'] },
+  /*
     Microsoft To Do (1095). The application registration is the deployment's own app, so saving it is the operator's
     act. Connecting starts the consent screen: it returns a URL the browser follows, and the state inside it is minted
     only for a deployment operator. Forgetting removes the connection and never the application registration.
@@ -2443,6 +2451,9 @@ const OPERATOR_ONLY: ReadonlySet<string> = new Set([
   'disconnect',
   'vikunja_connect',
   'vikunja_forget',
+  'microsoft_todo_lists',
+  'microsoft_todo_test',
+  'microsoft_todo_set_list',
   'microsoft_todo_set_client',
   'microsoft_todo_connect',
   'microsoft_todo_forget',
@@ -3620,6 +3631,41 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json({ action: actionName, result: { ...filed, ...searchable } })
     }
 
+    /*
+      THE MICROSOFT LIST AND THE TEST (1095). Operator-only (OPERATOR_ONLY). The lists and the test use the connection's own
+      credential, read here with the service key, so the refresh token never reaches the page. The test creates one clearly named
+      task, reads it back, deletes it and confirms it is gone, and reports each step.
+    */
+    if (actionName === 'microsoft_todo_lists' || actionName === 'microsoft_todo_test') {
+      const ctx: MicrosoftContext = {
+        office,
+        held: (name) => heldCredential(office, principal ?? '', name),
+        rpc: async (fn, a) => {
+          const r = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
+            method: 'POST',
+            headers: {
+              apikey: SERVICE_KEY,
+              Authorization: `Bearer ${SERVICE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(a),
+          })
+          return await r.json().catch(() => null)
+        },
+      }
+      if (actionName === 'microsoft_todo_lists') {
+        const got = await microsoftLists(ctx)
+        return json({
+          action: actionName,
+          result: got.ok ? { ok: true, lists: got.value } : { ok: false, error: got.error },
+        })
+      }
+      const settings = (await ctx.rpc('microsoft_todo_settings', { p_office: office })) as {
+        list_id?: string | null
+      } | null
+      const test = await microsoftTest(ctx, String(settings?.list_id ?? ''))
+      return json({ action: actionName, result: test })
+    }
     const done = await fetch(`${DB_URL}/rest/v1/rpc/${action.fn}`, {
       method: 'POST',
       headers: {

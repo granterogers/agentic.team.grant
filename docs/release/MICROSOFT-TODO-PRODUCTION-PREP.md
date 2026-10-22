@@ -86,6 +86,13 @@ Do not paste the client secret into chat. It goes only into the card, which stor
 
 ## 6. After connecting
 
+1. **Choose the list.** In Settings, Microsoft To Do card, press **Choose a list**, pick the list (create one named
+   `Team HQ` in Microsoft To Do first if you want your own list kept out), then **Use this list**. Until a list is
+   chosen, the office uses your default list.
+2. **Test the connection.** Press **Test the connection**. It makes one task named `Team HQ connection test (safe to
+   delete)`, reads it back, deletes it and checks it is gone. Each step is shown. Every step must pass before the sync is
+   trusted.
+
 - The card should show the connection working and the list name.
 - Within 15 minutes, one round runs. Its result appears as an Activity line beginning "Microsoft To Do:".
 - A round that cannot reach Microsoft says so in the card. Nothing is changed on either side in that case.

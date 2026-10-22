@@ -465,3 +465,59 @@ begin
   raise notice '1095 drive: classification, settings shape and the disabled duty checked';
 end;
 $drive$;
+
+-- 10. The list picker and the gateway's doors for the test and the list (1095).
+--     The office keeps its tasks in ONE To Do list, and Grant chooses which one from the lists his account holds. The
+--     gateway reads the lists and runs the test; this only records the choice. Operator-only at the gateway (hq-api
+--     OPERATOR_ONLY), because the connection is the deployment's.
+create function app.hq_microsoft_set_list(p_office uuid, p_list_id text, p_list_name text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $f$
+declare
+  v_id   text := btrim(coalesce(p_list_id, ''));
+  v_name text := left(btrim(coalesce(p_list_name, '')), 120);
+begin
+  -- A To Do list id is a short opaque string with no spaces. Anything else is refused before it is stored.
+  if v_id = '' or length(v_id) > 300 or v_id ~ '\s' then
+    return jsonb_build_object('error', 'choose one of your To Do lists from the list');
+  end if;
+  perform app.microsoft_todo_remember_list(p_office, v_id, v_name);
+  return jsonb_build_object('ok', true, 'list_name', v_name,
+    'note', 'the office keeps its tasks in this list from the next round');
+end;
+$f$;
+revoke all on function app.hq_microsoft_set_list(uuid, text, text) from public, anon, authenticated, service_role;
+
+create function public.hq_microsoft_set_list(p_office uuid, p_list_id text, p_list_name text)
+returns jsonb language sql security definer set search_path = '' as $w$
+  select app.hq_microsoft_set_list(p_office, p_list_id, p_list_name)
+$w$;
+revoke all on function public.hq_microsoft_set_list(uuid, text, text) from public, anon, authenticated;
+grant execute on function public.hq_microsoft_set_list(uuid, text, text) to service_role;
+
+-- The gateway stores a refresh token Microsoft rotated during the test or the list read, so the next round still works.
+create function public.microsoft_todo_store_rotation(p_office uuid, p_refresh_token text)
+returns void language sql security definer set search_path = '' as $w$
+  select app.microsoft_todo_rotate_refresh(p_office, p_refresh_token)
+$w$;
+revoke all on function public.microsoft_todo_store_rotation(uuid, text) from public, anon, authenticated;
+grant execute on function public.microsoft_todo_store_rotation(uuid, text) to service_role;
+
+do $drive$
+declare v jsonb;
+begin
+  -- Refusals driven, without an office: an empty id and an id with a space are both refused before anything is stored.
+  v := app.hq_microsoft_set_list(null, '', 'Team HQ');
+  if v ->> 'error' is null then
+    raise exception '1095: an empty list id was accepted: %', v;
+  end if;
+  v := app.hq_microsoft_set_list(null, 'AAMk list with a space', 'Team HQ');
+  if v ->> 'error' is null then
+    raise exception '1095: a list id with a space was accepted: %', v;
+  end if;
+  raise notice '1095 drive: list refusals checked (the stored choice needs an office and is proved by the replica suite)';
+end;
+$drive$;
