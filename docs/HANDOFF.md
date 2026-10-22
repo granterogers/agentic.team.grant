@@ -1244,6 +1244,24 @@ rather than rediscovery.
 
 ---
 
+## 22 October 2026 (close of the cycle) - version 0.13.0, on main and DEPLOYED
+
+**Deployed (page):** `dpl_yPVen92nQsJJKUbaJk4ayqqdTDFz` from `1e494a67e`, version 0.13.0. Rollback: `dpl_9KRm5txtn7X92cAf53d1VZqdtcjZ`. Earlier today: `dpl_9KRm5txtn7X92cAf53d1VZqdtcjZ` (0.12.0: whole-pixel columns, skeletons for Documents and Contacts) and `dpl_5ZEGU8oHQxd77Dvj6drkCXziofA4` (0.11.0). The record is in `docs/ops/deployment-state.json`.
+
+**Deployed (gateway):** `hq-api v1002`. The description now names `notebook_check` and `project_background`. `verify:hq` passes 49 of 49.
+
+**Migrations applied to production:** `1091` (drops the unused public `self_improvement_headroom` wrapper) and `1092` (drops the unused `app.self_improvement_headroom` it wrapped). Both were checked read-only first: no live function mentions them. `check:callers` now passes. The ledger and the record both count 840.
+
+**Data:** the one Stripe reference row (`project_references`, `stripe.com/docs/api`) was deleted. No rows remain.
+
+**Settings suites, fixed:** `verify:slack-card` passes. Team HQ does not need the page menu to reach Settings: `?settings=…` opens the sheet, and the sheet covers the menu. `sample:notice-link` checks the Services tab (called Connections before), with its Google tile. `sample:channel-link` opens Settings with `?settings=channels` and ends with nothing connected.
+
+**Not fixed, decided to leave:** `sample:dock` and `sample:labels` test the older studio's screens. The older studio stays at `/classic`, and removing it is a refactor of `app.js`, which Team HQ also runs through. Not done, because it could break things.
+
+**Still open:** a signed-in check of the live connection lists, the Drive picker save, and the Columns settings on a real office. The calendar has no loading state. The Card Table keeps blank space inside it. Adding or removing Card Table columns needs a backend change (ADR-0075). The empty and full layouts have not been seen on screen.
+
+**Environment:** `ALLOW_PRODUCTION_CHECKS=1` is set in the build sandbox, which means production reads can run without a deliberate choice. It should be cleared there.
+
 ## 22 October 2026 (later) - Loading and unreachable states on the Card Table and To-dos; version 0.11.0
 
 **What changed:** `source.fetching` is true for exactly as long as the office is being asked (`hydrate` wraps the
