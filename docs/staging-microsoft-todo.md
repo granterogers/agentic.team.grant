@@ -15,7 +15,7 @@ Settings card, which stores it in the vault. Supabase and Vercel tokens stay in 
 
 ## 1. Create the staging Supabase project
 
-1. Open https://supabase.com/dashboard and choose **New project**. Name it `innergy-office-staging`, pick the region
+1. Open https://supabase.com/dashboard and choose **New project**. Name it `team-hq-staging`, pick the region
    nearest you, and keep the free plan.
 2. When it is ready, copy the project ref. It is the part of the address after `/project/`, 20 letters and digits.
    This is `<staging-ref>` below.
@@ -25,8 +25,7 @@ Settings card, which stores it in the vault. Supabase and Vercel tokens stay in 
 1. Open https://entra.microsoft.com and sign in with the Microsoft account that owns the To Do lists you want to test
    with.
 2. Go to **Identity > Applications > App registrations > New registration**.
-3. Name it `INNERGY Office (staging)`. Under **Supported account types** choose **Accounts in any organizational
-   directory and personal Microsoft accounts**.
+3. Name it `Team HQ (staging)`. Under **Supported account types** choose **Personal Microsoft accounts only**.
 4. Under **Redirect URI** choose **Web** and enter exactly:
    `https://<staging-ref>.supabase.co/functions/v1/microsoft-oauth/callback`
 5. Press **Register**. On the Overview page, copy the **Application (client) ID**. This is `STAGING_MICROSOFT_CLIENT_ID`.

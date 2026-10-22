@@ -29,7 +29,7 @@ The first round would then:
 
 Two options:
 
-1. **A dedicated list (recommended).** Create a new list in To Do named `INNERGY Office`, and have the duty use it.
+1. **A dedicated list (recommended).** Create a new list in To Do named `Team HQ`, and have the duty use it.
    This keeps his personal list out of the office. It needs a small addition: the list id is set from a list the
    office can see, or entered once. This is **not built yet**. Say so before any production connect.
 2. **The default list.** Accept the merge described above. No code change.
@@ -71,8 +71,8 @@ tree.
 ## 5. Grant's steps (portal, cannot be automated)
 
 1. Open https://entra.microsoft.com and sign in with the Microsoft account that owns the To Do lists.
-2. Identity > Applications > App registrations > New registration. Name: `INNERGY Office`. Supported account types:
-   **Accounts in any organizational directory and personal Microsoft accounts**.
+2. Identity > Applications > App registrations > New registration. Name: `Team HQ`. Supported account types:
+   **Personal Microsoft accounts only**.
 3. Redirect URI, type **Web**, exactly:
    `https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/microsoft-oauth/callback`
 4. Copy the **Application (client) ID**.
@@ -101,6 +101,6 @@ Do not paste the client secret into chat. It goes only into the card, which stor
 
 - Urgent and important both sync as "high"; an urgent task edited in Microsoft comes back as important.
 - Due dates are the day only.
-- A work account may need an administrator's consent for `Tasks.ReadWrite`.
+- Personal accounts only: no administrator consent is involved.
 - Choosing a list other than the default is not built (decision A).
 - The first live Graph call will be production (decision C).

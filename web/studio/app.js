@@ -6622,7 +6622,7 @@ function microsoftSetupBody(redirectUri) {
   return `<p class="st-steps-title">Set up the Microsoft sign-in in six steps</p>
     <ol class="st-steps">
       <li>Open <a href="https://entra.microsoft.com" target="_blank" rel="noopener">entra.microsoft.com</a> and sign in with the Microsoft account that owns your To Do lists.</li>
-      <li>Go to Identity &gt; Applications &gt; App registrations &gt; New registration. Name it <strong>INNERGY Office</strong>. Under Supported account types, choose <strong>Accounts in any organizational directory and personal Microsoft accounts</strong>.</li>
+      <li>Go to Identity &gt; Applications &gt; App registrations &gt; New registration. Name it <strong>Team HQ</strong>. Under Supported account types, choose <strong>Personal Microsoft accounts only</strong>.</li>
       <li>Under Redirect URI, choose <strong>Web</strong> and paste this address exactly:<br><code>${esc(uri)}</code></li>
       <li>Press Register. On the Overview page, copy the <strong>Application (client) ID</strong> into the first box below.</li>
       <li>Go to Certificates &amp; secrets &gt; New client secret. Copy its <strong>Value</strong> (not the Secret ID) into the second box below. Microsoft shows it only once.</li>

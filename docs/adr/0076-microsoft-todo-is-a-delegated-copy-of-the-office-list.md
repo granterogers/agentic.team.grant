@@ -45,8 +45,8 @@ Microsoft To Do differs from Vikunja in three ways that matter:
   20. An urgent task edited in Microsoft To Do comes back as important. This is the honest limit of the provider.
 - **Due dates.** Written as midnight UTC, read back as the date part, as Vikunja does. A time set inside To Do is kept as
   its day.
-- **Tenant.** The consent screen uses the `common` endpoint, so personal and work accounts both work. A work account may
-  need an administrator's consent for `Tasks.ReadWrite`.
+- **Account type.** The Entra app is registered for personal Microsoft accounts only, and the consent screen uses the
+  `common` endpoint. No administrator consent is involved.
 
 ## What round-trips, measured against Microsoft's own definition (Graph v1.0, todoTask)
 
