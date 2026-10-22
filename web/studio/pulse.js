@@ -37,7 +37,7 @@
      that stops people trusting a page.
 */
 
-const EVERY = 20_000
+const EVERY = 60_000
 
 /** The last digest we saw, as text. Compared whole; the fields do not matter. */
 let seen = null
