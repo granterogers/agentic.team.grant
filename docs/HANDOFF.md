@@ -1258,7 +1258,15 @@ rather than rediscovery.
 
 **Not fixed, decided to leave:** `sample:dock` and `sample:labels` test the older studio's screens. The older studio stays at `/classic`, and removing it is a refactor of `app.js`, which Team HQ also runs through. Not done, because it could break things.
 
-**Still open:** a signed-in check of the live connection lists, the Drive picker save, and the Columns settings on a real office. The calendar has no loading state. The Card Table keeps blank space inside it. Adding or removing Card Table columns needs a backend change (ADR-0075). The empty and full layouts have not been seen on screen.
+**Closed after the page deploy (version 0.14.0, on main, NOT yet deployed):** the calendar shows a skeleton while the office is asked and says it could not be loaded when it did not answer, with Try again (items 25 and 26). A calendar that already has events keeps drawing them. `verify:ui`, `verify:wired`, `verify:talk` (36 of 36), lint and typecheck pass.
+
+**Still open:**
+- A signed-in check of the live connection lists, the Drive picker save, and the Columns settings on a real office. Needs a person signed in.
+- The Card Table keeps blank space inside it, because its height follows the count of stages. This is a visual decision.
+- Adding or removing Card Table columns needs a backend change (ADR-0075).
+- The empty and full layouts have not been seen on screen; the layout is proved in tests.
+- Requirements 7 and 10 are partial (see the limits above).
+- The older studio (`/classic`) and the two checks that test it are kept, not removed.
 
 **Environment:** `ALLOW_PRODUCTION_CHECKS=1` is set in the build sandbox, which means production reads can run without a deliberate choice. It should be cleared there.
 

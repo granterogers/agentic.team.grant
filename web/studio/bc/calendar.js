@@ -49,7 +49,8 @@
 
 import { act, canWrite, read } from '../office.js'
 import { growFrom, settleOnto } from './expand.js'
-import { esc } from './parts.js'
+import { button, errorState, esc, skeleton } from './parts.js'
+import { source } from '../data.js'
 import * as todos from './todos.js'
 
 let ctx = null
@@ -671,6 +672,11 @@ export const block = (p, { full = false } = {}) => {
   const ev = eventsFor(p.slug)
   const tasks = s.scope === 'project' ? taskItems(p) : []
   const list = [...ev.list, ...tasks]
+  // Nothing yet while the office is still being asked: a skeleton, not an empty month (22 October 2026, item 25).
+  if (list.length === 0 && source.fetching === true) return skeleton(3)
+  // The office did not answer: say so, with a way to ask again, rather than an empty calendar (item 26).
+  if (list.length === 0 && source.state === 'unreachable')
+    return errorState('Your calendar could not be loaded just now.', button('Try again', { 'data-bc-retry-office': '1' }))
   const today = todayIso()
   const days =
     s.view === 'day' ? [s.cursor] : Array.from({ length: 7 }, (_, i) => addDays(weekStart(s.cursor), i))

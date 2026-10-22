@@ -56,6 +56,16 @@ describe('an empty module while the office is being asked (item 25)', () => {
     expect(miniatures.contactsMini(project)).not.toContain('Nobody is recorded')
   })
 
+  it('the calendar keeps its month while the office is asked, when it already has events to draw', () => {
+    // The calendar's events come from the Sample or this browser, not from the office, so a month that has events is
+    // drawn at once. The skeleton is for an empty month that is still being asked for.
+    data.source.fetching = true
+    const html = miniatures.calendarMini(project)
+    expect(html).toContain('data-bc-cal')
+    expect(html).not.toContain('bcskelwrap')
+    data.source.fetching = false
+  })
+
   it('once the office has answered, an empty list is genuinely empty', () => {
     data.source.fetching = false
     expect(miniatures.cardsMini(project)).toContain('No to-dos yet')
