@@ -13,8 +13,9 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 841,
-    "highestAppliedAtRecord": "1093",
+    "appliedAtRecord": 842,
+    "highestAppliedAtRecord": "1094",
+    "note1094": "On 22 October 2026 migration 1094 (a paused job that waits on a person does not keep the heartbeat awake: app.worker_has_work counts a pause only when app.resumable_now returns it) was applied to production with npm run migrate:one and the production write flag, under Grant's authorisation, from 10fae1a. It replaces the 1093 predicate; the heartbeat cron entry itself is unchanged.",
     "note1093": "On 22 October 2026 migration 1093 (the heartbeat knocks only when there is work: app.worker_has_work, app.kick_worker_if_due, and the worker-heartbeat cron rescheduled to call it) was applied to production with npm run migrate:one and the production write flag, under Grant's authorisation, from 3ccd9c8. A first attempt failed on a wrong column name (signals has received_at, not created_at) and rolled back with nothing applied; the fix is in 3ccd9c8. Read back: cron.job worker-heartbeat now runs ' select app.kick_worker_if_due() '.",
     "note1092": "On 22 October 2026 migrations 1091 (drops the unused public headroom wrapper) and 1092 (drops the unused app headroom function) were applied to production with npm run migrate:one and the production write flag, under Grant's authorisation. Both were read-only checked first: no live function mentions the headroom function. check:callers now passes.",
     "noteProbe19Oct": "On 19 October 2026 the deploy probe was changed to check the NotebookLM reader and writer with the vaulted master token, the way the product reads them (commit of the same name in the log). deploy:hq then reported reader: http 200 with 3 notebooks, and writer: http 200 ok=true through the write path. Earlier probes reported 502 for the stored cookie jar, which had gone stale. Live gateway: hq-api v944 and the page were in place; the Services tiles were deployed in the 1089/1090 deploy.",
