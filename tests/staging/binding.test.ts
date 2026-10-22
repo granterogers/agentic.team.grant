@@ -37,6 +37,7 @@ const stagingEnv = (over: Env = {}): Env => ({
   STAGING_SITE_URL: 'https://team-hq-staging.vercel.app',
   VERCEL_ENV: 'preview',
   STAGING_GOOGLE_CLIENT_ID: 'staging-client.apps.googleusercontent.com',
+  STAGING_MICROSOFT_CLIENT_ID: '11111111-2222-4333-8444-555555555555',
   STAGING_TELEGRAM_BOT: 'unused',
   STAGING_SLACK_TEAM: 'unused',
   STAGING_VIKUNJA_URL: 'unused',

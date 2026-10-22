@@ -16,6 +16,7 @@
     "deploy:hq-basecamp",
     "deploy:hq-page",
     "deploy:mcp",
+    "deploy:microsoft-oauth",
     "deploy:page",
     "deploy:preview",
     "deploy:signin",

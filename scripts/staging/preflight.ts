@@ -33,6 +33,7 @@ const WANTED = [
   'STAGING_SITE_URL=https://<the preview deployment>',
   'VERCEL_ENV=preview',
   'STAGING_GOOGLE_CLIENT_ID=<staging OAuth client id | unused>',
+  'STAGING_MICROSOFT_CLIENT_ID=<staging Entra application id | unused>',
   'STAGING_TELEGRAM_BOT=<staging bot username | unused>',
   'STAGING_SLACK_TEAM=<staging workspace id | unused>',
   'STAGING_VIKUNJA_URL=<staging Vikunja address | unused>',

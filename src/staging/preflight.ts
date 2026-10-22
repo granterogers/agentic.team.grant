@@ -182,6 +182,7 @@ export function evaluate(env: Env, deny: Denylist, opts: { denylistFileFound: bo
   // --- each integration is a staging/test one, or deliberately absent -------------------------------------------------------
   for (const [name, what] of [
     ['STAGING_GOOGLE_CLIENT_ID', 'Google OAuth client'],
+    ['STAGING_MICROSOFT_CLIENT_ID', 'Microsoft app registration (To Do)'],
     ['STAGING_TELEGRAM_BOT', 'Telegram bot'],
     ['STAGING_SLACK_TEAM', 'Slack workspace'],
     ['STAGING_VIKUNJA_URL', 'Vikunja server'],

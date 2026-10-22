@@ -19,6 +19,7 @@ const good: Env = {
   STAGING_SITE_URL: 'https://team-hq-staging-git-feature.vercel.app',
   VERCEL_ENV: 'preview',
   STAGING_GOOGLE_CLIENT_ID: 'staging-client-123.apps.googleusercontent.com',
+  STAGING_MICROSOFT_CLIENT_ID: '11111111-2222-4333-8444-555555555555',
   STAGING_TELEGRAM_BOT: 'team_hq_staging_bot',
   STAGING_SLACK_TEAM: 'unused',
   STAGING_VIKUNJA_URL: 'https://vikunja.staging.example.org',

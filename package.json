@@ -230,6 +230,7 @@
     "deploy:worker": "tsx scripts/deploy/worker.ts",
     "release:services": "tsx scripts/release/bundle-manifest.ts",
     "deploy:google": "tsx scripts/deploy/google.ts",
+    "deploy:microsoft-oauth": "tsx scripts/deploy/microsoft-oauth.ts",
     "telegram:login": "tsx scripts/telegram/login.ts",
     "telegram:bots": "tsx scripts/telegram/bots.ts",
     "verify:mail": "tsx scripts/verify/mail.ts",
