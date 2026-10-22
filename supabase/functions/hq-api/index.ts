@@ -4630,16 +4630,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
     )
   // TEMPORARY DIAGNOSTIC (remove after reading): three back-to-back calls from inside the gateway, timed.
   if (name === 'studio' && url.searchParams.get('diag') === '1') {
-    const diag: number[] = []
-    for (let i = 0; i < 3; i++) {
+    const diag: Record<string, number> = {}
+    for (const fn of ['hq_studio', 'hq_projects', 'hq_pulse', 'hq_studio']) {
       const t0 = performance.now()
-      const rr = await fetch(`${DB_URL}/rest/v1/rpc/${section.fn}`, {
+      const rr = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
         method: 'POST',
         headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(args),
       })
-      await rr.text()
-      diag.push(Math.round(performance.now() - t0))
+      const size = (await rr.text()).length
+      diag[`${fn}@${String(Math.round(performance.now() - t0))}ms`] = size
     }
     return json({ diag }, 200)
   }
