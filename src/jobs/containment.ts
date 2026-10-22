@@ -71,6 +71,7 @@ export const REACH: Readonly<Record<string, KindReach>> = {
   'office.slack_rotate': { reach: 'external', service: 'Slack' },
   'office.vault_export': { reach: 'external', service: 'Telegram' },
   'tasks.sync': { reach: 'external', service: 'the task board' },
+  'microsoft.todo_sync': { reach: 'external', service: 'Microsoft To Do' },
 
   // --- reads: fetches from a third party, changes nothing there -------------
   'browser.gather': { reach: 'reads' },

@@ -253,6 +253,8 @@ const placed = {}
   function that names it is the `ageTimer` trap.
 */
 let googleSaid = null
+// What came back from Microsoft's consent screen (`?microsoft=`), said once on the connections tab.
+let microsoftSaid = null
 
 /*
   How much has arrived on each project since he last opened it (#122).
@@ -6614,6 +6616,33 @@ function notebookSteps() {
         </ul>`
 }
 
+// Microsoft To Do needs one sign-in app registered in Microsoft Entra, once. These are the steps, and the two boxes they fill.
+function microsoftSetupBody(redirectUri) {
+  const uri = redirectUri === null || redirectUri === '' ? 'Shown here once the office knows its address.' : redirectUri
+  return `<p class="st-steps-title">Set up the Microsoft sign-in in six steps</p>
+    <ol class="st-steps">
+      <li>Open <a href="https://entra.microsoft.com" target="_blank" rel="noopener">entra.microsoft.com</a> and sign in with the Microsoft account that owns your To Do lists.</li>
+      <li>Go to Identity &gt; Applications &gt; App registrations &gt; New registration. Name it <strong>INNERGY Office</strong>. Under Supported account types, choose <strong>Accounts in any organizational directory and personal Microsoft accounts</strong>.</li>
+      <li>Under Redirect URI, choose <strong>Web</strong> and paste this address exactly:<br><code>${esc(uri)}</code></li>
+      <li>Press Register. On the Overview page, copy the <strong>Application (client) ID</strong> into the first box below.</li>
+      <li>Go to Certificates &amp; secrets &gt; New client secret. Copy its <strong>Value</strong> (not the Secret ID) into the second box below. Microsoft shows it only once.</li>
+      <li>Go to API permissions &gt; Add a permission &gt; Microsoft Graph &gt; Delegated permissions. Tick <strong>Tasks.ReadWrite</strong> and <strong>offline_access</strong>, then press Add permissions.</li>
+    </ol>
+    <form class="st-form" data-mstodo-on data-saidwrap>
+      <div class="st-formrow">
+        <label class="st-field"><span>Application (client) ID</span>
+          <input class="st-input" data-mstodo-id autocomplete="off" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000" aria-label="The Application (client) ID from Microsoft" required></label>
+        <label class="st-field"><span>Client secret value</span>
+          <input class="st-input" data-mstodo-secret type="password" autocomplete="off" spellcheck="false" aria-label="The client secret value from Microsoft" required></label>
+      </div>
+      <div class="st-ctl" style="justify-content:flex-start">
+        <button class="st-btn primary" type="submit">Save</button>
+        <span class="st-said" data-said role="status" aria-live="polite"></span>
+      </div>
+    </form>
+    <p class="st-meta">The secret is stored in the vault and is never shown again.</p>`
+}
+
 // Notion's integration secret, pasted here and stored in the vault (migration 1090). A password box, so it is not shown.
 function notionBody() {
   return `<p class="st-steps-title">Connect Notion in two steps</p>
@@ -6709,13 +6738,20 @@ function connectionsTab() {
   const googleNeedsSetup = operator && ((config.SETUP ?? {}).google ?? {}).ready === false
 
   const said =
-    googleSaid === null
+    (googleSaid === null
       ? ''
       : ui.note({
           tone: googleSaid.tone === 'good' ? '' : 'warn',
           ic: googleSaid.tone === 'good' ? 'info' : 'info',
           text: googleSaid.text,
-        })
+        })) +
+    (microsoftSaid === null
+      ? ''
+      : ui.note({
+          tone: microsoftSaid.tone === 'good' ? '' : 'warn',
+          ic: 'info',
+          text: microsoftSaid.text,
+        }))
 
   // What the team keeps of your email is a privacy fact, so it is stated as one.
   const mail = (() => {
@@ -6807,6 +6843,89 @@ function connectionsTab() {
               </div>
             </form>`
           : ui.empty(canWrite() ? 'Connecting another task app is done by whoever runs this Team HQ.' : 'Sign in to connect one.'),
+      ]),
+    })
+  })()
+
+  // Your tasks in Microsoft To Do: the same arrangement as Vikunja above. Your tasks live here; the To Do list is a copy.
+  const msTasks = (() => {
+    const m = config.MICROSOFT_TODO
+    const title = 'Keep your tasks in step with Microsoft To Do'
+    // Asking is only honest while there is an office to ask; signed out, nothing is connected.
+    if (m.configured === null && canWrite()) {
+      return ui.section({ title: 'Your tasks in Microsoft To Do', body: ui.card([ui.empty('Asking…')]) })
+    }
+    const canSet = canWrite() && operator
+    const disconnect = canSet ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-mstodo-off': true } }) : ''
+    if (m.configured === true) {
+      // The last round's reading (ok, or what Microsoft said). A down connection is the loudest thing on this card.
+      const h = m.health
+      const down = h !== null && h.ok === false
+      const downChip = { refused: 'Token refused', error: 'Refused the last round', unreachable: 'Not answering' }
+      const why = down
+        ? h.kind === 'refused'
+          ? 'Microsoft turned the connection down. Nothing was changed here and nothing is lost. To fix it, disconnect, then connect again.'
+          : h.kind === 'error'
+            ? 'Microsoft answered but refused the sync. Nothing was changed here and nothing is lost. Disconnect, then connect again.'
+            : 'Microsoft is not answering. Nothing was changed here and nothing is lost. The team tries again every quarter of an hour and this clears itself when it answers.'
+        : ''
+      return ui.section({
+        title: 'Your tasks in Microsoft To Do',
+        body: ui.card([
+          ui.row({
+            name: title,
+            desc: `In step with your Microsoft To Do list "${String(m.listName ?? '')}". Your tasks live here; Microsoft To Do holds a copy, and disconnecting never loses anything.`,
+            wrap: true,
+            said: true,
+            kind: 'wide',
+            status: '',
+            control: (down ? ui.chip('bad', downChip[h.kind] ?? 'Not answering') : ui.chip('ok', 'In step')) + disconnect,
+          }),
+          ...(down
+            ? [ui.row({ name: 'Why it stopped', desc: `What it said: ${String(h.detail ?? '')}. ${why}`, kind: 'fact', attr: { 'data-mstodo-down': h.kind ?? 'unreachable' } })]
+            : []),
+        ]),
+      })
+    }
+    if (m.connected === true) {
+      return ui.section({
+        title: 'Your tasks in Microsoft To Do',
+        body: ui.card([
+          ui.row({
+            name: title,
+            desc: 'Microsoft To Do is connected. The office picks your default list on its next round, within 15 minutes, and then keeps it in step with your tasks here.',
+            wrap: true,
+            kind: 'wide',
+            status: '',
+            control: ui.chip('warn', 'Choosing a list') + disconnect,
+          }),
+        ]),
+      })
+    }
+    const note = 'Your tasks work on their own. If you keep Microsoft To Do, the team can mirror them both ways. It stays a copy, and disconnecting never loses anything.'
+    if (m.clientConfigured === true) {
+      return ui.section({
+        title: 'Your tasks in Microsoft To Do',
+        note,
+        body: ui.card([
+          ui.row({
+            name: 'Connect Microsoft To Do',
+            desc: 'The first sign-in asks for permission to read and change your To Do lists and the tasks in them. It does not ask for your mail, calendar or files.',
+            wrap: true,
+            kind: 'wide',
+            status: '',
+            control: canSet ? ui.button({ label: 'Connect Microsoft To Do', tone: 'primary', a: { 'data-mstodo-connect': true } }) : '',
+          }),
+        ]),
+      })
+    }
+    return ui.section({
+      title: 'Your tasks in Microsoft To Do',
+      note,
+      body: ui.card([
+        canSet
+          ? microsoftSetupBody(m.redirectUri)
+          : ui.empty(canWrite() ? 'Setting this up is done by whoever runs this Team HQ.' : 'Sign in to connect one.'),
       ]),
     })
   })()
@@ -6940,6 +7059,20 @@ function connectionsTab() {
         : vk.health?.state === 'down'
           ? ['bad', 'Not working']
           : ['ok', 'Connected']
+  // Microsoft To Do's word, from its own reading: asking, not set up, choosing a list, not working, or connected.
+  const msTodo = config.MICROSOFT_TODO
+  const msTodoTone =
+    msTodo.configured === null || msTodo.configured === undefined
+      ? ['off', 'Checking…']
+      : msTodo.configured === true
+        ? msTodo.health?.ok === false
+          ? ['bad', 'Not working']
+          : ['ok', 'Connected']
+        : msTodo.connected === true
+          ? ['warn', 'Choosing a list']
+          : msTodo.clientConfigured === true
+            ? ['off', 'Not connected']
+            : ['off', 'Not set up']
   const gmailMark = markFor('gmail')
   const driveMark = markFor('drive')
   const calendarMark = markFor('calendar')
@@ -6985,6 +7118,16 @@ function connectionsTab() {
       word: vikunjaTone[1],
       detail: config.TASK_SYNC.configured === true ? String(config.TASK_SYNC.url ?? '') : 'Keeps your tasks in step with a copy in Vikunja.',
       body: tasks,
+    }),
+    // Microsoft To Do is a connector of its own, opened the same way as Vikunja's tile.
+    tile({
+      key: 'microsoft_todo',
+      name: 'Microsoft To Do',
+      svg: '<span class="st-initial" aria-hidden="true">M</span>',
+      tone: msTodoTone[0],
+      word: msTodoTone[1],
+      detail: msTodo.configured === true ? `Your list: ${String(msTodo.listName ?? '')}` : 'Keeps your tasks in step with a copy in Microsoft To Do.',
+      body: msTasks,
     }),
   ]
   // Everything else on this page sits in the same grid, as a full-width cell, so no block is left outside it.
@@ -8532,6 +8675,62 @@ function settingsSheet() {
         return
       }
       const done = await attempt(b, 'Disconnecting…', async () => await act('vikunja_forget', {}))
+      if (!done) return
+      await afterWrite()
+    })
+  }
+  /*
+    Microsoft To Do: the same shape as Vikunja. The Azure app's id and secret go to a function that sorts and stores them;
+    the page hands over what was typed and shows what the office answered. The secret box is cleared whatever happened.
+  */
+  const msWire = $('[data-mstodo-on]', v)
+  if (msWire !== null) {
+    msWire.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const clientId = String($('[data-mstodo-id]', msWire)?.value ?? '').trim()
+      const clientSecret = String($('[data-mstodo-secret]', msWire)?.value ?? '').trim()
+      const btn = $('button[type="submit"]', msWire)
+      const done = await attempt(btn, 'Saving…', async () =>
+        await act('microsoft_todo_set_client', { client_id: clientId, client_secret: clientSecret }),
+      )
+      const box = $('[data-mstodo-secret]', msWire)
+      if (box !== null) box.value = ''
+      if (!done) return
+      await afterWrite()
+    })
+  }
+  for (const b of v.querySelectorAll('[data-mstodo-connect]')) {
+    b.addEventListener('click', async () => {
+      // A same-tab move after the office has minted the consent address. Only an https address is followed.
+      await attempt(
+        b,
+        'Opening Microsoft…',
+        async () => {
+          const made = await act('microsoft_todo_connect', {})
+          const url = String(made?.url ?? '')
+          if (!url.startsWith('https://')) throw new Error('Microsoft could not be opened just now. Nothing was changed.')
+          window.location.href = url
+          return true
+        },
+        'Microsoft is opening.',
+      )
+    })
+  }
+  for (const b of v.querySelectorAll('[data-mstodo-off]')) {
+    b.addEventListener('click', async () => {
+      if (
+        !(await settingsUi.confirmDialog({
+          title: 'Disconnect Microsoft To Do?',
+          body:
+            'Every task stays here; Microsoft To Do held a copy, not the list. The Microsoft sign-in is removed too, ' +
+            'so reconnecting needs a new one.',
+          confirmLabel: 'Disconnect',
+          danger: true,
+        }))
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Disconnecting…', async () => await act('microsoft_todo_forget', {}))
       if (!done) return
       await afterWrite()
     })
@@ -14338,7 +14537,50 @@ if (typeof window !== 'undefined') {
   It is words and nothing else. Whether Google is connected is read from
   `connection_health`, which is the card underneath.
 */
+/*
+  Microsoft's consent screen comes back here as `?microsoft=connected|refused|failed` (the edge function `microsoft-oauth`
+  sends it). Words only, like the Google return above: whether Microsoft To Do is connected is read from the office when
+  the tab opens, so a typed address cannot make it look connected. The address is cleaned so a reload does not re-announce.
+*/
+function cameBackFromMicrosoft() {
+  if (typeof location === 'undefined') return false
+  let said
+  try {
+    said = new URLSearchParams(location.search)
+  } catch {
+    return false
+  }
+  const outcome = said.get('microsoft')
+  if (outcome === null) return false
+  const why = (said.get('why') ?? '').slice(0, 160)
+  state.setting = 'connections'
+  state.settingsPane = 'detail'
+  microsoftSaid =
+    outcome === 'connected'
+      ? {
+          tone: 'good',
+          text: 'Microsoft To Do is connected. The office picks your default list within 15 minutes.',
+        }
+      : {
+          tone: 'warn',
+          text:
+            outcome === 'refused'
+              ? `Microsoft did not grant it${why === '' ? '' : ` — ${why}`}. Nothing changed.`
+              : `That did not finish${why === '' ? '' : ` — ${why}`}. Nothing changed, so ` +
+                'trying again is safe.',
+        }
+  try {
+    const clean = new URL(location.href)
+    for (const k of ['microsoft', 'why']) clean.searchParams.delete(k)
+    history.replaceState({}, '', clean.pathname + clean.search)
+  } catch {
+    /* A page opened from a file has no history to write to. The note still shows. */
+  }
+  return true
+}
+
 const backFromGoogle = cameBackFromGoogle()
+const backFromMicrosoft = cameBackFromMicrosoft()
 
 /*
   HAND THE EXPERIMENTAL EXPERIENCE WHAT IT NEEDS, once, before the first paint.
@@ -15060,7 +15302,7 @@ render()
   the page's invented example office, which is not somewhere to reconnect anything; the person gets the ordinary
   signed-out page and its way in instead. The Google callback has always opened it, and still does.
 */
-if (backFromGoogle === 'link' ? canWrite() : backFromGoogle) {
+if (backFromGoogle === 'link' ? canWrite() : backFromGoogle || backFromMicrosoft) {
   settingsSheet()
   sheet($('#settings'), true)
 }

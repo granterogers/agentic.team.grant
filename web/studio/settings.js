@@ -328,6 +328,19 @@ export const MAIL_BODIES = { bulk: 0, held: null, messages: 0, unread: 0 }
   card says so.
 */
 export const TASK_SYNC = { configured: null, url: null, project: null, linked: 0, trouble: [], health: null }
+/*
+  Microsoft To Do, read on its own call for the same reason as Vikunja. `clientConfigured` is whether the Azure app's id
+  and secret are in place; `connected` is whether a sign-in is stored; `configured` is connected AND a list has been
+  chosen. `health` is the last round's reading, or null until a round has run.
+*/
+export const MICROSOFT_TODO = {
+  configured: null,
+  connected: false,
+  clientConfigured: false,
+  listName: null,
+  redirectUri: null,
+  health: null,
+}
 export const BEHAVIOURS = [...FALLBACK_BEHAVIOURS]
 export const STANDING = [...FALLBACK_STANDING]
 export const DECISIONS = [...FALLBACK_DECISIONS]
@@ -554,6 +567,32 @@ export async function hydrateSettings(read) {
       .catch(() => {
         // A read that fails is not configured, so the card stops asking and offers the set-up it would offer anyway.
         TASK_SYNC.configured = false
+      })
+
+    // Microsoft To Do, the same way: its own call, and a failed read is "not set up", never "still asking".
+    read('microsoft_todo')
+      .then((d3) => {
+        if (d3 === null || typeof d3 !== 'object') {
+          MICROSOFT_TODO.configured = false
+          return
+        }
+        MICROSOFT_TODO.configured = d3.configured === true
+        MICROSOFT_TODO.connected = d3.connected === true
+        MICROSOFT_TODO.clientConfigured = d3.client_configured === true
+        MICROSOFT_TODO.listName = typeof d3.list_name === 'string' ? d3.list_name : null
+        MICROSOFT_TODO.redirectUri = typeof d3.redirect_uri === 'string' ? d3.redirect_uri : null
+        MICROSOFT_TODO.health =
+          d3.health !== null && typeof d3.health === 'object' && typeof d3.health.kind === 'string'
+            ? {
+                ok: d3.health.ok === true,
+                kind: d3.health.kind,
+                detail: typeof d3.health.detail === 'string' ? d3.health.detail : '',
+                at: typeof d3.health.at === 'string' ? d3.health.at : null,
+              }
+            : null
+      })
+      .catch(() => {
+        MICROSOFT_TODO.configured = false
       })
 
     // And the decision log, the same way and for the same reason (#129).

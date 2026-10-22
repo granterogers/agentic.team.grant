@@ -688,6 +688,9 @@ const SECTIONS: Readonly<
     front of it.
   */
   task_sync: { fn: 'task_sync_panel', office: true },
+  // Microsoft To Do's card (1093): whether the application and the connection are present, the list, and the last round.
+  // Never a secret. Its own section, as Vikunja's is, so the card does not wait for the whole Settings payload.
+  microsoft_todo: { fn: 'microsoft_todo_settings', office: true },
   conversation: { fn: 'conversation_history', office: true, arg: 'p_project_id' },
   /*
     How fast the conversation is growing, and how much room is left (#204).
@@ -2081,6 +2084,24 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     by: 'p_by',
   },
   vikunja_forget: { fn: 'hq_forget_vikunja', office: true, required: [] },
+  /*
+    Microsoft To Do (1093). The application registration is the deployment's own app, so saving it is the operator's
+    act. Connecting starts the consent screen: it returns a URL the browser follows, and the state inside it is minted
+    only for a deployment operator. Forgetting removes the connection and never the application registration.
+  */
+  microsoft_todo_set_client: {
+    fn: 'hq_set_microsoft_client',
+    office: true,
+    required: ['p_client_id', 'p_client_secret'],
+    by: 'p_by',
+  },
+  microsoft_todo_connect: {
+    fn: 'hq_microsoft_connect_start',
+    office: true,
+    required: [],
+    by: 'p_by',
+  },
+  microsoft_todo_forget: { fn: 'hq_forget_microsoft_todo', office: true, required: [] },
 }
 
 /**
@@ -2422,6 +2443,9 @@ const OPERATOR_ONLY: ReadonlySet<string> = new Set([
   'disconnect',
   'vikunja_connect',
   'vikunja_forget',
+  'microsoft_todo_set_client',
+  'microsoft_todo_connect',
+  'microsoft_todo_forget',
   'register_connector',
   'revoke_connector',
   'offer_connector_tool',

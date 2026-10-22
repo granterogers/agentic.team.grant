@@ -66,6 +66,7 @@ import { instructionHandler } from '../handlers/instruction.ts'
 import { jobTracesHandler } from '../handlers/job-traces.ts'
 import { mailHandler } from '../handlers/mail.ts'
 import { mcpDiscoverHandler } from '../handlers/mcp-discover.ts'
+import { microsoftTodoSyncHandler } from '../handlers/microsoft-todo-sync.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
 import { notionAdoptHandler } from '../handlers/notion-adopt.ts'
 import { notionImportHandler } from '../handlers/notion-import.ts'
@@ -525,6 +526,8 @@ export const buildPass = async (
     followupsHandler(db),
     remindersHandler(db),
     tasksSyncHandler(db),
+    // Microsoft To Do, when Grant has connected it (the duty is disabled until then).
+    microsoftTodoSyncHandler(db),
     // "Use the Notion you already have" — a configuration change the office can
     // now make, rather than one that needed a terminal (0164).
     notionAdoptHandler({ db }),
