@@ -836,5 +836,7 @@
   "1087_the_services_list_is_read_on_its_own.sql": "9a6cfc26da33e96ee0d87d5a235ed685b8e6e1dc68049383dca8c02c0abf093d",
   "1088_the_spend_card_is_read_beside_settings_not_inside_it.sql": "f0803f8344b2f2d1f3c46f29264429d3595977d989f3494ae3c05d17b4daa94f",
   "1089_the_google_sign_in_is_read_once_for_the_services_tiles.sql": "38ac8ab4d6a657a12cc0fa93387510c693359ce393a571b80ce4c35b1adb8f07",
-  "1090_a_notion_token_can_be_pasted_from_the_page.sql": "0fe0668c944465bee055eef32da82f8ade20327605e8f0b9c53c80a97e9124ee"
+  "1090_a_notion_token_can_be_pasted_from_the_page.sql": "0fe0668c944465bee055eef32da82f8ade20327605e8f0b9c53c80a97e9124ee",
+  "1091_the_unused_headroom_wrapper_is_dropped.sql": "cdd5e8b040f0afa2b7b0a049d9b812ce9cd5ad2112b850a6a26a7ebfd522d003",
+  "1092_the_unused_headroom_function_is_dropped.sql": "5b0d741950a92f7063fcdac5aece0988bd232d3a8f0bde7781eb37c4114e1c31"
 }
