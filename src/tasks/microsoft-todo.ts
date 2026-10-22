@@ -125,6 +125,21 @@ export const readTask = (t: GraphTask, listId: string): RemoteTask => ({
   canonicalId: markerOf(t.body?.content),
 })
 
+/** Statuses the office cannot show. A write keeps Microsoft's value rather than resetting it to "not started". */
+const KEPT_STATUSES = new Set(['inProgress', 'waitingOnOthers', 'deferred'])
+const keptStatus = (remote: GraphTask | null): string | null =>
+  remote !== null && KEPT_STATUSES.has(String(remote.status)) ? String(remote.status) : null
+
+/**
+ * The due date to send. If the office's date is the date Microsoft already holds, Microsoft's own value goes back
+ * unchanged, which keeps a due TIME and its time zone that the office cannot hold. Only a changed date is written.
+ */
+const dueKept = (task: CanonicalTask, remote: GraphTask | null): unknown => {
+  if (task.dueOn === null) return null
+  if (remote?.dueDateTime && dueIn(remote.dueDateTime) === task.dueOn) return remote.dueDateTime
+  return dueOut(task.dueOn)
+}
+
 export interface MicrosoftTodoOptions {
   /** The Azure application (client) id. Not secret, but never logged. */
   readonly clientId: string
@@ -312,14 +327,21 @@ export class MicrosoftTodoProvider implements TaskProvider {
     return `/me/todo/lists/${encodeURIComponent(this.listId)}/tasks`
   }
 
-  private body(task: CanonicalTask): Record<string, unknown> {
-    return {
+  /*
+    The payload for one write. A create sends what the office models. An update is built on what Microsoft holds, so a
+    field the office did not change keeps Microsoft's own value: a due TIME and its zone, a status the office cannot
+    show (in progress, waiting on others, deferred). Every field not named here is not sent, so Microsoft keeps it
+    (categories, reminders, recurrence, checklist items, linked resources, start and completion dates).
+  */
+  private body(task: CanonicalTask, remote: GraphTask | null): Record<string, unknown> {
+    const out: Record<string, unknown> = {
       title: task.title.slice(0, TITLE_MAX),
       body: { contentType: 'text', content: withMark(task.detail, task.id) },
-      status: task.done ? 'completed' : 'notStarted',
       importance: importanceOut(task.priority),
-      dueDateTime: dueOut(task.dueOn),
+      status: task.done ? 'completed' : (keptStatus(remote) ?? 'notStarted'),
     }
+    out.dueDateTime = dueKept(task, remote)
+    return out
   }
 
   async upsert(task: CanonicalTask): Promise<UpsertResult> {
@@ -333,13 +355,29 @@ export class MicrosoftTodoProvider implements TaskProvider {
     const creating = task.externalId === null || task.externalId === ''
     const adopted = creating ? await this.alreadyMine(task.id) : null
     const target = creating ? adopted : task.externalId
+    /*
+      An update reads Microsoft's copy first, so the write keeps what the office does not hold. A task Microsoft no
+      longer has (404) is created again rather than failing every round.
+    */
+    let remote: GraphTask | null = null
+    if (target !== null && target !== '') {
+      try {
+        remote = (await this.call(
+          'GET',
+          `${this.tasksPath()}/${encodeURIComponent(target)}`,
+        )) as GraphTask
+      } catch (error) {
+        if (error instanceof ProviderDownError || !/http 404/.test((error as Error).message))
+          throw error
+      }
+    }
     const got = (
-      target === null || target === ''
-        ? await this.call('POST', this.tasksPath(), this.body(task))
+      remote === null
+        ? await this.call('POST', this.tasksPath(), this.body(task, null))
         : await this.call(
             'PATCH',
-            `${this.tasksPath()}/${encodeURIComponent(target)}`,
-            this.body(task),
+            `${this.tasksPath()}/${encodeURIComponent(target ?? '')}`,
+            this.body(task, remote),
           )
     ) as GraphTask | null
     return {

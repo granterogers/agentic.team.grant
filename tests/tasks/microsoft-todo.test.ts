@@ -236,6 +236,10 @@ describe('the To Do routes', () => {
         status: 200,
         json: { value: [{ id: 'found-1', body: { content: `x\n\n[agentic:${ID}]` } }] },
       }),
+      'GET /v1.0/me/todo/lists/AAMk-list-1/tasks/found-1': () => ({
+        status: 200,
+        json: { id: 'found-1', status: 'notStarted' },
+      }),
       'PATCH /v1.0/me/todo/lists/AAMk-list-1/tasks/found-1': () => ({
         status: 200,
         json: { id: 'found-1', lastModifiedDateTime: '2026-10-22T11:00:00Z' },
@@ -300,5 +304,103 @@ describe('the To Do routes', () => {
     })
     const p = provider(g.fetch, '')
     expect(await p.defaultList()).toEqual({ id: 'L-default', name: 'Tasks' })
+  })
+})
+
+describe('an update keeps what Microsoft holds and the office does not show', () => {
+  const remoteTask = {
+    id: 'r-1',
+    title: 'Old title',
+    status: 'inProgress',
+    importance: 'high',
+    body: { content: `old note\n\n[agentic:${ID}]` },
+    dueDateTime: { dateTime: '2026-10-25T16:30:00.0000000', timeZone: 'Europe/London' },
+    categories: ['Work'],
+    isReminderOn: true,
+    reminderDateTime: { dateTime: '2026-10-25T09:00:00.0000000', timeZone: 'Europe/London' },
+    recurrence: { pattern: { type: 'weekly' } },
+    lastModifiedDateTime: '2026-10-22T09:00:00Z',
+  }
+  const canonical = {
+    id: ID,
+    revision: 3,
+    title: 'New title',
+    detail: 'old note',
+    done: false,
+    priority: 50,
+    dueOn: '2026-10-25',
+    externalId: 'r-1',
+    externalProjectId: null,
+  }
+
+  it('keeps the due time and zone when the date is unchanged, and keeps an in-progress status', async () => {
+    const g = fakeGraph({
+      'GET /v1.0/me/todo/lists/AAMk-list-1/tasks/r-1': () => ({ status: 200, json: remoteTask }),
+      'PATCH /v1.0/me/todo/lists/AAMk-list-1/tasks/r-1': () => ({
+        status: 200,
+        json: { id: 'r-1', lastModifiedDateTime: '2026-10-22T12:00:00Z' },
+      }),
+    })
+    await provider(g.fetch).upsert(canonical)
+    const sent = JSON.parse(g.calls.find((c) => c.method === 'PATCH')?.body ?? '{}') as Record<
+      string,
+      unknown
+    >
+    expect(sent.dueDateTime).toEqual(remoteTask.dueDateTime)
+    expect(sent.status).toBe('inProgress')
+    expect(sent.title).toBe('New title')
+  })
+
+  it('does not send fields the office does not model, so Microsoft keeps them', async () => {
+    const g = fakeGraph({
+      'GET /v1.0/me/todo/lists/AAMk-list-1/tasks/r-1': () => ({ status: 200, json: remoteTask }),
+      'PATCH /v1.0/me/todo/lists/AAMk-list-1/tasks/r-1': () => ({
+        status: 200,
+        json: { id: 'r-1' },
+      }),
+    })
+    await provider(g.fetch).upsert(canonical)
+    const sent = JSON.parse(g.calls.find((c) => c.method === 'PATCH')?.body ?? '{}') as Record<
+      string,
+      unknown
+    >
+    for (const kept of [
+      'categories',
+      'isReminderOn',
+      'reminderDateTime',
+      'recurrence',
+      'checklistItems',
+      'linkedResources',
+    ]) {
+      expect(sent).not.toHaveProperty(kept)
+    }
+  })
+
+  it('writes a changed date, at midnight UTC, and a completion when the office completes it', async () => {
+    const g = fakeGraph({
+      'GET /v1.0/me/todo/lists/AAMk-list-1/tasks/r-1': () => ({ status: 200, json: remoteTask }),
+      'PATCH /v1.0/me/todo/lists/AAMk-list-1/tasks/r-1': () => ({
+        status: 200,
+        json: { id: 'r-1' },
+      }),
+    })
+    await provider(g.fetch).upsert({ ...canonical, dueOn: '2026-11-02', done: true })
+    const sent = JSON.parse(g.calls.find((c) => c.method === 'PATCH')?.body ?? '{}') as Record<
+      string,
+      unknown
+    >
+    expect(sent.dueDateTime).toEqual({ dateTime: '2026-11-02T00:00:00.0000000', timeZone: 'UTC' })
+    expect(sent.status).toBe('completed')
+  })
+
+  it('creates the task again when Microsoft no longer has it, rather than failing every round', async () => {
+    const g = fakeGraph({
+      'GET /v1.0/me/todo/lists/AAMk-list-1/tasks/r-1': () => ({ status: 404 }),
+      'GET /v1.0/me/todo/lists/AAMk-list-1/tasks': () => ({ status: 200, json: { value: [] } }),
+      'POST /v1.0/me/todo/lists/AAMk-list-1/tasks': () => ({ status: 201, json: { id: 'r-2' } }),
+    })
+    const got = await provider(g.fetch).upsert(canonical)
+    expect(got.externalId).toBe('r-2')
+    expect(g.calls.some((c) => c.method === 'POST' && c.url.includes('/me/todo/'))).toBe(true)
   })
 })

@@ -48,6 +48,24 @@ Microsoft To Do differs from Vikunja in three ways that matter:
 - **Tenant.** The consent screen uses the `common` endpoint, so personal and work accounts both work. A work account may
   need an administrator's consent for `Tasks.ReadWrite`.
 
+## What round-trips, measured against Microsoft's own definition (Graph v1.0, todoTask)
+
+Checked against https://learn.microsoft.com/en-us/graph/api/resources/todotask?view=graph-rest-1.0 and the checklistItem
+and linkedResource pages, 22 October 2026.
+
+- **Held by the office and round-tripped:** title, body (as plain text), done, importance (three levels to four, see
+  above), due date (day only).
+- **Kept on Microsoft's side because the office never writes them:** categories, isReminderOn and reminderDateTime,
+  recurrence, startDateTime, checklistItems, linkedResources, attachments, extensions, singleValueExtendedProperties,
+  createdDateTime, completedDateTime.
+- **Kept on update by reading Microsoft's copy first:** the due TIME and its time zone (when the date is unchanged), and
+  the statuses inProgress, waitingOnOthers and deferred (when the office does not complete the task).
+- **Not shown in the office, and not lost:** the fields in the second list. The office does not hold them, so it cannot
+  show them, and it does not overwrite them. Showing them would need a canonical field per item, which is a decision
+  for Grant, not an engine change.
+- **Limits still open:** a note written as formatted text in To Do comes back as plain text; an office edit to the note
+  replaces the formatting. Microsoft's own behaviour for reminders when a status changes is not verified live.
+
 ## Why
 
 - It reuses the seam, the engine, and the governance that already keep Vikunja honest, so the two providers cannot
