@@ -13,8 +13,9 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 840,
-    "highestAppliedAtRecord": "1092",
+    "appliedAtRecord": 841,
+    "highestAppliedAtRecord": "1093",
+    "note1093": "On 22 October 2026 migration 1093 (the heartbeat knocks only when there is work: app.worker_has_work, app.kick_worker_if_due, and the worker-heartbeat cron rescheduled to call it) was applied to production with npm run migrate:one and the production write flag, under Grant's authorisation, from 3ccd9c8. A first attempt failed on a wrong column name (signals has received_at, not created_at) and rolled back with nothing applied; the fix is in 3ccd9c8. Read back: cron.job worker-heartbeat now runs ' select app.kick_worker_if_due() '.",
     "note1092": "On 22 October 2026 migrations 1091 (drops the unused public headroom wrapper) and 1092 (drops the unused app headroom function) were applied to production with npm run migrate:one and the production write flag, under Grant's authorisation. Both were read-only checked first: no live function mentions the headroom function. check:callers now passes.",
     "noteProbe19Oct": "On 19 October 2026 the deploy probe was changed to check the NotebookLM reader and writer with the vaulted master token, the way the product reads them (commit of the same name in the log). deploy:hq then reported reader: http 200 with 3 notebooks, and writer: http 200 ok=true through the write path. Earlier probes reported 502 for the stored cookie jar, which had gone stale. Live gateway: hq-api v944 and the page were in place; the Services tiles were deployed in the 1089/1090 deploy.",
     "note1090": "On 19 October 2026 migrations 1089 (the Google sign-in is read once for the Services tiles) and 1090 (a Notion integration token can be pasted from the page) were applied to production with npm run migrate:one. 1089 adds app.hq_google_connection, which reads connection_health google_calendar / oauth_client with a 24-hour freshness rule. 1090 adds app.hq_set_notion_token, which checks the shape and stores notion.integration_token in the vault. Both are additive, and each has a public wrapper.",
@@ -36,7 +37,8 @@
       "note": "16 October 2026, deploy:signin from 13c4a4f6 (v146 ACTIVE; health configured=true; a stranger 403; no origin 403; a dud refresh ok=false expired; nobody ok=false). Before it v143, 15 October 2026, deploy:signin from 5cf36d32 (PIN sign-in; passwords off, PASSWORD_SIGN_IN=0; refuses a stranger, a missing origin and a dud refresh with 403 or expired; health configured=true; the PIN path refuses an unknown login with the neutral sentence, proving the service role can read sign_in_pins). Earlier in the day: v136 from 754ab4b1, v139 and v141 (password experiments, retired). Before that v134 (10 October)"
     },
     "hq-api": {
-      "version": "v913",
+      "version": "v1004",
+      "note22Oct": "22 October 2026, deploy:hq from 3ccd9c8 (v1004 ACTIVE; unauthenticated 401; authenticated 200 counts present). The Team HQ pulse asks every 60 seconds. Before it, v913 on 16 October 2026, deploy:hq from f98d527e.",
       "note": "19 and 20 October 2026: deploy:hq re-deployed hq-api on every run (v968 ACTIVE on the first, from 5b666263; later runs redeployed it too, their version numbers not read back; unauthenticated 401, authenticated 200 counts present each time). 16 October 2026, deploy:hq from f98d527e (v913 ACTIVE; unauthenticated 401; authenticated 200 counts present). Before it v904, 15 October 2026, deploy:hq-api from 754ab4b1 (15 files, closure verified; unauthenticated 401, authenticated 200). Before it v903: 10 October 01:20 UTC V1 release from 047f6f17 (before it v899). Earlier: 9 October, Team HQ release (revisioned layout saves, project backgrounds); rollback bundle v897 captured by that release into .out/rollback-release/hq-api.v897 (gitignored, may no longer exist)"
     },
     "voice": {

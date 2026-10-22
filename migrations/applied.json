@@ -838,5 +838,6 @@
   "1089_the_google_sign_in_is_read_once_for_the_services_tiles.sql": "38ac8ab4d6a657a12cc0fa93387510c693359ce393a571b80ce4c35b1adb8f07",
   "1090_a_notion_token_can_be_pasted_from_the_page.sql": "0fe0668c944465bee055eef32da82f8ade20327605e8f0b9c53c80a97e9124ee",
   "1091_the_unused_headroom_wrapper_is_dropped.sql": "cdd5e8b040f0afa2b7b0a049d9b812ce9cd5ad2112b850a6a26a7ebfd522d003",
-  "1092_the_unused_headroom_function_is_dropped.sql": "5b0d741950a92f7063fcdac5aece0988bd232d3a8f0bde7781eb37c4114e1c31"
+  "1092_the_unused_headroom_function_is_dropped.sql": "5b0d741950a92f7063fcdac5aece0988bd232d3a8f0bde7781eb37c4114e1c31",
+  "1093_the_heartbeat_knocks_only_when_there_is_work.sql": "07e1d4dbf2e0ce4b4d18a5e3bf806d9c19404cf4ddf89c10dd5809afeb5c8f56"
 }
