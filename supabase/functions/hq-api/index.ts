@@ -2767,10 +2767,7 @@ const createOffice = async (
   )
 }
 
-/* TEMPORARY timing for the studio measurement (22 October 2026): reported in Server-Timing, removed after reading. */
-let requestStart = 0
 Deno.serve(async (request: Request): Promise<Response> => {
-  requestStart = performance.now()
   if (request.method === 'OPTIONS') return json({ ok: true })
 
   if (request.method === 'GET' && new URL(request.url).pathname.endsWith('/health')) {
@@ -4631,7 +4628,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
       },
       504,
     )
-  const tAuth = performance.now() - requestStart
   let response: Response
   try {
     response = await fetch(`${DB_URL}/rest/v1/rpc/${section.fn}`, {
@@ -4656,7 +4652,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
     throw error
   }
 
-  const tRpc = performance.now() - requestStart
   if (isActivity && response.status === 504) {
     console.error(`hq-api ${name}: upstream time budget`)
     return timedOut()
@@ -4685,7 +4680,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const data = await response.json()
-  const tBody = performance.now() - requestStart
 
   /*
     A document with a file gets a signed URL, minted here (#96).
@@ -4811,7 +4805,5 @@ Deno.serve(async (request: Request): Promise<Response> => {
     ;(data as Record<string, unknown>).viewer = { operator, guest: kind === 'guest' }
   }
 
-  const reply = json({ section: name, data })
-  reply.headers.set('server-timing', `auth;dur=${Math.round(tAuth)}, rpc;dur=${Math.round(tRpc)}, body;dur=${Math.round(tBody)}, total;dur=${Math.round(performance.now() - requestStart)}`)
-  return reply
+  return json({ section: name, data })
 })

@@ -105,7 +105,33 @@ describe('hydrate tells the page when it is asking (item 25)', () => {
     } finally {
       globalThis.fetch = realFetch
     }
-    expect(seen).toEqual([true])
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen.every(Boolean)).toBe(true)
     expect(data.source.fetching).toBe(false)
+  })
+
+  it('fills the project list from the projects section while the studio payload is still pending', async () => {
+    const realFetch = globalThis.fetch
+    let releaseStudio = (): void => undefined
+    const studioPending = new Promise<void>((resolve) => {
+      releaseStudio = resolve
+    })
+    globalThis.fetch = ((url: string) => {
+      if (String(url).includes('section=projects')) {
+        const body = { section: 'projects', data: [{ name: 'Alpha', slug: 'alpha' }, { name: 'Unnamed', slug: 'unnamed' }] }
+        return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return studioPending.then(() => new Response('{}', { status: 500 }))
+    }) as typeof fetch
+    try {
+      const asking = data.hydrate('https://example.invalid/api', 'token')
+      for (let i = 0; i < 50 && data.PROJECTS.length === 0; i++) await new Promise((r) => setTimeout(r, 10))
+      expect(data.PROJECTS.map((p: { slug: string }) => p.slug)).toEqual(['alpha', 'unnamed'])
+      expect(data.PROJECTS[1].name).toBe('Conversations')
+      releaseStudio()
+      await asking
+    } finally {
+      globalThis.fetch = realFetch
+    }
   })
 })

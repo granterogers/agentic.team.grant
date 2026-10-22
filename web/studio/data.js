@@ -677,6 +677,35 @@ const replace = (target, rows) => {
  */
 export const FROM_OFFICE = { appearance: null }
 
+/*
+  What the list shows for each project. The early list (see hydrateOnce) and the full payload both use it, so the two cannot drift.
+*/
+const projectRows = (list) => {
+  const hues = huesFor(list.map((p) => p.slug))
+  return list.map((p) => ({
+    ...p,
+    // The catch-all where loose conversations are filed is called Unnamed in the database, which reads as a mistake.
+    name: p.slug === 'unnamed' ? 'Conversations' : p.name,
+    hue: hues[p.slug] ?? hueFor(p.slug),
+    // Every section the studio renders, guaranteed to be an array so a
+    // renderer never has to ask. An absent section and an empty one are the
+    // same thing to a reader, and only one of them can throw.
+    // #151. Guaranteed an array like every other section: an absent one
+    // and an empty one are the same thing to a reader, and only one of
+    // them can throw.
+    waiting: p.waiting ?? [],
+    modules: p.modules ?? [],
+    documents: p.documents ?? [],
+    // A removed task is kept by the office for history and is not shown: it used to come back as a struck-through
+    // "done" one, so removing a task looked like completing it.
+    tasks: (p.tasks ?? []).filter((t) => t.state_raw !== 'cancelled'),
+    contacts: p.contacts ?? [],
+    sources: p.sources ?? [],
+    activity: p.activity ?? [],
+    requests: p.requests ?? [],
+  }))
+}
+
 /** Ask the office for everything the page shows. `source.fetching` is true for exactly as long as the question is open. */
 export async function hydrate(endpoint, token) {
   source.fetching = true
@@ -700,6 +729,19 @@ async function hydrateOnce(endpoint, token) {
     */
     const stop = AbortSignal.timeout(25_000)
     const began = sessionEpoch.epoch()
+    /*
+      The list before the studio answer (22 October 2026). The studio payload took 8 to 15 seconds, and the home page drew grey
+      placeholders for all of it, so a click had nothing to land on. The projects section answers in about two seconds with what the
+      list needs. It fills the list only while the studio answer is still pending; the full payload replaces it when it lands.
+    */
+    let studioLanded = false
+    fetch(`${endpoint}?section=projects`, { headers: { authorization: `Bearer ${token}` }, signal: stop })
+      .then((q) => (q.ok ? q.json() : null))
+      .then((q) => {
+        if (studioLanded || began !== sessionEpoch.epoch() || !Array.isArray(q?.data)) return
+        replace(PROJECTS, projectRows(q.data))
+      })
+      .catch(() => null)
     const r = await fetch(`${endpoint}?section=studio`, {
       headers: { authorization: `Bearer ${token}` },
       signal: stop,
@@ -761,32 +803,8 @@ async function hydrateOnce(endpoint, token) {
       }),
     )
 
-    const hues = huesFor(data.projects.map((p) => p.slug))
-    replace(
-      PROJECTS,
-      data.projects.map((p) => ({
-        ...p,
-        // The catch-all where loose conversations are filed is called Unnamed in the database, which reads as a mistake.
-        name: p.slug === 'unnamed' ? 'Conversations' : p.name,
-        hue: hues[p.slug] ?? hueFor(p.slug),
-        // Every section the studio renders, guaranteed to be an array so a
-        // renderer never has to ask. An absent section and an empty one are the
-        // same thing to a reader, and only one of them can throw.
-        // #151. Guaranteed an array like every other section: an absent one
-        // and an empty one are the same thing to a reader, and only one of
-        // them can throw.
-        waiting: p.waiting ?? [],
-        modules: p.modules ?? [],
-        documents: p.documents ?? [],
-        // A removed task is kept by the office for history and is not shown: it used to come back as a struck-through
-        // "done" one, so removing a task looked like completing it.
-        tasks: (p.tasks ?? []).filter((t) => t.state_raw !== 'cancelled'),
-        contacts: p.contacts ?? [],
-        sources: p.sources ?? [],
-        activity: p.activity ?? [],
-        requests: p.requests ?? [],
-      })),
-    )
+    studioLanded = true
+    replace(PROJECTS, projectRows(data.projects))
 
     // The labels Grant defined for contacts (#110, migration 0285). In this
     // payload rather than a second fetch: a second fetch fails by quietly
