@@ -691,11 +691,14 @@ async function hydrateOnce(endpoint, token) {
   try {
     /*
       A timeout, because a fetch with none can hang for the browser's default
-      and the page sits on a spinner-less blank claiming nothing is wrong. Ten
-      seconds is far longer than the office ever takes and far shorter than a
-      person will wait before deciding the product is broken.
+      and the page sits on a spinner-less blank claiming nothing is wrong. (The
+      length is set below: see the timeout.)
     */
-    const stop = AbortSignal.timeout(10_000)
+    /*
+      Twenty-five seconds (22 October 2026): the studio payload took 8 to 10 seconds in measurement, so a ten-second limit
+      answered "could not be loaded" to people whose office was simply slow. The office is still asked once; the wait is longer.
+    */
+    const stop = AbortSignal.timeout(25_000)
     const began = sessionEpoch.epoch()
     const r = await fetch(`${endpoint}?section=studio`, {
       headers: { authorization: `Bearer ${token}` },

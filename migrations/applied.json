@@ -840,5 +840,6 @@
   "1091_the_unused_headroom_wrapper_is_dropped.sql": "cdd5e8b040f0afa2b7b0a049d9b812ce9cd5ad2112b850a6a26a7ebfd522d003",
   "1092_the_unused_headroom_function_is_dropped.sql": "5b0d741950a92f7063fcdac5aece0988bd232d3a8f0bde7781eb37c4114e1c31",
   "1093_the_heartbeat_knocks_only_when_there_is_work.sql": "07e1d4dbf2e0ce4b4d18a5e3bf806d9c19404cf4ddf89c10dd5809afeb5c8f56",
-  "1094_a_paused_job_that_waits_on_a_person_does_not_keep_the_heartbeat_awake.sql": "a04f36845c0fba15d7c8ad6d01af020cdc14ef009511627cc0b198347d64a361"
+  "1094_a_paused_job_that_waits_on_a_person_does_not_keep_the_heartbeat_awake.sql": "a04f36845c0fba15d7c8ad6d01af020cdc14ef009511627cc0b198347d64a361",
+  "1095_the_live_jobs_of_an_office_are_counted_through_an_index.sql": "2225c8f2bf8a5ca470f8bf25ea98ee24892e6b922069af41eb697a52693a37f3"
 }
