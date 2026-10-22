@@ -3,14 +3,14 @@
 Status: **prepared, not executed.** Nothing has been run against production. Each production read or write below needs
 Grant's explicit go-ahead for that specific step (CLAUDE.md, "Production access is forbidden by default").
 
-Code under review: branch `claude/beautiful-cannon-75w02q` at `d22e871` (pushed). Version 0.13.0. Migration `1093` is the
+Code under review: branch `claude/beautiful-cannon-75w02q` at `d22e871` (pushed). Version 0.13.0. Migration `1095` is the
 only new migration. The tree was clean and 469 related tests passed on this commit.
 
 ## 1. What production will receive
 
 | Part | Where | Risk if wrong | Reversible? |
 |---|---|---|---|
-| Migration `1093` (additive: tables, functions, one disabled duty row) | `migrations/1093_*.sql` | Migration fails and rolls back | Additive; the duty row can be disabled |
+| Migration `1095` (additive: tables, functions, one disabled duty row) | `migrations/1095_*.sql` | Migration fails and rolls back | Additive; the duty row can be disabled |
 | `worker` (new `microsoft.todo_sync` handler) | `supabase/functions/worker` | Worker fails to start | Redeploy previous version |
 | `hq-api` (three operator actions, settings section) | `supabase/functions/hq-api` | Settings card cannot connect | Redeploy previous version |
 | Page (Settings card and tile) | `web/studio` | Card missing or wrong | Redeploy previous page |
@@ -45,8 +45,9 @@ dedicated list (decision A). Grant accepts this, or asks for staging first.
 
 Run from a shell with `SUPABASE_PROJECT_REF` set to the production ref and no write flag:
 
-1. The ledger: `app.schema_migrations` highest applied is `1092`, and `1093` is absent. `docs/ops/deployment-state.json`
-   records 1092 as the highest applied.
+1. The ledger: `app.schema_migrations` highest applied is `1094` (the heartbeat migrations `1093` and `1094`, from
+   branch `claude/zen-fermi-5kmv8v`), and `1095` is absent. Nothing on this branch can be applied until that branch is
+   merged here (see the note at the top of section 4).
 2. An operator office exists. The migration inserts the duty row for `app.operator_office()`, the first operator office.
    If none exists, the insert fails and the migration rolls back. Safe, but it must be known first.
 3. `npm run check:gateway-wrappers`, `npm run check:callers` and `npm run check:anon-exposure`, against production.
@@ -57,8 +58,8 @@ Run from a shell with `SUPABASE_PROJECT_REF` set to the production ref and no wr
 The deploy scripts require a clean tree at a pushed commit (ADR-0067). `d22e871` is pushed. Do not deploy from a dirty
 tree.
 
-1. **Migration:** `npm run migrate:one -- migrations/1093_a_microsoft_todo_connection_is_an_office_connection.sql`
-   (with `SUPABASE_ACCESS_TOKEN` and `ALLOW_PRODUCTION_WRITES=1` in the shell only). Confirm the ledger is 1093.
+1. **Migration:** `npm run migrate:one -- migrations/1095_a_microsoft_todo_connection_is_an_office_connection.sql`
+   (with `SUPABASE_ACCESS_TOKEN` and `ALLOW_PRODUCTION_WRITES=1` in the shell only). Confirm the ledger is 1095.
 2. **Worker:** `npm run deploy:worker`. Its probe must pass.
 3. **hq-api:** `npm run deploy:hq-api`. Probe: unauthenticated 401, authenticated 200.
 4. **Page:** `npm run deploy:hq` (page and hq-api together), or `npm run deploy:hq-page` if only the page changed. Probes
@@ -95,7 +96,7 @@ Do not paste the client secret into chat. It goes only into the card, which stor
   token, and keeps every task. The client id and secret are kept.
 - **Stop the duty without disconnecting:** `update public.responsibilities set enabled = false where slug =
   'microsoft-todo-sync'` for the office. Needs a production write and its own go-ahead.
-- **Code:** redeploy the previous worker, hq-api and page versions. Migration `1093` is additive and stays.
+- **Code:** redeploy the previous worker, hq-api and page versions. Migration `1095` is additive and stays.
 
 ## 8. Known limits (ADR-0076)
 

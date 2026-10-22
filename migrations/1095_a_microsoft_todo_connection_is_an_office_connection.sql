@@ -1,5 +1,5 @@
 /*
-  1093 — a Microsoft To Do connection is an office connection (#259, Phase 2 for Microsoft To Do)
+  1095 — a Microsoft To Do connection is an office connection (#259, Phase 2 for Microsoft To Do)
 
   Grant's tasks already sync, both ways, to a Vikunja board (0519 to 0981). Microsoft To Do is the second
   destination he asked for, and it is built as a second provider on the same seam (`task_links.provider`), not as a
@@ -81,7 +81,7 @@ create table if not exists public.microsoft_oauth_states (
   used_at      timestamptz
 );
 comment on table public.microsoft_oauth_states is
-  'One-time states for the Microsoft To Do connect flow (1093). Minted for an operator and an office by app.hq_microsoft_connect_start, consumed by the microsoft-oauth callback. Only the SHA-256 of the state is stored.';
+  'One-time states for the Microsoft To Do connect flow (1095). Minted for an operator and an office by app.hq_microsoft_connect_start, consumed by the microsoft-oauth callback. Only the SHA-256 of the state is stored.';
 alter table public.microsoft_oauth_states enable row level security;
 revoke all on table public.microsoft_oauth_states from anon, authenticated;
 grant select on table public.microsoft_oauth_states to service_role;
@@ -221,7 +221,7 @@ begin
   end if;
   if v_sec <> '' then
     perform app.store_secret('microsoft.client_secret', v_sec,
-      'The Microsoft Entra client secret VALUE for To Do sync (1093). Read only by the microsoft-oauth callback and the sync duty.');
+      'The Microsoft Entra client secret VALUE for To Do sync (1095). Read only by the microsoft-oauth callback and the sync duty.');
   end if;
 
   return jsonb_build_object('ok', true,
@@ -287,7 +287,7 @@ begin
             'kind', case when p_kind in ('ok', 'refused', 'unreachable', 'error') then p_kind else 'error' end,
             'detail', left(coalesce(p_detail, ''), 200),
             'at', app.now_utc()),
-          'The last Microsoft To Do round, for Settings (1093).')
+          'The last Microsoft To Do round, for Settings (1095).')
   on conflict (key) do update set value = excluded.value;
 end;
 $f$;
@@ -302,8 +302,8 @@ as $f$
 begin
   perform app.require_office(p_office);
   insert into public.system_config (key, value, description) values
-    ('microsoft_todo.list_id', to_jsonb(coalesce(p_list_id, '')), 'The Microsoft To Do list the office keeps in step (1093).'),
-    ('microsoft_todo.list_name', to_jsonb(coalesce(p_list_name, '')), 'The name of that list, for Settings (1093).')
+    ('microsoft_todo.list_id', to_jsonb(coalesce(p_list_id, '')), 'The Microsoft To Do list the office keeps in step (1095).'),
+    ('microsoft_todo.list_name', to_jsonb(coalesce(p_list_name, '')), 'The name of that list, for Settings (1095).')
   on conflict (key) do update set value = excluded.value;
 end;
 $f$;
@@ -424,7 +424,7 @@ insert into public.responsibilities
   (office_id, slug, description, staff_id, job_kind, period_minutes, enabled, created_by)
 select app.operator_office(),
        'microsoft-todo-sync',
-       'Keep Grant''s personal tasks in step with Microsoft To Do, when he has connected it (1093).',
+       'Keep Grant''s personal tasks in step with Microsoft To Do, when he has connected it (1095).',
        (select staff_id from public.staff where slug = 'chief-of-staff'),
        'microsoft.todo_sync',
        15,
@@ -443,25 +443,25 @@ declare
 begin
   if app.credential_class('microsoft.client_secret') is distinct from 'human_integration'
      or app.credential_class('microsoft_todo.refresh_token') is distinct from 'human_integration' then
-    raise exception '1093: the Microsoft names are not classified as human integration credentials';
+    raise exception '1095: the Microsoft names are not classified as human integration credentials';
   end if;
   if app.credential_class('google.client_secret') is distinct from 'human_integration' then
-    raise exception '1093: the classification lost an existing name';
+    raise exception '1095: the classification lost an existing name';
   end if;
 
   if app.operator_office() is not null then
     v := app.microsoft_todo_settings(app.operator_office());
     if v ? 'client_secret' or v ? 'refresh_token' then
-      raise exception '1093: the settings payload carries a secret';
+      raise exception '1095: the settings payload carries a secret';
     end if;
     if (v ->> 'connected')::boolean is not false then
-      raise exception '1093: it reports itself connected before anything was stored';
+      raise exception '1095: it reports itself connected before anything was stored';
     end if;
   end if;
 
   if not exists (select 1 from public.responsibilities where job_kind = 'microsoft.todo_sync' and not enabled) then
-    raise exception '1093: the duty is missing, or is running before it is connected';
+    raise exception '1095: the duty is missing, or is running before it is connected';
   end if;
-  raise notice '1093 drive: classification, settings shape and the disabled duty checked';
+  raise notice '1095 drive: classification, settings shape and the disabled duty checked';
 end;
 $drive$;

@@ -1,5 +1,5 @@
 /**
- * Connecting Grant's Microsoft To Do, once (1093).
+ * Connecting Grant's Microsoft To Do, once (1095).
  *
  * The same handshake as `google-oauth`, for the same reason: a callback URL Microsoft can reach, and a place to keep a
  * refresh token that a browser must never see. The page asks hq-api for a one-time state (minted only for a deployment

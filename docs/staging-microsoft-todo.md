@@ -84,7 +84,7 @@ From the staging shell, with the two production-access flags set for the staging
 ALLOW_PRODUCTION_CHECKS=1 ALLOW_PRODUCTION_WRITES=1 npm run migrate
 ```
 
-This replays every migration in `migrations/` into the empty staging project, including `1093`.
+This replays every migration in `migrations/` into the empty staging project, including `1095`.
 
 ## 7. Hold the duties, then deploy
 
@@ -132,6 +132,6 @@ to diagnose it.
 
 ## When staging is satisfied
 
-Production is a separate, explicitly authorised step. It means applying `1093` with `npm run migrate:one` under the
+Production is a separate, explicitly authorised step. It means applying `1095` with `npm run migrate:one` under the
 production write flag, then the same deploys against the production ref, then connecting Grant's own office. Claude will
 not run any of it without a specific go-ahead.
