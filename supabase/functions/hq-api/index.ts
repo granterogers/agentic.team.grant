@@ -3713,6 +3713,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
         Object.values(SECTIONS).flatMap((x) => (x.textArg === undefined ? [] : [x.textArg.param])),
       ),
     ]
+    /*
+      The sections the gateway answers in its own branch above, not from SECTIONS: a project's picture and the notebook probe
+      each carry their own checks. They are described here so the description names every section the gateway serves
+      (22 October 2026: verify:hq found two of them missing). The dispatch is unchanged; these are not in SECTIONS.
+    */
+    const BRANCHED: Readonly<Record<string, string>> = {
+      project_background: 'a project’s picture; takes ?slug=',
+      notebook_check: 'the state of the notebook connection',
+    }
     const doc = {
       openapi: '3.1.0',
       info: {
@@ -3739,7 +3748,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
                 name: 'section',
                 in: 'query',
                 required: true,
-                schema: { type: 'string', enum: Object.keys(SECTIONS).sort() },
+                schema: {
+                  type: 'string',
+                  enum: [...Object.keys(SECTIONS), ...Object.keys(BRANCHED)].sort(),
+                },
               },
               ...(ids
                 ? [
@@ -3812,9 +3824,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
           .map(([name, a]) => [name, { function: a.fn, required: a.required }]),
       ),
       'x-sections': Object.fromEntries(
-        Object.entries(SECTIONS)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([name, x]) => [
+        [
+          ...Object.entries(SECTIONS).map(([name, x]) => [
             name,
             {
               function: x.fn,
@@ -3823,6 +3834,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
               ...(x.scoped === true ? { scoped: true } : {}),
             },
           ]),
+          ...Object.entries(BRANCHED).map(([name, what]) => [
+            name,
+            { function: null, description: what },
+          ]),
+        ].sort(([a], [b]) => String(a).localeCompare(String(b))),
       ),
     }
     return json(doc)

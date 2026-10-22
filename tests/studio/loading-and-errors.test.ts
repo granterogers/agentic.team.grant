@@ -49,6 +49,13 @@ describe('an empty module while the office is being asked (item 25)', () => {
     expect(html).not.toContain('No to-dos yet')
   })
 
+  it('the documents and contacts modules show a skeleton while the office is asked', () => {
+    data.source.fetching = true
+    expect(miniatures.docsMini(project)).toContain('bcskelwrap')
+    expect(miniatures.contactsMini(project)).toContain('bcskelwrap')
+    expect(miniatures.contactsMini(project)).not.toContain('Nobody is recorded')
+  })
+
   it('once the office has answered, an empty list is genuinely empty', () => {
     data.source.fetching = false
     expect(miniatures.cardsMini(project)).toContain('No to-dos yet')

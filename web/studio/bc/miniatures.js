@@ -1119,6 +1119,8 @@ export const docThumbs = (docs) => docs.map((d, i) => thumb(d, i)).join('')
 
 export const docsMini = (p, { items = 6 } = {}) => {
   const docs = docsOf(p)
+  if (docs.length === 0 && source.fetching === true) return skeleton(3)
+  if (docs.length === 0 && source.state === 'unreachable') return unreachable('documents')
   if (docs.length === 0) {
     return emptyWith(
       'Nothing filed on this project yet. What you upload, or the team writes, appears here.',
@@ -1474,6 +1476,8 @@ const face_ = (c) => {
 
 export const contactsMini = (p, { items = 4 } = {}) => {
   const cs = p.contacts ?? []
+  if (cs.length === 0 && source.fetching === true) return skeleton(3)
+  if (cs.length === 0 && source.state === 'unreachable') return unreachable('contacts')
   if (cs.length === 0) return emptyWith('Nobody is recorded against this project yet.', 'Add a contact', `/p/${p.slug}/contacts`)
   /*
     v2: *"Clicking a contact should show useful information/details... The user

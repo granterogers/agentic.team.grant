@@ -1078,9 +1078,11 @@ begin(
   const anchor = new Date(String(t?.remind_at))
 
   // occurrence 1: time passes by exactly one period (the wall-clock anchor survives), the duty fires, the message is delivered
+  // The rewind moves the wall clock, as the product does: 168 hours of absolute time would turn 09:00 into 10:00 across a
+  // change of clocks (the anchor is after 25 October 2026, the rewound occurrence is before it).
   const rewindSeries = (periods: number) =>
     db.execute(
-      `update public.tasks set remind_at = ${lit(new Date(anchor.getTime() - periods * 7 * 86400000).toISOString())}::timestamptz where task_id = ${lit(id)}::uuid`,
+      `update public.tasks set remind_at = ((${lit(anchor.toISOString())}::timestamptz at time zone ${lit(ATHENS)}) - interval '${String(periods * 7)} days') at time zone ${lit(ATHENS)} where task_id = ${lit(id)}::uuid`,
     )
   await rewindSeries(1)
   const f1 = await dutyTick()

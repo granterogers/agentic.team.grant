@@ -119,7 +119,10 @@ describe('the duty records the connection after every round', () => {
     const w = world()
     const db = {
       kind: 'fake',
-      execute: async (q: string) => (w.sql.push(q), { rows: [{ v: { configured: false } }] }),
+      execute: async (q: string) => {
+        w.sql.push(q)
+        return { rows: [{ v: { configured: false } }] }
+      },
     } as unknown as SqlExecutor
     await tasksSyncHandler(db).handle(job, db)
     expect(w.health()).toHaveLength(0)

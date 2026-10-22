@@ -1296,7 +1296,9 @@ const autoRects = (slug, on = null, pinned = []) => {
   */
   const reserve = cols === 3 && doc(slug).postits.length === 0 && !doc(slug).seeded
   const usable = reserve ? stage.w - NOTE_STRIP : stage.w
-  const colW = (usable - GAP * (cols + 1)) / cols
+  // Whole pixels: a fractional column let a module's edge meet its neighbour's keep-clear margin by a third of a pixel, and
+  // that blocked the space under To-dos (22 October 2026, item 60).
+  const colW = Math.floor((usable - GAP * (cols + 1)) / cols)
   // What is already on the page and must not be covered: the pinned modules, then each automatic module as it is placed.
   const taken = pinned.map((m) => ({ ...m }))
   const out = []

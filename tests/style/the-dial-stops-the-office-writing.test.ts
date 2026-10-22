@@ -67,7 +67,12 @@ describe('making a document', () => {
     it(`${String(v)}: no model is asked and nothing is stored`, async () => {
       const { db, sent } = dbWith(v)
       let asked = 0
-      const router = { complete: async () => (asked++, { text: '{}' }) } as never
+      const router = {
+        complete: async () => {
+          asked++
+          return { text: '{}' }
+        },
+      } as never
       const out = await artifactHandler({ db, router, projectRef: 'x', serviceKey: '' }).handle(
         { jobId: JOB, projectId: PROJECT } as never,
         {} as never,
