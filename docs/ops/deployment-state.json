@@ -13,8 +13,9 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 838,
-    "highestAppliedAtRecord": "1090",
+    "appliedAtRecord": 840,
+    "highestAppliedAtRecord": "1092",
+    "note1092": "On 22 October 2026 migrations 1091 (drops the unused public headroom wrapper) and 1092 (drops the unused app headroom function) were applied to production with npm run migrate:one and the production write flag, under Grant's authorisation. Both were read-only checked first: no live function mentions the headroom function. check:callers now passes.",
     "noteProbe19Oct": "On 19 October 2026 the deploy probe was changed to check the NotebookLM reader and writer with the vaulted master token, the way the product reads them (commit of the same name in the log). deploy:hq then reported reader: http 200 with 3 notebooks, and writer: http 200 ok=true through the write path. Earlier probes reported 502 for the stored cookie jar, which had gone stale. Live gateway: hq-api v944 and the page were in place; the Services tiles were deployed in the 1089/1090 deploy.",
     "note1090": "On 19 October 2026 migrations 1089 (the Google sign-in is read once for the Services tiles) and 1090 (a Notion integration token can be pasted from the page) were applied to production with npm run migrate:one. 1089 adds app.hq_google_connection, which reads connection_health google_calendar / oauth_client with a 24-hour freshness rule. 1090 adds app.hq_set_notion_token, which checks the shape and stores notion.integration_token in the vault. Both are additive, and each has a public wrapper.",
     "noteReader19Oct": "On 19 October 2026 the notebook reader (api/notebook.py) was changed to mint a fresh cookie jar from the vaulted master token on each call, and the worker's HTTP adapter sends that token (commit 0feb6148). deploy:hq published the reader and page; deploy:worker published worker v1008; hq-api is v944. No migration. Read-only check through the worker's own adapter (HttpNotebookAdapter.fromVault then listNotebooks): the reader answered with 4 notebooks. The stored cookie jar was not used for that read.",
