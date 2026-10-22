@@ -125,8 +125,12 @@ const open = async (extra = ''): Promise<import('playwright').Page> => {
   await p.goto(`http://127.0.0.1:4798/?settings=channels${extra}`, {
     waitUntil: 'domcontentloaded',
   })
-  await p.waitForSelector('[data-bc-settings]', { timeout: 30000 })
-  await p.locator('[data-bc-settings]').first().click({ force: true })
+  // The way a person gets there: the page menu, then Global Settings. The menu is closed on load, so its item is not visible
+  // until the menu is open (the address alone no longer opens Settings on Team HQ; ADR-0051).
+  await p.waitForSelector('button[data-bc-menu]', { timeout: 30000 })
+  await p.locator('button[data-bc-menu]').first().click({ force: true })
+  await p.waitForSelector('[data-bc-global-menu]', { state: 'visible', timeout: 15000 })
+  await p.locator('[data-bc-global-menu]').first().click()
   await p.waitForSelector('#settings .stg-navitem', { timeout: 15000 })
   await p.locator('#settings [data-setting="channels"]').click({ force: true })
   // the pane is drawn from what the gateway answered; wait for the Messaging pane, not for a fixed pause
