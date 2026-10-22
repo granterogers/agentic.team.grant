@@ -39,7 +39,7 @@ as $$
          )
       or exists (
            select 1 from public.signals s
-            where s.created_at > app.now_utc() - interval '15 minutes'
+            where s.received_at > app.now_utc() - interval '15 minutes'
               and not exists (select 1 from public.trigger_firings f where f.signal_id = s.signal_id)
          )
       or exists (
