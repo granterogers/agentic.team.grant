@@ -41,9 +41,11 @@ try {
   )
   await phone.page.screenshot({ path: `${out}/phone-signed-in.png` })
   check('signed in: Settings opens by itself', text !== '')
+  // Team HQ calls this tab "Services" (it was "Connections"). Its Google tiles are drawn once the tab opens; their
+  // status may still read "Checking…", so the check is the tab's own heading and its Google tile, not the status.
   check(
-    'signed in: it is the Connections tab, with Google on it',
-    /Google/.test(text) && /Connect|Reconnect|connected/i.test(text),
+    'signed in: it is the Services tab (the Connections tab), with Google on it',
+    /Services/.test(text) && /Google (Drive|Calendar)|Gmail/.test(text),
   )
   check(
     'the address bar is cleaned of the parameter',

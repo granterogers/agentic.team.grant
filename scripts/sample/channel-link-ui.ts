@@ -96,7 +96,8 @@ try {
       phone,
     )
     await signIn(studio, page, s)
-    await page.goto(`${studio.base}/`, { waitUntil: 'domcontentloaded' })
+    // The address opens Settings on the Channels tab on Team HQ. The page menu is not used: the sheet covers it when open.
+    await page.goto(`${studio.base}/?settings=channels`, { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle').catch(() => null)
     await sleep(2500)
     const shut = page.locator('[data-dock-close]:visible').first()
