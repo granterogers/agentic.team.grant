@@ -498,6 +498,7 @@ const topRow = () => {
     ${work}
     <div class="bcright">
       <!-- The build's version, on every screen and in the Sample: the one place a person can always see what they are running. -->
+      ${buildVersionMark()}
       <!--
         Light or dark, on every screen, always at the top right (Grant, 14 October 2026). Both glyphs are drawn and the CSS
         shows the one that switches to the OTHER scheme, so the button needs no state from the render. It writes the same
