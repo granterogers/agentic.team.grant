@@ -321,6 +321,8 @@ export const fromItem = (it) => ({
   external_ref: it.external_ref ?? '',
   external_url: it.external_url ?? '',
   mime: it.mime ?? '',
+  /* The first words of the text, when the office holds it (the tile's drawn page). Null when it does not. */
+  excerpt: typeof it.excerpt === 'string' && it.excerpt !== '' ? it.excerpt : null,
   /* Team HQ holds a stored file for it (an import, an upload, or a file a real read brought in). */
   hasFile: it.has_file === true,
   size_bytes: it.size_bytes ?? null,

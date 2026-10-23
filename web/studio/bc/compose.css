@@ -163,7 +163,8 @@
 [data-experience='basecamp'] .bctaskwho { display: inline-flex; flex: 0 0 auto; }
 [data-experience='basecamp'] .bcmodhead {
   display: flex;
-  align-items: baseline;
+  /* Centred, not on the baseline: on the baseline the title sat visibly low against its icon. */
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 10px;

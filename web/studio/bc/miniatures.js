@@ -1022,7 +1022,7 @@ export const thumbFace = (d, i, extra = '') => {
   const typed = object === undefined ? ` data-filekind="${esc(shortKind(d))}"` : ''
   return `<span class="bcthumb${tone}${extra === '' ? '' : ` ${esc(extra)}`}"${typed}
     data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}" data-bc-thumbmod="${esc(String(d.modified ?? ''))}" data-bc-thumbext="${typeof d.external_ref === 'string' && d.external_ref !== '' ? '1' : ''}" data-bc-thumbtype="${esc(`${d.mime ?? ''} ${d.kind ?? ''} ${d.title ?? ''}`.trim())}">
-    ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9, extra === 'bcrowthumb' || extra === 'bccompact') : (GLYPH[object.glyph] ?? '')}
+    ${object === undefined ? drawnPage(d, extra === 'bcrowthumb' ? 4 : 9, extra === 'bcrowthumb') : (GLYPH[object.glyph] ?? '')}
   </span>`
 }
 
@@ -1112,7 +1112,17 @@ const emptyWith = (line, label, to) =>
 /** The project's documents as one logical item each, with source and type worked out. */
 export const docsOf = (p) => {
   const office = docsrc.officeList(p.slug)
-  return docsrc.dedupe((office ?? p.documents ?? []).map(docsrc.enrich))
+  /*
+    The office's own list does not carry the cached excerpt; the studio payload does. Each document takes its excerpt from the
+    payload by id, so the tile can draw the first words of it.
+  */
+  const excerptOf = new Map((p.documents ?? []).map((d) => [d.id, d.excerpt ?? null]))
+  /* An empty office list is not the project's documents: the studio payload is then the list, with its excerpts. */
+  const source = office !== null && office.length > 0 ? office : (p.documents ?? [])
+  const list = source.map((d) =>
+    d.excerpt === undefined || d.excerpt === null ? { ...d, excerpt: excerptOf.get(d.id) ?? null } : d,
+  )
+  return docsrc.dedupe(list.map(docsrc.enrich))
 }
 
 export const docThumbs = (docs) => docs.map((d, i) => thumb(d, i)).join('')
