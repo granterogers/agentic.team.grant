@@ -2256,7 +2256,21 @@ interface Answer {
   readonly canCreate?: boolean
 }
 
-const sessionAllowed = async (presented: string): Promise<Answer> => {
+/*
+  One sign-in check per credential at a time. A page's first load sends a dozen requests together, and without this each one that
+  landed on an instance without an answer yet asked the identity service and the database the same questions. The answer is
+  remembered by `seen` as before, once it is a 'yes'.
+*/
+const inFlight = new Map<string, Promise<Answer>>()
+const sessionAllowed = (presented: string): Promise<Answer> => {
+  const pending = inFlight.get(presented)
+  if (pending !== undefined) return pending
+  const asking = verifySession(presented).finally(() => inFlight.delete(presented))
+  inFlight.set(presented, asking)
+  return asking
+}
+
+const verifySession = async (presented: string): Promise<Answer> => {
   const cached = seen.get(presented)
   if (cached !== undefined && cached.until > Date.now()) {
     return {
@@ -2297,28 +2311,31 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
     .toLowerCase()
   if (email === '') return { verdict: 'no', principal: null, kind: null }
 
-  const membership = await askUpstream(`${DB_URL}/rest/v1/rpc/office_member`, {
+  /*
+    ONE question to the database, not two in a row: who this login is in the office's own membership list, and which office it
+    belongs to. A cold instance used to wait for each in turn, about a second and a half before any work started. The database
+    answers both from the same lookups as before.
+
+    The membership list is this office's own table. A failure to READ it is never evidence that somebody is not on it -- that is
+    exactly the direction 0304 warns about -- so anything other than a successful answer is unknown.
+  */
+  const asked = await askUpstream(`${DB_URL}/rest/v1/rpc/principal_for_session`, {
     method: 'POST',
     headers: {
       apikey: SERVICE_KEY,
       Authorization: `Bearer ${SERVICE_KEY}`,
       'content-type': 'application/json',
     },
-    body: JSON.stringify({ p_email: email }),
+    body: JSON.stringify({ p_auth_user_id: String(user.id ?? ''), p_email: email }),
   })
-  if ('unreachable' in membership) return { verdict: 'unknown', principal: null, kind: null }
-  /*
-    The membership list is this office's own table. A failure to READ it is
-    never evidence that somebody is not on it -- that is exactly the direction
-    0304 warns about -- so anything other than a successful answer is unknown.
-  */
-  if (!membership.response.ok) return { verdict: 'unknown', principal: null, kind: null }
-  const rows = (await membership.response.json().catch(() => [])) as {
-    ok?: boolean
-    owner_key?: string | null
-    kind?: string | null
-  }[]
-  if (rows[0]?.ok !== true) {
+  if ('unreachable' in asked || !asked.response.ok)
+    return { verdict: 'unknown', principal: null, kind: null }
+  const answer = (await asked.response.json().catch(() => ({}))) as {
+    member?: { ok?: boolean; owner_key?: string | null; kind?: string | null } | null
+    office?: { ok?: boolean; office_id?: string } | null
+  }
+  const member = answer.member
+  if (member?.ok !== true) {
     /*
       NOT A MEMBER. A stranger whose address Supabase has CONFIRMED is a real login with no office yet, which is
       answered with a distinct 'no_office' + canCreate (403, so the page keeps the session and offers to create one).
@@ -2330,7 +2347,7 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
       ? { verdict: 'no_office', principal: null, kind: null, canCreate: true }
       : { verdict: 'no', principal: null, kind: null }
   }
-  const owner = String(rows[0]?.owner_key ?? '').trim()
+  const owner = String(member.owner_key ?? '').trim()
   // A member with no owner key is admitted to read and is nobody to answer as.
   const principal = owner === '' ? null : owner
   /*
@@ -2339,28 +2356,14 @@ const sessionAllowed = async (presented: string): Promise<Answer> => {
     that predates 0614 answers no kind at all, and must not make everybody one.)
   */
   const kind: PrincipalKind =
-    rows[0]?.kind === 'person' ? 'person' : rows[0]?.kind === 'guest' ? 'guest' : 'harness'
+    member.kind === 'person' ? 'person' : member.kind === 'guest' ? 'guest' : 'harness'
 
   /*
     THE OFFICE comes from the verified auth user id and from nothing the caller said. No office, a disabled one, or an
-    ambiguous answer is a refusal - never a default, never Grant. A failure to ASK is unknown, not no (0304).
+    ambiguous answer is a refusal - never a default, never Grant.
   */
-  const asked = await askUpstream(`${DB_URL}/rest/v1/rpc/resolve_office`, {
-    method: 'POST',
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ p_auth_user_id: String(user.id ?? '') }),
-  })
-  if ('unreachable' in asked || !asked.response.ok)
-    return { verdict: 'unknown', principal: null, kind: null }
-  const resolved = (await asked.response.json().catch(() => ({}))) as {
-    ok?: boolean
-    office_id?: string
-  }
-  if (resolved.ok !== true || typeof resolved.office_id !== 'string' || resolved.office_id === '')
+  const resolved = answer.office
+  if (resolved?.ok !== true || typeof resolved.office_id !== 'string' || resolved.office_id === '')
     return { verdict: 'no_office', principal: null, kind: null }
   const office = resolved.office_id
 

@@ -843,5 +843,6 @@
   "1094_a_paused_job_that_waits_on_a_person_does_not_keep_the_heartbeat_awake.sql": "a04f36845c0fba15d7c8ad6d01af020cdc14ef009511627cc0b198347d64a361",
   "1095_the_live_jobs_of_an_office_are_counted_through_an_index.sql": "2225c8f2bf8a5ca470f8bf25ea98ee24892e6b922069af41eb697a52693a37f3",
   "1096_a_task_list_asks_the_harness_check_once_per_job.sql": "5c59363706969fabf7094d04ca2aa190098d270277ed274c38239c2a6948d7db",
-  "1097_a_task_list_reads_the_office_clock_once.sql": "9ca16cf339645cd6a94a74a45ed024c83deaa37507c2245b7bbb275b70c4ad05"
+  "1097_a_task_list_reads_the_office_clock_once.sql": "9ca16cf339645cd6a94a74a45ed024c83deaa37507c2245b7bbb275b70c4ad05",
+  "1098_a_sign_in_asks_the_database_once.sql": "3cd005e2e6e3637e469e2480676f20ce04f8e41e4e61359eaf4d6d5c893b2b17"
 }
