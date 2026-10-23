@@ -105,6 +105,26 @@
 <script src="/config.js"></script>
 <script>
   /*
+    The list's first two requests, started now rather than when the modules have loaded: on a cold page that was about four seconds
+    of waiting before anything was asked. Only with a token already stored in this browser; data.js uses them only when the token is
+    the one it holds and the answer is good, and otherwise asks afresh (so a stale token cannot sign anybody out).
+  */
+  (function () {
+    try {
+      var stored = JSON.parse(localStorage.getItem('hq.session') || 'null')
+      var token = stored && typeof stored.access_token === 'string' ? stored.access_token : ''
+      if (token === '' || !window.HQ_API) return
+      var headers = { authorization: 'Bearer ' + token }
+      var studio = fetch(window.HQ_API + '?section=studio', { headers: headers })
+      var projects = fetch(window.HQ_API + '?section=projects', { headers: headers })
+      studio.catch(function () { /* data.js asks again */ })
+      projects.catch(function () { /* data.js asks again */ })
+      window.hqEarly = { token: token, studio: studio, projects: projects }
+    } catch (e) { /* storage blocked: the page asks when its modules are ready, as before */ }
+  })()
+</script>
+<script>
+  /*
     ALWAYS THE LATEST VERSION. This page was loaded from a build; the server's config.js names the newest one. When they
     differ (a release was deployed while this tab was open, or an old copy was restored from cache), reload once so the
     person gets the current design. The check runs on load and whenever a backgrounded tab comes back to the front. A

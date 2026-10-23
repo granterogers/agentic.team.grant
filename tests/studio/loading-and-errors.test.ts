@@ -110,6 +110,50 @@ describe('hydrate tells the page when it is asking (item 25)', () => {
     expect(data.source.fetching).toBe(false)
   })
 
+  it('uses the first asks the page started before its modules loaded, when they are good', async () => {
+    const realFetch = globalThis.fetch
+    const asked: string[] = []
+    globalThis.fetch = ((url: string) => {
+      asked.push(String(url))
+      return Promise.resolve(new Response('{}', { status: 500 }))
+    }) as typeof fetch
+    const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+    ;(globalThis as { hqEarly?: unknown }).hqEarly = {
+      token: 'early-token',
+      studio: Promise.resolve(ok({ data: { projects: [] } })),
+      projects: Promise.resolve(ok({ data: [] })),
+    }
+    try {
+      const loaded = await data.hydrate('https://example.invalid/api', 'early-token')
+      expect(loaded).toBe(true)
+      expect(asked.some((u) => u.includes('section=studio'))).toBe(false)
+    } finally {
+      globalThis.fetch = realFetch
+      delete (globalThis as { hqEarly?: unknown }).hqEarly
+    }
+  })
+
+  it('asks afresh when the early request has a different token', async () => {
+    const realFetch = globalThis.fetch
+    const asked: string[] = []
+    globalThis.fetch = ((url: string) => {
+      asked.push(String(url))
+      return Promise.resolve(new Response('bad', { status: 500 }))
+    }) as typeof fetch
+    ;(globalThis as { hqEarly?: unknown }).hqEarly = {
+      token: 'some-other-token',
+      studio: Promise.resolve(new Response('{}', { status: 200 })),
+      projects: Promise.resolve(new Response('{}', { status: 200 })),
+    }
+    try {
+      await data.hydrate('https://example.invalid/api', 'this-token').catch(() => undefined)
+      expect(asked.some((u) => u.includes('section=studio'))).toBe(true)
+    } finally {
+      globalThis.fetch = realFetch
+      delete (globalThis as { hqEarly?: unknown }).hqEarly
+    }
+  })
+
   it('asks again after a gateway 502, and loads when the retry answers', async () => {
     const realFetch = globalThis.fetch
     let calls = 0

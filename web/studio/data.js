@@ -706,6 +706,18 @@ const projectRows = (list) => {
   }))
 }
 
+/*
+  A request the page started before its modules loaded (index.html), made with the token it holds. Used once, and only with that
+  same token: a missing one is simply asked afresh.
+*/
+const takeEarly = (token, name) => {
+  const early = globalThis.hqEarly
+  if (early === undefined || early === null || early.token !== token || !early[name]) return null
+  const pending = early[name]
+  early[name] = null
+  return pending
+}
+
 /** Ask the office for everything the page shows. `source.fetching` is true for exactly as long as the question is open. */
 export async function hydrate(endpoint, token) {
   source.fetching = true
@@ -735,7 +747,11 @@ async function hydrateOnce(endpoint, token) {
       list needs. It fills the list only while the studio answer is still pending; the full payload replaces it when it lands.
     */
     let studioLanded = false
-    fetch(`${endpoint}?section=projects`, { headers: { authorization: `Bearer ${token}` }, signal: stop })
+    const freshProjects = () =>
+      fetch(`${endpoint}?section=projects`, { headers: { authorization: `Bearer ${token}` }, signal: stop })
+    const earlyProjects = takeEarly(token, 'projects')
+    const projectsAsk = earlyProjects === null ? freshProjects() : earlyProjects.then((q) => (q.ok ? q : freshProjects()), freshProjects)
+    projectsAsk
       .then((q) => (q.ok ? q.json() : null))
       .then((q) => {
         if (studioLanded || began !== sessionEpoch.epoch() || !Array.isArray(q?.data)) return
@@ -747,11 +763,19 @@ async function hydrateOnce(endpoint, token) {
       used to show "the office did not answer" and drop the whole project on the first one. It now asks again twice, with a
       short pause, inside the same deadline. A refusal (401, 403) is never retried.
     */
-    const studioOnce = () =>
+    const freshStudio = () =>
       fetch(`${endpoint}?section=studio`, {
         headers: { authorization: `Bearer ${token}` },
         signal: stop,
       })
+    // The first ask may already be on its way, started by the page before its modules loaded (index.html).
+    let earlyStudio = takeEarly(token, 'studio')
+    const studioOnce = () => {
+      const pre = earlyStudio
+      earlyStudio = null
+      if (pre === null) return freshStudio()
+      return pre.then((s) => (s.ok ? s : freshStudio()), freshStudio)
+    }
     let r = await studioOnce()
     for (let attempt = 1; attempt <= 2 && [502, 503, 504].includes(r.status); attempt += 1) {
       await new Promise((ok) => setTimeout(ok, 1500 * attempt))
