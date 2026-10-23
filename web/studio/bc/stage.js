@@ -55,6 +55,12 @@ export const wireStage = (root, ctx) => {
   const slug = board.dataset.bcBoard ?? ctx.state.project
   /* The dock lives in the shell's top bar (the project's tools), not in the board; the page's own head row is the older home. */
   const dock = document.querySelector('.bcdock') ?? board.closest('.bchome') ?? root
+  /*
+    The arrange controls are in two places: the top bar's dock, and the plus menu on the board. A control is looked for in the dock
+    first and then on the board, so it is wired wherever it actually is. (Tidy, Auto arrange, Reset view, Fit and Layouts sit in
+    the plus menu, and were wired to the dock only, so they did nothing.)
+  */
+  const arrange = (sel) => dock.querySelector(sel) ?? root.querySelector(sel)
   const stageEl = board.querySelector('.bcstage')
   const guides = board.querySelector('.bcguides')
   if (stageEl === null) return
@@ -526,7 +532,7 @@ export const wireStage = (root, ctx) => {
   }
 
   /* Bring every module and note into view. */
-  dock.querySelector('[data-bc-fit]')?.addEventListener('click', () => {
+  arrange('[data-bc-fit]')?.addEventListener('click', () => {
     stageEl.classList.add('bcstage--zooming')
     globalThis.setTimeout(() => {
       stageEl.classList.remove('bcstage--zooming')
@@ -655,17 +661,17 @@ export const wireStage = (root, ctx) => {
 
   /* -------------------------------------------------------------- the dock */
 
-  const tidy = dock.querySelector('[data-bc-tidy]')
+  const tidy = arrange('[data-bc-tidy]')
   tidy?.addEventListener('click', () => {
     glide()
     grid.autoArrange(slug)
     paintAll()
   })
   /* Automatic arrangement (21 October 2026): the modules are laid out from their content again; the manual one is kept. */
-  dock.querySelector('[data-bc-autoarrange]')?.addEventListener('click', () => {
+  arrange('[data-bc-autoarrange]')?.addEventListener('click', () => {
     if (grid.arrangeAutomatically(slug)) ctx.render()
   })
-  dock.querySelector('[data-bc-viewreset]')?.addEventListener('click', () => {
+  arrange('[data-bc-viewreset]')?.addEventListener('click', () => {
     grid.reset(slug)
     view = grid.viewOf(slug)
     /* A module that had been taken off comes back with the default, so the page needs drawing again. */
@@ -691,7 +697,7 @@ export const wireStage = (root, ctx) => {
     pop = null
     if (hadFocus && popOpener?.isConnected === true) popOpener.focus()
     popOpener = null
-    dock.querySelector('[data-bc-layouts]')?.setAttribute('aria-expanded', 'false')
+    arrange('[data-bc-layouts]')?.setAttribute('aria-expanded', 'false')
   }
   const outside = (e) => {
     if (pop !== null && !pop.contains(e.target) && e.target.closest('[data-bc-layouts], [data-bc-tint]') === null) shut()

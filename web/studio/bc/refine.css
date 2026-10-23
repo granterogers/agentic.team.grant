@@ -1609,7 +1609,9 @@ html[data-text-size='large'] { zoom: 1.25; }
 [data-experience='basecamp'] .bcplusmenu {
   position: absolute;
   top: calc(100% + 8px);
-  left: 0;
+  /* The plus sits at the board's right edge, so the menu opens to the LEFT of it; opening right ran it off the window. */
+  right: 0;
+  left: auto;
   min-width: 190px;
   padding: 6px;
   display: grid;
