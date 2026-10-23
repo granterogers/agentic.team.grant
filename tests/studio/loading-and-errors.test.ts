@@ -110,6 +110,24 @@ describe('hydrate tells the page when it is asking (item 25)', () => {
     expect(data.source.fetching).toBe(false)
   })
 
+  it('asks again after a gateway 502, and loads when the retry answers', async () => {
+    const realFetch = globalThis.fetch
+    let calls = 0
+    globalThis.fetch = ((url: string) => {
+      if (!String(url).includes('section=studio')) return Promise.resolve(new Response('{}', { status: 500 }))
+      calls += 1
+      if (calls === 1) return Promise.resolve(new Response('bad gateway', { status: 502 }))
+      return Promise.resolve(new Response(JSON.stringify({ data: { projects: [] } }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    }) as typeof fetch
+    try {
+      const loaded = await data.hydrate('https://example.invalid/api', 'token')
+      expect(loaded).toBe(true)
+      expect(calls).toBe(2)
+    } finally {
+      globalThis.fetch = realFetch
+    }
+  })
+
   it('fills the project list from the projects section while the studio payload is still pending', async () => {
     const realFetch = globalThis.fetch
     let releaseStudio = (): void => undefined

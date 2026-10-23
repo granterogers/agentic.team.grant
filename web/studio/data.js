@@ -742,10 +742,21 @@ async function hydrateOnce(endpoint, token) {
         replace(PROJECTS, projectRows(q.data))
       })
       .catch(() => null)
-    const r = await fetch(`${endpoint}?section=studio`, {
-      headers: { authorization: `Bearer ${token}` },
-      signal: stop,
-    })
+    /*
+      A gateway answer of 502, 503 or 504 is almost always a moment's trouble on the way to the office, not a refusal. The page
+      used to show "the office did not answer" and drop the whole project on the first one. It now asks again twice, with a
+      short pause, inside the same deadline. A refusal (401, 403) is never retried.
+    */
+    const studioOnce = () =>
+      fetch(`${endpoint}?section=studio`, {
+        headers: { authorization: `Bearer ${token}` },
+        signal: stop,
+      })
+    let r = await studioOnce()
+    for (let attempt = 1; attempt <= 2 && [502, 503, 504].includes(r.status); attempt += 1) {
+      await new Promise((ok) => setTimeout(ok, 1500 * attempt))
+      r = await studioOnce()
+    }
     // Somebody signed out while this was in flight: it is theirs, not whoever is here now (#405).
     if (began !== sessionEpoch.epoch()) throw new Error('signed out while loading')
     if (r.status === 403) {
