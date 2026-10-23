@@ -105,6 +105,15 @@
 <script src="/config.js"></script>
 <script>
   /*
+    Keep this build's static files on the device, so a returning visit does not download them again (sw.js says why). The version
+    in the address makes each release its own cache. The page works without it, so a failure here is ignored.
+  */
+  if ('serviceWorker' in navigator && window.HQ_VERSION) {
+    navigator.serviceWorker.register('/sw.js?v=' + encodeURIComponent(window.HQ_VERSION)).catch(function () { /* works without it */ })
+  }
+</script>
+<script>
+  /*
     The list's first two requests, started now rather than when the modules have loaded: on a cold page that was about four seconds
     of waiting before anything was asked. Only with a token already stored in this browser; data.js uses them only when the token is
     the one it holds and the answer is good, and otherwise asks afresh (so a stale token cannot sign anybody out).
