@@ -1,0 +1,195 @@
+{
+  "taken": "2026-10-25T17:25:49.661Z",
+  "indexes": [
+    {
+      "table_name": "activity_events",
+      "index_name": "activity_events_correlation_idx",
+      "definition": "CREATE INDEX activity_events_correlation_idx ON public.activity_events USING btree (correlation_id, occurred_at) WHERE (correlation_id IS NOT NULL)"
+    },
+    {
+      "table_name": "activity_events",
+      "index_name": "activity_events_external_idx",
+      "definition": "CREATE INDEX activity_events_external_idx ON public.activity_events USING btree (occurred_at DESC) WHERE (actor_kind = 'external'::text)"
+    },
+    {
+      "table_name": "activity_events",
+      "index_name": "activity_events_job_idx",
+      "definition": "CREATE INDEX activity_events_job_idx ON public.activity_events USING btree (job_id, occurred_at) WHERE (job_id IS NOT NULL)"
+    },
+    {
+      "table_name": "activity_events",
+      "index_name": "activity_events_office_time_idx",
+      "definition": "CREATE INDEX activity_events_office_time_idx ON public.activity_events USING btree (office_id, occurred_at DESC, activity_id DESC)"
+    },
+    {
+      "table_name": "activity_events",
+      "index_name": "activity_events_project_time_idx",
+      "definition": "CREATE INDEX activity_events_project_time_idx ON public.activity_events USING btree (project_id, occurred_at DESC) WHERE (project_id IS NOT NULL)"
+    },
+    {
+      "table_name": "activity_events",
+      "index_name": "activity_events_user_time_idx",
+      "definition": "CREATE INDEX activity_events_user_time_idx ON public.activity_events USING btree (office_id, occurred_at DESC, activity_id DESC) WHERE (visibility = 'user'::text)"
+    },
+    {
+      "table_name": "activity_write_failures",
+      "index_name": "activity_write_failures_office_time_idx",
+      "definition": "CREATE INDEX activity_write_failures_office_time_idx ON public.activity_write_failures USING btree (office_id, occurred_at DESC)"
+    },
+    {
+      "table_name": "artifacts",
+      "index_name": "artifacts_pending",
+      "definition": "CREATE INDEX artifacts_pending ON public.artifacts USING btree (state) WHERE (state = 'generating'::text)"
+    },
+    {
+      "table_name": "browser_sessions",
+      "index_name": "browser_sessions_live",
+      "definition": "CREATE INDEX browser_sessions_live ON public.browser_sessions USING btree (project_id) WHERE ((revoked_at IS NULL) AND (expired_at IS NULL))"
+    },
+    {
+      "table_name": "calendar_event_projects",
+      "index_name": "calendar_event_projects_project",
+      "definition": "CREATE INDEX calendar_event_projects_project ON public.calendar_event_projects USING btree (project_id)"
+    },
+    {
+      "table_name": "contact_labels",
+      "index_name": "contact_labels_office_idx",
+      "definition": "CREATE INDEX contact_labels_office_idx ON public.contact_labels USING btree (office_id)"
+    },
+    {
+      "table_name": "decisions",
+      "index_name": "decisions_search",
+      "definition": "CREATE INDEX decisions_search ON public.decisions USING gin (search)"
+    },
+    {
+      "table_name": "documents",
+      "index_name": "documents_tags_idx",
+      "definition": "CREATE INDEX documents_tags_idx ON public.documents USING gin (tags)"
+    },
+    {
+      "table_name": "drive_watch",
+      "index_name": "drive_watch_due",
+      "definition": "CREATE INDEX drive_watch_due ON public.drive_watch USING btree (last_checked_at)"
+    },
+    {
+      "table_name": "event_triggers",
+      "index_name": "event_triggers_office_idx",
+      "definition": "CREATE INDEX event_triggers_office_idx ON public.event_triggers USING btree (office_id)"
+    },
+    {
+      "table_name": "events",
+      "index_name": "events_reversible_idx",
+      "definition": "CREATE INDEX events_reversible_idx ON public.events USING btree (occurred_at DESC) WHERE reversible"
+    },
+    {
+      "table_name": "failure_signatures",
+      "index_name": "failure_signatures_office_idx",
+      "definition": "CREATE INDEX failure_signatures_office_idx ON public.failure_signatures USING btree (office_id)"
+    },
+    {
+      "table_name": "inbound_commands_slack",
+      "index_name": "inbound_commands_slack_by_channel",
+      "definition": "CREATE INDEX inbound_commands_slack_by_channel ON public.inbound_commands_slack USING btree (channel_id)"
+    },
+    {
+      "table_name": "lessons",
+      "index_name": "lessons_by_kind",
+      "definition": "CREATE INDEX lessons_by_kind ON public.lessons USING btree (job_kind) WHERE (job_kind IS NOT NULL)"
+    },
+    {
+      "table_name": "mail_messages",
+      "index_name": "mail_messages_search",
+      "definition": "CREATE INDEX mail_messages_search ON public.mail_messages USING gin (search)"
+    },
+    {
+      "table_name": "mcp_auth_codes",
+      "index_name": "mcp_auth_codes_office_idx",
+      "definition": "CREATE INDEX mcp_auth_codes_office_idx ON public.mcp_auth_codes USING btree (office_id)"
+    },
+    {
+      "table_name": "mcp_providers",
+      "index_name": "mcp_providers_office_idx",
+      "definition": "CREATE INDEX mcp_providers_office_idx ON public.mcp_providers USING btree (office_id)"
+    },
+    {
+      "table_name": "notebook_exclusions",
+      "index_name": "notebook_exclusions_office_idx",
+      "definition": "CREATE INDEX notebook_exclusions_office_idx ON public.notebook_exclusions USING btree (office_id)"
+    },
+    {
+      "table_name": "notebook_sync_queue",
+      "index_name": "notebook_sync_queue_pending",
+      "definition": "CREATE INDEX notebook_sync_queue_pending ON public.notebook_sync_queue USING btree (created_at) WHERE (state = 'pending'::notebook_sync_state)"
+    },
+    {
+      "table_name": "notebook_sync_queue",
+      "index_name": "notebook_sync_queue_uncertain",
+      "definition": "CREATE INDEX notebook_sync_queue_uncertain ON public.notebook_sync_queue USING btree (uncertain_since) WHERE (state = 'uncertain'::notebook_sync_state)"
+    },
+    {
+      "table_name": "outputs",
+      "index_name": "outputs_pending_review",
+      "definition": "CREATE INDEX outputs_pending_review ON public.outputs USING btree (created_at) WHERE ((reviewer_status = 'pending'::reviewer_status) AND (NOT deterministic))"
+    },
+    {
+      "table_name": "preference_proposals",
+      "index_name": "preference_proposals_office_idx",
+      "definition": "CREATE INDEX preference_proposals_office_idx ON public.preference_proposals USING btree (office_id)"
+    },
+    {
+      "table_name": "preference_proposals",
+      "index_name": "preference_proposals_open",
+      "definition": "CREATE INDEX preference_proposals_open ON public.preference_proposals USING btree (proposed_at DESC) WHERE (state = 'open'::proposal_state)"
+    },
+    {
+      "table_name": "project_events",
+      "index_name": "project_events_to_sync",
+      "definition": "CREATE INDEX project_events_to_sync ON public.project_events USING btree (office_id) WHERE (sync_state = 'pending'::text)"
+    },
+    {
+      "table_name": "projects",
+      "index_name": "projects_name_trgm",
+      "definition": "CREATE INDEX projects_name_trgm ON public.projects USING gin (app.normalise_name(name) gin_trgm_ops)"
+    },
+    {
+      "table_name": "provider_models",
+      "index_name": "provider_models_stale_idx",
+      "definition": "CREATE INDEX provider_models_stale_idx ON public.provider_models USING btree (last_probed_at NULLS FIRST)"
+    },
+    {
+      "table_name": "slack_app_credentials",
+      "index_name": "slack_app_credentials_office_idx",
+      "definition": "CREATE INDEX slack_app_credentials_office_idx ON public.slack_app_credentials USING btree (office_id)"
+    },
+    {
+      "table_name": "standing_authorizations",
+      "index_name": "standing_authorizations_office_idx",
+      "definition": "CREATE INDEX standing_authorizations_office_idx ON public.standing_authorizations USING btree (office_id)"
+    },
+    {
+      "table_name": "suggestions",
+      "index_name": "suggestions_by_weight",
+      "definition": "CREATE INDEX suggestions_by_weight ON public.suggestions USING btree (weight DESC, raised_at DESC) WHERE (state = 'open'::text)"
+    },
+    {
+      "table_name": "task_calendar_links",
+      "index_name": "task_calendar_links_pushed",
+      "definition": "CREATE INDEX task_calendar_links_pushed ON public.task_calendar_links USING btree (pushed_at DESC)"
+    },
+    {
+      "table_name": "task_tombstones",
+      "index_name": "task_tombstones_office_idx",
+      "definition": "CREATE INDEX task_tombstones_office_idx ON public.task_tombstones USING btree (office_id)"
+    },
+    {
+      "table_name": "tasks",
+      "index_name": "tasks_mine_remind",
+      "definition": "CREATE INDEX tasks_mine_remind ON public.tasks USING btree (remind_at) WHERE (assigned_to_human AND (remind_at IS NOT NULL) AND (state <> 'done'::text))"
+    },
+    {
+      "table_name": "workspace_layouts",
+      "index_name": "workspace_layouts_office_idx",
+      "definition": "CREATE INDEX workspace_layouts_office_idx ON public.workspace_layouts USING btree (office_id)"
+    }
+  ]
+}
