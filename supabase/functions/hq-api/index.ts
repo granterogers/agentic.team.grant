@@ -2770,7 +2770,50 @@ const createOffice = async (
   )
 }
 
-Deno.serve(async (request: Request): Promise<Response> => {
+/*
+  THE FIRST LOAD IN ONE REQUEST (26 October 2026).
+
+  A first load used to send about seventeen separate requests, and each one repeated the sign-in check (the identity service and the
+  session lookup), so the host spent much of its time re-answering the same question. `first_load` answers the sections the home
+  board needs in ONE request. It runs each section through this same handler, so every answer is what that section would have
+  answered on its own: the same checks, the same office, the same status. The sign-in check is shared, because the calls arrive
+  together and share one in-flight answer (`sessionAllowed`).
+
+  Only sections that take no argument are listed, so there is no parameter to get wrong. A section that fails reports its own
+  status and body; the bundle itself is answered 200.
+*/
+const FIRST_LOAD = [
+  'studio',
+  'projects',
+  'pulse',
+  'thinking',
+  'team_work',
+  'unseen',
+  'workspace',
+  'portfolio_tasks',
+  'activity_ledger',
+  'lately',
+  'google_connection',
+] as const
+
+const firstLoad = async (
+  request: Request,
+  answer: (asked: Request) => Promise<Response>,
+): Promise<Response> => {
+  const url = new URL(request.url)
+  const parts = await Promise.all(
+    FIRST_LOAD.map(async (section) => {
+      const asked = new URL(url)
+      asked.searchParams.set('section', section)
+      const reply = await answer(new Request(asked, { method: 'GET', headers: request.headers }))
+      const body: unknown = await reply.json().catch(() => ({}))
+      return [section, { status: reply.status, body }] as const
+    }),
+  )
+  return json({ section: 'first_load', data: Object.fromEntries(parts) })
+}
+
+const answer = async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') return json({ ok: true })
 
   if (request.method === 'GET' && new URL(request.url).pathname.endsWith('/health')) {
@@ -2778,6 +2821,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     // present at all. An unauthenticated caller learning which sections exist
     // is a probing aid.
     return json({ ok: true, endpoint: 'hq-api', token_configured: HQ_TOKEN !== '' })
+  }
+
+  if (request.method === 'GET' && new URL(request.url).searchParams.get('section') === 'first_load') {
+    return await firstLoad(request, answer)
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
@@ -4809,4 +4856,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   return json({ section: name, data })
-})
+}
+
+Deno.serve(answer)
