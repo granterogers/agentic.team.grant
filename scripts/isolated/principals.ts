@@ -413,7 +413,7 @@ check(
   const still = Number(
     (
       await one(
-        `select count(*)::int as c from public.staff_tools where staff_slug = 'chief-of-staff' and tool = 'db.read'`,
+        `select count(*)::int as c from public.staff_tools where office_id = app.operator_office() and staff_slug = 'chief-of-staff' and tool = 'db.read'`,
       )
     ).c,
   )
