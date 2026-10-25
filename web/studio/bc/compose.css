@@ -3478,6 +3478,8 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 }
 @keyframes bc-spin { to { transform: rotate(360deg); } }
 [data-experience='basecamp'] .bcconnecting { display: grid; gap: 20px; }
+[data-experience='basecamp'] .bcconnectingbar { display: flex; align-items: center; gap: 12px; }
+[data-experience='basecamp'] .bcplusbtn[disabled] { opacity: 0.45; cursor: default; }
 [data-experience='basecamp'] .bcskelgrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

@@ -3974,6 +3974,10 @@ const connecting = () => source.live !== true && source.state === 'prototype' &&
 
 const connectingOutline = () => `<div class="bcconnecting" aria-busy="true" aria-live="polite">
     <span class="bcvh">Loading your office</span>
+    <div class="bcconnectingbar">
+      <button type="button" class="bcplusbtn" disabled aria-label="Arrange this page: available once your office has loaded" title="Arranging is available once your office has loaded">+</button>
+      <span class="bcconnectingnote t-meta">Arranging the page becomes available once your modules have loaded.</span>
+    </div>
     <div class="bcskel bcskel--head"></div>
     <div class="bcskelgrid">${'<div class="bcskel bcskel--pane"></div>'.repeat(6)}</div>
   </div>`
