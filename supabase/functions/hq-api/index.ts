@@ -2779,12 +2779,11 @@ const createOffice = async (
   answered on its own: the same checks, the same office, the same status. The sign-in check is shared, because the calls arrive
   together and share one in-flight answer (`sessionAllowed`).
 
-  Only sections that take no argument are listed, so there is no parameter to get wrong. A section that fails reports its own
-  status and body; the bundle itself is answered 200.
+  Only sections that take no argument are listed, so there is no parameter to get wrong. The studio payload and the project list are
+  NOT in the bundle: the board waits for them, so they are asked on their own and never held behind the slowest of the rest. A
+  section that fails reports its own status and body; the bundle itself is answered 200.
 */
 const FIRST_LOAD = [
-  'studio',
-  'projects',
   'pulse',
   'thinking',
   'team_work',
@@ -2823,7 +2822,10 @@ const answer = async (request: Request): Promise<Response> => {
     return json({ ok: true, endpoint: 'hq-api', token_configured: HQ_TOKEN !== '' })
   }
 
-  if (request.method === 'GET' && new URL(request.url).searchParams.get('section') === 'first_load') {
+  if (
+    request.method === 'GET' &&
+    new URL(request.url).searchParams.get('section') === 'first_load'
+  ) {
     return await firstLoad(request, answer)
   }
 

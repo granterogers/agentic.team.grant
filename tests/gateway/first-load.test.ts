@@ -8,8 +8,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 const OFFICE = '2a2cd4d4-48c9-41ba-8271-a798631997da'
 const jwt = `${'a'.repeat(30)}.${'b'.repeat(30)}.${'c'.repeat(30)}`
 const LISTED = [
-  'studio',
-  'projects',
   'pulse',
   'thinking',
   'team_work',
@@ -110,7 +108,7 @@ describe('the first load in one request', () => {
     }
     expect(body.section).toBe('first_load')
     expect(Object.keys(body.data).sort()).toEqual([...LISTED].sort())
-    expect(body.data.studio?.body.data?.answered_by).toBe('hq_studio')
+    expect(body.data.studio).toBeUndefined()
     expect(body.data.pulse?.body.data?.answered_by).toBe('hq_pulse')
   })
 
