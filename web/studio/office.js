@@ -29,13 +29,8 @@
 */
 
 import { HQ_API as API, UNCONFIGURED } from './backend.js'
-import { limiter } from './limit.js'
 import { bounded } from './net.js'
 import * as session from './session.js'
-
-/** Section reads in flight at once. Four keeps the office's database host from being asked for eleven heavy answers together. */
-const SECTION_READS = 4
-const sectionRead = limiter(SECTION_READS)
 
 /*
   THE OFFICE'S OWN KEY, AND WHY IT IS STILL READ HERE.
@@ -259,10 +254,11 @@ export async function read(section, id, extra) {
     }
   }
   const began = session.epoch()
-  const bearer = await toPresent()
-  // At most SECTION_READS at once (26 October 2026): see limit.js. The deadline runs from when the read actually starts.
-  const r = await sectionRead(() =>
-    bounded(`office:read:${section}`, `${API}?${parts.join('&')}`, { headers: { Authorization: `Bearer ${bearer}` } }, 20_000),
+  const r = await bounded(
+    `office:read:${section}`,
+    `${API}?${parts.join('&')}`,
+    { headers: { Authorization: `Bearer ${await toPresent()}` } },
+    20_000,
   )
   if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
   if (r.status === 401) {
