@@ -508,7 +508,7 @@ const topRow = () => {
         <svg class="bcschemeicon bcschemeicon--moon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg>
         <svg class="bcschemeicon bcschemeicon--sun" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
       </button>
-      ${source.state === 'prototype' ? '<a class="bcsignlink" href="?welcome">Sign in</a>' : ''}
+      ${source.state === 'prototype' && !connecting() ? '<a class="bcsignlink" href="?welcome">Sign in</a>' : ''}
       ${session.signedIn() ? `<span class="bcwho" data-bc-who title="${esc(who)}">${esc(who)}</span>` : ''}
       <!--
         THE OFFICE'S OWN SETTINGS, OUTSIDE ANY PROJECT.
@@ -4003,15 +4003,20 @@ const notLive = () => {
     </div>`
   }
   if (source.live === true) return ''
-  /* The prototype and the Sample are played as ordinary projects: no banner says they are not the real office (Grant, 14 Oct 2026). */
-  if (source.state === 'prototype') return ''
+  /*
+    While a signed-in person's office is still answering, say so. This sits before the prototype check: the office has not
+    answered yet, so the state is still 'prototype', and the strip used to be skipped exactly when it was needed (23 October
+    2026: the page showed "Sign in" beside the email with grey placeholders, and no sentence said the office was loading).
+  */
   if (connecting()) {
     return `<div class="bcnotlive bcnotlive--wait" role="status">
       <span class="bcspin" aria-hidden="true"></span>
       <b>Connecting to your office</b>
-      <span>Your projects appear here the moment it answers.</span>
+      <span>Your projects appear here the moment it answers. The menus and the team chat work meanwhile.</span>
     </div>`
   }
+  /* The prototype and the Sample are played as ordinary projects: no banner says they are not the real office (Grant, 14 Oct 2026). */
+  if (source.state === 'prototype') return ''
   const s = SOURCE_STATE[source.state] ?? SOURCE_STATE.prototype
   const canRetry = source.state === 'unreachable' || source.state === 'stale'
   /*
