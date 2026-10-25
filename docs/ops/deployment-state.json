@@ -33,8 +33,8 @@
   },
   "components": {
     "worker": {
-      "version": "v988",
-      "note": "16 October 2026, deploy:worker from 13c4a4f6 (deployed v988 ACTIVE; liveness ok; unauthenticated kick 401; authenticated kick 200; slack.per_office_delivery true). Before it v983, 15 October 2026, deploy:worker from 754ab4b1 (closure of 226 files verified; liveness ok; unauthenticated kick 401; authenticated kick 200). Before it v980: 10 October 01:20 UTC, V1 release from 047f6f17; before that v976 (code of 9310116)"
+      "version": "v1043",
+      "note": "25 October 2026, deploy:worker from 41ad8998 (the worker writes the announce flag only when it changes; version 0.29.0). Before it the platform reported v1041, which this record had not shown: deploys between v988 and v1041 were not written down, and that gap is now known. Liveness ok; unauthenticated kick 401; authenticated kick 200 with nothing to handle. ROLLBACK: deploy:worker from 1cd58eb1e (the code before this change). The v1041 code is the best-known match for 1cd58eb1e and has not been byte-verified. Earlier: 16 October 2026, deploy:worker from 13c4a4f6 (deployed v988 ACTIVE; liveness ok; unauthenticated kick 401; authenticated kick 200; slack.per_office_delivery true). Before it v983, 15 October 2026, deploy:worker from 754ab4b1 (closure of 226 files verified; liveness ok; unauthenticated kick 401; authenticated kick 200). Before it v980: 10 October 01:20 UTC, V1 release from 047f6f17; before that v976 (code of 9310116)"
     },
     "signin": {
       "version": "v146",
