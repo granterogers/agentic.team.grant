@@ -43,6 +43,18 @@ const fake = vi.fn(async (url: string | URL | Request, init?: RequestInit): Prom
   const fn = m?.[1] ?? ''
   const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
   rpc.push({ fn, body })
+  // The gateway asks ONE question about a session now (principal_for_session, 23 October 2026). It is answered here from the same
+  // member and office variables the old membership and office answers used, so the log above keeps its meaning.
+  if (fn === 'principal_for_session')
+    return new Response(
+      JSON.stringify({
+        member: member ? { ok: true, owner_key: 'x', kind: 'person' } : { ok: false },
+        office: officeGone
+          ? { ok: false, reason: 'no_office' }
+          : { ok: true, office_id: 'office-1' },
+      }),
+      { status: 200 },
+    )
   if (fn === 'office_member')
     return new Response(
       JSON.stringify(member ? [{ ok: true, owner_key: 'x', kind: 'person' }] : [{ ok: false }]),

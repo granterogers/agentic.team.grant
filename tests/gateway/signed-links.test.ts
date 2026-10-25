@@ -52,10 +52,22 @@ let studioAnswer: unknown = null
 /** What the browsing ledger returns for the asking office. */
 let browserAnswer: unknown[] = []
 
-const fake = vi.fn(async (url: string | URL | Request): Promise<Response> => {
+const answer = async (url: string | URL | Request): Promise<Response> => {
   const u = decodeURIComponent(String(url))
   if (u.endsWith('/auth/v1/user'))
     return new Response(JSON.stringify({ id: 'auth-1', email: 'sam@example.com' }), { status: 200 })
+  // The gateway asks ONE question about a session now (principal_for_session, 23 October 2026). It is answered from the two answers
+  // this test gives for the member and the office, through the inner function, so nothing is recorded as a call of its own.
+  if (u.endsWith('/rpc/principal_for_session')) {
+    const member = await answer(u.replace(/\/rpc\/[a-z_0-9]+$/, '/rpc/office_member'))
+    const office = await answer(u.replace(/\/rpc\/[a-z_0-9]+$/, '/rpc/resolve_office'))
+    if (!member.ok || !office.ok) return new Response('boom', { status: 500 })
+    const [row] = (await member.json()) as { ok?: boolean; owner_key?: string; kind?: string }[]
+    return new Response(
+      JSON.stringify({ member: row ?? { ok: false }, office: await office.json() }),
+      { status: 200 },
+    )
+  }
   if (u.endsWith('/rpc/office_member'))
     return new Response(JSON.stringify([{ ok: true, owner_key: 'sam', kind: 'person' }]), {
       status: 200,
@@ -114,7 +126,8 @@ const fake = vi.fn(async (url: string | URL | Request): Promise<Response> => {
     )
   }
   return new Response('{}', { status: 200 })
-})
+}
+const fake = vi.fn(answer)
 
 beforeAll(async () => {
   vi.stubGlobal('Deno', {
