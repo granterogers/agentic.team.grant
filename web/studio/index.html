@@ -123,24 +123,12 @@
       var stored = JSON.parse(localStorage.getItem('hq.session') || 'null')
       var token = stored && typeof stored.access_token === 'string' ? stored.access_token : ''
       if (token === '' || !window.HQ_API) return
-      /*
-        The studio payload and the project list are asked for on their own, as they always were: the board waits for them, so they
-        are never held behind the slowest of the other sections (26 October 2026). The other home-board sections are asked for in
-        ONE request (first_load), so the sign-in is checked once for them; each reader takes its own part from window.hqBundle
-        (bundle.js). Any failure falls back to asking afresh.
-      */
       var headers = { authorization: 'Bearer ' + token }
       var studio = fetch(window.HQ_API + '?section=studio', { headers: headers })
       var projects = fetch(window.HQ_API + '?section=projects', { headers: headers })
       studio.catch(function () { /* data.js asks again */ })
       projects.catch(function () { /* data.js asks again */ })
       window.hqEarly = { token: token, studio: studio, projects: projects }
-      /* Started once the studio payload has answered, so the other sections never compete with the board's own request. */
-      var bundle = studio.catch(function () { return null })
-        .then(function () { return fetch(window.HQ_API + '?section=first_load', { headers: headers }) })
-        .then(function (r) { return r.ok ? r.json() : null })
-        .catch(function () { return null })
-      window.hqBundle = { token: token, bundle: bundle, taken: new Set() }
     } catch (e) { /* storage blocked: the page asks when its modules are ready, as before */ }
   })()
 </script>

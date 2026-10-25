@@ -29,7 +29,6 @@
 */
 
 import { HQ_API as API, UNCONFIGURED } from './backend.js'
-import { takeBundled } from './bundle.js'
 import { bounded } from './net.js'
 import * as session from './session.js'
 
@@ -255,19 +254,12 @@ export async function read(section, id, extra) {
     }
   }
   const began = session.epoch()
-  const bearer = await toPresent()
-  /*
-    A first-load section may already be in the bundle `index.html` asked for in one request (26 October 2026). bundle.js takes it
-    once, with the same token; anything else goes to the network exactly as before.
-  */
-  const r =
-    (await takeBundled(globalThis.hqBundle, section, bearer)) ??
-    (await bounded(
-      `office:read:${section}`,
-      `${API}?${parts.join('&')}`,
-      { headers: { Authorization: `Bearer ${bearer}` } },
-      20_000,
-    ))
+  const r = await bounded(
+    `office:read:${section}`,
+    `${API}?${parts.join('&')}`,
+    { headers: { Authorization: `Bearer ${await toPresent()}` } },
+    20_000,
+  )
   if (began !== session.epoch()) throw new Error('You signed out before this arrived.')
   if (r.status === 401) {
     session.forget()
