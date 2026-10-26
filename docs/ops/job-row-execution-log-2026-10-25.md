@@ -61,6 +61,21 @@ The effect on the in-place rate and on the write count can only be read over hou
 - `pg_stat_statements` calls for `update public.jobs set announce`, compared with 18,183 at 25 October.
 - The first-load timing on the live site, compared with the median of 4.8 seconds.
 
+## Follow-up result (26 October 2026, 00:22 UTC, read-only)
+
+- **In-place rate (phase 1):** since the baseline (25 October, 18:10 UTC) `jobs` took 937 more updates and 282 of them were in place,
+  about 30%, against 6.0% over the whole history. This is a real change in the in-place share, but on a small volume: 937 updates in
+  about six hours.
+- **Announce writes (phase 3):** 18,205 calls to the old `update public.jobs set announce` statement, against 18,183 at 25 October:
+  22 more. The guarded statement (`... and announce is distinct from ...`) has run **zero** times since the worker deploy, although 117
+  jobs were created in that window. So the write-count change is not yet exercised, and no gain is claimed for it.
+- **First load (live, five trials):** median 11.0 s, worst 14.8 s, against a median of 4.8 s in the baseline. The page and its requests
+  are unchanged since 0.28.1, so this is most likely database load at the time of the test, not these changes. Not rolled back, because
+  nothing points at them.
+- **Critical gate:** 72 of 72, green.
+- **Verdict:** the in-place share rose; the write count is unmeasured; the page timing is worse, for a cause not yet established.
+  Keep phase 1 and the worker change in place, and measure again once the worker's guarded statement has run.
+
 ## Known gap found on the way
 
 The deployment record showed the worker as v988, but the platform reported v1041 before this deploy. Deploys in between were not
