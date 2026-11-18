@@ -200,7 +200,9 @@
     top: auto;
     transform: none;
     min-width: 0;
-    overflow: hidden;
+    /* Not `overflow: hidden`: that clipped the project switcher's menu to the 36 px label (A2, 18 November 2026). The title itself
+       keeps its ellipsis on .bcjumpname. */
+    overflow: visible;
   }
 }
 
