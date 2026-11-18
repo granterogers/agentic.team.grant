@@ -271,6 +271,33 @@ try {
     `http ${String(upMachine.status)}`,
   )
 } finally {
+  /*
+    Teardown: this run's real-named and fixture projects are removed, so the replica the next proofs read is the one they expect. A
+    project named by this run was left behind before (25 October 2026): the office then asked "which project is that for?" in
+    turn-entitlement, because two stray "P1 storage" projects were now there to choose between.
+  */
+  try {
+    /*
+      The replica is throwaway, so this run's projects are removed with foreign-key checks off for this one statement only. Their
+      dependent rows (documents, contacts and the rest) are left as orphans that no screen reads, which is why the teardown is
+      only ever done here and never against production.
+    */
+    await db.execute(
+      `do $$ begin set local session_replication_role = replica;
+         delete from public.projects where name like ${lit(`P1 storage % ${run}`)} or name like ${lit(`fixture-p1storage-% ${run}`)};
+       end $$`,
+    )
+  } catch (e) {
+    console.log(`      teardown of this run's projects was refused: ${String((e as Error).message).slice(0, 140)}`)
+  }
+  const left = Number(
+    (
+      await db.execute(
+        `select count(*)::int as n from public.projects where name like ${lit(`P1 storage % ${run}`)} or name like ${lit(`fixture-p1storage-% ${run}`)}`,
+      )
+    ).rows[0]?.n,
+  )
+  check('teardown left nothing behind', left === 0, `${String(left)} project(s)`)
   const failed = results.filter((r) => !r.ok).length
   console.log(`\n${String(results.length - failed)}/${String(results.length)} passed`)
   exit = failed === 0 ? 0 : 1

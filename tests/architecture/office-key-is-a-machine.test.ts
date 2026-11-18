@@ -93,8 +93,9 @@ describe('the office key is a machine (#385)', () => {
 
   it('a member whose kind the database did not say is treated as a test member, never a person', () => {
     // 'guest' is named by the database (kind guest, a sample office's visitor); anything else it does not name is a test member.
+    // 23 October 2026: the kind comes from the member of principal_for_session, not from a row list.
     expect(source).toMatch(
-      /rows\[0\]\?\.kind === 'person' \? 'person' : rows\[0\]\?\.kind === 'guest' \? 'guest' : 'harness'/,
+      /member\.kind === 'person' \? 'person' : member\.kind === 'guest' \? 'guest' : 'harness'/,
     )
   })
 })
