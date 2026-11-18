@@ -322,7 +322,7 @@ export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
         return `<p class="bcmpty">Nothing here under ${esc(f.name)}.
           <button type="button" class="bclinky" data-bc-filter-off="1">Show everything</button></p>`
       }
-      return emptyWith('No to-dos on this project yet.', 'Add a to-do', `/p/${whole.slug}/tasks`)
+      return emptyWith('No to-dos on this project yet.', 'Open To-dos to add one', `/p/${whole.slug}/tasks`)
     }
     return `<ul class="bctasks">${flat.slice(0, per * lists).map(taskLine).join('')}</ul>`
   }
@@ -423,7 +423,7 @@ export const cardsMini = (p) => {
   const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
   if (tasks.length === 0 && source.fetching === true) return skeleton(4)
   if (tasks.length === 0 && source.state === 'unreachable') return unreachable('to-dos')
-  if (tasks.length === 0) return emptyWith('No to-dos yet. Add one to start this list.', 'Add a to-do', `/p/${p.slug}/tasks`)
+  if (tasks.length === 0) return emptyWith('No to-dos yet. Add one to start this list.', 'Open To-dos to add one', `/p/${p.slug}/tasks`)
   const at = (id) =>
     tasks.filter((t) => {
       const st = t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')

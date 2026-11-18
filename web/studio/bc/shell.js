@@ -386,6 +386,17 @@ const menuPanel = () => {
            <p class="bcmenunone" role="status" aria-live="polite" data-bc-restore-said>${esc(compose.restoreSaid())}</p>`
         : ''
     }
+    <p class="bcmenuhead">Go to</p>
+    <div class="bcmenulist" data-bc-menu-go>
+      ${trayItems()
+        .map(
+          (t) =>
+            `<button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(t.to)}"><span class="bcmenuname">${esc(t.name)}</span></button>`,
+        )
+        .join('')}
+      <button type="button" role="menuitem" class="bcmenuitem" data-bc-global-menu="1"
+        title="Global Settings: the whole office, outside any project"><span class="bcmenuname">Global Settings</span></button>
+    </div>
     ${
       here === null
         ? ''
@@ -397,9 +408,6 @@ const menuPanel = () => {
       )
       .join('')}${item(at(`/p/${here}/chat`), 'Team Chat', rowMark('chat'))}<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-sources="1">${rowMark('sources')}<span class="bcmenuname">Sources</span></button></div>`
     }
-    <hr class="bcmenusep">
-    <button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem bcmenuglobal" data-bc-global-menu="1"
-      title="Global Settings: the whole office, outside any project"><span class="bcmenuname">Global Settings</span></button>
   </div>`
 }
 
