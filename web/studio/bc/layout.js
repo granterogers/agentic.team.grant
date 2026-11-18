@@ -451,9 +451,16 @@ export const tidy = (mods, st) => {
       back without anything landing on its neighbour: clamping afterwards would
       move the last module on top of the one beside it.
     */
+    /*
+      The minimum width is kept only while the row still fits the stage. A row of five 240px modules in a 1200px stage
+      scales to 230px, and flooring each back to 240px made the row 1248px wide: the right-to-left pass then pushed the
+      first two modules onto each other (A6, Tidy overlap). A row that cannot keep its minimum shrinks proportionally.
+    */
+    const floored = items.map((m) => Math.max(MIN.w, Math.round(m.w * scale)))
+    const fits = floored.reduce((n, w) => n + w, 0) + gaps <= st.w
     let cursor = 0
-    const row2 = items.map((m) => {
-      const w = Math.max(MIN.w, Math.round(m.w * scale))
+    const row2 = items.map((m, i) => {
+      const w = fits ? floored[i] : Math.max(1, Math.round(m.w * scale))
       const x = Math.max(cursor, m.x)
       cursor = x + w + GAP
       return { ...m, x, w }
@@ -477,7 +484,15 @@ export const tidy = (mods, st) => {
       m.h = Math.max(MIN.h, Math.round(m.h * f))
     }
   }
-  return placed.map((m) => clampRect(m, st))
+  /*
+    Keep each module inside the stage without resizing it. clampRect would raise a width back to its minimum here, which
+    undid the shrink above and put modules over their neighbours (A6).
+  */
+  return placed.map((m) => ({
+    ...m,
+    x: Math.max(0, Math.min(Math.max(0, st.w - m.w), m.x)),
+    y: Math.max(0, Math.min(Math.max(0, st.h - m.h), m.y)),
+  }))
 }
 
 /* ----------------------------------------------------------- the document --- */
