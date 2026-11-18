@@ -433,4 +433,11 @@
     min-width: 44px;
     min-height: 44px;
   }
+  :root[data-experience='basecamp'] .bcbtn.bcmic {
+    width: 44px;
+  }
+  /* Every other button of the studio: the page's own buttons are 26 to 36 px tall on a phone. */
+  :root[data-experience='basecamp'] .bcbtn {
+    min-height: 44px;
+  }
 }
