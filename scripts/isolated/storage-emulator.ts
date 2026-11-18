@@ -88,6 +88,17 @@ export class StorageEmulator {
       }
       return this.json([...seen.values()])
     }
+    if (path === '/object/backups' && method === 'DELETE') {
+      // Storage's bulk delete: `{ prefixes: [paths] }`, answered with the objects it removed (a missing path is skipped,
+      // not an error), the shape `runs.ts` counts.
+      const { prefixes } = JSON.parse(String(init.body)) as { prefixes: string[] }
+      const removed: { name: string }[] = []
+      for (const key of prefixes) {
+        this.deleted.push(key)
+        if (this.objects.delete(key)) removed.push({ name: key })
+      }
+      return this.json(removed)
+    }
     if (path.startsWith('/object/backups/') && method === 'DELETE') {
       const key = decodeURIComponent(path.slice('/object/backups/'.length))
       this.deleted.push(key)
