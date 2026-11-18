@@ -1,8 +1,30 @@
 # Backup retention policy
 
-**Status: RECORDED AND TESTED. NOT EXECUTED.** Nothing has been deleted, no backup has been touched, migration 1026 has not been deployed,
-and no production system was contacted to write this. Destructive retention in production stays separately approval-gated (see "The approval
-gate").
+**Status: EXECUTED ONCE, 18 November 2026, under Grant's explicit approval in the session ("Policy + interrupted").** Before that it was
+recorded and tested only. Destructive retention in production stays separately approval-gated (see "The approval gate"): that approval covered
+that one pass, not the next.
+
+## The 18 November 2026 execution
+
+Why: Supabase reported the organisation over its 1 GB File Storage quota in the previous billing cycle, with projects to be restricted from
+18 December 2026. Measured read-only before acting (`storage.objects`, 13:2x UTC): **1,281.7 MB stored, 1,203.8 MB of it `backups`**, 41 items.
+
+What was found on the way, and is NOT fixed by this pass: **no nightly backup has finished since 8 November.** Every `office.backup` job from
+9 to 17 November ended `failed`, `recovery: 5 attempts exhausted while in running`, each folder stopping at 132 of 316 objects, at
+`public.job_state_transitions` (280,782 rows, 72 MB on 18 November). The earlier successes already needed 3 to 5 attempts. The table outgrew one
+worker tick. Tracked as an Issue; fixing it needs a worker deploy.
+
+What was done (`npm run backup:prune -- --attended --interrupted`, both production flags, the owner's approval of this pass):
+
+| | Runs | Objects | MB |
+|---|---|---|---|
+| Out of policy, verified, deleted (two passes: the first was cut by the ten-minute shell limit part way through one folder, manifest first, so that folder became an interrupted run) | 14 (incl. the 12 September legacy file), plus `run-f879cd17` cut part way | 4,057 | 498.7 |
+| Interrupted (no manifest), older than 24 h, deleted | 13 | 1,875 | 223.1 |
+| Kept: 7 daily (1 to 8 November) and 5 weekly (27 September to 25 October), all re-verified by reading back | 12 | | 466.0 |
+| Kept: the 17 November interrupted run, younger than the 24 h floor | 1 | | 15.8 |
+
+After: **559.7 MB stored (0.52 GiB), backups 481.8 MB.** Two tool changes made this possible and are part of the same change: bulk deletion
+(100 paths a call, manifest objects in a call of their own first) and `--interrupted` (`planInterrupted` / `applyInterrupted`).
 
 ## The owner's policy, verbatim
 
@@ -46,8 +68,12 @@ wording of a reason.
   deletes; it exits with a message.
 * `applyRetention` also refuses a plan that names a foreign file, an unverified run or an unfinished run, whatever produced the plan.
 * **Production destructive execution additionally needs the owner's separate approval of that specific deletion.** No code in this repository can
-  grant that, and the two environment variables are the owner's switch, never an agent's. The nightly handler never plans a deletion; it only
-  reports the size and says to run the dry run.
+  grant that, and the two environment variables are the owner's switch, never an agent's.
+* **The nightly prune (ADR-0077, since 18 November 2026)** is the one deletion without a person at the keyboard, and only because Grant chose it
+  ("Auto-prune nightly"). It runs only while `system_config` `backup.auto_prune` is `true` and not self-adjustable; off is the default. It
+  applies this same policy, but a run counts as verified only if it carries the verify-once marker (`verified.json`, written after the
+  nightly job read every object back). It deletes at most 3 a night and refuses a longer plan whole, never deletes tonight's run, and never
+  touches an unmarked, unverified, unfinished or foreign item. `npm run backup:prune -- --attended` backfills the marker on the runs it verifies.
 
 ## Worked example (computed, not production)
 

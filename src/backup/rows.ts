@@ -27,7 +27,10 @@ export function splitTable(text: string): TableText {
   if (!text.startsWith(`${OPEN}"`) || head < 0) {
     throw new Error('not a table object: it does not begin {"table":"...","rows":[')
   }
-  const name = JSON.parse(text.slice(OPEN.length, head)) as string
+  // `"name"`, or `"name","part":n` for one part of a table written in parts (#503)
+  const header = /^("(?:[^"\\]|\\.)*")(?:,"part":\d+)?$/.exec(text.slice(OPEN.length, head))
+  if (header === null) throw new Error('not a table object: its header is not {"table":"..."}')
+  const name = JSON.parse(header[1] as string) as string
   const rows: string[] = []
   let i = head + MARK.length
   const n = text.length

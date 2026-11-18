@@ -42,7 +42,11 @@ export class MemoryArchive implements ArchiveSource {
   }
 
   async table(qualified: string): Promise<{ text: string; sha256: string; bytes: number } | null> {
-    const bytes = this.objects.get(`${this.prefix}/${qualified}.json.gz`)
+    return await this.object(`${this.prefix}/${qualified}.json.gz`)
+  }
+
+  async object(key: string): Promise<{ text: string; sha256: string; bytes: number } | null> {
+    const bytes = this.objects.get(key)
     if (bytes === undefined) return null
     return { text: await gunzipText(bytes), sha256: await checksum(bytes), bytes: bytes.length }
   }
@@ -85,7 +89,10 @@ export class StorageFolderSource implements ArchiveSource {
   }
 
   async table(qualified: string): Promise<{ text: string; sha256: string; bytes: number } | null> {
-    const key = `${this.prefix}/${qualified}.json.gz`
+    return await this.object(`${this.prefix}/${qualified}.json.gz`)
+  }
+
+  async object(key: string): Promise<{ text: string; sha256: string; bytes: number } | null> {
     const bytes = await downloadArchive(this.ref, this.serviceKey, key).catch(() => null)
     if (bytes === null) return null
     return { text: await gunzipText(bytes), sha256: await checksum(bytes), bytes: bytes.length }

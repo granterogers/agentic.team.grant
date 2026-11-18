@@ -44,6 +44,7 @@
 import type { SqlExecutor } from '../db/executor.ts'
 import { collectAux } from './aux.ts'
 import { type PagedOptions, pagedDump } from './paged.ts'
+import { partKey } from './parts.ts'
 
 export interface Archive {
   readonly name: string
@@ -244,7 +245,11 @@ export async function dumpTable(
 ): Promise<TableDump> {
   const dump = await pagedDump(db, schema, table, options)
   return {
-    key: `${prefix}/${schema}.${table}.json.gz`,
+    // a part has its own object (parts.ts); a whole table keeps the name every stored backup already uses
+    key:
+      options.part === undefined
+        ? `${prefix}/${schema}.${table}.json.gz`
+        : partKey(prefix, `${schema}.${table}`, options.part),
     bytes: dump.bytes,
     sha256: await sha256(dump.bytes),
     rows: dump.rows,
@@ -257,6 +262,8 @@ export interface ManifestExtra {
   /** Per object key: checksum and size, so a manifest can vouch for every object it names. */
   readonly objects?: Record<string, { sha256: string; bytes: number }>
   readonly fingerprints?: Record<string, string>
+  /** Per table written in parts: its part objects' keys, in order (parts.ts). A table absent here is one object. */
+  readonly parts?: Record<string, string[]>
 }
 
 /**
@@ -285,8 +292,10 @@ export async function buildManifest(
     await db.execute('select name from app.schema_migrations order by name')
   ).rows.map((r) => String(r.name))
 
+  const hasParts = extra.parts !== undefined && Object.keys(extra.parts).length > 0
   const json = JSON.stringify({
-    format: 'folder/1',
+    // folder/2 only when a table was written in parts, so a backup with none reads exactly as before
+    format: hasParts ? 'folder/2' : 'folder/1',
     exported_at: new Date().toISOString(),
     project_ref: projectRef,
     note:
@@ -306,6 +315,7 @@ export async function buildManifest(
     // in public or app (logins, schedules, secret NAMES, storage objects, sequences). See aux.ts.
     ...(extra.objects === undefined ? {} : { objects: extra.objects }),
     ...(extra.fingerprints === undefined ? {} : { fingerprints: extra.fingerprints }),
+    ...(hasParts ? { parts: extra.parts } : {}),
     aux: await collectAux(db),
   })
   const bytes = await gzip(json)
@@ -422,8 +432,10 @@ export async function readFolder(
         return (await readArchive(bytes)) as { table?: string; rows?: unknown[] }
       }),
     )
+    // a table written in parts (#503) is several objects naming the same table: their rows are appended
     for (const one of got) {
-      if (one !== null && typeof one.table === 'string') data[one.table] = one.rows ?? []
+      if (one !== null && typeof one.table === 'string')
+        data[one.table] = [...(data[one.table] ?? []), ...(one.rows ?? [])]
     }
   }
 

@@ -39,6 +39,7 @@ import { type Aux, STRUCTURE_SQL, type StructureFingerprint } from './aux.ts'
 import {
   type Manifest,
   type ObservedObject,
+  objectKeys,
   type RestoredTable,
   type Verdict,
   verifyArchive,
@@ -203,6 +204,8 @@ export interface ArchiveSource {
   observed(): Promise<ReadonlyMap<string, ObservedObject>>
   /** One table object, decompressed, with the checksum of the compressed bytes it came from. */
   table(qualified: string): Promise<{ text: string; sha256: string; bytes: number } | null>
+  /** Any one object by its full key, the same way: how the parts of a split table are read (#503). */
+  object(key: string): Promise<{ text: string; sha256: string; bytes: number } | null>
 }
 
 // -------------------------------------------------------------------------------------------------- the restore
@@ -599,13 +602,19 @@ export async function restoreArchive(
         const rowsExpected = manifest.row_counts?.[t]
         if (rowsExpected === undefined) continue // created after the backup: stays empty
         if (rowsExpected === 0) continue
-        const got = await source.table(t)
-        if (got === null) throw new Error(`${t}: the archive has no object for it`)
-        const seen = observed.get(`${source.prefix}/${t}.json.gz`)
-        if (seen !== undefined && seen.sha256 !== got.sha256) {
-          throw new Error(`${t}: its bytes changed between verification and load`)
+        // one object, or the parts of a table written in parts (#503), each checked against what verification saw
+        const rows: string[] = []
+        for (const key of objectKeys(manifest, source.prefix, t)) {
+          const got = await source.object(key)
+          if (got === null) throw new Error(`${t}: the archive has no object ${key}`)
+          const seen = observed.get(key)
+          if (seen !== undefined && seen.sha256 !== got.sha256) {
+            throw new Error(`${t}: its bytes changed between verification and load`)
+          }
+          const piece = splitTable(got.text)
+          if (piece.table !== t) throw new Error(`${key} holds ${piece.table}, not ${t}`)
+          rows.push(...piece.rows)
         }
-        const { rows } = splitTable(got.text)
         if (rows.length !== rowsExpected) {
           throw new Error(
             `${t}: the object holds ${String(rows.length)} rows and the manifest says ${String(rowsExpected)}`,

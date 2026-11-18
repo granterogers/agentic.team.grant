@@ -15,6 +15,9 @@
  * would not fit is the point at which the format needs parts, and `maxCompressedBytes` makes that a refusal with a
  * sentence rather than an out-of-memory kill that looks like a retry.
  *
+ * That point came on 9 November 2026 (#503, ADR-0076): a large table is now dumped as several `KeyRange` parts, one
+ * object and one checkpointed step each (parts.ts), so the bound per object is one part, not one table.
+ *
  * ## Why keyset and not OFFSET
  *
  * OFFSET re-reads and discards every earlier row on every page (quadratic) and, worse, a row inserted between pages
@@ -58,6 +61,10 @@ export interface PagedDump {
 export interface PagedOptions {
   readonly pageRows?: number
   readonly maxCompressedBytes?: number
+  /** Read only this slice of the table (a part). Absent: the whole table. */
+  readonly range?: KeyRange
+  /** The part number written into the object (`"part":n`), for a person reading it. Absent on a whole table. */
+  readonly part?: number
 }
 
 const quoteIdent = (s: string): string => `"${s.replace(/"/g, '""')}"`
@@ -67,7 +74,7 @@ const TWO_64 = 1n << 64n
 /** Is this row hash's contribution to the fingerprint. First 48 bits of an md5 hex digest. */
 export const rowHashValue = (md5hex: string): bigint => BigInt(`0x${md5hex.slice(0, 12)}`)
 
-interface Key {
+export interface Key {
   readonly cols: readonly string[]
   readonly types: readonly string[]
   /** True when the table has no usable key and `ctid` stands in for it. */
@@ -110,6 +117,16 @@ export async function pageKey(db: SqlExecutor, schema: string, table: string): P
   }
 }
 
+/**
+ * A slice of a table in key order: rows whose key is strictly after `after` and at most `through`. `null` is open on
+ * that side, so `{ after: null, through: null }` is the whole table. A large table is written as several of these
+ * (parts.ts), one checkpointed step each, so no single step has to hold more than one part (#503).
+ */
+export interface KeyRange {
+  readonly after: readonly string[] | null
+  readonly through: readonly string[] | null
+}
+
 /** The page query. Exported so a test can assert the statement without a database. */
 export function pageSql(
   schema: string,
@@ -117,19 +134,57 @@ export function pageSql(
   key: Key,
   after: readonly string[] | null,
   limit: number,
+  through: readonly string[] | null = null,
 ): string {
   const from = `${quoteIdent(schema)}.${quoteIdent(table)}`
   // One level, on the table's own alias: `to_jsonb(s)` is then exactly the table's columns and nothing this query added.
   const col = (c: string): string => (c === 'ctid' ? 's.ctid' : `s.${quoteIdent(c)}`)
   const order = key.cols.map(col).join(', ')
-  const where =
-    after === null
-      ? ''
-      : key.physical
-        ? `where s.ctid > ${lit(after[0] as string)}::tid`
-        : `where (${order}) > (${key.cols.map((_, i) => `${lit(after[i] as string)}::${key.types[i] as string}`).join(', ')})`
+  const values = (v: readonly string[]): string =>
+    key.cols.map((_, i) => `${lit(v[i] as string)}::${key.types[i] as string}`).join(', ')
+  const conditions: string[] = []
+  if (after !== null)
+    conditions.push(
+      key.physical ? `s.ctid > ${lit(after[0] as string)}::tid` : `(${order}) > (${values(after)})`,
+    )
+  if (through !== null) {
+    // ctid shifts under a concurrent update, so it is never a part boundary (parts.ts does not split such a table)
+    if (key.physical)
+      throw new Error(`${schema}.${table} has no key, so it cannot be read by range`)
+    conditions.push(`(${order}) <= (${values(through)})`)
+  }
+  const where = conditions.length === 0 ? '' : `where ${conditions.join(' and ')}`
   const keyText = key.cols.map((c, i) => `${col(c)}::text as k${String(i)}`).join(', ')
   return `select to_jsonb(s)::text as j, md5(to_jsonb(s)::text) as h, ${keyText} from ${from} s ${where} order by ${order} limit ${String(limit)}`
+}
+
+/**
+ * The key of every `every`-th row in key order: the inclusive upper ends of all parts but the last. Reads the key
+ * columns only. A table with fewer than `every` rows answers no boundaries (it stays one object).
+ */
+export function boundarySql(schema: string, table: string, key: Key, every: number): string {
+  if (key.physical) throw new Error(`${schema}.${table} has no key, so it cannot be split`)
+  const from = `${quoteIdent(schema)}.${quoteIdent(table)}`
+  const inner = key.cols.map((c) => `s.${quoteIdent(c)}`).join(', ')
+  const keyText = key.cols.map((c, i) => `x.${quoteIdent(c)}::text as k${String(i)}`).join(', ')
+  return `select ${keyText} from (select ${inner}, row_number() over (order by ${inner}) as rn__ from ${from} s) x where x.rn__ % ${String(every)} = 0 order by x.rn__`
+}
+
+/** Turn the boundaries into consecutive ranges that cover the whole table: the last is open-ended, for rows added since. */
+export function rangesFrom(boundaries: readonly (readonly string[])[]): KeyRange[] {
+  const out: KeyRange[] = []
+  let after: readonly string[] | null = null
+  for (const b of boundaries) {
+    out.push({ after, through: b })
+    after = b
+  }
+  out.push({ after, through: null })
+  return out
+}
+
+/** Combine per-part fingerprints into the table's: they are sums mod 2^64, so the parts add up to the whole. */
+export function addFingerprints(parts: readonly string[]): string {
+  return (parts.reduce((a, p) => (a + BigInt(p)) % TWO_64, 0n) as bigint).toString()
 }
 
 export async function pagedDump(
@@ -173,11 +228,13 @@ export async function pagedDump(
   let pages = 0
   let maxPageChars = 0
   let fingerprint = 0n
-  let after: string[] | null = null
+  let after: readonly string[] | null = options.range?.after ?? null
+  const through = options.range?.through ?? null
+  const part = options.part === undefined ? '' : `,"part":${String(options.part)}`
   try {
-    await put(`{"table":${JSON.stringify(`${schema}.${table}`)},"rows":[`)
+    await put(`{"table":${JSON.stringify(`${schema}.${table}`)}${part},"rows":[`)
     for (;;) {
-      const { rows: page } = await db.execute(pageSql(schema, table, key, after, limit))
+      const { rows: page } = await db.execute(pageSql(schema, table, key, after, limit, through))
       if (page.length === 0) break
       pages += 1
       const text = page.map((r) => String(r.j)).join(',')

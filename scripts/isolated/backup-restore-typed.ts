@@ -20,7 +20,7 @@
  */
 import { spawnSync } from 'node:child_process'
 import { type Aux, STRUCTURE_SQL } from '../../src/backup/aux.ts'
-import { type Manifest, verifyArchive } from '../../src/backup/manifest.ts'
+import { type Manifest, objectKeys, verifyArchive } from '../../src/backup/manifest.ts'
 import { fingerprintSql, pagedDump } from '../../src/backup/paged.ts'
 import { checksum, newestFolder, readFolder, tablesToBackUp } from '../../src/backup/portable.ts'
 import {
@@ -30,10 +30,11 @@ import {
   restoreArchive,
 } from '../../src/backup/restore.ts'
 import { DEFAULT_POLICY, planRetention } from '../../src/backup/retention.ts'
+import { splitTable } from '../../src/backup/rows.ts'
 import { applyRetention, listRuns, verifyRuns } from '../../src/backup/runs.ts'
 import { gunzipText, MemoryArchive, StorageFolderSource } from '../../src/backup/sources.ts'
 import { PgExecutor } from '../../src/db/pg-executor.ts'
-import { backupHandler } from '../../src/handlers/backup.ts'
+import { autoPruneOn, backupHandler } from '../../src/handlers/backup.ts'
 import { isolated } from './guard.ts'
 import { StorageEmulator } from './storage-emulator.ts'
 
@@ -227,26 +228,60 @@ check(
   out.body.startsWith('Backed up') && emulator.objects.has(`run-${jobId}/manifest.json.gz`),
   `${out.body.split('\n')[0]?.slice(0, 110)} in ${String(Math.round((Date.now() - started) / 1000))}s`,
 )
-check(
-  'every table is in the folder, with a checksum beside it',
-  tablesNow.every(
-    (t) =>
-      emulator.objects.has(`run-${jobId}/${t.table_schema}.${t.table_name}.json.gz`) &&
-      emulator.objects.has(`run-${jobId}/${t.table_schema}.${t.table_name}.json.gz.sha256`),
-  ),
-  `${String(tablesNow.length)} tables`,
-)
-
 const mem = new MemoryArchive(`run-${jobId}`)
 for (const [k, o] of emulator.objects)
   if (k.startsWith(`run-${jobId}/`) && !k.endsWith('.sha256')) mem.put(k, o.bytes)
 const manifest = await mem.manifest()
+// every object a table's rows are in: one, or its parts (#503)
+const keysOf = (t: { table_schema: string; table_name: string }): readonly string[] =>
+  objectKeys(manifest, `run-${jobId}`, `${t.table_schema}.${t.table_name}`)
+const allKeys = tablesNow.flatMap(keysOf)
+check(
+  'every table is in the folder, with a checksum beside each of its objects',
+  allKeys.every((k) => emulator.objects.has(k) && emulator.objects.has(`${k}.sha256`)),
+  `${String(tablesNow.length)} tables in ${String(allKeys.length)} objects`,
+)
 check(
   'the manifest vouches for every object and every table content',
-  Object.keys(manifest.objects ?? {}).length === tablesNow.length &&
+  Object.keys(manifest.objects ?? {}).length === allKeys.length &&
+    allKeys.every((k) => manifest.objects?.[k] !== undefined) &&
     Object.keys(manifest.fingerprints ?? {}).length === tablesNow.length,
   `${String(Object.keys(manifest.objects ?? {}).length)} objects, ${String(Object.keys(manifest.fingerprints ?? {}).length)} fingerprints`,
 )
+
+// ---- parts (#503): the large table is written in several key-range objects, at the PRODUCTION thresholds
+{
+  const big = manifest.parts?.['public.zz_probe_big'] ?? []
+  const counted = manifest.row_counts?.['public.zz_probe_big'] ?? -1
+  let inParts = 0
+  for (const k of big)
+    inParts += splitTable(await gunzipText(mem.objects.get(k) as Uint8Array)).rows.length
+  check(
+    'the 120,000-row table with a composite (bigint, uuid) key was written in parts, at the production thresholds',
+    manifest.format === 'folder/2' && big.length > 1,
+    `${String(big.length)} parts, format ${String(manifest.format)}`,
+  )
+  check(
+    'its parts hold every row exactly once between them (no gap, no overlap at a boundary)',
+    inParts === 120000 && counted === 120000,
+    `${String(inParts)} rows in the parts, manifest counts ${String(counted)}`,
+  )
+  check(
+    'a table under the threshold is still one object, under the name every earlier backup uses',
+    manifest.parts?.['public.zz_probe_parent'] === undefined &&
+      emulator.objects.has(`run-${jobId}/public.zz_probe_parent.json.gz`),
+    `${String(Object.keys(manifest.parts ?? {}).length)} table(s) in parts`,
+  )
+  // CONTROL: a missing part must turn verification red
+  const holed = new Map(await mem.observed())
+  holed.delete(big[1] as string)
+  const v = verifyArchive(manifest, mem.prefix, holed)
+  check(
+    'CONTROL: a backup missing one part fails verification, naming the part',
+    !v.ok && v.errors.some((e) => e.includes(big[1] as string)),
+    v.errors.find((e) => e.includes('zz_probe_big')) ?? 'no error',
+  )
+}
 
 // ---- the auxiliary section: what it records and what it must never record
 const manifestText = await gunzipText(
@@ -1060,6 +1095,218 @@ const tamper = async (qualified: string, change: (t: string) => string): Promise
     cron.length >= 1 &&
       cron.some((c) => c.includes("'brt-heartbeat'") && !c.includes(CANARY_TOKEN)),
     cron[0]?.slice(0, 100) ?? 'none',
+  )
+}
+// ---- #503, the production failure itself: an attempt dies part way through a split table, the next one carries on
+{
+  const key2 = `brt-backup-resume-${run}`
+  await src.execute(
+    `insert into public.jobs (job_id, correlation_id, idempotency_key, kind, requested_by, office_id, state, pinned_config)
+     values (gen_random_uuid(), gen_random_uuid(), ${lit(key2)}, 'office.backup', 'duty:nightly-backup', ${lit(system)}::uuid, 'running'::job_state, '{}'::jsonb)`,
+  )
+  const job2 = String(
+    (await one(src, `select job_id from public.jobs where idempotency_key = ${lit(key2)}`)).job_id,
+  )
+  const asJob = {
+    jobId: job2,
+    kind: 'office.backup',
+    correlationId: job2,
+    projectId: null,
+    idempotencyKey: key2,
+    attempt: 1,
+  } as never
+  // the worker "dies" as the third part of the big table begins: the edge runtime killing an attempt, as on 9 to 17 November
+  const KILL = 'zz_probe_big#part-0003'
+  const dying = {
+    execute: async (sql: string, ...rest: unknown[]) => {
+      if (sql.includes('step_begin') && sql.includes(KILL))
+        throw new Error('simulated: the worker died mid-run')
+      return await (src.execute as (s: string, ...r: unknown[]) => Promise<unknown>)(sql, ...rest)
+    },
+  } as unknown as typeof src
+  const first = await backupHandler({ db: dying, projectRef: REF, serviceKey: KEY })
+    .handle(asJob, dying)
+    .then(() => 'finished')
+    .catch((e: unknown) => String((e as Error).message))
+  const doneAfterDeath = (
+    await src.execute(
+      `select step, finished_at::text as at from public.job_steps where job_id = ${lit(job2)}::uuid and finished_at is not null order by step`,
+    )
+  ).rows as { step: string; at: string }[]
+  const at = new Map(doneAfterDeath.map((r) => [r.step, r.at]))
+  check(
+    'CONTROL: the simulated death really stopped the run inside the big table, with its plan and first two parts banked',
+    first.includes('simulated') &&
+      at.has('plan:parts') &&
+      at.has('table:public.zz_probe_big#part-0001') &&
+      at.has('table:public.zz_probe_big#part-0002') &&
+      !at.has('table:public.zz_probe_big#part-0003') &&
+      !emulator.objects.has(`run-${job2}/manifest.json.gz`),
+    `${first.slice(0, 60)}; ${String(at.size)} step(s) banked`,
+  )
+  const second = await backupHandler({ db: src, projectRef: REF, serviceKey: KEY }).handle(
+    asJob,
+    src,
+  )
+  const after = new Map(
+    (
+      (
+        await src.execute(
+          `select step, finished_at::text as at from public.job_steps where job_id = ${lit(job2)}::uuid and finished_at is not null`,
+        )
+      ).rows as { step: string; at: string }[]
+    ).map((r) => [r.step, r.at]),
+  )
+  const m2 = JSON.parse(
+    await gunzipText(
+      emulator.objects.get(`run-${job2}/manifest.json.gz`)?.bytes ?? new Uint8Array(),
+    ),
+  ) as Manifest
+  check(
+    'the next attempt finishes the backup from where the last one died: same plan, banked parts not redone',
+    second.body.startsWith('Backed up') &&
+      after.get('plan:parts') === at.get('plan:parts') &&
+      after.get('table:public.zz_probe_big#part-0001') ===
+        at.get('table:public.zz_probe_big#part-0001') &&
+      after.has('table:public.zz_probe_big#part-0003') &&
+      m2.row_counts?.['public.zz_probe_big'] === 120000 &&
+      (m2.parts?.['public.zz_probe_big']?.length ?? 0) > 1,
+    `${String(m2.parts?.['public.zz_probe_big']?.length)} parts, ${String(m2.row_counts?.['public.zz_probe_big'])} rows`,
+  )
+  const resumedVerdict = verifyArchive(
+    m2,
+    `run-${job2}`,
+    await (async () => {
+      const m = new MemoryArchive(`run-${job2}`)
+      for (const [k, o] of emulator.objects)
+        if (k.startsWith(`run-${job2}/`) && !k.endsWith('.sha256')) m.put(k, o.bytes)
+      return await m.observed()
+    })(),
+  )
+  check(
+    'the resumed backup verifies: every part present with the checksum its own attempt recorded',
+    resumedVerdict.ok,
+    resumedVerdict.errors[0] ?? `${String(resumedVerdict.tables)} tables`,
+  )
+}
+
+// ---- ADR-0077, the nightly prune: verify once, mark, and delete only what the policy names, only when switched on
+{
+  check(
+    "the nightly job read its own run back and marked it (the marker is what tomorrow's prune trusts)",
+    emulator.objects.has(`run-${jobId}/verified.json`),
+    String(emulator.objects.get(`run-${jobId}/verified.json`)?.bytes.length ?? 0) + ' byte marker',
+  )
+  // The emulator stamps uploads from 6 October; the prune plans against the real date. From here the scenario runs on
+  // the real clock, and the runs written above (stamped in October) lose their markers so they are not part of it.
+  emulator.setClock(new Date().toISOString())
+  for (const k of [...emulator.objects.keys()])
+    if (k.endsWith('/verified.json')) emulator.objects.delete(k)
+  // old backups to prune: nine nights of MARKED runs, one UNMARKED old run, one INTERRUPTED old run
+  const seedRun = (at: string, opts: { marker: boolean; manifest: boolean }): string => {
+    const name = `run-${crypto.randomUUID()}`
+    const b = new TextEncoder().encode('{"table":"public.t","rows":[]}')
+    emulator.seed(`${name}/public.t.json.gz`, b, at)
+    if (opts.manifest) emulator.seed(`${name}/manifest.json.gz`, b, at)
+    if (opts.marker) emulator.seed(`${name}/verified.json`, b, at)
+    return name
+  }
+  const noon = (daysAgo: number): string => {
+    const t = new Date(Date.now() - daysAgo * 86_400_000)
+    t.setUTCHours(12, 0, 0, 0)
+    return t.toISOString()
+  }
+  const marked = Array.from({ length: 9 }, (_, i) =>
+    seedRun(noon(i + 1), { marker: true, manifest: true }),
+  )
+  const unmarked = seedRun(noon(40), { marker: false, manifest: true })
+  const interrupted = seedRun(noon(41), { marker: false, manifest: false })
+
+  const runNight = async (label: string) => {
+    const k = `brt-backup-prune-${label}-${run}`
+    await src.execute(
+      `insert into public.jobs (job_id, correlation_id, idempotency_key, kind, requested_by, office_id, state, pinned_config)
+       values (gen_random_uuid(), gen_random_uuid(), ${lit(k)}, 'office.backup', 'duty:nightly-backup', ${lit(system)}::uuid, 'running'::job_state, '{}'::jsonb)`,
+    )
+    const id = String(
+      (await one(src, `select job_id from public.jobs where idempotency_key = ${lit(k)}`)).job_id,
+    )
+    const out = await backupHandler({ db: src, projectRef: REF, serviceKey: KEY }).handle(
+      {
+        jobId: id,
+        kind: 'office.backup',
+        correlationId: id,
+        projectId: null,
+        idempotencyKey: k,
+        attempt: 1,
+      } as never,
+      src,
+    )
+    return { id, out }
+  }
+  const present = (name: string): boolean =>
+    [...emulator.objects.keys()].some((k) => k.startsWith(`${name}/`))
+
+  // switch OFF (absent): a full night, nothing deleted
+  await src.execute(`delete from public.system_config where key = 'backup.auto_prune'`)
+  const off = await runNight('off')
+  check(
+    'CONTROL: with the switch off, a full nightly run deletes nothing and says the prune is off',
+    marked.every(present) &&
+      present(unmarked) &&
+      present(interrupted) &&
+      off.out.body.includes('prune is off'),
+    off.out.body.split('\n')[0]?.slice(0, 90) ?? '',
+  )
+
+  // switch ON: what the policy names goes, computed independently from the same listing first
+  await src.execute(
+    `insert into public.system_config (key, value, description, self_adjustable)
+     values ('backup.auto_prune', 'true'::jsonb, 'brt proof', false)
+     on conflict (key) do update set value = 'true'::jsonb, self_adjustable = false`,
+  )
+  const before = await listRuns(REF, KEY)
+  const expected = planRetention(
+    before.map((r) => ({ ...r, verified: r.complete && r.marked === true })),
+    new Date(),
+    DEFAULT_POLICY,
+  ).remove.map((d) => d.name)
+  const on = await runNight('on')
+  const gone = marked.filter((n) => !present(n))
+  check(
+    'with the switch on, the nightly run deletes exactly what the policy names (1 to 3), manifest and marker first',
+    gone.length >= 1 &&
+      gone.length <= 3 &&
+      [...gone].sort().join() ===
+        [...expected]
+          .filter((n) => marked.includes(n))
+          .sort()
+          .join() &&
+      expected.every((n) => marked.includes(n)),
+    `${String(gone.length)} deleted, policy named ${String(expected.length)}; ${on.out.body
+      .replace(/\n/g, ' ')
+      .replace(/^.*?checksum\. /, '')
+      .slice(0, 260)}`,
+  )
+  check(
+    'it never touches an unmarked backup, an interrupted run, or tonight’s run, and tonight’s run is marked',
+    present(unmarked) &&
+      present(interrupted) &&
+      present(`run-${on.id}`) &&
+      emulator.objects.has(`run-${on.id}/verified.json`) &&
+      on.out.body.includes('interrupted run'),
+    `unmarked ${String(present(unmarked))}, interrupted ${String(present(interrupted))}, tonight marked ${String(emulator.objects.has(`run-${on.id}/verified.json`))}`,
+  )
+  // a switch the office's own adaptation could change is no switch at all
+  await src.execute(
+    `update public.system_config set self_adjustable = true where key = 'backup.auto_prune'`,
+  )
+  const adjustable = await autoPruneOn(src)
+  await src.execute(`delete from public.system_config where key = 'backup.auto_prune'`)
+  check(
+    'CONTROL: a switch marked self-adjustable reads as OFF',
+    adjustable === false,
+    `autoPruneOn = ${String(adjustable)}`,
   )
 }
 check(
