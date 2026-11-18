@@ -420,13 +420,16 @@
   module's Maximise and Take-off buttons, were 24 to 38 px at 390 px wide, under the 44 px floor. The visible glyph keeps
   its size; the button's box does not shrink below the floor.
 */
-/* The compose sheet sets these buttons' height at (0,3,0), so the floor is written at the same weight and comes later. */
+/*
+  The compose sheet loads after this file and sets these buttons' height at (0,3,0), so the floor is written one level
+  heavier (:root adds a level) rather than relying on load order.
+*/
 @media (max-width: 760px) {
-  [data-experience='basecamp'] .bcbtn.bcburger,
-  [data-experience='basecamp'] .bcbtn.bcmic,
-  [data-experience='basecamp'] .bcbtn.bcpagemenu,
-  [data-experience='basecamp'] button.bcmodbtn,
-  [data-experience='basecamp'] .bcbtn[data-bc-dock] {
+  :root[data-experience='basecamp'] .bcbtn.bcburger,
+  :root[data-experience='basecamp'] .bcbtn.bcmic,
+  :root[data-experience='basecamp'] .bcbtn.bcpagemenu,
+  :root[data-experience='basecamp'] button.bcmodbtn,
+  :root[data-experience='basecamp'] .bcbtn[data-bc-dock] {
     min-width: 44px;
     min-height: 44px;
   }
