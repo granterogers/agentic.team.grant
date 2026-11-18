@@ -979,8 +979,22 @@ export const docRef = (d) =>
  */
 const TYPE_TAG = { pdf: 'PDF', doc: 'DOC', made: 'DOC', image: 'IMG' }
 
+/*
+  The excerpt is the document's own first words, so it carries its markdown: a tile read "# People - Grant Rogers" and
+  "# A7 check". The markers are taken out for the tile (A15g); the text itself is not changed.
+*/
+const plainExcerpt = (s) =>
+  s
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*(?:[-*+>]|\d+\.)\s+/gm, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`~]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
 const drawnPage = (d, most = 9, small = false) => {
-  const excerpt = typeof d.excerpt === 'string' ? d.excerpt.trim() : ''
+  const excerpt = typeof d.excerpt === 'string' ? plainExcerpt(d.excerpt.trim()) : ''
   if (excerpt !== '' && !small) {
     return `<span class="bcpage bcxpage" aria-hidden="true"><span class="bcxpagetext">${esc(excerpt)}</span></span>`
   }
@@ -1012,6 +1026,8 @@ const drawnPage = (d, most = 9, small = false) => {
 const SHORT_KIND = { Document: 'DOC', Written: 'DOC', PDF: 'PDF', Spreadsheet: 'XLS', Presentation: 'PPT', Note: 'NOTE', Image: 'IMG' }
 const shortKind = (d) => {
   const word = kindWordOf(d)
+  // A kind word the map does not list was cut to four letters, which read "WRIT" for a written page (A15e).
+  if (/^writ/i.test(word)) return 'DOC'
   return SHORT_KIND[word] ?? String(word || 'FILE').slice(0, 4).toUpperCase()
 }
 

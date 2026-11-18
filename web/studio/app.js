@@ -9763,10 +9763,19 @@ function keepUrl() {
   }
 }
 
+/*
+  A15d. The Chat page is the dock's larger self, so while it is showing the dock yields to it rather than covering its
+  text. The dock's own open state is kept, so it comes back when the person leaves the page.
+*/
+function syncDockYield() {
+  document.body.classList.toggle('dock-yields', dockOpen() && /\/chat\/?$/.test(location.pathname))
+}
+
 function render() {
   const key = focusKey()
   try {
     drawShell()
+    syncDockYield()
     keepUrl()
     restoreFocus(key)
     painting = false
