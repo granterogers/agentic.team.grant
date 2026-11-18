@@ -69,8 +69,12 @@ class LocalFolderSource implements ArchiveSource {
     return out
   }
   async table(qualified: string): Promise<{ text: string; sha256: string; bytes: number } | null> {
+    return await this.object(`${run}/${qualified}.json.gz`)
+  }
+  async object(key: string): Promise<{ text: string; sha256: string; bytes: number } | null> {
     try {
-      const bytes = new Uint8Array(readFileSync(join(dir, `${qualified}.json.gz`)))
+      // keys are `<run>/<file>`; the files sit flat in `dir`
+      const bytes = new Uint8Array(readFileSync(join(dir, key.slice(run.length + 1))))
       return { text: await gunzipText(bytes), sha256: sha(bytes), bytes: bytes.length }
     } catch {
       return null

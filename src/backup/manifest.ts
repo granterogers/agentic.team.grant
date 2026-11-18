@@ -31,6 +31,8 @@ export interface Manifest {
   readonly objects?: Readonly<Record<string, { sha256: string; bytes: number }>>
   /** Per table: the content fingerprint (paged.ts). */
   readonly fingerprints?: Readonly<Record<string, string>>
+  /** Per table written in parts (format folder/2, #503): its part object keys, in order. */
+  readonly parts?: Readonly<Record<string, readonly string[]>>
   readonly aux?: Aux
 }
 
@@ -52,6 +54,16 @@ export interface ObservedObject {
 /** The object key a table lives at under a run prefix. */
 export const tableKey = (prefix: string, qualified: string): string =>
   `${prefix}/${qualified}.json.gz`
+
+/**
+ * Every object a table's rows are in: its part objects when the manifest says it was written in parts (#503), else the
+ * one object. The single place a reader asks this, so verification and restore cannot disagree about it.
+ */
+export const objectKeys = (
+  manifest: Manifest,
+  prefix: string,
+  qualified: string,
+): readonly string[] => manifest.parts?.[qualified] ?? [tableKey(prefix, qualified)]
 
 export function verifyArchive(
   manifest: Manifest,
@@ -85,24 +97,35 @@ export function verifyArchive(
       'this manifest records no object checksums (taken before they were recorded): objects are checked only against the sidecar files',
     )
   }
+  for (const [t, keys] of Object.entries(manifest.parts ?? {})) {
+    if (!names.includes(t))
+      errors.push(`${t}: the manifest lists parts for a table it does not count`)
+    else if (keys.length === 0) errors.push(`${t}: the manifest lists no parts for it`)
+    else if (keys.some((k) => !k.startsWith(`${prefix}/`)))
+      errors.push(`${t}: a part is outside this folder`)
+  }
   for (const t of names) {
-    const key = tableKey(prefix, t)
-    const seen = observed.get(key)
-    if (seen === undefined) {
-      errors.push(`${t}: its object ${key} is missing`)
-      continue
-    }
-    const want = recorded?.[key]
-    if (want !== undefined) {
-      if (want.sha256 !== seen.sha256)
-        errors.push(`${t}: its object does not match the checksum the manifest recorded`)
-      else if (want.bytes !== seen.bytes)
-        errors.push(
-          `${t}: its object is ${String(seen.bytes)} bytes, the manifest recorded ${String(want.bytes)}`,
-        )
+    for (const key of objectKeys(manifest, prefix, t)) {
+      const seen = observed.get(key)
+      if (seen === undefined) {
+        errors.push(`${t}: its object ${key} is missing`)
+        continue
+      }
+      const want = recorded?.[key]
+      if (want !== undefined) {
+        if (want.sha256 !== seen.sha256)
+          errors.push(`${t}: its object does not match the checksum the manifest recorded`)
+        else if (want.bytes !== seen.bytes)
+          errors.push(
+            `${t}: its object is ${String(seen.bytes)} bytes, the manifest recorded ${String(want.bytes)}`,
+          )
+      } else if (manifest.parts?.[t] !== undefined) {
+        // a split table is only ever written with checksums recorded, so a part without one was not written by this run
+        errors.push(`${t}: the manifest records no checksum for its part ${key}`)
+      }
     }
   }
-  const expected = new Set(names.map((t) => tableKey(prefix, t)))
+  const expected = new Set(names.flatMap((t) => objectKeys(manifest, prefix, t)))
   for (const key of observed.keys()) {
     if (key.endsWith('.json.gz') && !key.endsWith('/manifest.json.gz') && !expected.has(key)) {
       warnings.push(

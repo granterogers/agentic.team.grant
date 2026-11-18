@@ -32,6 +32,8 @@
  * is a command he runs.
  */
 
+import { addFingerprints, type KeyRange } from '../backup/paged.ts'
+import { type PartOptions, type PartsPlan, partKey, partStep, planParts } from '../backup/parts.ts'
 import {
   BUCKET,
   backupPrefix,
@@ -45,7 +47,7 @@ import {
 import { DEFAULT_POLICY } from '../backup/retention.ts'
 import { listRuns } from '../backup/runs.ts'
 import type { SqlExecutor } from '../db/executor.ts'
-import { runSteps } from '../jobs/checkpoint.ts'
+import { runSteps, type Step } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { count } from '../text/plain.ts'
 
@@ -60,7 +62,15 @@ export interface BackupDeps {
    * without one.
    */
   readonly serviceKey: string
+  /** How large tables are split (parts.ts). Production uses the defaults; a replica proof lowers them to force a split. */
+  readonly parts?: PartOptions
 }
+
+/**
+ * The checkpoint version. @2 added the `plan:parts` step and part steps (#503): a run begun under @1 is refused its old
+ * checkpoints by `app.step_begin` rather than mixing two layouts in one folder.
+ */
+export const STEPS_VERSION = 'office.backup@2'
 
 export function backupHandler(deps: BackupDeps): Handler {
   const { db, projectRef, serviceKey } = deps
@@ -127,65 +137,112 @@ export function backupHandler(deps: BackupDeps): Handler {
       const prefix = backupPrefix(job.jobId)
       const tables = await tablesToBackUp(db)
 
-      const end = await runSteps(
-        db,
-        job.jobId,
-        'office.backup@1',
-        [
-          ...tables.map((t) => ({
-            name: `table:${t.table_schema}.${t.table_name}`,
-            effect: 'local' as const,
-            run: async () => {
-              const dump = await dumpTable(db, prefix, t.table_schema, t.table_name)
-              await putObject(projectRef, serviceKey, dump)
-              return {
-                // sha256 and fingerprint ride in the checkpoint so the manifest can vouch for this object (G-2)
-                outcome: {
-                  rows: dump.rows,
-                  bytes: dump.bytes.length,
-                  sha256: dump.sha256,
-                  fingerprint: dump.fingerprint ?? null,
-                },
-                effectRef: dump.key,
-              }
+      /*
+        PARTS FIRST, AND CHECKPOINTED (#503).
+
+        A worker attempt dies after about 13 to 16 MB of compressed output, and an attempt that finishes no step earns
+        no further slice. `job_state_transitions` outgrew one attempt on 9 November and no backup finished for ten
+        nights. So a large table is written as several key-range parts, one step each (src/backup/parts.ts).
+
+        Which parts is decided ONCE, in this first step, and read back from its checkpoint by every later attempt, so the
+        step names and the ranges they cover are the same however many attempts the run takes. The table steps can only
+        be listed once the plan is known, hence two calls to runSteps; the second lists the plan again, and the gate
+        skips it with its recorded answer.
+      */
+      const planStep: Step = {
+        name: 'plan:parts',
+        effect: 'local',
+        run: async () => ({ outcome: { parts: await planParts(db, tables, deps.parts) } }),
+      }
+      const planned = await runSteps(db, job.jobId, STEPS_VERSION, [planStep], job)
+      const plan =
+        planned.kind === 'done'
+          ? ((planned.outcomes['plan:parts']?.parts ?? {}) as PartsPlan)
+          : null
+
+      const tableSteps = (t: { table_schema: string; table_name: string }): Step[] => {
+        const q = `${t.table_schema}.${t.table_name}`
+        const write = async (options: { range?: KeyRange; part?: number } = {}) => {
+          const dump = await dumpTable(db, prefix, t.table_schema, t.table_name, options)
+          await putObject(projectRef, serviceKey, dump)
+          return {
+            // sha256 and fingerprint ride in the checkpoint so the manifest can vouch for this object (G-2)
+            outcome: {
+              rows: dump.rows,
+              bytes: dump.bytes.length,
+              sha256: dump.sha256,
+              fingerprint: dump.fingerprint ?? null,
+              key: dump.key,
             },
-          })),
-          {
-            /*
+            effectRef: dump.key,
+          }
+        }
+        const ranges = plan?.[q]
+        if (ranges === undefined)
+          return [{ name: `table:${q}`, effect: 'local', run: async () => await write() }]
+        return ranges.map((range, i) => ({
+          name: partStep(q, i + 1),
+          effect: 'local' as const,
+          run: async () => await write({ range, part: i + 1 }),
+        }))
+      }
+
+      const end =
+        plan === null
+          ? planned
+          : await runSteps(
+              db,
+              job.jobId,
+              STEPS_VERSION,
+              [
+                planStep,
+                ...tables.flatMap(tableSteps),
+                {
+                  /*
             The manifest LAST, because its presence is what makes the folder a
             complete backup rather than an interrupted one. A restore that
             finds tables and no manifest should say so, not load three
             quarters of an office.
           */
-            name: 'manifest',
-            effect: 'local' as const,
-            run: async (done) => {
-              const counts: Record<string, number> = {}
-              const objects: Record<string, { sha256: string; bytes: number }> = {}
-              const fingerprints: Record<string, string> = {}
-              for (const t of tables) {
-                const q = `${t.table_schema}.${t.table_name}`
-                const o = done[`table:${q}`]
-                counts[q] = Number(o?.rows ?? 0)
-                if (typeof o?.sha256 === 'string') {
-                  objects[`${prefix}/${q}.json.gz`] = {
-                    sha256: o.sha256,
-                    bytes: Number(o.bytes ?? 0),
-                  }
-                }
-                if (typeof o?.fingerprint === 'string') fingerprints[q] = o.fingerprint
-              }
-              const m = await buildManifest(db, projectRef, prefix, counts, {
-                objects,
-                fingerprints,
-              })
-              await putObject(projectRef, serviceKey, m)
-              return { outcome: { rows: m.rows, tables: Object.keys(counts).length } }
-            },
-          },
-        ],
-        job,
-      )
+                  name: 'manifest',
+                  effect: 'local' as const,
+                  run: async (done) => {
+                    const counts: Record<string, number> = {}
+                    const objects: Record<string, { sha256: string; bytes: number }> = {}
+                    const fingerprints: Record<string, string> = {}
+                    const parts: Record<string, string[]> = {}
+                    for (const t of tables) {
+                      const q = `${t.table_schema}.${t.table_name}`
+                      const ranges = plan?.[q]
+                      // a whole table is one step; a split one is its parts, added together (fingerprints are sums)
+                      const pieces =
+                        ranges === undefined
+                          ? [{ key: `${prefix}/${q}.json.gz`, o: done[`table:${q}`] }]
+                          : ranges.map((_, i) => ({
+                              key: partKey(prefix, q, i + 1),
+                              o: done[partStep(q, i + 1)],
+                            }))
+                      counts[q] = pieces.reduce((a, p) => a + Number(p.o?.rows ?? 0), 0)
+                      for (const p of pieces)
+                        if (typeof p.o?.sha256 === 'string')
+                          objects[p.key] = { sha256: p.o.sha256, bytes: Number(p.o.bytes ?? 0) }
+                      const fps = pieces.map((p) => p.o?.fingerprint)
+                      if (fps.every((f): f is string => typeof f === 'string'))
+                        fingerprints[q] = addFingerprints(fps)
+                      if (ranges !== undefined) parts[q] = pieces.map((p) => p.key)
+                    }
+                    const m = await buildManifest(db, projectRef, prefix, counts, {
+                      objects,
+                      fingerprints,
+                      parts,
+                    })
+                    await putObject(projectRef, serviceKey, m)
+                    return { outcome: { rows: m.rows, tables: Object.keys(counts).length } }
+                  },
+                },
+              ],
+              job,
+            )
 
       if (end.kind !== 'done') {
         /*
@@ -245,13 +302,17 @@ export function backupHandler(deps: BackupDeps): Handler {
         retentionNote = ''
       }
 
+      const split = Object.keys(plan ?? {})
       return {
         ...base,
         body:
           `Backed up ${count(rows, 'row', 'rows')} across ` +
           `${count(tables.length, 'table', 'tables')} — ` +
           `${String(Math.round(bytes / 1024))}KB compressed, one object per table in ` +
-          `${bucket}/${prefix}.\n\n` +
+          `${bucket}/${prefix}` +
+          (split.length === 0
+            ? '.\n\n'
+            : ` (${split.map((q) => `${q} in ${String(plan?.[q]?.length ?? 0)} parts`).join(', ')}).\n\n`) +
           `${count(kept.length, 'copy is', 'copies are')} kept (${bucketState}). ` +
           'Nothing is ever deleted automatically.\n\n' +
           'It holds no credentials, and it lives in the same Supabase project it ' +
