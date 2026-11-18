@@ -34,7 +34,7 @@ import { splitTable } from '../../src/backup/rows.ts'
 import { applyRetention, listRuns, verifyRuns } from '../../src/backup/runs.ts'
 import { gunzipText, MemoryArchive, StorageFolderSource } from '../../src/backup/sources.ts'
 import { PgExecutor } from '../../src/db/pg-executor.ts'
-import { backupHandler } from '../../src/handlers/backup.ts'
+import { autoPruneOn, backupHandler } from '../../src/handlers/backup.ts'
 import { isolated } from './guard.ts'
 import { StorageEmulator } from './storage-emulator.ts'
 
@@ -1187,6 +1187,126 @@ const tamper = async (qualified: string, change: (t: string) => string): Promise
     'the resumed backup verifies: every part present with the checksum its own attempt recorded',
     resumedVerdict.ok,
     resumedVerdict.errors[0] ?? `${String(resumedVerdict.tables)} tables`,
+  )
+}
+
+// ---- ADR-0077, the nightly prune: verify once, mark, and delete only what the policy names, only when switched on
+{
+  check(
+    "the nightly job read its own run back and marked it (the marker is what tomorrow's prune trusts)",
+    emulator.objects.has(`run-${jobId}/verified.json`),
+    String(emulator.objects.get(`run-${jobId}/verified.json`)?.bytes.length ?? 0) + ' byte marker',
+  )
+  // The emulator stamps uploads from 6 October; the prune plans against the real date. From here the scenario runs on
+  // the real clock, and the runs written above (stamped in October) lose their markers so they are not part of it.
+  emulator.setClock(new Date().toISOString())
+  for (const k of [...emulator.objects.keys()])
+    if (k.endsWith('/verified.json')) emulator.objects.delete(k)
+  // old backups to prune: nine nights of MARKED runs, one UNMARKED old run, one INTERRUPTED old run
+  const seedRun = (at: string, opts: { marker: boolean; manifest: boolean }): string => {
+    const name = `run-${crypto.randomUUID()}`
+    const b = new TextEncoder().encode('{"table":"public.t","rows":[]}')
+    emulator.seed(`${name}/public.t.json.gz`, b, at)
+    if (opts.manifest) emulator.seed(`${name}/manifest.json.gz`, b, at)
+    if (opts.marker) emulator.seed(`${name}/verified.json`, b, at)
+    return name
+  }
+  const noon = (daysAgo: number): string => {
+    const t = new Date(Date.now() - daysAgo * 86_400_000)
+    t.setUTCHours(12, 0, 0, 0)
+    return t.toISOString()
+  }
+  const marked = Array.from({ length: 9 }, (_, i) =>
+    seedRun(noon(i + 1), { marker: true, manifest: true }),
+  )
+  const unmarked = seedRun(noon(40), { marker: false, manifest: true })
+  const interrupted = seedRun(noon(41), { marker: false, manifest: false })
+
+  const runNight = async (label: string) => {
+    const k = `brt-backup-prune-${label}-${run}`
+    await src.execute(
+      `insert into public.jobs (job_id, correlation_id, idempotency_key, kind, requested_by, office_id, state, pinned_config)
+       values (gen_random_uuid(), gen_random_uuid(), ${lit(k)}, 'office.backup', 'duty:nightly-backup', ${lit(system)}::uuid, 'running'::job_state, '{}'::jsonb)`,
+    )
+    const id = String(
+      (await one(src, `select job_id from public.jobs where idempotency_key = ${lit(k)}`)).job_id,
+    )
+    const out = await backupHandler({ db: src, projectRef: REF, serviceKey: KEY }).handle(
+      {
+        jobId: id,
+        kind: 'office.backup',
+        correlationId: id,
+        projectId: null,
+        idempotencyKey: k,
+        attempt: 1,
+      } as never,
+      src,
+    )
+    return { id, out }
+  }
+  const present = (name: string): boolean =>
+    [...emulator.objects.keys()].some((k) => k.startsWith(`${name}/`))
+
+  // switch OFF (absent): a full night, nothing deleted
+  await src.execute(`delete from public.system_config where key = 'backup.auto_prune'`)
+  const off = await runNight('off')
+  check(
+    'CONTROL: with the switch off, a full nightly run deletes nothing and says the prune is off',
+    marked.every(present) &&
+      present(unmarked) &&
+      present(interrupted) &&
+      off.out.body.includes('prune is off'),
+    off.out.body.split('\n')[0]?.slice(0, 90) ?? '',
+  )
+
+  // switch ON: what the policy names goes, computed independently from the same listing first
+  await src.execute(
+    `insert into public.system_config (key, value, description, self_adjustable)
+     values ('backup.auto_prune', 'true'::jsonb, 'brt proof', false)
+     on conflict (key) do update set value = 'true'::jsonb, self_adjustable = false`,
+  )
+  const before = await listRuns(REF, KEY)
+  const expected = planRetention(
+    before.map((r) => ({ ...r, verified: r.complete && r.marked === true })),
+    new Date(),
+    DEFAULT_POLICY,
+  ).remove.map((d) => d.name)
+  const on = await runNight('on')
+  const gone = marked.filter((n) => !present(n))
+  check(
+    'with the switch on, the nightly run deletes exactly what the policy names (1 to 3), manifest and marker first',
+    gone.length >= 1 &&
+      gone.length <= 3 &&
+      [...gone].sort().join() ===
+        [...expected]
+          .filter((n) => marked.includes(n))
+          .sort()
+          .join() &&
+      expected.every((n) => marked.includes(n)),
+    `${String(gone.length)} deleted, policy named ${String(expected.length)}; ${on.out.body
+      .replace(/\n/g, ' ')
+      .replace(/^.*?checksum\. /, '')
+      .slice(0, 260)}`,
+  )
+  check(
+    'it never touches an unmarked backup, an interrupted run, or tonight’s run, and tonight’s run is marked',
+    present(unmarked) &&
+      present(interrupted) &&
+      present(`run-${on.id}`) &&
+      emulator.objects.has(`run-${on.id}/verified.json`) &&
+      on.out.body.includes('interrupted run'),
+    `unmarked ${String(present(unmarked))}, interrupted ${String(present(interrupted))}, tonight marked ${String(emulator.objects.has(`run-${on.id}/verified.json`))}`,
+  )
+  // a switch the office's own adaptation could change is no switch at all
+  await src.execute(
+    `update public.system_config set self_adjustable = true where key = 'backup.auto_prune'`,
+  )
+  const adjustable = await autoPruneOn(src)
+  await src.execute(`delete from public.system_config where key = 'backup.auto_prune'`)
+  check(
+    'CONTROL: a switch marked self-adjustable reads as OFF',
+    adjustable === false,
+    `autoPruneOn = ${String(adjustable)}`,
   )
 }
 check(

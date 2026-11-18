@@ -68,8 +68,12 @@ wording of a reason.
   deletes; it exits with a message.
 * `applyRetention` also refuses a plan that names a foreign file, an unverified run or an unfinished run, whatever produced the plan.
 * **Production destructive execution additionally needs the owner's separate approval of that specific deletion.** No code in this repository can
-  grant that, and the two environment variables are the owner's switch, never an agent's. The nightly handler never plans a deletion; it only
-  reports the size and says to run the dry run.
+  grant that, and the two environment variables are the owner's switch, never an agent's.
+* **The nightly prune (ADR-0077, since 18 November 2026)** is the one deletion without a person at the keyboard, and only because Grant chose it
+  ("Auto-prune nightly"). It runs only while `system_config` `backup.auto_prune` is `true` and not self-adjustable; off is the default. It
+  applies this same policy, but a run counts as verified only if it carries the verify-once marker (`verified.json`, written after the
+  nightly job read every object back). It deletes at most 3 a night and refuses a longer plan whole, never deletes tonight's run, and never
+  touches an unmarked, unverified, unfinished or foreign item. `npm run backup:prune -- --attended` backfills the marker on the runs it verifies.
 
 ## Worked example (computed, not production)
 

@@ -22,7 +22,14 @@
  */
 import '../../src/safety/require-production-writes.ts'
 import { DEFAULT_POLICY, planInterrupted, planRetention } from '../../src/backup/retention.ts'
-import { applyInterrupted, applyRetention, listRuns, verifyRuns } from '../../src/backup/runs.ts'
+import {
+  applyInterrupted,
+  applyRetention,
+  listRuns,
+  MARKER,
+  verifyRuns,
+  writeMarker,
+} from '../../src/backup/runs.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const arg = (name: string, fallback: number): number => {
@@ -94,6 +101,26 @@ console.log(
     ? 'DRY RUN: nothing was deleted. Run again with --attended to delete exactly the list above.'
     : `deleted ${String(applied.objectsDeleted)} object(s) in ${String(applied.deleted.length)} run(s)`,
 )
+
+// Backfill the verify-once marker (ADR-0077) on every kept run this command has just read back and found whole, so the
+// nightly prune can count it without reading it again. Only with --attended, like any write here.
+const keptNames = new Set(plan.keep.map((d) => d.name))
+const toMark = runs.filter(
+  (r) => keptNames.has(r.name) && r.verified && r.name.startsWith('run-') && r.marked !== true,
+)
+if (toMark.length > 0) {
+  if (!attended) console.log(`would mark ${String(toMark.length)} verified run(s) with ${MARKER}`)
+  else {
+    for (const r of toMark)
+      await writeMarker(ref, serviceKey, {
+        format: 'verified/1',
+        run: r.name,
+        verified_at: new Date().toISOString(),
+        by: 'attended prune',
+      })
+    console.log(`marked ${String(toMark.length)} verified run(s) with ${MARKER}`)
+  }
+}
 
 // Interrupted runs (no manifest; a restore refuses them) are a separate decision, asked for by name with --interrupted.
 if (process.argv.includes('--interrupted')) {

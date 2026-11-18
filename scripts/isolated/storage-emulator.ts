@@ -27,6 +27,14 @@ export class StorageEmulator {
     this.objects.set(key, { bytes, createdAt })
   }
 
+  /**
+   * Stamp uploads from now on from this instant. The default clock starts at 6 October 2026, so a proof that plans
+   * retention against the real date (the nightly prune does) sets it to now, or every run it writes looks weeks old.
+   */
+  setClock(iso: string): void {
+    this.clock = Date.parse(iso)
+  }
+
   install(ref: string): () => void {
     const real = globalThis.fetch
     const base = `https://${ref}.supabase.co/storage/v1`

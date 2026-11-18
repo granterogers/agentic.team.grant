@@ -38,7 +38,9 @@
  *  - At most `maxDeletes` per pass, oldest first: the blast radius of a wrong policy is bounded.
  *
  * The caller decides whether to act on the answer. `scripts/backup/prune.ts` is a dry run unless given `--attended`,
- * behind the production-writes gate; `applyRetention` refuses without both; the nightly handler never plans a deletion.
+ * behind the production-writes gate; `applyRetention` refuses without both. The nightly handler plans with this same
+ * function, counting only runs carrying the verify-once marker, and deletes through `applyScheduledRetention` only while
+ * the owner's `backup.auto_prune` switch is on (ADR-0077).
  */
 
 export interface RunInfo {
@@ -52,6 +54,8 @@ export interface RunInfo {
   readonly complete: boolean
   /** Every object was read back and its checksum matched. Set by the caller from a real read, never inferred here. */
   readonly verified: boolean
+  /** The run carries the verify-once marker (runs.ts, ADR-0077). Set by `listRuns`; only the nightly prune reads it. */
+  readonly marked?: boolean
 }
 
 export interface Policy {

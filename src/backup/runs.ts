@@ -15,7 +15,8 @@
  *
  * Nothing calls `applyRetention` or `applyInterrupted` with `go: true` except `scripts/backup/prune.ts`, behind the
  * production-writes gate and a person's explicit `--attended` (and, for interrupted runs, `--interrupted`). A deletion refuses (throws) without BOTH the attended flag and the repository's own
- * production-write approval. The nightly handler only reports.
+ * production-write approval. The nightly handler deletes only through `applyScheduledRetention`, only while the owner's
+ * `backup.auto_prune` switch is on, under that function's own limits (ADR-0077).
  */
 
 import { productionWritesAllowed } from '../safety/production-gate.ts'
@@ -30,6 +31,14 @@ interface Listed {
 }
 
 const sizeOf = (o: Listed): number => Number(o.metadata?.size ?? 0)
+
+/**
+ * The verify-once marker (ADR-0077): `run-<id>/verified.json`, written after every object of the run was read back and
+ * matched the checksum recorded when it was written. Its presence, beside a manifest, is what the NIGHTLY prune takes as
+ * verified, so it never has to read old backups again. The attended `backup:prune` still reads every run itself.
+ */
+export const MARKER = 'verified.json'
+export const isMarker = (name: string): boolean => name.endsWith(`/${MARKER}`)
 
 export async function listRuns(ref: string, serviceKey: string): Promise<RunInfo[]> {
   const top = (await listUnder(ref, serviceKey, '')) as readonly Listed[]
@@ -48,7 +57,10 @@ export async function listRuns(ref: string, serviceKey: string): Promise<RunInfo
     }
     if (o.name.startsWith('run-')) {
       const inside = (await listUnder(ref, serviceKey, o.name)) as readonly Listed[]
+      // The marker is left out of the run's time: it can be written days later (a backfill), and a run's day and ISO
+      // week must stay the day its backup was taken, or the policy would keep and drop the wrong runs.
       const times = inside
+        .filter((i) => !isMarker(i.name))
         .map((i) => i.created_at ?? '')
         .filter((t) => t !== '')
         .sort()
@@ -58,6 +70,7 @@ export async function listRuns(ref: string, serviceKey: string): Promise<RunInfo
         bytes: inside.reduce((a, i) => a + sizeOf(i), 0),
         complete: inside.some((i) => i.name.endsWith('/manifest.json.gz')),
         verified: false,
+        marked: inside.some((i) => isMarker(i.name)),
       })
     } else {
       // a legacy single file and its checksum beside it
@@ -195,24 +208,28 @@ const removeAll = async (
  */
 const emptyFolder = async (ref: string, serviceKey: string, name: string): Promise<number> => {
   const order = deletionOrder((await listUnder(ref, serviceKey, name)).map((o) => o.name))
-  const isManifest = (n: string): boolean => n.includes('/manifest.json.gz')
   return (
-    (await removeAll(ref, serviceKey, order.filter(isManifest))) +
+    (await removeAll(ref, serviceKey, order.filter(leadsDeletion))) +
     (await removeAll(
       ref,
       serviceKey,
-      order.filter((n) => !isManifest(n)),
+      order.filter((n) => !leadsDeletion(n)),
     ))
   )
 }
+
+/**
+ * What goes FIRST when a run is emptied: the manifest (and its checksum) and the verify-once marker. Either left behind
+ * over missing data would vouch for a backup with holes in it; gone first, an interrupted deletion reads as unfinished.
+ */
+const leadsDeletion = (n: string): boolean => n.includes('/manifest.json.gz') || isMarker(n)
 
 /**
  * The order a run folder's objects are removed in: its manifest and manifest checksum first, then every data object.
  * Exported so the order is tested directly, rather than inferred from a deletion that may be killed halfway.
  */
 export function deletionOrder(inside: readonly string[]): string[] {
-  const isManifest = (n: string): boolean => n.includes('/manifest.json.gz')
-  return [...inside.filter(isManifest), ...inside.filter((n) => !isManifest(n))]
+  return [...inside.filter(leadsDeletion), ...inside.filter((n) => !leadsDeletion(n))]
 }
 
 export async function applyRetention(
@@ -295,6 +312,96 @@ export async function applyInterrupted(
       continue
     }
     objects += await removeAll(ref, serviceKey, inside)
+    deleted.push(name)
+  }
+  return { dryRun: false, deleted, objectsDeleted: objects, refused: null, skipped }
+}
+
+/** What a verify-once marker says. Written by the nightly job, or by the attended prune for a run it has just read. */
+export interface Marker {
+  readonly format: 'verified/1'
+  readonly run: string
+  readonly verified_at: string
+  /** How many objects were read back and matched, when the writer counted them (the nightly job does). */
+  readonly objects?: number
+  readonly by: 'nightly backup' | 'attended prune'
+}
+
+/** Put the marker in a run folder. Upsert, so a repeated step writes the same thing. */
+export async function writeMarker(ref: string, serviceKey: string, marker: Marker): Promise<void> {
+  const r = await fetch(
+    `https://${ref}.supabase.co/storage/v1/object/${BUCKET}/${marker.run}/${MARKER}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+        'x-upsert': 'true',
+      },
+      body: JSON.stringify(marker),
+    },
+  )
+  if (!r.ok)
+    throw new Error(`could not write the marker for ${marker.run}: http ${String(r.status)}`)
+}
+
+/** The nightly prune's own limit: a wrong policy removes at most this many runs a night. Steady state removes one. */
+export const NIGHTLY_MAX_DELETES = 3
+
+export interface Scheduled {
+  readonly switchOn: boolean
+  /** The run this night's job wrote: never deleted, whatever the plan says. */
+  readonly justWritten: string
+  readonly maxDeletes?: number
+}
+
+/**
+ * The NIGHTLY prune (ADR-0077). A deletion the owner switched on once (`backup.auto_prune`, not self-adjustable), not a
+ * person at the keyboard, so it has its own guards in place of `--attended` and the production-write flags, and they are
+ * checked here, at the moment of deletion, not trusted from the plan:
+ *  - the switch is on, or nothing happens (an answer, not an error: off is the default);
+ *  - the plan was not refused, names only runs this system made, names nothing unverified or unfinished, and does not
+ *    name the run this night's job wrote;
+ *  - at most `maxDeletes` (3) runs; a longer plan is refused WHOLE, because steady state is one a night and more means
+ *    something is wrong;
+ *  - each run is listed again, and one that no longer has BOTH its manifest and its marker is skipped, not emptied.
+ */
+export async function applyScheduledRetention(
+  ref: string,
+  serviceKey: string,
+  plan: Plan,
+  options: Scheduled,
+): Promise<Applied & { readonly skipped: readonly string[] }> {
+  const none = { dryRun: true, deleted: [], objectsDeleted: 0, skipped: [] }
+  if (!options.switchOn)
+    return { ...none, refused: 'the nightly prune is off (system_config backup.auto_prune)' }
+  if (plan.refused !== null) return { ...none, refused: plan.refused }
+  const names = plan.remove.map((d) => d.name)
+  const max = options.maxDeletes ?? NIGHTLY_MAX_DELETES
+  if (names.length > max)
+    throw new RetentionRefused(
+      `refusing a nightly prune of ${String(names.length)} runs: the limit is ${String(max)}, and more than that is a person's decision (npm run backup:prune)`,
+    )
+  if (names.includes(options.justWritten))
+    throw new RetentionRefused(`refusing to delete ${options.justWritten}: tonight's job wrote it`)
+  const foreign = names.find((n) => !isOurs(n) || !n.startsWith('run-'))
+  if (foreign !== undefined)
+    throw new RetentionRefused(`refusing to delete ${foreign}: not a run folder this system made`)
+  const reported = new Set(plan.unknown.map((d) => d.name))
+  const unjudged = names.find((n) => reported.has(n))
+  if (unjudged !== undefined)
+    throw new RetentionRefused(`refusing to delete ${unjudged}: it is unverified or unfinished`)
+
+  const deleted: string[] = []
+  const skipped: string[] = []
+  let objects = 0
+  for (const name of names) {
+    const inside = (await listUnder(ref, serviceKey, name)).map((o) => o.name)
+    if (!inside.some((n) => n.endsWith('/manifest.json.gz')) || !inside.some(isMarker)) {
+      skipped.push(name)
+      continue
+    }
+    objects += await emptyFolder(ref, serviceKey, name)
     deleted.push(name)
   }
   return { dryRun: false, deleted, objectsDeleted: objects, refused: null, skipped }
