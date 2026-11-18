@@ -90,6 +90,8 @@ const panes = () => PANES.filter((x) => x.teamHq !== true || isTeamHq())
   project's team can never appear under another's name.
 */
 const held = new Map()
+// Whether "Name, export and archive" is open. Survives redraws; see wire().
+let foldOpen = false
 
 const esc = (s) =>
   String(s ?? '').replace(
@@ -601,7 +603,7 @@ export function section(p, pane, people) {
 
 /** Rename, export and archive: what the Project tab held, kept reachable without a tab of its own. */
 function projectFold(p) {
-  return `<details class="setfold">
+  return `<details class="setfold"${foldOpen ? ' open' : ''}>
     <summary>Name, export and archive</summary>
     ${projectPane(p)}
   </details>`
@@ -664,6 +666,12 @@ function download(name, payload) {
  * row and wrong about the rest.
  */
 export function wire(root, p, people, redraw, openLook, reload) {
+  /*
+    The fold is rebuilt on every redraw, and a rebuilt <details> comes back closed. Its open state is kept here so a save
+    or a timer redraw does not close the section the person is using (A8).
+  */
+  const fold = root.querySelector('details.setfold')
+  if (fold) fold.addEventListener('toggle', () => { foldOpen = fold.open })
   appearanceWire(root, p)
   /*
     The picker is built in `app.js`, where the sheet and its 451 marks live, so
