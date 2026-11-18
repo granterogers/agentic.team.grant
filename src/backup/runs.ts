@@ -13,14 +13,14 @@
  *     a complete, verified backup with holes in it. Removing the manifest first means an interrupted deletion leaves an
  *     INCOMPLETE run, which a restore refuses and the policy reports rather than deletes.
  *
- * Nothing calls `applyRetention` with `go: true` except `scripts/backup/prune.ts`, behind the production-writes gate and a
- * person's explicit `--attended`. A deletion refuses (throws) without BOTH the attended flag and the repository's own
+ * Nothing calls `applyRetention` or `applyInterrupted` with `go: true` except `scripts/backup/prune.ts`, behind the
+ * production-writes gate and a person's explicit `--attended` (and, for interrupted runs, `--interrupted`). A deletion refuses (throws) without BOTH the attended flag and the repository's own
  * production-write approval. The nightly handler only reports.
  */
 
 import { productionWritesAllowed } from '../safety/production-gate.ts'
 import { BUCKET, checksum, downloadArchive, listUnder, readFolder } from './portable.ts'
-import { isOurs, type Plan, type RunInfo } from './retention.ts'
+import { type Decision, isOurs, type Plan, type RunInfo } from './retention.ts'
 
 interface Listed {
   readonly name: string
@@ -160,12 +160,50 @@ export interface ApplyOptions {
 /** Refused deletion: thrown, never silently turned into a dry run, so a script that asked for a deletion hears no. */
 export class RetentionRefused extends Error {}
 
-const remove = async (ref: string, serviceKey: string, path: string): Promise<boolean> => {
-  const r = await fetch(`https://${ref}.supabase.co/storage/v1/object/${BUCKET}/${path}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${serviceKey}` },
-  })
-  return r.ok
+/** Objects per bulk call. Storage accepts up to 1,000; a smaller batch bounds what one failed call leaves behind. */
+export const DELETE_BATCH = 100
+
+/**
+ * Remove objects with Storage's bulk endpoint, `batch` paths a call, in the order given, and answer how many Storage says
+ * it removed. One object per call took about 300 requests a backup and did not finish 14 backups inside a ten-minute
+ * foreground command on 18 November 2026; it stopped part way through one folder (harmlessly, manifest first).
+ */
+const removeAll = async (
+  ref: string,
+  serviceKey: string,
+  paths: readonly string[],
+  batch = DELETE_BATCH,
+): Promise<number> => {
+  let removed = 0
+  for (let i = 0; i < paths.length; i += batch) {
+    const r = await fetch(`https://${ref}.supabase.co/storage/v1/object/${BUCKET}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefixes: paths.slice(i, i + batch) }),
+    })
+    if (!r.ok) throw new Error(`storage refused a bulk delete: http ${String(r.status)}`)
+    const body = (await r.json().catch(() => [])) as unknown
+    removed += Array.isArray(body) ? body.length : 0
+  }
+  return removed
+}
+
+/**
+ * Empty one run folder: its manifest objects in a call of their own FIRST, then the data objects in batches. Splitting
+ * the manifest into its own call is what keeps the manifest-first guarantee with bulk deletion: a batch is not ordered
+ * inside itself, so a manifest sharing a batch with data could outlive some of it.
+ */
+const emptyFolder = async (ref: string, serviceKey: string, name: string): Promise<number> => {
+  const order = deletionOrder((await listUnder(ref, serviceKey, name)).map((o) => o.name))
+  const isManifest = (n: string): boolean => n.includes('/manifest.json.gz')
+  return (
+    (await removeAll(ref, serviceKey, order.filter(isManifest))) +
+    (await removeAll(
+      ref,
+      serviceKey,
+      order.filter((n) => !isManifest(n)),
+    ))
+  )
 }
 
 /**
@@ -210,14 +248,54 @@ export async function applyRetention(
 
   let objects = 0
   for (const name of names) {
-    if (name.startsWith('run-')) {
-      const inside = (await listUnder(ref, serviceKey, name)).map((o) => o.name)
-      for (const path of deletionOrder(inside))
-        if (await remove(ref, serviceKey, path)) objects += 1
-    } else {
-      for (const path of [name, `${name}.sha256`])
-        if (await remove(ref, serviceKey, path)) objects += 1
-    }
+    objects += name.startsWith('run-')
+      ? await emptyFolder(ref, serviceKey, name)
+      : await removeAll(ref, serviceKey, [name, `${name}.sha256`])
   }
   return { dryRun: false, deleted: names, objectsDeleted: objects, refused: null }
+}
+
+/**
+ * Delete INTERRUPTED runs (`planInterrupted` in retention.ts): folders with no manifest, which a restore refuses. The
+ * same gates as `applyRetention` (dry run by default; a deletion needs `go`, `attended` and the production-write
+ * approval), and two of its own, checked at the moment of deletion rather than trusted from the plan:
+ *  - only a `run-<uuid>` folder this system created;
+ *  - the folder is listed again, and one that now HAS a manifest (it finished since the plan was made) is skipped and
+ *    reported, never emptied.
+ */
+export async function applyInterrupted(
+  ref: string,
+  serviceKey: string,
+  decisions: readonly Decision[],
+  options: ApplyOptions,
+): Promise<Applied & { readonly skipped: readonly string[] }> {
+  const names = decisions.map((d) => d.name)
+  const bad = names.find((n) => !isOurs(n) || !n.startsWith('run-'))
+  if (bad !== undefined)
+    throw new Error(`refusing to delete ${bad}: not a run folder this system created`)
+  if (!options.go)
+    return { dryRun: true, deleted: names, objectsDeleted: 0, refused: null, skipped: [] }
+  if (options.attended !== true) {
+    throw new RetentionRefused(
+      'refusing to delete: a deletion needs the attended flag (--attended) as well as go',
+    )
+  }
+  if (!(options.writesAllowed ?? productionWritesAllowed)()) {
+    throw new RetentionRefused(
+      "refusing to delete: production writes are not allowed (ALLOW_PRODUCTION_CHECKS=1 and ALLOW_PRODUCTION_WRITES=1 are the owner's switch)",
+    )
+  }
+  const deleted: string[] = []
+  const skipped: string[] = []
+  let objects = 0
+  for (const name of names) {
+    const inside = (await listUnder(ref, serviceKey, name)).map((o) => o.name)
+    if (inside.some((n) => n.endsWith('/manifest.json.gz'))) {
+      skipped.push(name)
+      continue
+    }
+    objects += await removeAll(ref, serviceKey, inside)
+    deleted.push(name)
+  }
+  return { dryRun: false, deleted, objectsDeleted: objects, refused: null, skipped }
 }

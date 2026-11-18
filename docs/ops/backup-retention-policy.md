@@ -1,8 +1,30 @@
 # Backup retention policy
 
-**Status: RECORDED AND TESTED. NOT EXECUTED.** Nothing has been deleted, no backup has been touched, migration 1026 has not been deployed,
-and no production system was contacted to write this. Destructive retention in production stays separately approval-gated (see "The approval
-gate").
+**Status: EXECUTED ONCE, 18 November 2026, under Grant's explicit approval in the session ("Policy + interrupted").** Before that it was
+recorded and tested only. Destructive retention in production stays separately approval-gated (see "The approval gate"): that approval covered
+that one pass, not the next.
+
+## The 18 November 2026 execution
+
+Why: Supabase reported the organisation over its 1 GB File Storage quota in the previous billing cycle, with projects to be restricted from
+18 December 2026. Measured read-only before acting (`storage.objects`, 13:2x UTC): **1,281.7 MB stored, 1,203.8 MB of it `backups`**, 41 items.
+
+What was found on the way, and is NOT fixed by this pass: **no nightly backup has finished since 8 November.** Every `office.backup` job from
+9 to 17 November ended `failed`, `recovery: 5 attempts exhausted while in running`, each folder stopping at 132 of 316 objects, at
+`public.job_state_transitions` (280,782 rows, 72 MB on 18 November). The earlier successes already needed 3 to 5 attempts. The table outgrew one
+worker tick. Tracked as an Issue; fixing it needs a worker deploy.
+
+What was done (`npm run backup:prune -- --attended --interrupted`, both production flags, the owner's approval of this pass):
+
+| | Runs | Objects | MB |
+|---|---|---|---|
+| Out of policy, verified, deleted (two passes: the first was cut by the ten-minute shell limit part way through one folder, manifest first, so that folder became an interrupted run) | 14 (incl. the 12 September legacy file), plus `run-f879cd17` cut part way | 4,057 | 498.7 |
+| Interrupted (no manifest), older than 24 h, deleted | 13 | 1,875 | 223.1 |
+| Kept: 7 daily (1 to 8 November) and 5 weekly (27 September to 25 October), all re-verified by reading back | 12 | | 466.0 |
+| Kept: the 17 November interrupted run, younger than the 24 h floor | 1 | | 15.8 |
+
+After: **559.7 MB stored (0.52 GiB), backups 481.8 MB.** Two tool changes made this possible and are part of the same change: bulk deletion
+(100 paths a call, manifest objects in a call of their own first) and `--interrupted` (`planInterrupted` / `applyInterrupted`).
 
 ## The owner's policy, verbatim
 

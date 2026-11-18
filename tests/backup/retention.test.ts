@@ -5,11 +5,12 @@ import {
   isoWeek,
   type Plan,
   type Policy,
+  planInterrupted,
   planRetention,
   type RunInfo,
   utcDay,
 } from '../../src/backup/retention.ts'
-import { applyRetention, RetentionRefused } from '../../src/backup/runs.ts'
+import { applyInterrupted, applyRetention, RetentionRefused } from '../../src/backup/runs.ts'
 
 /*
   The owner's policy (7 October 2026): the NEWEST 7 DAILY VERIFIED backups, PLUS the NEWEST VERIFIED backup from each of
@@ -579,22 +580,31 @@ describe('the deletion path: dry run by default, refused without the attended fl
     vi.unstubAllEnvs()
   })
 
-  const bucket = (): { calls: { method: string; url: string }[]; objects: string[] } => {
+  const bucket = (): {
+    calls: { method: string; url: string; paths: string[] }[]
+    objects: string[]
+  } => {
     const objects = [
       'run-00000001-0000-4000-8000-000000000000/public.a.json.gz',
       'run-00000001-0000-4000-8000-000000000000/public.a.json.gz.sha256',
       'run-00000001-0000-4000-8000-000000000000/manifest.json.gz',
       'run-00000001-0000-4000-8000-000000000000/manifest.json.gz.sha256',
     ]
-    const calls: { method: string; url: string }[] = []
-    vi.stubGlobal('fetch', async (url: string, init?: { method?: string }) => {
-      calls.push({ method: init?.method ?? 'GET', url: String(url) })
+    const calls: { method: string; url: string; paths: string[] }[] = []
+    vi.stubGlobal('fetch', async (url: string, init?: { method?: string; body?: string }) => {
+      const paths =
+        init?.method === 'DELETE'
+          ? ((JSON.parse(init.body ?? '{}') as { prefixes?: string[] }).prefixes ?? [])
+          : []
+      calls.push({ method: init?.method ?? 'GET', url: String(url), paths })
       if (String(url).includes('/object/list/'))
         return new Response(
           JSON.stringify(
             objects.map((o) => ({ name: o.split('/')[1], id: 'x', metadata: { size: 1 } })),
           ),
         )
+      if (init?.method === 'DELETE')
+        return new Response(JSON.stringify(paths.map((name) => ({ name }))), { status: 200 })
       return new Response('{}', { status: 200 })
     })
     return { calls, objects }
@@ -647,17 +657,62 @@ describe('the deletion path: dry run by default, refused without the attended fl
   it('only with both does it delete, the whole run, its manifest FIRST', async () => {
     // The manifest goes first: a folder that keeps its manifest reads as complete even with objects missing, so an
     // interrupted deletion must leave no manifest behind. Control: the data objects are still all removed.
-    const { calls } = bucket()
+    const { calls, objects } = bucket()
     const out = await applyRetention('ref', 'key', removable(), {
       go: true,
       attended: true,
       writesAllowed: () => true,
     })
     expect(out.dryRun).toBe(false)
-    const del = calls.filter((c) => c.method === 'DELETE').map((c) => c.url)
-    expect(del).toHaveLength(4)
-    expect(del.slice(0, 2).every((u) => u.includes('manifest.json.gz'))).toBe(true)
-    expect(del.slice(2).every((u) => !u.includes('manifest.json.gz'))).toBe(true)
+    // Bulk deletion: the manifest objects go in a call of their OWN, before any call that names a data object, because
+    // a single bulk call is not ordered inside itself.
+    const del = calls.filter((c) => c.method === 'DELETE')
+    expect(del).toHaveLength(2)
+    expect(del[0]?.paths.every((p) => p.includes('manifest.json.gz'))).toBe(true)
+    expect(del[0]?.paths).toHaveLength(2)
+    expect(del[1]?.paths.some((p) => p.includes('manifest.json.gz'))).toBe(false)
+    expect(del[1]?.paths).toHaveLength(2)
+    // control: every object of the run is removed, each exactly once
+    expect(del.flatMap((c) => c.paths).sort()).toEqual([...objects].sort())
+    expect(out.objectsDeleted).toBe(4)
+  })
+
+  it('a large run is removed in batches, never one object per request', async () => {
+    const many = Array.from(
+      { length: 250 },
+      (_, i) => `run-00000001-0000-4000-8000-000000000000/public.t${String(i)}.json.gz`,
+    )
+    const calls: string[][] = []
+    vi.stubGlobal('fetch', async (url: string, init?: { method?: string; body?: string }) => {
+      if (String(url).includes('/object/list/'))
+        return new Response(JSON.stringify(many.map((o) => ({ name: o.split('/')[1] }))))
+      const paths = (JSON.parse(init?.body ?? '{}') as { prefixes: string[] }).prefixes
+      calls.push(paths)
+      return new Response(JSON.stringify(paths.map((name) => ({ name }))))
+    })
+    const out = await applyRetention('ref', 'key', removable(), {
+      go: true,
+      attended: true,
+      writesAllowed: () => true,
+    })
+    // no manifest in this folder: the manifest call is empty and skipped, then 250 data objects in 100s
+    expect(calls.map((c) => c.length)).toEqual([100, 100, 50])
+    expect(out.objectsDeleted).toBe(250)
+  })
+
+  it('a refused bulk call stops the deletion with an error rather than reporting success', async () => {
+    vi.stubGlobal('fetch', async (url: string) =>
+      String(url).includes('/object/list/')
+        ? new Response(JSON.stringify([{ name: 'manifest.json.gz' }, { name: 'public.a.json.gz' }]))
+        : new Response('no', { status: 500 }),
+    )
+    await expect(
+      applyRetention('ref', 'key', removable(), {
+        go: true,
+        attended: true,
+        writesAllowed: () => true,
+      }),
+    ).rejects.toThrow(/refused a bulk delete/)
   })
 
   it('a plan naming an unverified or unfinished run is refused whole, before anything is sent', async () => {
@@ -726,5 +781,115 @@ describe('the command that runs it (assert the CALL)', () => {
     expect(src).toMatch(/'--go'[\s\S]{0,200}process\.exit\(2\)/)
     // the production-write gate is the first import
     expect(src.indexOf("require-production-writes.ts'")).toBeLessThan(src.indexOf('retention.ts'))
+    // interrupted runs are deleted only when asked for by name, through the same attended call shape
+    expect(src).toMatch(/process\.argv\.includes\('--interrupted'\)/)
+    expect(src).toMatch(
+      /await applyInterrupted\(ref, serviceKey, interrupted, \{ go: attended, attended \}\)/,
+    )
+  })
+})
+
+describe('interrupted runs (no manifest): a separate, attended decision', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('selects only unfinished run folders older than the age floor, oldest first', () => {
+    const old1 = run(daysBefore(NOW, 9), { complete: false, verified: false })
+    const old2 = run(daysBefore(NOW, 3), { complete: false, verified: false })
+    const fresh = run(new Date(NOW.getTime() - 2 * 3_600_000).toISOString(), {
+      complete: false,
+      verified: false,
+    })
+    const finished = run(daysBefore(NOW, 5))
+    const finishedUnverified = run(daysBefore(NOW, 6), { verified: false })
+    const foreign = { ...old1, name: 'grants-hand-made-export' }
+    const legacy = { ...old1, name: 'aiteamhq-20260912T221503Z.json.gz', complete: false }
+    const out = planInterrupted(
+      [old2, fresh, finished, finishedUnverified, foreign, legacy, old1],
+      NOW,
+    )
+    expect(names(out)).toEqual([old1.name, old2.name])
+    expect(out.every((d) => d.rule === 'incomplete')).toBe(true)
+    // control: with no age floor the run still being written would be chosen, so the floor is what protects it
+    expect(names(planInterrupted([fresh], NOW, PURE))).toEqual([fresh.name])
+  })
+
+  it('honours the per-pass limit', () => {
+    const many = Array.from({ length: 5 }, (_, i) =>
+      run(daysBefore(NOW, 10 + i), { complete: false, verified: false }),
+    )
+    expect(planInterrupted(many, NOW, policy({ maxDeletes: 2 }))).toHaveLength(2)
+  })
+
+  const folder = (withManifest: boolean): { deleted: string[][] } => {
+    const deleted: string[][] = []
+    const objects = ['public.a.json.gz', 'public.a.json.gz.sha256']
+    if (withManifest) objects.push('manifest.json.gz')
+    vi.stubGlobal('fetch', async (url: string, init?: { method?: string; body?: string }) => {
+      if (String(url).includes('/object/list/'))
+        return new Response(JSON.stringify(objects.map((name) => ({ name }))))
+      const paths = (JSON.parse(init?.body ?? '{}') as { prefixes: string[] }).prefixes
+      deleted.push(paths)
+      return new Response(JSON.stringify(paths.map((name) => ({ name }))))
+    })
+    return { deleted }
+  }
+  const victim = (): ReturnType<typeof planInterrupted> =>
+    planInterrupted([run(daysBefore(NOW, 4), { complete: false, verified: false })], NOW)
+
+  it('is a dry run by default, and refused without attended or without the write approval', async () => {
+    const { deleted } = folder(false)
+    const dry = await applyInterrupted('ref', 'key', victim(), { go: false })
+    expect(dry.dryRun).toBe(true)
+    await expect(
+      applyInterrupted('ref', 'key', victim(), { go: true, writesAllowed: () => true }),
+    ).rejects.toThrow(RetentionRefused)
+    await expect(
+      applyInterrupted('ref', 'key', victim(), {
+        go: true,
+        attended: true,
+        writesAllowed: () => false,
+      }),
+    ).rejects.toThrow(RetentionRefused)
+    expect(deleted).toEqual([])
+  })
+
+  it('with both, empties the folder', async () => {
+    const { deleted } = folder(false)
+    const out = await applyInterrupted('ref', 'key', victim(), {
+      go: true,
+      attended: true,
+      writesAllowed: () => true,
+    })
+    expect(out.objectsDeleted).toBe(2)
+    expect(out.skipped).toEqual([])
+    expect(deleted.flat()).toHaveLength(2)
+  })
+
+  it('skips a folder that has gained a manifest since the plan was made (it finished)', async () => {
+    const { deleted } = folder(true)
+    const out = await applyInterrupted('ref', 'key', victim(), {
+      go: true,
+      attended: true,
+      writesAllowed: () => true,
+    })
+    expect(out.deleted).toEqual([])
+    expect(out.skipped).toHaveLength(1)
+    expect(deleted).toEqual([])
+  })
+
+  it('refuses a name that is not a run folder this system created, before anything is sent', async () => {
+    const { deleted } = folder(false)
+    for (const name of ['grants-export', 'aiteamhq-20260912T221503Z.json.gz']) {
+      await expect(
+        applyInterrupted('ref', 'key', [{ name, bytes: 1, rule: 'incomplete', reason: 'x' }], {
+          go: true,
+          attended: true,
+          writesAllowed: () => true,
+        }),
+      ).rejects.toThrow(/not a run folder/)
+    }
+    expect(deleted).toEqual([])
   })
 })

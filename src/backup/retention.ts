@@ -265,3 +265,40 @@ export function planRetention(
     freedBytes: remove.reduce((a, d) => a + d.bytes, 0),
   }
 }
+
+/**
+ * Which INTERRUPTED runs may go: a separate question from the policy, asked only when a person passes `--interrupted`.
+ *
+ * An interrupted run is a `run-<uuid>` folder with no manifest: a nightly backup whose job ran out of attempts before
+ * the last table, or a folder a killed deletion left behind (the manifest is removed first). A restore refuses it, so
+ * it is not a backup, only space. `planRetention` never deletes one, deliberately, because deciding that is a person's
+ * call; Grant made it on 18 November 2026 ("Policy + interrupted"), when 13 such folders held about 200 MB of the 1 GB.
+ *
+ * Bounded the same way the policy is:
+ *  - only folders this system created (`run-<uuid>`); a legacy single file is never unfinished, and a foreign name is
+ *    never touched;
+ *  - nothing younger than `minAgeHours`, so a backup still being written (its job retries over the following hours,
+ *    into the same folder) is never removed from under it;
+ *  - at most `maxDeletes` a pass, oldest first.
+ *
+ * The executor (`applyInterrupted` in runs.ts) re-lists each folder at the moment of deletion and refuses one that has
+ * gained a manifest since this answer was computed.
+ */
+export function planInterrupted(
+  runs: readonly RunInfo[],
+  now: Date,
+  policy: Policy = DEFAULT_POLICY,
+): Decision[] {
+  const age = (r: RunInfo): number => (now.getTime() - Date.parse(r.at)) / HOUR
+  return runs
+    .filter((r) => FOLDER.test(r.name) && !r.complete && age(r) >= policy.minAgeHours)
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || (a.name < b.name ? -1 : 1))
+    .slice(0, Math.max(0, policy.maxDeletes))
+    .map((r) => ({
+      name: r.name,
+      bytes: r.bytes,
+      rule: 'incomplete' as const,
+      reason:
+        'an interrupted run with no manifest: a restore refuses it, so it holds space and no backup',
+    }))
+}

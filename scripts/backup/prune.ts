@@ -4,6 +4,8 @@
  *
  *   npm run backup:prune                    # a DRY RUN: verifies, prints the plan, deletes nothing
  *   npm run backup:prune -- --attended      # deletes exactly what the plan names (and needs the production-write approval)
+ *   npm run backup:prune -- --interrupted   # also lists interrupted runs (no manifest, older than 24 h); with
+ *                                           # --attended as well, deletes them (planInterrupted, applyInterrupted)
  *
  * Backups are never deleted automatically, on purpose (src/handlers/backup.ts): *"you should always check before making
  * any destructive action with me."* They also share the 1 GB Storage allowance with everything else, and G-1 of the
@@ -19,8 +21,8 @@
  * counted, never deleted, and never the reason a verified one is deleted.
  */
 import '../../src/safety/require-production-writes.ts'
-import { DEFAULT_POLICY, planRetention } from '../../src/backup/retention.ts'
-import { applyRetention, listRuns, verifyRuns } from '../../src/backup/runs.ts'
+import { DEFAULT_POLICY, planInterrupted, planRetention } from '../../src/backup/retention.ts'
+import { applyInterrupted, applyRetention, listRuns, verifyRuns } from '../../src/backup/runs.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const arg = (name: string, fallback: number): number => {
@@ -92,3 +94,19 @@ console.log(
     ? 'DRY RUN: nothing was deleted. Run again with --attended to delete exactly the list above.'
     : `deleted ${String(applied.objectsDeleted)} object(s) in ${String(applied.deleted.length)} run(s)`,
 )
+
+// Interrupted runs (no manifest; a restore refuses them) are a separate decision, asked for by name with --interrupted.
+if (process.argv.includes('--interrupted')) {
+  const interrupted = planInterrupted(runs, new Date(), policy)
+  console.log(
+    `interrupted: ${String(interrupted.length)} run(s) older than ${String(policy.minAgeHours)} h, ${mb(interrupted.reduce((a, d) => a + d.bytes, 0))}`,
+  )
+  for (const d of interrupted) console.log(`  x ${d.name}  ${mb(d.bytes)}`)
+  const gone = await applyInterrupted(ref, serviceKey, interrupted, { go: attended, attended })
+  console.log(
+    gone.dryRun
+      ? 'DRY RUN: no interrupted run was deleted.'
+      : `deleted ${String(gone.objectsDeleted)} object(s) in ${String(gone.deleted.length)} interrupted run(s)`,
+  )
+  for (const s of gone.skipped) console.log(`  skipped ${s}: it has a manifest now`)
+}
