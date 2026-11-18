@@ -414,3 +414,21 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/*
+  Phone touch targets (A14, 18 November 2026). The header's navigation, voice, project-menu and Chat buttons, and each
+  module's Maximise and Take-off buttons, were 24 to 38 px at 390 px wide, under the 44 px floor. The visible glyph keeps
+  its size; the button's box does not shrink below the floor.
+*/
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcburger,
+  [data-experience='basecamp'] .bcmic,
+  [data-experience='basecamp'] .bcpagemenu,
+  [data-experience='basecamp'] .bcmodbtn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  [data-experience='basecamp'] [data-bc-dock] {
+    min-height: 44px;
+  }
+}
