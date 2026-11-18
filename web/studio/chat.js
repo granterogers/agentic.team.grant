@@ -28,6 +28,7 @@
 import { HQ_API, UNCONFIGURED, VOICE } from './backend.js'
 import * as session from './session.js'
 import { CREW, PROJECTS } from './data.js'
+import { noteServerDate, serverNow } from './net.js'
 
 const KEY = 'studio.chat'
 
@@ -140,6 +141,7 @@ export async function load(slug, projectId, token) {
     const r = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     })
+    noteServerDate(r)
     if (!r.ok) return null
     const body = await r.json()
     if (began !== session.epoch()) return null
@@ -232,7 +234,7 @@ export function routeTo(text, context, to) {
 */
 
 /** The moment a request was handed over, for the waiting row to count from. */
-const startedAt = () => Date.now()
+const startedAt = () => serverNow()
 
 /*
   Where a typed message goes (#103).
@@ -327,7 +329,7 @@ export function newMessageId() {
 }
 
 export function send(slug, text, context, to, also = []) {
-  const now = new Date().toISOString()
+  const now = new Date(serverNow()).toISOString()
   const mine = {
     id: `m${Date.now()}`, from: 'grant', text, at: now,
     context: context ? { kind: context.kind, id: context.id, title: context.title } : null,
@@ -670,7 +672,7 @@ export async function follow(slug, job, token, onState) {
           write(slug, [
             ...(all()[slug] ?? []),
             {
-              id: `turn-failed-${job}`, from: 'the-office', at: new Date().toISOString(),
+              id: `turn-failed-${job}`, from: 'the-office', at: new Date(serverNow()).toISOString(),
               text: 'The team could not finish that. Nothing was lost: what you asked is recorded. You can ask again.',
               pending: false, bad: true, waiting: null, inflight: true,
             },
@@ -689,8 +691,8 @@ export async function follow(slug, job, token, onState) {
         return
       }
       upsert({
-        id: rowId, from: 'the-office', at: new Date().toISOString(), inflight: true, pending: true,
-        waiting: st.state, say: statusWords(st), since: Date.parse(String(st.asked_at ?? '')) || Date.now(),
+        id: rowId, from: 'the-office', at: new Date(serverNow()).toISOString(), inflight: true, pending: true,
+        waiting: st.state, say: statusWords(st), since: Date.parse(String(st.asked_at ?? '')) || serverNow(),
       })
     }
   } finally {

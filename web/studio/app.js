@@ -34,6 +34,7 @@ import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, toke
 import * as bc from './bc/shell.js'
 import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
+import { serverNow } from './net.js'
 import { mountSetPassword } from './set-password.js'
 import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
@@ -16286,7 +16287,7 @@ function tickWaiting() {
   for (const el of marks) {
     const since = Number(el.dataset.waitingSince)
     if (!Number.isFinite(since)) continue
-    const secs = Math.max(0, Math.round((Date.now() - since) / 1000))
+    const secs = Math.max(0, Math.round((serverNow() - since) / 1000))
     el.textContent = secs < 60
       ? `${secs}s`
       : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`

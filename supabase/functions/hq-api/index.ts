@@ -2563,6 +2563,9 @@ const json = (body: unknown, status = 200): Response =>
       // credential for another origin to ride on.
       'access-control-allow-origin': '*',
       'access-control-allow-headers': 'authorization, content-type',
+      // The server's clock, so the page can correct a computer clock that is wrong (A3, 18 November 2026). Without this the browser
+      // hides the Date header from the page.
+      'access-control-expose-headers': 'date',
       'cache-control': 'no-store',
     },
   })

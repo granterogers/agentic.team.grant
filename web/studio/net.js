@@ -99,6 +99,21 @@ export const unreachable = (boundary, ms) => {
  * A signal the caller already holds is honoured: aborting it still aborts the request, and is not reported as a
  * timeout.
  */
+/*
+  THE SERVER'S CLOCK, NOT THIS COMPUTER'S (A3, 18 November 2026).
+
+  A computer whose clock is wrong stamped new messages and timed waits with its own time: on the owner's computer that was 92 seconds
+  fast, so a message showed one time when it was sent and another after a reload. Every gateway answer carries the server's time in
+  its Date header (the gateway exposes it), and the difference is kept here. Anything that must agree with the server's record uses
+  `serverNow()`; durations, timeouts and deadlines keep using `Date.now()`, which is correct for them.
+*/
+let clockOffset = 0
+export const serverNow = () => Date.now() + clockOffset
+export function noteServerDate(response) {
+  const sent = Date.parse(response?.headers?.get?.('date') ?? '')
+  if (Number.isFinite(sent)) clockOffset = sent - Date.now()
+}
+
 export async function bounded(boundary, url, init = {}, ms = 20_000) {
   const began = Date.now()
   const at = new Date(began).toISOString()
@@ -109,6 +124,7 @@ export async function bounded(boundary, url, init = {}, ms = 20_000) {
       : stop
   try {
     const response = await fetch(url, { ...init, signal })
+    noteServerDate(response)
     remember({ boundary, at, ms: Date.now() - began, outcome: 'answered', status: response.status })
     return response
   } catch (error) {
