@@ -2074,6 +2074,14 @@ const saidIn = (el, words) => {
   const say = el?.closest('form')?.querySelector('[data-bc-contact-said]')
   if (say !== null && say !== undefined) say.textContent = words
 }
+/*
+  A contact save redraws the page, and the redraw removes the sentence the save wrote beside its button, so "Saved" was
+  never seen (A10d). The sentence is written again on the new button after the redraw.
+*/
+const saidAfterRedraw = (key, words) => {
+  const b = globalThis.document?.querySelector(`[data-bc-contact-save="${String(key).replace(/"/g, '\\"')}"]`)
+  saidIn(b, words)
+}
 
 const wireContacts = (root) => {
   for (const b of root.querySelectorAll('[data-bc-contact]')) {
@@ -2165,14 +2173,15 @@ const wireContacts = (root) => {
       }
       if (localKey(key)) {
         await contacts.save(ctx.state.project, key, patch)
-        saidIn(b, 'Saved.')
         ctx.render()
+        saidAfterRedraw(key, 'Saved.')
         return
       }
       const done = await attempt(b, 'Saving…', () => contacts.save(ctx.state.project, key, patch), 'Saved.')
       if (done !== null) {
         ctx.render()
         await ctx.refresh()
+        saidAfterRedraw(key, 'Saved.')
       }
     })
   }
@@ -2190,10 +2199,11 @@ const wireContacts = (root) => {
       if (!armed) {
         armed = true
         b.textContent = 'Press again to remove'
+        // Long enough to read the words and reach the button; a slow second press used to reset silently (A10b).
         setTimeout(() => {
           armed = false
           if (b.isConnected) b.textContent = 'Remove contact'
-        }, 6000)
+        }, 15000)
         return
       }
       const key = b.dataset.bcContactAway ?? ''

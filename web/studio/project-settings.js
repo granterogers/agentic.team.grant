@@ -92,6 +92,8 @@ const panes = () => PANES.filter((x) => x.teamHq !== true || isTeamHq())
 const held = new Map()
 // Whether "Name, export and archive" is open. Survives redraws; see wire().
 let foldOpen = false
+// "Archived." for the project just put away, shown where the archive button was (A10e). Cleared by any other archive.
+let archivedNote = null
 
 const esc = (s) =>
   String(s ?? '').replace(
@@ -603,8 +605,13 @@ export function section(p, pane, people) {
 
 /** Rename, export and archive: what the Project tab held, kept reachable without a tab of its own. */
 function projectFold(p) {
+  const note =
+    archivedNote !== null && archivedNote.slug === p.slug
+      ? `<p class="t-meta" role="status">${esc(archivedNote.words)}</p>`
+      : ''
   return `<details class="setfold"${foldOpen ? ' open' : ''}>
     <summary>Name, export and archive</summary>
+    ${note}
     ${projectPane(p)}
   </details>`
 }
@@ -933,7 +940,7 @@ export function wire(root, p, people, redraw, openLook, reload) {
       ) {
         return
       }
-      await attempt(
+      const archived = await attempt(
         b,
         'Putting it away…',
         () => act('project_archive', { p_slug: b.dataset.archive }),
@@ -946,6 +953,23 @@ export function wire(root, p, people, redraw, openLook, reload) {
               : ''
           }.`,
       )
+      /*
+        The redraw below replaces the button that carried the sentence, so the sentence was never seen (A10e). It is kept
+        and shown in the section until the person leaves this project.
+      */
+      if (archived !== null) {
+        archivedNote = {
+          slug: b.dataset.archive ?? '',
+          words: `Archived${
+            Number(archived?.automations_stopped ?? 0) > 0
+              ? `, and ${String(archived.automations_stopped)} automation${
+                  Number(archived.automations_stopped) === 1 ? '' : 's'
+                } stopped`
+              : ''
+          }. It has left your project list. Nothing was deleted, and you can bring it back from the archive list.`,
+        }
+        await reload?.()
+      }
     })
   }
 }
