@@ -1803,6 +1803,27 @@ const dockOpen = () => {
   try { return localStorage.getItem('studio.dock') === 'open' } catch { return false }
 }
 /*
+  THE TEAM CHAT SHOWS CLAIRE, UNLESS YOU ASK FOR THE HISTORY (23 October 2026).
+
+  Grant: only the Chief of Staff messages him. Other teammates still write their answers into the conversation record, and
+  the dock used to draw every one of them, so the panel filled with replies he had asked the office not to send him. By
+  default the dock now draws his own messages, the Chief of Staff's, and anything still waiting for an answer. "Show history"
+  brings back the full record, and the choice is remembered on this browser.
+*/
+const DOCK_HISTORY = 'studio.dock.history'
+const dockShowHistory = () => {
+  try { return localStorage.getItem(DOCK_HISTORY) === 'open' } catch { return false }
+}
+const setDockShowHistory = (open) => {
+  try { localStorage.setItem(DOCK_HISTORY, open ? 'open' : 'shut') } catch { /* not fatal */ }
+}
+const dockVisible = (m) =>
+  m.from === undefined ||
+  m.from === null ||
+  m.from === 'grant' ||
+  (typeof m.waiting === 'string' && m.waiting !== '') ||
+  CREW.find((c) => c.slug === m.from || c.staffSlug === m.from)?.role === 'Chief of Staff'
+/*
   SUPERSEDED BY #416 FOR EVERY SCREEN THAT HAS A PROJECT: the dock is the page's project and follows it (see paintDock).
   The pin below survives only to carry the deliberately chosen general Conversation across repaints on screens with no
   project loaded, and to keep the voice note and composer in step. What follows is the reasoning of #376, kept because it
@@ -1980,7 +2001,10 @@ function paintDock() {
       if (t !== null) paintDock()
     })
   }
-  const messages = p ? chat.thread(p.slug) : []
+  const all = p ? chat.thread(p.slug) : []
+  const everyone = dockShowHistory()
+  const messages = everyone ? all : all.filter(dockVisible)
+  const hiddenCount = all.length - messages.length
   const draft = $('[data-docksay]')?.value ?? ''
   /*
     A redraw replaces the composer, so a person who is TYPING when an answer lands (or a retry comes back, or the history loads) would
@@ -2020,6 +2044,13 @@ function paintDock() {
             : esc(p.slug === 'unnamed' ? 'Conversation' : p.name)
         }</span>
       </span>
+      ${
+        p === null
+          ? ''
+          : `<button class="btn quiet small" type="button" data-dock-history aria-pressed="${everyone}">${
+              everyone ? 'Hide history' : `Show history${hiddenCount > 0 ? ` (${hiddenCount})` : ''}`
+            }</button>`
+      }
       <button class="closeconv" data-dock-close aria-label="Close the conversation" title="Close the conversation">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -2101,6 +2132,10 @@ function paintDock() {
   $('[data-dock-close]', el)?.addEventListener('click', () => {
     bcDictate.release()
     rememberDock(false)
+    paintDock()
+  })
+  $('[data-dock-history]', el)?.addEventListener('click', () => {
+    setDockShowHistory(!dockShowHistory())
     paintDock()
   })
   /*

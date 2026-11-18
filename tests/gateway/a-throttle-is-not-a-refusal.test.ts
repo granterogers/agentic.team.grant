@@ -52,12 +52,13 @@ describe('the gateway separates refused from could-not-check', () => {
     expect(SOURCE).toMatch(/type Verdict = 'yes' \| 'no' \| 'unknown'/)
     // 0608: the verdict now travels with who the credential is, in one value.
     expect(SOURCE).toMatch(/interface Answer \{\s*readonly verdict: Verdict/)
-    expect(SOURCE).toMatch(/const sessionAllowed = async \([^)]*\): Promise<Answer>/)
+    // 23 October 2026: the session check is `verifySession` (sign-in asks the database once; `sessionAllowed` only shares it).
+    expect(SOURCE).toMatch(/const verifySession = async \([^)]*\): Promise<Answer>/)
     expect(SOURCE).toMatch(/const allowed = async \([^)]*\): Promise<Answer>/)
   })
 
   it('calls a session invalid only when the identity service SAID so', () => {
-    const body = bodyOf('const sessionAllowed = async')
+    const body = bodyOf('const verifySession = async')
     /*
       401 and 403 are a refusal. Everything else that is not ok -- 429, 5xx, a
       gateway error -- is a failure to answer. Asserted as the shape rather than
@@ -72,9 +73,12 @@ describe('the gateway separates refused from could-not-check', () => {
   })
 
   it('never reads a failure to reach the membership list as not being on it', () => {
-    const body = bodyOf('const sessionAllowed = async')
-    const membership = body.slice(body.indexOf('office_member'))
-    expect(membership).toMatch(/if \(!membership\.response\.ok\) return \{ verdict: 'unknown'/)
+    // The one identity question about the session (principal_for_session): a failure to ask it is 'unknown', never 'not a member'.
+    const body = bodyOf('const verifySession = async')
+    const asking = body.slice(body.indexOf('principal_for_session'))
+    expect(asking).toMatch(
+      /if \('unreachable' in asked \|\| !asked\.response\.ok\)\s*return \{ verdict: 'unknown'/,
+    )
   })
 
   it('retries a throttle rather than treating it as an answer', () => {

@@ -1,0 +1,5 @@
+{
+  "taken": "2026-10-25T18:13:39.256Z",
+  "index": "jobs_finished_with_spend_idx",
+  "definition": "CREATE INDEX jobs_finished_with_spend_idx ON public.jobs USING btree (finished_at) WHERE (COALESCE(trace_pence, (0)::numeric) > (0)::numeric)"
+}

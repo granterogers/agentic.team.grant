@@ -1741,10 +1741,13 @@ const runJobHeld = async (
         .catch(() => undefined)
       announce = say !== false
     }
-    // P3: keyed by the claimed job id.
+    /*
+      P3: keyed by the claimed job id. Written only when the value changes: a write of the value the row already holds left
+      a new copy of the row behind (about 18,000 such writes in two months, 25 October 2026), and the row ends identical either way.
+    */
     await db.execute(
       `update public.jobs set announce = ${announce ? 'true' : 'false'}
-        where job_id = ${lit(job.jobId)}::uuid`,
+        where job_id = ${lit(job.jobId)}::uuid and announce is distinct from ${announce ? 'true' : 'false'}`,
     )
   }
 

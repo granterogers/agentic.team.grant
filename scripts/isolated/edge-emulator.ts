@@ -93,7 +93,16 @@ export async function startEdge(o: EdgeOptions): Promise<Edge> {
       const token = String(headers?.Authorization ?? '').replace(/^Bearer\s+/i, '')
       const email = o.authUsers?.[token]
       if (email === undefined) return reply(401, {})
-      // The identity service also answers the auth user's id (P3: the office is resolved from the id, not the address).
+      /*
+        The identity service also answers the auth user's id (P3: the office is resolved from the id, not the address). A login the
+        service has issued always HAS an id, so an address with no auth.users row yet is given one here, as the real service would
+        have it. Without it the gateway was sent an empty id, the lookup failed, and a stranger was answered 503 "could not check"
+        instead of being refused (the four red proofs of 25 October 2026).
+      */
+      await o.db.execute(
+        `insert into auth.users (id, email) select gen_random_uuid(), ${lit(email)}
+          where not exists (select 1 from auth.users u where lower(u.email) = ${lit(email.toLowerCase())})`,
+      )
       const found = await o.db
         .execute(
           `select id::text as id from auth.users where lower(email) = ${lit(email.toLowerCase())} limit 1`,
