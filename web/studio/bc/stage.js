@@ -957,13 +957,19 @@ export const wireStage = (root, ctx) => {
       })
     }
   }
-  dock.querySelector('[data-bc-layouts]')?.addEventListener('click', (e) => {
-    if (pop !== null && pop.classList.contains('bcpop--layouts')) {
-      shut()
-      return
-    }
-    openLayouts(e.currentTarget)
-  })
+  /*
+    Every Layouts button, not just the dock's: the arrange menu has its own (A5, 18 November 2026). Attaching to the dock's alone left
+    the one in the + menu with no listener, so pressing it did nothing.
+  */
+  for (const layoutsButton of new Set([...dock.querySelectorAll('[data-bc-layouts]'), ...root.querySelectorAll('[data-bc-layouts]')])) {
+    layoutsButton.addEventListener('click', (e) => {
+      if (pop !== null && pop.classList.contains('bcpop--layouts')) {
+        shut()
+        return
+      }
+      openLayouts(e.currentTarget)
+    })
+  }
 
   /* ---------------------------------------------------------------- notes */
 
