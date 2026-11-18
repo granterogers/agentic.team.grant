@@ -3731,9 +3731,16 @@ function teamTab(p) {
   they are indistinguishable — which is right. Non-visually there is nothing
   else to go on, so it is said.
 */
+/*
+  WHO SAID IT, EXACTLY (A1, 18 November 2026). `crewBy` answers the first teammate (Claire) for an id it does not know, so a reply
+  from "the-office" (the team's own answers, which the Chief of Staff relays) was named, drawn and avatared as Claire. The team's
+  replies carry their own name here, and only a real crew member is named as one.
+*/
+const senderOf = (who) => CREW.find((c) => c.slug === who || c.staffSlug === who) ?? null
+const THE_TEAM = { slug: 'the-team', hue: 'p-slate', tone: 210, name: 'The team', role: '', face: '', state: 'idle', doing: '' }
 const saidBy = (who, m) => {
-  const name = who === 'grant' ? 'You' : (crewBy(who)?.name ?? 'The office')
-  const role = who === 'grant' ? '' : `, ${crewBy(who)?.role ?? ''}`
+  const name = who === 'grant' ? 'You' : (senderOf(who)?.name ?? THE_TEAM.name)
+  const role = who === 'grant' ? '' : `, ${senderOf(who)?.role ?? ''}`
   /* A message with no usable time says nothing about one: a screen reader was told "Invalid Date". */
   const when = m.at === undefined || m.at === null || m.at === '' ? null : new Date(m.at)
   const at = when === null || Number.isNaN(when.getTime())
@@ -3827,7 +3834,7 @@ const bubble = (m) => {
       </div>`
     }
 
-    const c = crewBy(m.from)
+    const c = senderOf(m.from) ?? THE_TEAM
     return `<div class="msg theirs ${m.bad ? 'bad' : ''}" role="listitem"
          style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
       ${face(c, 30)}
