@@ -42,6 +42,12 @@
   when the tab is not visible; `retime()` rides it.
 */
 
+/*
+  The clock these words are measured against is the server's, not the browser's (A16). A browser clock that runs fast
+  made an item saved seconds ago read "1 minute ago"; net.js keeps the offset from the server's Date header (A3).
+*/
+import { serverNow } from './net.js'
+
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
@@ -53,7 +59,7 @@ const DAY = 24 * HOUR
  * reading a feed wants to know roughly when, and a decimal reads as precision
  * that the underlying number does not have.
  */
-export function words(iso, now = Date.now()) {
+export function words(iso, now = serverNow()) {
   const at = Date.parse(iso)
   if (Number.isNaN(at)) return ''
 
@@ -184,7 +190,7 @@ const escapeText = (s) =>
  * would fight the caret, the selection and every open sheet.
  */
 export function retime(root = document) {
-  const now = Date.now()
+  const now = serverNow()
   for (const el of root.querySelectorAll('time[data-rel][datetime]')) {
     const said = words(el.getAttribute('datetime'), now)
     if (said !== '' && said !== el.textContent) el.textContent = said
