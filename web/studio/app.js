@@ -6234,6 +6234,30 @@ function memoryTab() {
   }
   const off = canWrite() ? false : true
 
+  /*
+    A19c. The same rule was recorded more than once (each time it was taught, as its own row), so the list showed one
+    rule three or seven times. One card per rule: the rows that say the same thing in the same place are merged, and
+    "Forget this" retires every row in the card.
+  */
+  const lessonKey = (l) =>
+    `${l.scope}|${String(l.where ?? '').toLowerCase()}|${String(l.body ?? '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[\s.!?]+$/, '')
+      .trim()}`
+  const merged = new Map()
+  for (const l of g.lessons) {
+    const k = lessonKey(l)
+    const seen = Number(l.seen ?? 1)
+    const hit = merged.get(k)
+    if (hit === undefined) merged.set(k, { ...l, ids: [l.id], seen })
+    else {
+      hit.ids.push(l.id)
+      hit.seen = Math.max(hit.seen, seen)
+    }
+  }
+  const rules = [...merged.values()]
+
   const lesson = (l) =>
     ui.caseCard({
       title: `${SCOPE_WORD[l.scope] ?? l.scope}${String(l.where ?? '').toLowerCase() === 'everywhere' || !l.where ? '' : `: ${l.where}`}`,
@@ -6247,7 +6271,7 @@ function memoryTab() {
       actions: ui.button({
         label: 'Forget this',
         tone: 'quiet',
-        a: { 'data-retract': l.id, disabled: off, 'aria-label': 'Forget this rule' },
+        a: { 'data-retract': l.ids.join(','), disabled: off, 'aria-label': 'Forget this rule' },
       }),
     })
 
@@ -6277,11 +6301,11 @@ function memoryTab() {
     ui.section({
       title: 'Rules and habits it has picked up',
       note: 'The team follows these in its work. Forgetting one stops the team being shown it from now on.',
-      count: g.lessons.length,
+      count: rules.length,
       body: ui.card(
-        g.lessons.length === 0
+        rules.length === 0
           ? [ui.empty('Nothing yet. When you correct the team and the correction sticks, it is written down here.')]
-          : g.lessons.map(lesson),
+          : rules.map(lesson),
       ),
     }),
     ui.section({
@@ -8116,8 +8140,12 @@ function settingsSheet() {
       ) {
         return
       }
-      const done = await attempt(b, 'Retracting…', () =>
-        act('lesson_retract', { p_lesson_id: b.dataset.retract }), 'Retracted.')
+      // One card can stand for several recorded rows (A19c); each is retracted in turn.
+      const ids = String(b.dataset.retract ?? '').split(',').filter((x) => x !== '')
+      const done = await attempt(b, 'Retracting…', async () => {
+        for (const id of ids) await act('lesson_retract', { p_lesson_id: id })
+        return true
+      }, 'Retracted.')
       if (done) await afterGovernance()
     })
   }
