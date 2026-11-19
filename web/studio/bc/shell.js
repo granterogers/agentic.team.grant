@@ -339,7 +339,11 @@ const switcherPanel = (here) => {
         : `<div class="bcmenulist">${projects.map(row).join('')}</div>`
     }
     ${
-      here === null
+      /*
+        A17d. On the project's own overview this item went to the address already on screen, so it did nothing. It is
+        offered only where it would take the person somewhere.
+      */
+      here === null || (globalThis.location?.pathname ?? '').replace(/\/+$/, '') === at(`/p/${here.slug}`)
         ? ''
         : `<hr class="bcmenusep"><button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(at(`/p/${here.slug}`))}"><span class="bcmenuname">Overview of ${esc(here.name)}</span></button>`
     }
