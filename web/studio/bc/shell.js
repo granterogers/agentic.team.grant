@@ -3574,7 +3574,7 @@ const myTasks = () => {
   const addForm = `<form class="bcaddform bcgap-l" data-bc-mytaskform>
       <label class="bcfield"><span class="bclabel" for="bc-mytask-title">What needs doing</span>
         <input class="bcinput" id="bc-mytask-title" name="title" autocomplete="off" required></label>
-      <label class="bcfield"><span class="bclabel" for="bc-mytask-due">Due (optional)</span>
+      <label class="bcfield"><span class="bclabel" for="bc-mytask-due">Due (leave blank for today)</span>
         <input class="bcinput" type="date" id="bc-mytask-due" name="due"></label>
       <div class="bcrow"><button type="submit" class="bcbtn bcbtn--primary" data-bc-mytaskadd="1">Add to my list</button></div>
       <p class="bcpmeta" data-bc-mytasksay role="status"></p>

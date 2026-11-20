@@ -3432,7 +3432,8 @@ const wireTasks = (root) => {
       const done = await attempt(
         btn ?? f,
         'Adding…',
-        () => act('my_task_add', { p_title: title, ...(due === '' ? {} : { p_due_on: due }) }),
+        // A task with no date is not due today, so it would not appear on the Today list the page opens on. A blank date is today.
+        () => act('my_task_add', { p_title: title, p_due_on: due === '' ? new Date().toISOString().slice(0, 10) : due }),
         'Added.',
       )
       if (done !== null) {
