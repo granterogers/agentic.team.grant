@@ -3576,7 +3576,7 @@ const myTasks = () => {
         <input class="bcinput" id="bc-mytask-title" name="title" autocomplete="off" required></label>
       <label class="bcfield"><span class="bclabel" for="bc-mytask-due">Due (optional)</span>
         <input class="bcinput" type="date" id="bc-mytask-due" name="due"></label>
-      <div class="bcrow">${button('Add to my list', { kind: 'primary', 'data-bc-mytaskadd': '1' })}</div>
+      <div class="bcrow"><button type="submit" class="bcbtn bcbtn--primary" data-bc-mytaskadd="1">Add to my list</button></div>
       <p class="bcpmeta" data-bc-mytasksay role="status"></p>
     </form>`
   return `<h1 class="bcsectiontitle">My Tasks</h1>
