@@ -58,8 +58,16 @@ const paintPreview = async (host, fileFor) => {
     )
     return
   }
+  /*
+    A7. A text document's first words are already in the office's list (the cached excerpt). They are drawn at once, so
+    the person sees the document while its full read is on its way; the full text replaces them when it arrives.
+  */
+  const early = host.dataset.bcDocexcerpt ?? ''
+  if (early !== '') host.innerHTML = `<pre class="bcdoctext" tabindex="0" aria-label="Text of the document">${esc(early)}</pre>`
   const file = await fileFor(ref)
   if (file === null) {
+    // The excerpt already drawn is the better answer than "nothing to preview" when the full read failed.
+    if (early !== '') return
     none('There is nothing to preview here. The office holds a record of this document, not its contents.')
     return
   }

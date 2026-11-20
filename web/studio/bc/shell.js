@@ -3252,7 +3252,7 @@ const documentRecord = (p) => {
     </div>
     ${provenanceLine}
     <div class="bcdocgrid">
-      <div class="bcdocpreview" role="region" tabindex="0" aria-label="${esc(`Preview of ${d.title ?? 'the document'}`)}" data-bc-docpreview="${esc(ref)}" data-bc-docaudio="${isAudio ? '1' : ''}" data-bc-doctitle="${esc(d.title ?? '')}"${
+      <div class="bcdocpreview" role="region" tabindex="0" aria-label="${esc(`Preview of ${d.title ?? 'the document'}`)}" data-bc-docpreview="${esc(ref)}" data-bc-docaudio="${isAudio ? '1' : ''}" data-bc-docexcerpt="${esc(d.kind === 'doc' || d.kind === 'made' ? String(d.excerpt ?? '') : '')}" data-bc-doctitle="${esc(d.title ?? '')}"${
         onDemand && !isAudio
           ? ` data-bc-docmode="ondemand" data-bc-docid="${esc(String(d.id))}" data-bc-docproject="${esc(String(p.slug ?? ''))}" data-bc-docsourcename="${esc(sourceName)}" data-bc-docsourceurl="${esc(sourceHref)}" data-bc-docimportable="${canImport && !importPending ? '1' : ''}"`
           : ''
