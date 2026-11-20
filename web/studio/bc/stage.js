@@ -905,6 +905,11 @@ export const wireStage = (root, ctx) => {
         glide()
         grid.applyPreset(slug, b.dataset.preset)
         view = grid.viewOf(slug)
+        /*
+          A5: the preset is written to the arrangement, but the module elements only take their place in paintAll;
+          a redraw of the page alone left them where they were, so the Layouts options did nothing on screen.
+        */
+        paintAll()
         shut()
         ctx.render()
       })
