@@ -34,8 +34,8 @@
   },
   "components": {
     "hq-api-first-load": {
-      "version": "v1013",
-      "note": "26 October 2026: deploy:hq-api from baeae4acb (the first_load endpoint, which answers the nine secondary home-board sections in one request). v1012 was the first deploy, from 98c4a0f0e, which also carried studio and projects in the bundle and was narrowed in v1013. Live v1011 before the change. Liveness: an unauthenticated call is 401 and a signed-in call is 200; the nine sections answered 200 with a live session. No page uses the endpoint since the 0.33.0 rollback. ROLLBACK: deploy:hq-api from fe07473ab (the commit before first_load); the endpoint is additive, so the older code answers every existing section unchanged."
+      "version": "removed in v1020",
+      "note": "REMOVED 20 November 2026 in 0.60.0 (K2): no page has called it since 0.33.0. Recorded history follows. 26 October 2026: deploy:hq-api from baeae4acb (the first_load endpoint, which answers the nine secondary home-board sections in one request). v1012 was the first deploy, from 98c4a0f0e, which also carried studio and projects in the bundle and was narrowed in v1013. Live v1011 before the change. Liveness: an unauthenticated call is 401 and a signed-in call is 200; the nine sections answered 200 with a live session. No page uses the endpoint since the 0.33.0 rollback. ROLLBACK: deploy:hq-api from fe07473ab (the commit before first_load); the endpoint is additive, so the older code answers every existing section unchanged."
     },
     "worker": {
       "version": "v1053",
@@ -46,8 +46,8 @@
       "note": "16 October 2026, deploy:signin from 13c4a4f6 (v146 ACTIVE; health configured=true; a stranger 403; no origin 403; a dud refresh ok=false expired; nobody ok=false). Before it v143, 15 October 2026, deploy:signin from 5cf36d32 (PIN sign-in; passwords off, PASSWORD_SIGN_IN=0; refuses a stranger, a missing origin and a dud refresh with 403 or expired; health configured=true; the PIN path refuses an unknown login with the neutral sentence, proving the service role can read sign_in_pins). Earlier in the day: v136 from 754ab4b1, v139 and v141 (password experiments, retired). Before that v134 (10 October)"
     },
     "hq-api": {
-      "version": "v913",
-      "note": "19 and 20 October 2026: deploy:hq re-deployed hq-api on every run (v968 ACTIVE on the first, from 5b666263; later runs redeployed it too, their version numbers not read back; unauthenticated 401, authenticated 200 counts present each time). 16 October 2026, deploy:hq from f98d527e (v913 ACTIVE; unauthenticated 401; authenticated 200 counts present). Before it v904, 15 October 2026, deploy:hq-api from 754ab4b1 (15 files, closure verified; unauthenticated 401, authenticated 200). Before it v903: 10 October 01:20 UTC V1 release from 047f6f17 (before it v899). Earlier: 9 October, Team HQ release (revisioned layout saves, project backgrounds); rollback bundle v897 captured by that release into .out/rollback-release/hq-api.v897 (gitignored, may no longer exist)"
+      "version": "v1020",
+      "note": "20 November 2026: deploy:hq-api from 681b2fce35ef (version 0.60.0): the unused first_load section is removed (K2). Unauthenticated 401, authenticated 200. Before it, v1017 (the earlier record below). Earlier:19 and 20 October 2026: deploy:hq re-deployed hq-api on every run (v968 ACTIVE on the first, from 5b666263; later runs redeployed it too, their version numbers not read back; unauthenticated 401, authenticated 200 counts present each time). 16 October 2026, deploy:hq from f98d527e (v913 ACTIVE; unauthenticated 401; authenticated 200 counts present). Before it v904, 15 October 2026, deploy:hq-api from 754ab4b1 (15 files, closure verified; unauthenticated 401, authenticated 200). Before it v903: 10 October 01:20 UTC V1 release from 047f6f17 (before it v899). Earlier: 9 October, Team HQ release (revisioned layout saves, project backgrounds); rollback bundle v897 captured by that release into .out/rollback-release/hq-api.v897 (gitignored, may no longer exist)"
     },
     "voice": {
       "version": "v674",
