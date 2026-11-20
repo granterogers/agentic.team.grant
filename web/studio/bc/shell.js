@@ -262,11 +262,14 @@ const TRAY_MARKS = {
   home: '<path d="M3.5 10.5 12 3.8l8.5 6.7"/><path d="M5.5 9.2V20h13V9.2"/><path d="M10 20v-5.5h4V20"/>',
   tasks: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8.2 12.2 2.6 2.6 5-5.4"/>',
   activity: '<path d="M3 12h4l2.5-6.5 5 13L17 12h4"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
 }
 const trayItems = () => [
   { name: 'Home', to: at('/'), glyph: trayMark(TRAY_MARKS.home) },
   { name: 'My Tasks', to: at('/tasks'), glyph: trayMark(TRAY_MARKS.tasks) },
   { name: 'Activity', to: at('/activity'), glyph: trayMark(TRAY_MARKS.activity) },
+  // D9: Search is a screen of its own at /search; it had no entry in the menu.
+  { name: 'Search', to: at('/search'), glyph: trayMark(TRAY_MARKS.search) },
 ]
 
 /*
