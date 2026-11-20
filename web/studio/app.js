@@ -9618,9 +9618,12 @@ function goToPath(path) {
     always pointed. The older studio is kept at /classic, which nothing links
     to, for as long as it is useful.
   */
-  if (bits[0] === 'basecamp' || bits[0] === 'studio') bits.shift()
-  state.experience = bits[0] === 'classic' ? 'default' : 'basecamp'
-  if (state.experience === 'default') bits.shift()
+  /*
+    /classic is retired too (20 Nov 2026): the older studio is no longer reachable by any address. It is read as the same
+    address without the prefix, exactly as /basecamp and /studio are, and the first paint writes the canonical form.
+  */
+  if (bits[0] === 'basecamp' || bits[0] === 'studio' || bits[0] === 'classic') bits.shift()
+  state.experience = 'basecamp'
   // Cleared here, once, rather than at each of the callers that navigate.
   state.bcTask = null
   // An expanded module does not survive a navigation: the page underneath it
