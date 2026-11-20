@@ -847,5 +847,6 @@
   "1098_a_sign_in_asks_the_database_once.sql": "3cd005e2e6e3637e469e2480676f20ce04f8e41e4e61359eaf4d6d5c893b2b17",
   "1099_the_office_clock_is_read_without_the_zone_listing.sql": "f085a317d1b47a0944dc24e430e7f3f50c74c767d3f7e38002857cd99e7dc354",
   "1100_the_documents_payload_carries_the_preview_the_tile_draws.sql": "9b92ffea4661325c72bef747ea006f8de1befbcf387e3eb135f3ee1cbbb342ea",
-  "1101_a_project_says_what_documents_and_people_it_holds.sql": "efe3bfc4a3a2add735a5f7fcac548896e4b1101d5a7c4c682b4c131509a57346"
+  "1101_a_project_says_what_documents_and_people_it_holds.sql": "efe3bfc4a3a2add735a5f7fcac548896e4b1101d5a7c4c682b4c131509a57346",
+  "1102_the_catch_all_project_is_called_conversations.sql": "01f0fccc91c50ed79559923671e9abe5c05e3a9275d00e565ad70e05ec3d1c31"
 }

@@ -13,8 +13,9 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 849,
-    "highestAppliedAtRecord": "1101",
+    "appliedAtRecord": 850,
+    "highestAppliedAtRecord": "1102",
+    "note1102": "On 20 November 2026 migration 1102 renamed the catch-all project (slug unnamed) from Unnamed to Conversations, so the page and the agents use one name. Applied with npm run migrate:one and the production write flag.",
     "note1101": "On 19 November 2026 migration 1101 (app.project_context_brief, a read-only brief of a project's document count, recent titles and the permanent team, A20) was applied to production with npm run migrate:one and the production write flag, under Grant's instruction to make the worker change.",
     "note1100": "On 23 October 2026 migration 1100 (app.studio_documents carries the cached preview text as excerpt) was applied to production with npm run migrate:one and the production write flag, under Grant's instruction to show real previews. It adds one key to the live function body; nothing else changes.",
     "note1099": "On 23 October 2026 migration 1099 (app.office_timezone asks the database directly rather than listing every zone, about 80 ms a call) was applied to production with npm run migrate:one and the production write flag, under Grant's instruction to fix the slow first load. The offices' zones (UTC, Europe/Athens) give the same answers. Grant's office studio call fell from about 6 s to about 0.8 s in the database. Version 0.22.0 page deployed alongside; rollback for the function is the previous body, which is in migrations/0001-era app.office_timezone (1046).",
