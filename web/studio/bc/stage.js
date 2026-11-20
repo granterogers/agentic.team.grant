@@ -966,14 +966,23 @@ export const wireStage = (root, ctx) => {
     Every Layouts button, not just the dock's: the arrange menu has its own (A5, 18 November 2026). Attaching to the dock's alone left
     the one in the + menu with no listener, so pressing it did nothing.
   */
+  /*
+    One listener per button, and it calls the handler of the LATEST draw (A5). The button persists across redraws, so a
+    listener added by each draw made an older draw open the popover; that draw's board had left the page, its `gone`
+    listener closed the popover on the next press, and the preset was never reached.
+  */
   for (const layoutsButton of new Set([...dock.querySelectorAll('[data-bc-layouts]'), ...root.querySelectorAll('[data-bc-layouts]')])) {
-    layoutsButton.addEventListener('click', (e) => {
+    layoutsButton.__bcLayoutsPress = (e) => {
       if (pop !== null && pop.classList.contains('bcpop--layouts')) {
         shut()
         return
       }
       openLayouts(e.currentTarget)
-    })
+    }
+    if (layoutsButton.dataset.layoutsWired !== '1') {
+      layoutsButton.dataset.layoutsWired = '1'
+      layoutsButton.addEventListener('click', (e) => layoutsButton.__bcLayoutsPress?.(e))
+    }
   }
 
   /* ---------------------------------------------------------------- notes */
