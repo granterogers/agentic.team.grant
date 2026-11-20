@@ -9623,6 +9623,8 @@ function goToPath(path) {
     address without the prefix, exactly as /basecamp and /studio are, and the first paint writes the canonical form.
   */
   if (bits[0] === 'basecamp' || bits[0] === 'studio' || bits[0] === 'classic') bits.shift()
+  // A18. /my-tasks is the My Tasks screen, which lives at /tasks. It used to fall back to home.
+  if (bits[0] === 'my-tasks') bits = ['tasks']
   state.experience = 'basecamp'
   // Cleared here, once, rather than at each of the callers that navigate.
   state.bcTask = null
@@ -14235,7 +14237,11 @@ function cameBackFromGoogle() {
       form still works. Any name that is not a tab, an alias or `health` is ignored.
     */
     const fromPath = /^\/settings\/([a-z]+)\/?$/.exec(location.pathname)
-    const wanted = fromPath !== null ? fromPath[1] : said.get('settings')
+    /*
+      A18. The bare /settings address used to fall back to home, so a link to Settings bounced. It now opens the first tab.
+    */
+    const bareSettings = /^\/settings\/?$/.test(location.pathname)
+    const wanted = bareSettings ? (config.TABS[0]?.id ?? null) : fromPath !== null ? fromPath[1] : said.get('settings')
     const known =
       wanted !== null && (wanted === 'health' || config.TABS.some((t) => t.id === (config.TAB_ALIAS[wanted] ?? wanted)))
     if (!known) return false
