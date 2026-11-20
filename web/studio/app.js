@@ -16723,7 +16723,15 @@ async function startOfficeReads(token) {
   `refresh` is passed so an undo redraws through the same path a write does.
 */
 onWrite((_action, result) => {
-  undo.offer(result, refresh)
+  /*
+    A9. An undo put a task back on the server, but the refresh it asked for did not clear the My Tasks list, so the list
+    stayed as it was until a reload. Every write forgets my tasks; an undo must do the same and then read them again.
+  */
+  undo.offer(result, async () => {
+    forgetMine()
+    await refresh()
+    if (state.view === 'tasks') void needMine(mine.bucket)
+  })
 })
 
 live()
