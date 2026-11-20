@@ -288,7 +288,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     to?: unknown
     project?: unknown
     message?: unknown
+    typed?: unknown
   }
+  // D8: a message typed in Team HQ is recorded as its own origin, "teamhq"; spoken words keep "voice".
+  const originChannel = body.typed === true ? 'teamhq' : 'voice'
   const said = typeof body.said === 'string' ? body.said.trim() : ''
   const session = typeof body.session === 'string' ? body.session : ''
   if (said === '') return json({ error: 'nothing was said' }, 400)
@@ -429,7 +432,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const row = (stated: string | null, addressee: string | null): Record<string, unknown> => ({
     // Explicit, from the verified speaker: the compatibility bridge is not asked to guess.
     office_id: office,
-    origin_channel: 'voice',
+    origin_channel: originChannel,
     origin_ref: `${talk}:${turn}`,
     actor: speaker.actor,
     // `subject` is NOT set here. 0056's trigger resolves it through

@@ -503,6 +503,8 @@ export async function ask(slug, text, context, token, to, also, onState) {
             }
           : {
               said: text,
+              // D8: typed in Team HQ, so the office records it as "teamhq", not "voice" (the same endpoint serves both).
+              typed: true,
               session: visit,
               message: messageId,
               // The thread's project, so the office files it there and nowhere else.
