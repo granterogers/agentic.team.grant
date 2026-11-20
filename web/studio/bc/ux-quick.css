@@ -448,8 +448,22 @@ body.dock-yields #dock { display: none !important; }
     min-width: 44px;
     min-height: 44px;
   }
-  :root[data-experience='basecamp'] .bcbtn.bcmic {
+  :root[data-experience='basecamp'] .bcbtn.bcmic,
+  :root[data-experience='basecamp'] .bcbtn.bcpagemenu {
     width: 44px;
+    min-width: 44px;
+  }
+  /* A14: the empty-state action, the "View all" link and the sort control were 21 to 42 px tall on a phone. */
+  :root[data-experience='basecamp'] .bcmptyact {
+    min-height: 44px;
+  }
+  :root[data-experience='basecamp'] .bcdocsall a {
+    display: inline-block;
+    min-height: 44px;
+    line-height: 44px;
+  }
+  :root[data-experience='basecamp'] .bcdocsort .bcdocsortpick {
+    min-height: 44px;
   }
   /* Every other button of the studio: the page's own buttons are 26 to 36 px tall on a phone. */
   :root[data-experience='basecamp'] .bcbtn {
