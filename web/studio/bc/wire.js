@@ -2568,6 +2568,37 @@ const warmNext = async () => {
 */
 const isSmallTile = (host) => host.classList.contains('bccompact') || host.classList.contains('bcrowthumb')
 
+/*
+  A7. Every tile that has no kept thumbnail asked the gateway for its document at once: about two dozen reads on opening
+  Docs & Files, several of them repeated on each redraw. They took the browser's connections, and the document the person
+  had just opened waited behind them for twenty seconds before its preview appeared. Thumbnail reads now run two at a
+  time, and a read already in flight for the same document is shared rather than repeated. The opened document's own
+  preview is not routed through here.
+*/
+const THUMB_READS = { active: 0, waiting: [], inflight: new Map() }
+const THUMB_READS_MAX = 2
+const readForThumb = (ref) => {
+  const pending = THUMB_READS.inflight.get(ref)
+  if (pending !== undefined) return pending
+  const p = new Promise((resolve, reject) => {
+    const run = () => {
+      THUMB_READS.active += 1
+      fileFor(ref)
+        .then(resolve, reject)
+        .finally(() => {
+          THUMB_READS.active -= 1
+          THUMB_READS.inflight.delete(ref)
+          const next = THUMB_READS.waiting.shift()
+          if (next !== undefined) next()
+        })
+    }
+    if (THUMB_READS.active < THUMB_READS_MAX) run()
+    else THUMB_READS.waiting.push(run)
+  })
+  THUMB_READS.inflight.set(ref, p)
+  return p
+}
+
 const paintThumb = async (host, ref) => {
   /*
     A small tile is drawn by the render (its glyph or type card), so nothing is fetched for it: no record, no bytes.
@@ -2593,7 +2624,7 @@ const paintThumb = async (host, ref) => {
       return
     }
   }
-  const file = await fileFor(ref)
+  const file = await readForThumb(ref)
   if (ref.startsWith('id:') && (file === null || file.url === '')) {
     /* A document Team HQ reads on demand and nobody has opened yet: make its first-page picture ourselves (below). */
     void warmThumb(host, ref.slice(3))
