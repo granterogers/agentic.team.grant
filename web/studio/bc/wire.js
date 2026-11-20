@@ -804,6 +804,17 @@ export const wire = (root) => {
   }
   for (const item of root.querySelectorAll('#bc-plus-menu [role="menuitem"]')) {
     item.addEventListener('click', () => {
+      /*
+        Layouts opens its own popover. The redraw that follows a pick would take that popover's board away, and the
+        preset that is pressed next was then never reached (A5). So a Layouts pick closes the menu without a redraw.
+      */
+      if (item.matches('[data-bc-layouts]')) {
+        compose.plus.open = false
+        const menu = root.ownerDocument.querySelector('#bc-plus-menu')
+        if (menu !== null) menu.hidden = true
+        root.ownerDocument.querySelector('[data-bc-plus]')?.setAttribute('aria-expanded', 'false')
+        return
+      }
       globalThis.setTimeout(() => {
         compose.plus.open = false
         ctx.render()
