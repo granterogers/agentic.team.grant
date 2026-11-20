@@ -3567,11 +3567,24 @@ const myTasks = () => {
     const shown = new Set((Array.isArray(mine) ? mine : []).map((t) => String(t.id ?? '')))
     return all.filter((t) => !shown.has(String(t.id ?? '')))
   })()
+  /*
+    D4: My Tasks can add and remove its own items, as the older studio's My Tasks always could. The add is the office's
+    my_task_add; removing is my_task_delete, which keeps the row for history and offers an undo.
+  */
+  const addForm = `<form class="bcaddform bcgap-l" data-bc-mytaskform>
+      <label class="bcfield"><span class="bclabel" for="bc-mytask-title">What needs doing</span>
+        <input class="bcinput" id="bc-mytask-title" name="title" autocomplete="off" required></label>
+      <label class="bcfield"><span class="bclabel" for="bc-mytask-due">Due (optional)</span>
+        <input class="bcinput" type="date" id="bc-mytask-due" name="due"></label>
+      <div class="bcrow">${button('Add to my list', { kind: 'primary', 'data-bc-mytaskadd': '1' })}</div>
+      <p class="bcpmeta" data-bc-mytasksay role="status"></p>
+    </form>`
   return `<h1 class="bcsectiontitle">My Tasks</h1>
     <p class="bcpmeta bcprose bcgap-l">
       Your own list. Separate from what any project has committed to, and from
       what the team is running.
     </p>
+    ${signedIn && !trouble ? addForm : ''}
     ${
       !signedIn
         ? empty({
@@ -3600,6 +3613,7 @@ const myTasks = () => {
                     only, and only where the row has an id to write to. No backticks in this comment. Template literal.
                   -->
                   ${stopSeries(t)}
+                  ${t.id === undefined || String(t.id) === '' ? '' : button('Remove', { 'data-bc-mytaskremove': esc(String(t.id)), 'aria-label': `Remove: ${t.title}` })}
                 </div>`,
               )
               .join('')}</div>`

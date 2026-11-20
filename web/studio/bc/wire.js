@@ -3416,6 +3416,55 @@ const wireTasks = (root) => {
   }
 
   /*
+    D4. ADDING TO MY LIST. The office's my_task_add, with the title and an optional due date. The page then reads the list again.
+  */
+  for (const f of root.querySelectorAll('[data-bc-mytaskform]')) {
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const title = String(f.querySelector('#bc-mytask-title')?.value ?? '').trim()
+      const due = String(f.querySelector('#bc-mytask-due')?.value ?? '').trim()
+      const say = f.querySelector('[data-bc-mytasksay]')
+      const btn = f.querySelector('[data-bc-mytaskadd]')
+      if (title === '') {
+        if (say !== null) say.textContent = 'A task needs words. What needs doing?'
+        return
+      }
+      const done = await attempt(
+        btn ?? f,
+        'Adding…',
+        () => act('my_task_add', { p_title: title, ...(due === '' ? {} : { p_due_on: due }) }),
+        'Added.',
+      )
+      if (done !== null) {
+        f.reset()
+        await (ctx.refreshMyTasks?.() ?? ctx.refresh())
+      }
+    })
+  }
+
+  /*
+    D4. REMOVING FROM MY LIST. Two presses, like every other removal here: the first says what the second will do. The office
+    keeps the row, and the undo strip brings it back.
+  */
+  for (const b of root.querySelectorAll('[data-bc-mytaskremove]')) {
+    let armed = false
+    const label = b.textContent
+    b.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true
+        b.textContent = 'Press again to remove'
+        setTimeout(() => {
+          armed = false
+          if (b.isConnected) b.textContent = label
+        }, 6000)
+        return
+      }
+      const done = await attempt(b, 'Removing…', () => act('my_task_delete', { p_task_id: b.dataset.bcMytaskremove }), 'Removed.')
+      if (done !== null) await (ctx.refreshMyTasks?.() ?? ctx.refresh())
+    })
+  }
+
+  /*
     ENDING A RECURRING REMINDER (owner decision, 7 October 2026; migration 1051 in this repository).
 
     Ticking a series off completes THAT time only, so the series has its own, separate press. It asks first the way every other
