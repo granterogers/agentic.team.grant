@@ -81,6 +81,26 @@ const wording = (result) => {
  * common case — most writes are not reversible and the honest answer is
  * silence, not a disabled button.
  */
+/*
+  A change made on this page, not by the office (stress test LAY-02): a module moved or resized. The same strip, and the
+  same eleven seconds, but the undo is the page's own, so it does not go to the office.
+*/
+export function offerLocal(text, onUndo) {
+  const bar = el()
+  if (bar === null) return
+  hide()
+  bar.hidden = false
+  bar.innerHTML = `<span class="undoword">${text}</span>
+    <button class="undogo" data-undo-local type="button">Undo</button>
+    <button class="undoshut" data-undo-dismiss type="button" aria-label="Dismiss">&times;</button>`
+  timer = setTimeout(hide, SHOWN)
+  bar.querySelector('[data-undo-dismiss]')?.addEventListener('click', hide)
+  bar.querySelector('[data-undo-local]')?.addEventListener('click', () => {
+    hide()
+    onUndo()
+  })
+}
+
 export function offer(result, refresh) {
   const id = result?.undo
   if (typeof id !== 'string' || id === '') return

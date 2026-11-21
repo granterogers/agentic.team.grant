@@ -177,7 +177,7 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
       is a real button on the title; its keys bubble to the header's own
       handler, so Enter opens and Alt with the arrows still moves and resizes.
     -->
-    <header class="bcmodhead" data-bc-expand="${esc(id)}">
+    <header class="bcmodhead" data-bc-expand="${esc(id)}" tabindex="0" aria-label="${esc(`${name}. Alt and the arrow keys move it, Alt Shift and the arrow keys resize it`)}">
       <h2 class="bcmodtitle">${modIcon(id)}<button type="button" class="bcmodopen"
         aria-label="${esc(`Open ${name}`)}"
         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown">${esc(name)}</button></h2>

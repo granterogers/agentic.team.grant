@@ -500,6 +500,30 @@ export const tidy = (mods, st) => {
 const KEY = (slug) => `bc.stage.${slug}`
 const slugOf = (s) => (typeof s === 'string' ? s : (s?.slug ?? ''))
 
+/*
+  WHAT CAN BE TAKEN BACK (stress test LAY-02). Before a person's own change to a canvas (a move, a resize, a preset, Tidy,
+  Arrange, Reset view), the canvas as it was is kept here, a few steps deep, per project, for this page visit. Undo puts the
+  last one back through the same save as any other change, so it is not a second, separate notion of the layout.
+*/
+const layoutHistory = new Map()
+const rememberLayout = (slug) => {
+  const s = slugOf(slug)
+  if (s === '') return
+  const list = layoutHistory.get(s) ?? []
+  list.push(JSON.parse(JSON.stringify(doc(s))))
+  if (list.length > 20) list.shift()
+  layoutHistory.set(s, list)
+}
+export const canUndoLayout = (slug) => (layoutHistory.get(slugOf(slug))?.length ?? 0) > 0
+export const undoLayout = (slug) => {
+  const s = slugOf(slug)
+  const list = layoutHistory.get(s) ?? []
+  const before = list.pop()
+  if (before === undefined) return false
+  commit(s, before)
+  return true
+}
+
 const emptyDoc = () => ({
   mods: null,
   zoom: 1,
@@ -1364,6 +1388,7 @@ export const contentBottom = (slug) => Math.max(0, ...layout(slug).map((m) => m.
  */
 export const arrangeAutomatically = (slug) => {
   const d = doc(slug)
+  rememberLayout(slug)
   if (isAutomatic(slug)) return false
   const layouts = { ...d.layouts, 'Before automatic arrangement': { mods: d.mods, zoom: d.zoom } }
   commit(slug, { ...d, mods: null, layouts })
@@ -1437,6 +1462,7 @@ export const makeRoom = (mods, id) => {
 
 /** Move or resize one module. Any module it lands on is pushed down to make room (makeRoom). */
 export const place = (slug, id, rect) => {
+  rememberLayout(slug)
   /* A move or a resize pins THAT module. The others stay automatic and are laid out around it. */
   const d = materialised(slug)
   const z = topZ(d) + 1
@@ -1500,6 +1526,7 @@ export const off = (slug) => {
 
 /** Lightly tidy this page. */
 export const autoArrange = (slug) => {
+  rememberLayout(slug)
   /* Tidy is a person's own choice to lay everything out, so every module is pinned to the tidy layout. */
   const d = materialised(slug)
   d.mods = tidy(d.mods, stage).map((m) => ({ ...m, placed: true }))
@@ -1516,6 +1543,7 @@ export const autoArrange = (slug) => {
  * arrangement.
  */
 export const reset = (slug) => {
+  rememberLayout(slug)
   commit(slug, { ...doc(slug), mods: null, zoom: 1, pan: { x: 0, y: 0 } })
 }
 
@@ -1712,6 +1740,7 @@ export const fitToWindow = (slug) => {
 export const applyPreset = (slug, key) => {
   const p = PRESETS[key]
   if (p === undefined) return false
+  rememberLayout(slug)
   commit(slug, { ...doc(slug), mods: fromFractions(p.frac, stage).map((m) => ({ ...m, placed: true })) })
   return true
 }

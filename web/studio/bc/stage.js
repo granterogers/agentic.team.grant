@@ -41,6 +41,7 @@ import * as cal from './calendar.js'
 import * as grid from './layout.js'
 import { NAMES, note } from './compose.js'
 import { esc } from './parts.js'
+import * as undo from '../undo.js'
 
 const PHONE = '(max-width: 860px)'
 /** Pixels kept under the stage for the tray and the page's own bottom margin. */
@@ -384,6 +385,11 @@ export const wireStage = (root, ctx) => {
       if (id !== was.id) was.el.dataset.bcNoteId = id
     } else {
       grid.place(slug, was.id, was.next)
+      // The way back, for this change (stress test LAY-02). Ctrl+Z does the same while the canvas has focus.
+      undo.offerLocal('Moved.', () => {
+        grid.undoLayout(slug)
+        paintAll()
+      })
     }
     paintAll()
     cal.recheck()
@@ -488,6 +494,10 @@ export const wireStage = (root, ctx) => {
         ? { w: now.w + step[0], h: now.h + step[1] }
         : { x: now.x + step[0], y: now.y + step[1] }
       grid.place(slug, id, want)
+      undo.offerLocal('Moved.', () => {
+        grid.undoLayout(slug)
+        paintAll()
+      })
       paintAll()
       const rz = stageEl.querySelector(`[data-mod="${id}"] [data-bc-resize]`)
       rz?.setAttribute('aria-valuenow', String(grid.layout(slug).find((m) => m.id === id)?.w ?? 0))
@@ -728,6 +738,13 @@ export const wireStage = (root, ctx) => {
   const onKey = (e) => {
     if (e.key === 'Escape' && pop !== null) {
       shut()
+    }
+    // Ctrl+Z (Cmd+Z on a Mac) takes back the last change to this canvas, unless a person is typing somewhere (LAY-02).
+    const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable="true"]') !== null
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z') && !typing && grid.canUndoLayout(slug)) {
+      e.preventDefault()
+      grid.undoLayout(slug)
+      paintAll()
     }
   }
   document.addEventListener('keydown', onKey)
