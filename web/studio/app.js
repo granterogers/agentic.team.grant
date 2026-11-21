@@ -6347,17 +6347,27 @@ function healthTab() {
   const waiting = openRequestCount()
   const open = (label, tab) => ui.button({ label, tone: 'quiet', a: { 'data-goto-setting': tab } })
 
+  /*
+    A19a. "Nothing is connected" is a claim about the office, so it is made only when the list has actually been read. While
+    the list is on its way, or when it could not be read, Health says that instead of reading the placeholder list as the truth.
+  */
+  const listRead = config.CONNECTIONS_SOURCE.state === 'ready'
   const summary = ui.card([
     ui.row({
       name: 'Services',
-      desc:
-        wrong.length === 0
+      desc: !listRead
+        ? config.CONNECTIONS_SOURCE.state === 'failed'
+          ? 'Could not read which connections are working. Close Settings and open it again.'
+          : 'Checking which connections are working…'
+        : wrong.length === 0
           ? anyConnected
             ? 'Everything that is connected is working.'
             : 'Nothing is connected yet. Connect Google, Slack or Telegram when you want the team to use them.'
           : `${wrong.map((c) => c.name).join(', ')} ${wrong.length === 1 ? 'needs' : 'need'} attention.`,
       control:
-        ui.chip(wrong.length === 0 ? (anyConnected ? 'ok' : 'off') : 'warn', wrong.length === 0 ? (anyConnected ? 'Working' : 'Nothing connected') : `${wrong.length} to look at`) +
+        (listRead
+          ? ui.chip(wrong.length === 0 ? (anyConnected ? 'ok' : 'off') : 'warn', wrong.length === 0 ? (anyConnected ? 'Working' : 'Nothing connected') : `${wrong.length} to look at`)
+          : ui.chip('off', config.CONNECTIONS_SOURCE.state === 'failed' ? 'Not read' : 'Checking')) +
         (wrong.length === 0 ? '' : open('Review', 'connections')),
     }),
     ui.row({

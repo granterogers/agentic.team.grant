@@ -291,6 +291,15 @@
 [data-experience='basecamp'] .bcvia { font-size: 12px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bceventwhat { font-size: 13px; color: var(--bc-text); }
 
+/* A15b. The grip bar is a fixed strip, so the "Note" label sits inside it and does not run into the text beneath. */
+[data-experience='basecamp'] .bcpostit .bcpostitbar {
+  flex: 0 0 28px;
+  min-height: 28px;
+  height: 28px;
+  align-items: center;
+  overflow: hidden;
+}
+
 /* 99. A sticky note's grip bar says what it is. */
 [data-experience='basecamp'] .bcpostitbar::before {
   content: 'Note';
@@ -451,6 +460,11 @@ body.dock-yields #dock { display: none !important; }
   :root[data-experience='basecamp'] .bcbtn.bcmic,
   :root[data-experience='basecamp'] .bcbtn.bcpagemenu {
     width: 44px;
+    min-width: 44px;
+  }
+  /* A14 (21 Nov 2026): the calendar's previous and next, the New button and the Day, Week and Month switch were 26 to 30 px. */
+  :root[data-experience='basecamp'] .bccal2btn {
+    min-height: 44px;
     min-width: 44px;
   }
   /* A14: the empty-state action, the "View all" link and the sort control were 21 to 42 px tall on a phone. */
