@@ -33,5 +33,3 @@ const v = await fetch(`${url}/auth/v1/verify`, {
 if (!v.ok) throw new Error(`verify ${String(v.status)}`)
 const { access_token } = (await v.json()) as { access_token?: string }
 process.stdout.write(access_token ?? '')
-
-export {}

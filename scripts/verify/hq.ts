@@ -847,8 +847,8 @@ record(
     'and every action it can perform names the arguments it requires',
     missingA.length === 0
       ? `${mustDo.length}/${mustDo.length}, e.g. document_upload needs ${JSON.stringify(
-          ((parsed['x-actions'] as Record<string, { required?: string[] }>).document_upload ?? {})
-            .required ?? [],
+          (parsed['x-actions'] as Record<string, { required?: string[] }>).document_upload
+            ?.required ?? [],
         )}`
       : `missing: ${missingA.join(', ')}`,
     missingA.length === 0,

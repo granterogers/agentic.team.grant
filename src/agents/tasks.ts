@@ -557,7 +557,7 @@ export const titleReply = (
     sentence and a wrong mutation costs Grant's trust in every confirmation
     after it.
   */
-  const pending = previousAnswer !== null && previousAnswer.includes(TITLE_ASKED)
+  const pending = previousAnswer?.includes(TITLE_ASKED)
   const read = readFollowUp(instruction, pending, resolvesAnotherAction)
   if (read.kind !== 'answered' || read.value === null) return null
   return NOT_A_TITLE.test(read.value) ? null : read.value

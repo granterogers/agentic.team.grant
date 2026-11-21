@@ -30,11 +30,6 @@
  */
 import '../../src/safety/require-production-checks.ts'
 
-// This file has no imports — it talks to providers over fetch and reads
-// process.env — so it needs an explicit marker to be treated as a module,
-// without which top-level await is a syntax error.
-export {}
-
 /**
  * `NO_QUOTA` is the fourth instance of this file's own thesis, found on
  * 2026-09-03 by Grant trying Gate 1.

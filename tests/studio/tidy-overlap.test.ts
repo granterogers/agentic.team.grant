@@ -11,7 +11,8 @@ import * as L from '../../web/studio/bc/layout.js'
 
 type R = { id: string; x: number; y: number; w: number; h: number }
 
-const crosses = (a: R, b: R) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+const crosses = (a: R, b: R) =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 const pairs = (list: R[]) => {
   let n = 0
   for (let i = 0; i < list.length; i += 1)

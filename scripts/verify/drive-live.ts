@@ -139,7 +139,7 @@ check(
   language is a string. A search that breaks on one would be a search nobody
   could trust with real names.
 */
-const awkward = await browse('&q=' + encodeURIComponent("it's"))
+const awkward = await browse(`&q=${encodeURIComponent("it's")}`)
 check(
   'and a search containing an apostrophe does not break the query',
   awkward.status === 200,

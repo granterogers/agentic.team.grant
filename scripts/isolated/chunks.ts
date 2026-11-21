@@ -95,7 +95,7 @@ for (const [label, query, fact] of [
   const h = hits.find((x) => x.documentId === longId)
   check(
     `a fact at the ${label} of a long document is found and SHOWN`,
-    h !== undefined && h.excerpt.includes(fact),
+    h?.excerpt.includes(fact),
     h === undefined
       ? 'document not returned'
       : `parts ${(h.passage?.seqs ?? []).join(',')} of ${String(h.passage?.of)}`,
@@ -306,7 +306,7 @@ const quartzForeign = await doc(
   const h = named.find((x) => x.documentId === quartz)
   check(
     'a NAMED secondary project is read, and its END of document is shown',
-    h !== undefined && h.excerpt.includes('Ingrid Valdemar'),
+    h?.excerpt.includes('Ingrid Valdemar'),
     h?.excerpt.slice(0, 60) ?? 'no hit',
   )
   check(

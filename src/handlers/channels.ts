@@ -167,7 +167,12 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
           a yes to a Slack channel, so the shortcut is off and every channel is offered as a question. The authority rows
           are kept, so turning this back on is one line.
         */
-        if (PERSON_CREATION_IS_CONSENT && a !== null && a !== undefined && typeof a.authorized_by === 'string') {
+        if (
+          PERSON_CREATION_IS_CONSENT &&
+          a !== null &&
+          a !== undefined &&
+          typeof a.authorized_by === 'string'
+        ) {
           because = `because ${a.authorized_by} created the project`
           spend = true
         } else {

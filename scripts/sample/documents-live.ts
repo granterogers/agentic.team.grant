@@ -165,7 +165,7 @@ for (const [name, query, fact] of [
   const h = hits.find((x) => x.documentId === ids.get(name))
   check(
     `the fact in ${name} is found and shown`,
-    h !== undefined && h.excerpt.includes(fact),
+    h?.excerpt.includes(fact),
     h === undefined
       ? 'document not returned'
       : `parts ${(h.passage?.seqs ?? []).join(',')} of ${String(h.passage?.of)}`,

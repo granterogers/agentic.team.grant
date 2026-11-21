@@ -125,7 +125,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     },
     body: JSON.stringify({ p_bot_id: claimed }),
   }).catch(() => null)
-  const answered = asked !== null && asked.ok ? await asked.json().catch(() => null) : null
+  const answered = asked?.ok ? await asked.json().catch(() => null) : null
   if (!Array.isArray(answered)) {
     return new Response('could not resolve the bot', { status: 503 })
   }
@@ -460,13 +460,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
         `${DB_URL}/rest/v1/inbound_commands?dedupe_key=eq.${encodeURIComponent(command.dedupe_key)}&select=command_id,job_id&limit=1`,
         { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
       ).catch(() => null)
-      const rows =
-        existing !== null && existing.ok
-          ? ((await existing.json().catch(() => [])) as {
-              command_id?: string
-              job_id?: string | null
-            }[])
-          : []
+      const rows = existing?.ok
+        ? ((await existing.json().catch(() => [])) as {
+            command_id?: string
+            job_id?: string | null
+          }[])
+        : []
       if (rows[0]?.command_id !== undefined && (rows[0].job_id ?? null) === null) {
         commandId = rows[0].command_id
       }

@@ -288,7 +288,9 @@ try {
        end $$`,
     )
   } catch (e) {
-    console.log(`      teardown of this run's projects was refused: ${String((e as Error).message).slice(0, 140)}`)
+    console.log(
+      `      teardown of this run's projects was refused: ${String((e as Error).message).slice(0, 140)}`,
+    )
   }
   const left = Number(
     (

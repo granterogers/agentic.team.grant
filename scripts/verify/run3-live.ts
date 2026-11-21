@@ -190,7 +190,7 @@ try {
     )
     const noKey = await gateway(null, 'answer_blocker', { p_blocker_id: ZERO, p_answer: 'x' })
     check('no credential at all is 401', noKey.status === 401, `http ${String(noKey.status)}`)
-    const junk = await gateway('aaa.bbb.' + 'x'.repeat(70), 'answer_blocker', {
+    const junk = await gateway(`aaa.bbb.${'x'.repeat(70)}`, 'answer_blocker', {
       p_blocker_id: ZERO,
       p_answer: 'x',
     })

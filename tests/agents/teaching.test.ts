@@ -126,7 +126,9 @@ describe('readTeaching — a procedure is a skill', () => {
   it('does not promote a short conditional into a procedure', () => {
     // "When you finish, tell me" is a preference, not a method, and filing it
     // as a skill buries one sentence in a library.
-    const t = readTeaching('From now on, whenever you finish something, always tell me straight away.')
+    const t = readTeaching(
+      'From now on, whenever you finish something, always tell me straight away.',
+    )
     expect(t?.kind).toBe('lesson')
   })
 })
@@ -232,9 +234,15 @@ describe('the rule is the sentence that carries the marker (final audit, invaria
   })
 
   it.each([
-    ['From now on, do not use bullet points. I never read them.', 'From now on, do not use bullet points.'],
+    [
+      'From now on, do not use bullet points. I never read them.',
+      'From now on, do not use bullet points.',
+    ],
     ['From now on, keep it short. I always read on my phone.', 'From now on, keep it short.'],
-    ['From now on, please use British spelling. I always forget to say.', 'From now on, please use British spelling.'],
+    [
+      'From now on, please use British spelling. I always forget to say.',
+      'From now on, please use British spelling.',
+    ],
     ['Keep replies short. From now on use bullet points.', 'Keep replies short.'],
   ])(
     'an incidental "never"/"always" later does not displace the rule before it (review R2-2): %s',

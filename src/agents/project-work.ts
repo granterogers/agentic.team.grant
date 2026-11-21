@@ -84,7 +84,8 @@ const documentsLine = (b: WorkBrief): string => {
   const d = b.context?.documents
   if (d === undefined) return ''
   if (d.total === 0) return `The project "${b.name}" holds no documents.`
-  const titles = d.titles.length === 0 ? '' : ` Most recent: ${d.titles.map((t) => `"${t}"`).join('; ')}.`
+  const titles =
+    d.titles.length === 0 ? '' : ` Most recent: ${d.titles.map((t) => `"${t}"`).join('; ')}.`
   return `The project "${b.name}" holds ${String(d.total)} document${d.total === 1 ? '' : 's'}.${titles}`
 }
 
@@ -109,7 +110,9 @@ export function projectWorkSpine(briefs: readonly WorkBrief[]): string {
               ? ` The ${String(b.shown)} most pressing are listed; the other ${String(c.total - b.shown)} are not shown here.`
               : ' All of them are listed.')
       const tasks = c.total === 0 ? head : `${head}\n${b.tasks.map(sentence).join('\n')}`
-      return b.context === undefined ? tasks : `${tasks}\n${documentsLine(b)}${b.here === true ? `\n${teamLine(b.context)}` : ''}`
+      return b.context === undefined
+        ? tasks
+        : `${tasks}\n${documentsLine(b)}${b.here === true ? `\n${teamLine(b.context)}` : ''}`
     })
     .join('\n\n')
 }
@@ -165,7 +168,8 @@ export async function readProjectWork(
           `select app.project_context_brief(${office}, ${lit(id)}::uuid) as c`,
         )
         const cr = (c.rows[0] as { c?: unknown } | undefined)?.c
-        if (cr !== null && cr !== undefined) context = (typeof cr === 'string' ? JSON.parse(cr) : cr) as ProjectContext
+        if (cr !== null && cr !== undefined)
+          context = (typeof cr === 'string' ? JSON.parse(cr) : cr) as ProjectContext
       } catch {
         context = undefined
       }

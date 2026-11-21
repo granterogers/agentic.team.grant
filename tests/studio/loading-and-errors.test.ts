@@ -117,7 +117,11 @@ describe('hydrate tells the page when it is asking (item 25)', () => {
       asked.push(String(url))
       return Promise.resolve(new Response('{}', { status: 500 }))
     }) as typeof fetch
-    const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+    const ok = (body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
     ;(globalThis as { hqEarly?: unknown }).hqEarly = {
       token: 'early-token',
       studio: Promise.resolve(ok({ data: { projects: [] } })),
@@ -158,10 +162,16 @@ describe('hydrate tells the page when it is asking (item 25)', () => {
     const realFetch = globalThis.fetch
     let calls = 0
     globalThis.fetch = ((url: string) => {
-      if (!String(url).includes('section=studio')) return Promise.resolve(new Response('{}', { status: 500 }))
+      if (!String(url).includes('section=studio'))
+        return Promise.resolve(new Response('{}', { status: 500 }))
       calls += 1
       if (calls === 1) return Promise.resolve(new Response('bad gateway', { status: 502 }))
-      return Promise.resolve(new Response(JSON.stringify({ data: { projects: [] } }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      return Promise.resolve(
+        new Response(JSON.stringify({ data: { projects: [] } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
     }) as typeof fetch
     try {
       const loaded = await data.hydrate('https://example.invalid/api', 'token')
@@ -180,14 +190,26 @@ describe('hydrate tells the page when it is asking (item 25)', () => {
     })
     globalThis.fetch = ((url: string) => {
       if (String(url).includes('section=projects')) {
-        const body = { section: 'projects', data: [{ name: 'Alpha', slug: 'alpha' }, { name: 'Unnamed', slug: 'unnamed' }] }
-        return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }))
+        const body = {
+          section: 'projects',
+          data: [
+            { name: 'Alpha', slug: 'alpha' },
+            { name: 'Unnamed', slug: 'unnamed' },
+          ],
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
       }
       return studioPending.then(() => new Response('{}', { status: 500 }))
     }) as typeof fetch
     try {
       const asking = data.hydrate('https://example.invalid/api', 'token')
-      for (let i = 0; i < 50 && data.PROJECTS.length === 0; i++) await new Promise((r) => setTimeout(r, 10))
+      for (let i = 0; i < 50 && data.PROJECTS.length === 0; i++)
+        await new Promise((r) => setTimeout(r, 10))
       expect(data.PROJECTS.map((p: { slug: string }) => p.slug)).toEqual(['alpha', 'unnamed'])
       expect(data.PROJECTS[1].name).toBe('Conversations')
       releaseStudio()

@@ -44,7 +44,9 @@ describe('the project brief says what documents and people it holds (A20)', () =
   })
 
   it('says a project holds no documents when the count is zero, which is a fact the read gave', () => {
-    const s = projectWorkSpine([base({ context: { documents: { total: 0, titles: [] }, team: [] } })])
+    const s = projectWorkSpine([
+      base({ context: { documents: { total: 0, titles: [] }, team: [] } }),
+    ])
     expect(s).toContain('holds no documents')
   })
 
@@ -63,7 +65,8 @@ describe('the project brief says what documents and people it holds (A20)', () =
     }
     const db = {
       execute: async (sql: string) => {
-        for (const [needle, rows] of Object.entries(answers)) if (sql.includes(needle)) return { rows }
+        for (const [needle, rows] of Object.entries(answers))
+          if (sql.includes(needle)) return { rows }
         return { rows: [] }
       },
     } as unknown as SqlExecutor
@@ -75,7 +78,8 @@ describe('the project brief says what documents and people it holds (A20)', () =
     const failing = {
       execute: async (sql: string) => {
         if (sql.includes('app.project_context_brief')) throw new Error('boom')
-        for (const [needle, rows] of Object.entries(answers)) if (sql.includes(needle)) return { rows }
+        for (const [needle, rows] of Object.entries(answers))
+          if (sql.includes(needle)) return { rows }
         return { rows: [] }
       },
     } as unknown as SqlExecutor

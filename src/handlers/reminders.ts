@@ -64,9 +64,7 @@ export function remindersBody(due: readonly Due[]): string {
     const only = due[0] as Due
     return `Reminder: ${line(only)}.`
   }
-  return (
-    `${count(due.length, 'reminder', 'reminders')}:\n\n` + due.map((d) => `- ${line(d)}`).join('\n')
-  )
+  return `${count(due.length, 'reminder', 'reminders')}:\n\n${due.map((d) => `- ${line(d)}`).join('\n')}`
 }
 
 export function remindersHandler(db: SqlExecutor): Handler {

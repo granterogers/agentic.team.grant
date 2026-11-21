@@ -18,7 +18,7 @@ for (const dpr of [1, 2]) for (const id of ids) {
   await page.goto('http://127.0.0.1:4720/basecamp'); await page.waitForTimeout(500)
   const slug = (await page.evaluate(`document.querySelector('[data-bc-go^="/p/"]').dataset.bcGo`)) as string
   await page.evaluate(`localStorage.setItem('bc.stage.${slug.split('/').pop()}', JSON.stringify({ mods: null, zoom: 1, pan: { x: 0, y: 0 }, layouts: {}, postits: [], gone: {}, seeded: true, bg: { id: '${id}', mode: 'tile', scale: 1, intensity: 1, tint: 0, at: 1 } }))`)
-  await page.goto('http://127.0.0.1:4720' + slug); await page.waitForSelector('[data-bc-board]'); await page.waitForTimeout(900)
+  await page.goto(`http://127.0.0.1:4720${slug}`); await page.waitForSelector('[data-bc-board]'); await page.waitForTimeout(900)
   await page.screenshot({ path: `${OUT}/${id}-${dpr}x-rest.png`, clip: { x: 0, y: 0, width: 760, height: 330 } })
   await page.mouse.move(1200, 700); await page.mouse.down(); await page.mouse.move(1130, 660, { steps: 5 }); await page.mouse.up()
   await page.mouse.wheel(0, 300); await page.waitForTimeout(400)

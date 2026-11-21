@@ -152,7 +152,7 @@ export function evaluate(env: Env, deny: Denylist, opts: { denylistFileFound: bo
     add(
       'database.host',
       h !== null && ref !== '' && h.includes(ref) && denied(db, deny) === null,
-      h !== null && h.includes(ref)
+      h?.includes(ref)
         ? 'the database host names the staging project'
         : 'SUPABASE_DB_URL does not name the staging project',
     )

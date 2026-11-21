@@ -130,7 +130,7 @@ const sheet = (await page.evaluate(
   words: string
 } | null
 
-check('pressing it opens the picker', sheet !== null && sheet.shown, JSON.stringify(sheet))
+check('pressing it opens the picker', sheet?.shown, JSON.stringify(sheet))
 if (sheet !== null) {
   const name = (await page.evaluate(
     inPage(

@@ -331,7 +331,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
     run: async ({ step, from, request, router }): Promise<Observation | Later> => {
       const upstream = step.needs
         .map((id) => from[id] as Observation | undefined)
-        .filter((o): o is Observation => o !== undefined && o.found)
+        .filter((o): o is Observation => o?.found)
       if (upstream.length === 0) {
         return nothing(
           'draft.create',
@@ -461,7 +461,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
       */
       const upstream = step.needs
         .map((id) => from[id] as Observation | undefined)
-        .filter((o): o is Observation => o !== undefined && o.found)
+        .filter((o): o is Observation => o?.found)
       if (step.needs.length > 0 && upstream.length === 0) {
         return nothing(
           'task.create',
@@ -574,7 +574,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
       */
       const upstream = step.needs
         .map((id) => from[id] as Observation | undefined)
-        .filter((o): o is Observation => o !== undefined && o.found)
+        .filter((o): o is Observation => o?.found)
       if (step.needs.length > 0 && upstream.length === 0) {
         return nothing(
           'task.extract',
