@@ -13,8 +13,9 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 858,
-    "highestAppliedAtRecord": "1110",
+    "appliedAtRecord": 860,
+    "highestAppliedAtRecord": "1112",
+    "note1112": "On 21 November 2026 migrations 1111 and 1112 were applied with npm run migrate:one and the production write flag, under Grant's instruction to add a way to delete a project for good (ADR-0077). 1111 adds app.hq_project_purge_plan (counts, changes nothing) and app.hq_project_purge (removes a named project and what is stored here for it, in one transaction, with the ledger's append-only triggers switched off for that transaction only and back on before commit; writes one project.purged record with no project link). Both are callable by the service role only. 1112 makes app.references_in refuse a null or unknown office with no_office, as the other office functions do; its query is unchanged. Gate: 73 of 73 critical proofs green on the replica before this was applied.",
     "note1110": "On 21 November 2026 migration 1110 added a Google entry to the Services list (app.hq_studio_connections), read from the Google sign-in's health row by app.hq_google_connection. Before it the list had no Google entry, so a dead sign-in never reached Health. The seven existing entries were compared before and after and are unchanged.",
     "note1109": "On 21 November 2026 migration 1109 changed app.hq_studio_lately to work out each row's door (Team HQ, Slack, Voice and so on) with joins instead of one function call per row. The labels were compared for all 24,821 office events before it was applied, and the feed's output was compared before and after (same 11 rows, same order). One timed run went from about 3.4 s to about 1.3 s; a single run, so an estimate.",
     "note1108": "On 21 November 2026 migration 1108 changed app.hq_studio_lately to work out the office's own name once rather than per row. The feed's output was compared with a saved copy before and after and is identical. It did not measurably change the feed's time.",
