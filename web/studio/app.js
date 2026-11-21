@@ -5897,9 +5897,12 @@ function directLinks() {
     ['Activity', '/activity'],
     ['Search', '/search'],
   ]
-  const settings = config.TABS.map((t) => [`Settings: ${t.name}`, `/settings/${t.id}`])
+  /*
+    Settings is not listed here (stress test FUN-01): a Settings address typed into the bar redirects to the home page, so a
+    link to it was a lie. Settings is reached from Open the project menu, then Global Settings.
+  */
   const projects = PROJECTS.filter((x) => x.slug !== 'unnamed').map((x) => [`Project: ${x.name}`, `/p/${x.slug}`])
-  const rows = [...views, ...settings, ...projects]
+  const rows = [...views, ...projects]
   return `<section class="st-sec">
       <h3 class="st-sectitle">Direct links</h3>
       <div class="st-card"><ul class="st-links">${rows
