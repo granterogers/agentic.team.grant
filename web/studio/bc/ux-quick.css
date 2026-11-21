@@ -351,8 +351,7 @@
 @media (min-width: 761px) and (max-width: 1100px) {
   [data-experience='basecamp'] .bcplus {
     position: fixed;
-    top: auto;
-    bottom: 12px;
+    top: 10px;
     right: 8px;
   }
 }
