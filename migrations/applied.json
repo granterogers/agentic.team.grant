@@ -858,5 +858,6 @@
   "1109_the_activity_feed_reads_each_job_once.sql": "c62aac658018317302e5c90c465d2a4fc53b718b44814829aa1d18cfaf5b6ae5",
   "1110_the_services_list_carries_the_google_sign_in.sql": "d1381bcf1dc7f6d8acd0da0b18fe5a3c0be6ad01057032a697a32861d8379eb0",
   "1111_a_project_can_be_purged_for_good_by_name.sql": "fcb67a6aa03233b1f08d3a63192dfbaa483bacb4261006dc749c9f0f1a3e9150",
-  "1112_references_in_refuses_an_office_it_cannot_find.sql": "b94333a83cbcc05fb0f1b10a8eaeb737ad2341e5870a4d91b6d390690cb01456"
+  "1112_references_in_refuses_an_office_it_cannot_find.sql": "b94333a83cbcc05fb0f1b10a8eaeb737ad2341e5870a4d91b6d390690cb01456",
+  "1113_a_project_with_only_its_creation_record_can_be_deleted_without_its_name.sql": "3bacf7bfe3b7a5399ea96ebbf0974a274827b1903cf53c5816b5fbff0176f5ac"
 }
