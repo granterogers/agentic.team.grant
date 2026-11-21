@@ -562,7 +562,12 @@ export async function hydrateSettings(read) {
         if (Array.isArray(rows)) replace(DECISIONS, rows)
       })
       .catch(() => undefined)
-    replace(CONNECTIONS, d.connections ?? [])
+    /*
+      The Services list has its own read (hydrateConnections), which carries the Google sign-in. This payload's copy does not,
+      and it arrives in either order, so it may only fill the list while that read has not landed (21 November 2026: the
+      payload's seven rows overwrote the eight, and Health said nothing was connected while Google was dead).
+    */
+    if (CONNECTIONS_SOURCE.state !== 'ready') replace(CONNECTIONS, d.connections ?? [])
     /*
       Three places have to learn a new key and two of them fail SILENTLY.
       CLAUDE.md records 0420: the Governance page rendered "0 open" over
