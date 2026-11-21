@@ -6343,6 +6343,8 @@ function healthTab() {
   const list = config.services()
   const wrong = list.filter((c) => ['degraded', 'dead'].includes(String(c.state)))
   const anyConnected = list.some((c) => config.isConnected(c.state))
+  // A reading older than a day is "unchecked" (migration 1086): that means NOT CONFIRMED, not "not connected".
+  const unchecked = list.some((c) => String(c.state) === 'unchecked')
   const stuck = Number((g.stranded ?? {}).total ?? 0)
   const waiting = openRequestCount()
   const open = (label, tab) => ui.button({ label, tone: 'quiet', a: { 'data-goto-setting': tab } })
@@ -6362,11 +6364,13 @@ function healthTab() {
         : wrong.length === 0
           ? anyConnected
             ? 'Everything that is connected is working.'
-            : 'Nothing is connected yet. Connect Google, Slack or Telegram when you want the team to use them.'
+            : unchecked
+              ? 'Nothing has been checked recently, so none of it is confirmed. Open Connections to check it again.'
+              : 'Nothing is connected yet. Connect Google, Slack or Telegram when you want the team to use them.'
           : `${wrong.map((c) => c.name).join(', ')} ${wrong.length === 1 ? 'needs' : 'need'} attention.`,
       control:
         (listRead
-          ? ui.chip(wrong.length === 0 ? (anyConnected ? 'ok' : 'off') : 'warn', wrong.length === 0 ? (anyConnected ? 'Working' : 'Nothing connected') : `${wrong.length} to look at`)
+          ? ui.chip(wrong.length === 0 ? (anyConnected ? 'ok' : 'off') : 'warn', wrong.length === 0 ? (anyConnected ? 'Working' : unchecked ? 'Not checked' : 'Nothing connected') : `${wrong.length} to look at`)
           : ui.chip('off', config.CONNECTIONS_SOURCE.state === 'failed' ? 'Not read' : 'Checking')) +
         (wrong.length === 0 ? '' : open('Review', 'connections')),
     }),
