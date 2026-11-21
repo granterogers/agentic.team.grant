@@ -31,7 +31,9 @@ import { straighten } from './quality.ts'
   unknown escape and collapses to a literal `s+` — `calloff.ts` records
   twelve of thirteen probe sentences missing exactly that way.
 */
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const SUBJECT = String.raw`(?:people|persons?|staff|of (?:you|the team)|anyone|anybody|someone|somebody|agents?|specialists?)`
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const ON_IT = String.raw`(?:on|working on|looking at|dealing with|handling|doing)`
 const IT = String.raw`(?:it|that|this|these|those|the\s+[a-z0-9][a-z0-9'’\- ]{0,40})`
 
@@ -116,11 +118,13 @@ export function asksWhoIsOnIt(text: string): WhoIsOnIt | null {
   the question from the rows, because the rows have it: what each colleague
   came back with, what is still running, and what is waiting on his word.
 */
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const COLLEAGUES = String.raw`(?:they|them|the team|everyone|both(?: of them)?|he|she)`
 
 const CAME_BACK = new RegExp(
   String.raw`^\s*(?:and\s+|so\s+|ok(?:ay)?[,\s]+)*` +
     String.raw`(?:what|anything)\s+(?:did|have|has)\s+${COLLEAGUES}\s+` +
+    // biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
     String.raw`(?:come back with|say|find|report|conclude|think|make of (?:it|that))` +
     String.raw`[^?]{0,40}\??\s*$`,
   'i',
@@ -129,6 +133,7 @@ const CAME_BACK = new RegExp(
 const DID_THEY = new RegExp(
   String.raw`^\s*(?:and\s+|so\s+|ok(?:ay)?[,\s]+)*` +
     String.raw`(?:did|do|have|has)\s+${COLLEAGUES}\s+` +
+    // biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
     String.raw`(?:agree|disagree|get back to (?:you|me)|come back|finish|manage it)` +
     String.raw`[^?]{0,40}\??\s*$`,
   'i',
@@ -137,6 +142,7 @@ const DID_THEY = new RegExp(
 const WHERE_DIFFER = new RegExp(
   String.raw`^\s*(?:and\s+|so\s+|ok(?:ay)?[,\s]+)*` +
     String.raw`(?:where|how|in what way)\s+(?:exactly\s+)?(?:do|did)\s+${COLLEAGUES}\s+` +
+    // biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
     String.raw`(?:differ|disagree|diverge|split)` +
     String.raw`[^?]{0,40}\??\s*$`,
   'i',

@@ -169,6 +169,7 @@ console.log('the Google form, both boxes through one door (0377)')
   check(
     'a Slack token in the secret box is refused, by name of its class',
     r.error ?? '(accepted!)',
+    // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
     r.error !== undefined && r.error.includes('Slack bot token'),
   )
 }
@@ -179,6 +180,7 @@ console.log('the Google form, both boxes through one door (0377)')
   check(
     'a malformed secret is refused and told what the right one starts with',
     r.error ?? '(accepted!)',
+    // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
     r.error !== undefined && r.error.includes('GOCSPX-'),
   )
 }
@@ -221,6 +223,7 @@ console.log('the Google form, both boxes through one door (0377)')
   check(
     'a GitHub token in the plaintext client ID box is refused outright',
     r.error ?? '(accepted!)',
+    // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
     r.error !== undefined && r.error.includes('GitHub personal access token'),
   )
 }
@@ -261,6 +264,7 @@ console.log('\nthe Slack form (0359)')
   check(
     'the opposite Slack token type is refused, by name of its class',
     r.error ?? '(accepted!)',
+    // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
     r.error !== undefined && r.error.includes('app-level token'),
   )
 }
@@ -270,6 +274,7 @@ console.log('\nthe Slack form (0359)')
   check(
     'a malformed signing secret is refused and described',
     r.error ?? '(accepted!)',
+    // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
     r.error !== undefined && r.error.includes('signing secret'),
   )
 }
@@ -286,6 +291,7 @@ for (const [what, value, expect] of [
   check(
     `${what} in a setting is refused`,
     r.error ?? '(accepted!)',
+    // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
     r.error !== undefined && r.error.includes(expect),
   )
 }

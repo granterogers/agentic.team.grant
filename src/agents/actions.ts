@@ -582,6 +582,7 @@ export function researchRequest(text: string): ResearchRequest | null {
     ("Kevin said to search the web"). A missed lookup costs him one sentence; a search nobody asked for sends his words to
     a third party, so the expensive direction is the false positive.
   */
+  // biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
   const verb = String.raw`(?:search|research|look|find|dig|google)`
   if (
     new RegExp(

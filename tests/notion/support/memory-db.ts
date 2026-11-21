@@ -20,6 +20,7 @@ export interface MemDoc {
 }
 
 const unq = (s: string): string => s.replace(/''/g, "'")
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const q = String.raw`'((?:[^']|'')*)'`
 
 export interface MemoryDb {
@@ -44,6 +45,7 @@ export const memoryDb = (opts: MemoryOptions): MemoryDb => {
   const seen: string[] = []
   const failures: { when: RegExp; error: () => Error; left: number }[] = []
   const officeOf = (sql: string): string => {
+    // biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
     const m = new RegExp(String.raw`project_id = ${q}::uuid`).exec(sql)
     const office = m === null ? undefined : opts.offices[unq(m[1] ?? '')]
     if (office === undefined)
@@ -51,7 +53,9 @@ export const memoryDb = (opts: MemoryOptions): MemoryDb => {
     return office
   }
   const keyOf = (sql: string) => {
+    // biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
     const parent = new RegExp(String.raw`external_parent_ref = ${q}`).exec(sql)
+    // biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
     const ref = new RegExp(String.raw`external_ref = ${q}`).exec(sql)
     return { parent: unq(parent?.[1] ?? ''), ref: unq(ref?.[1] ?? '') }
   }
@@ -135,6 +139,7 @@ export const memoryDb = (opts: MemoryOptions): MemoryDb => {
         const { parent, ref } = keyOf(sql)
         const d = docs.find((x) => x.office === office && x.parent === parent && x.ref === ref)
         if (d === undefined) return { rows: [] }
+        // biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
         const title = new RegExp(String.raw`title = ${q},`).exec(sql)
         if (title !== null) d.title = unq(title[1] ?? '')
         const t = /coalesce\((null|'[^']*')::timestamptz, remote_updated_at\)/.exec(sql)

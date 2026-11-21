@@ -165,6 +165,7 @@ for (const [name, query, fact] of [
   const h = hits.find((x) => x.documentId === ids.get(name))
   check(
     `the fact in ${name} is found and shown`,
+    // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
     h !== undefined && h.excerpt.includes(fact),
     h === undefined
       ? 'document not returned'

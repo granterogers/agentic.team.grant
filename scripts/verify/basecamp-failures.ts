@@ -594,6 +594,7 @@ for (const d of drives) {
  * never had, so a signed-in person whose office had gone down would have read
  * invented records as their own.
  */
+// biome-ignore lint/complexity/noUselessLoneBlockStatements: the block scopes this proof's constants from the rest of the file
 {
   for (const [name, withToken, refuse, wantRetry] of [
     ['with no token, the prototype says it is the prototype', false, false, false],

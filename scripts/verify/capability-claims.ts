@@ -95,6 +95,7 @@ const makesDocuments = cap.can.find((a) => a.tool === 'document.create') ?? null
 check(
   'the office knows it can produce a document',
   makesDocuments === null ? 'document.create is not held' : `${makesDocuments.tool}, in a reply`,
+  // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
   makesDocuments !== null && makesDocuments.inReply,
 )
 

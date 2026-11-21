@@ -557,6 +557,7 @@ export const titleReply = (
     sentence and a wrong mutation costs Grant's trust in every confirmation
     after it.
   */
+  // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
   const pending = previousAnswer !== null && previousAnswer.includes(TITLE_ASKED)
   const read = readFollowUp(instruction, pending, resolvesAnotherAction)
   if (read.kind !== 'answered' || read.value === null) return null

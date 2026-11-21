@@ -85,18 +85,23 @@ export const verdict = (src: string): string | null => {
 
 /* The control: the detector must fail on the shapes that escaped. */
 const control = [
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
   'fetch(`${base}/voice/turn`, { body: JSON.stringify({ said, session: `deploy${Date.now()}` }) })',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
   'const session = `scenario-a-${run}`\nfetch(`https://x/functions/v1/voice/turn`)',
 ]
+// biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
 const passes = ["fetch(`${b}/voice/turn`, { body: JSON.stringify({ said, session: 'verify-x' }) })"]
 // the exemption needs BOTH halves: the marker alone, or the assertion alone, is still an escape
 const probe =
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
   '// check:voice-sessions-exempt: office-key refusal probe\nconst r = await fetch(`${b}/voice/turn`, { body: JSON.stringify({ session: `page${run}xyz` }) })\ncheck(r.status === 403)'
 control.push(probe.replace('// check:voice-sessions-exempt: office-key refusal probe\n', ''))
 control.push(probe.replace('check(r.status === 403)', 'check(r.ok)'))
 passes.push(probe)
 // the in-process exemption needs BOTH halves, and neither half alone is enough
 const inProcess =
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
   "const db = await isolated('post')\nconst v = await startEdge({\n  db,\n  edgeFile: 'supabase/functions/voice/index.ts',\n})\nawait v.call(new Request('https://gw.invalid/functions/v1/voice/turn', { body: JSON.stringify({ session: `s${run}` }) }))"
 passes.push(inProcess)
 control.push(inProcess.replace("const db = await isolated('post')\n", 'const db = 1\n'))

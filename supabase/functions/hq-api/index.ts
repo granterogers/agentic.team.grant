@@ -3360,7 +3360,8 @@ const answer = async (request: Request): Promise<Response> => {
         },
         body: JSON.stringify({ p_office: office, p_slug: slug, p_typed: typed }),
       }).catch(() => null)
-      if (r === null) return json({ error: 'the project could not be reached; nothing was removed' }, 503)
+      if (r === null)
+        return json({ error: 'the project could not be reached; nothing was removed' }, 503)
       const out = (await r.json().catch(() => ({}))) as {
         ok?: boolean
         error?: string

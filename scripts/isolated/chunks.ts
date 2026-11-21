@@ -95,6 +95,7 @@ for (const [label, query, fact] of [
   const h = hits.find((x) => x.documentId === longId)
   check(
     `a fact at the ${label} of a long document is found and SHOWN`,
+    // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
     h !== undefined && h.excerpt.includes(fact),
     h === undefined
       ? 'document not returned'
@@ -306,6 +307,7 @@ const quartzForeign = await doc(
   const h = named.find((x) => x.documentId === quartz)
   check(
     'a NAMED secondary project is read, and its END of document is shown',
+    // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
     h !== undefined && h.excerpt.includes('Ingrid Valdemar'),
     h?.excerpt.slice(0, 60) ?? 'no hit',
   )

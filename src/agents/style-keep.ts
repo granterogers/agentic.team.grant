@@ -31,15 +31,19 @@ export interface StyleKeep {
   readonly onlyThat: boolean
 }
 
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const STYLE = String.raw`(?:style|design|look|format|layout|template)`
 const LEAD = String.raw`^(?:(?:ok|okay|right|so|now|and|also|then|please|thanks|thank you|great|lovely|perfect)[, ]+)*(?:(?:(?:can|could|would|will) you|you (?:should|can|could)|i(?:'d| would) like you to|i want you to|let's)\s+(?:please\s+)?|please\s+)?`
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const SAFE_VERB = String.raw`(?:save|keep|adopt|remember|store)`
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const NEEDS_SCOPE_VERB = String.raw`(?:use|make|set)`
 // Where the style comes from: this/that report, or one he names.
 const O1 = String.raw`(?:this|that)(?: (?:report|document|pdf|one))?(?:'s)? ${STYLE}\b`
 const O2 = String.raw`the ${STYLE} (?:of|from|used (?:in|for|on)) (?:this|that|the ([a-z0-9' -]{1,50}?)) ?(?:report|document|pdf)?\b`
 const O3 = String.raw`the ([a-z0-9' -]{1,50}?) (?:report|document|pdf)(?:'s)? ${STYLE}\b`
 const O4 = String.raw`(?:this|that|it)(?: report)? (?:as |the |our |my )(?:the |our |my )?(?:project|default)\b(?: report)?(?: ${STYLE})?`
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const SOURCE = String.raw`(?:${O1}|${O2}|${O3}|${O4})`
 const SCOPE = String.raw`(?:(?:for|in|on|across|to) (?:this|the|our|my) project\b|(?:for|in|on) (?:all |any |every )?(?:future|new|upcoming|later|next|further|my|our)\b[a-z ]{0,12}?\breports?\b|(?:as )?the (?:project|default)(?: report)? ${STYLE}\b|(?:as )?(?:the )?default\b|going forward|from now on)`
 

@@ -488,15 +488,13 @@ export type PreviewPayload =
     }
   | { readonly type: 'held' }
 
-export interface Recorder {
-  /** Persists derived data. Never bytes. */
-  (args: {
-    readonly meta: SourceMeta
-    readonly kind: 'text' | 'pdf' | 'image'
-    readonly text: string | null
-    readonly truncated: boolean
-  }): Promise<boolean>
-}
+/** Persists derived data. Never bytes. */
+export type Recorder = (args: {
+  readonly meta: SourceMeta
+  readonly kind: 'text' | 'pdf' | 'image'
+  readonly text: string | null
+  readonly truncated: boolean
+}) => Promise<boolean>
 
 const ms = (iso: string | null | undefined): number | null => {
   if (iso === null || iso === undefined || iso === '') return null

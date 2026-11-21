@@ -169,11 +169,7 @@ try {
   })
   check(
     '"the latest customer research report" resolves to the newest APPROVED report in this project',
-    latest.status === 'resolved' && latest.status === 'resolved' && latest.document.id === q3
-      ? true
-      : latest.status === 'ambiguous' || latest.status === 'none'
-        ? false
-        : false,
+    latest.status === 'resolved' && latest.status === 'resolved' && latest.document.id === q3,
     JSON.stringify(latest).slice(0, 200),
   )
   const all = JSON.stringify(latest)

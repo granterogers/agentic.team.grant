@@ -73,6 +73,7 @@ export const controls = (classOf: ClassOf): { name: string; ok: boolean; detail:
     [
       'a name built at run time',
       probe(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
         'db.execute(`select decrypted_secret from vault.decrypted_secrets where name = ${lit(n)}`)',
       ),
       true,

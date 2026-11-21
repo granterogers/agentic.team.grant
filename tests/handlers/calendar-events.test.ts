@@ -37,7 +37,10 @@ const recorder = (): { db: SqlExecutor; sql: string[] } => {
     sql,
     db: {
       kind: 'fake',
-      execute: async (q: string) => (sql.push(q), { rows: [] }),
+      execute: async (q: string) => {
+        sql.push(q)
+        return { rows: [] }
+      },
     } as unknown as SqlExecutor,
   }
 }
