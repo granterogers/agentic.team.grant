@@ -147,6 +147,7 @@ export async function load(slug, projectId, token) {
     if (began !== session.epoch()) return null
     if (!Array.isArray(body.data)) return null
     office.set(slug, body.data.map(asBubble))
+    resumeInFlight(slug, body.data, token)
     // What was in flight has landed, so the optimistic copy would now be a
     // duplicate of it. Only what was sent BEFORE this read began: a message typed while the read was on its way is not in the answer,
     // and dropping it made a sent message vanish from the screen until the next read (a person then types it again).
@@ -158,6 +159,23 @@ export async function load(slug, projectId, token) {
   } catch {
     return null
   }
+}
+
+/*
+  A4. An acknowledgement that the team has the request is not stored anywhere, so a reload lost it while the work was still
+  running. The thread already says which messages started a job, so a recent one whose job has not finished is followed
+  again on load, and its waiting line (the acknowledgement) comes back from the office's own status. A job that has
+  finished is remembered and never followed again, so a reload cannot loop.
+*/
+const settledJobs = new Set()
+const resumeInFlight = (slug, rows, token) => {
+  const cutoff = Date.now() - 60 * 60 * 1000
+  const jobs = rows
+    .filter((r) => typeof r.job === 'string' && r.job !== '' && Date.parse(String(r.at ?? '')) >= cutoff)
+    .map((r) => r.job)
+    .filter((j) => !settledJobs.has(j))
+    .slice(-5)
+  for (const j of jobs) void follow(slug, j, token)
 }
 
 const write = (slug, messages) => {
@@ -629,7 +647,8 @@ const statusWords = (st) => {
   const who = names.length === 0 ? '' : names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
   switch (st.state) {
     case 'queued':
-      return 'Waiting its turn. Nobody has picked it up yet.'
+      // The acknowledgement (A4): the same words the office gave when the request was taken.
+      return 'I have put that to the team. Nobody has picked it up yet, and the answer will appear here.'
     case 'working':
       return who === '' ? 'The team is working on it.' : `${who} ${names.length === 1 ? 'is' : 'are'} working on it.`
     case 'waiting':
@@ -667,6 +686,7 @@ export async function follow(slug, job, token, onState) {
       }
       if (st === null || typeof st.state !== 'string') continue
       if (st.state === 'done' || st.state === 'failed') {
+        settledJobs.add(job)
         upsert(null)
         const pid = PROJECTS.find((x) => x.slug === slug)?.id
         const loaded = await load(slug, pid, token)
