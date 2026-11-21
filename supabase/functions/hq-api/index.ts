@@ -1553,6 +1553,12 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   },
   project_background_delete: { fn: 'hq_upload_target', office: true, required: ['p_slug'] },
   /*
+    DELETING A PROJECT FOR GOOD (ADR-0077). The plan is read-only: what would be removed, counted, before the person types
+    the name. The purge itself is handled below, because it also removes the files the database hands back.
+  */
+  project_purge_plan: { fn: 'hq_project_purge_plan', office: true, required: ['p_slug'] },
+  project_purge: { fn: 'hq_project_purge', office: true, required: ['p_slug', 'p_typed'] },
+  /*
     PICKING A FILE OUT OF DRIVE.
 
     A reference, not a copy: the office records which file it is and where it
@@ -3323,6 +3329,76 @@ const answer = async (request: Request): Promise<Response> => {
       return json({
         result: recorded,
         photo: signedURL === undefined ? null : `${DB_URL}/storage/v1${signedURL}`,
+      })
+    }
+
+    /*
+      DELETING A PROJECT FOR GOOD (ADR-0077). Only a person, signed in as themselves, may do it: never a guest, a machine or
+      a test member. The database removes the project's rows in one transaction, or nothing, and returns the files it held.
+      Only then are those files removed from this office's storage, so a refusal never leaves a file gone and a row kept.
+      A file that fails to go is reported by its path, not hidden; the rows are already gone and the path can be removed again.
+    */
+    if (actionName === 'project_purge') {
+      if (!office) return json({ error: 'no_office' }, 403)
+      if (kind !== 'person') {
+        return json(
+          { error: 'Only you can delete a project for good, signed in as yourself.' },
+          403,
+        )
+      }
+      const slug = String(args.p_slug ?? '').trim()
+      if (slug === '' || slug.length > 120) return json({ error: 'which project?' }, 400)
+      const typed = String(args.p_typed ?? '')
+      const r = await fetch(`${DB_URL}/rest/v1/rpc/hq_project_purge`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_office: office, p_slug: slug, p_typed: typed }),
+      }).catch(() => null)
+      if (r === null) return json({ error: 'the project could not be reached; nothing was removed' }, 503)
+      const out = (await r.json().catch(() => ({}))) as {
+        ok?: boolean
+        error?: string
+        message?: string
+        project_id?: string
+        purged?: string
+        records?: number
+        counts?: Record<string, number>
+        stored_files?: string[]
+      }
+      if (!r.ok) {
+        return json(
+          { error: out.message ?? 'the project was not deleted; nothing was removed' },
+          r.status >= 500 ? 502 : 400,
+        )
+      }
+      if (out.error !== undefined) return json({ error: out.error }, 400)
+      const store = originalStore()
+      const filesLeft: string[] = []
+      for (const path of out.stored_files ?? []) {
+        const gone = await store.remove(path).catch(() => false)
+        if (!gone) filesLeft.push(path)
+      }
+      let picturesLeft = false
+      if (typeof out.project_id === 'string') {
+        const listed = await bgList(office)
+        const mine = (listed ?? [])
+          .map((o) => o.name)
+          .filter((name) => projectOfKey(office, name) === out.project_id)
+        if (mine.length > 0) picturesLeft = !(await bgRemove(office, mine))
+      }
+      return json({
+        result: {
+          ok: true,
+          purged: out.purged ?? slug,
+          records: out.records ?? 0,
+          counts: out.counts ?? {},
+          files_left: filesLeft,
+          picture_left: picturesLeft,
+        },
       })
     }
 

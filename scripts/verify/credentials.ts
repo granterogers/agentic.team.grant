@@ -169,7 +169,7 @@ console.log('the Google form, both boxes through one door (0377)')
   check(
     'a Slack token in the secret box is refused, by name of its class',
     r.error ?? '(accepted!)',
-    r.error?.includes('Slack bot token'),
+    r.error !== undefined && r.error.includes('Slack bot token'),
   )
 }
 
@@ -179,7 +179,7 @@ console.log('the Google form, both boxes through one door (0377)')
   check(
     'a malformed secret is refused and told what the right one starts with',
     r.error ?? '(accepted!)',
-    r.error?.includes('GOCSPX-'),
+    r.error !== undefined && r.error.includes('GOCSPX-'),
   )
 }
 
@@ -221,7 +221,7 @@ console.log('the Google form, both boxes through one door (0377)')
   check(
     'a GitHub token in the plaintext client ID box is refused outright',
     r.error ?? '(accepted!)',
-    r.error?.includes('GitHub personal access token'),
+    r.error !== undefined && r.error.includes('GitHub personal access token'),
   )
 }
 
@@ -261,7 +261,7 @@ console.log('\nthe Slack form (0359)')
   check(
     'the opposite Slack token type is refused, by name of its class',
     r.error ?? '(accepted!)',
-    r.error?.includes('app-level token'),
+    r.error !== undefined && r.error.includes('app-level token'),
   )
 }
 
@@ -270,7 +270,7 @@ console.log('\nthe Slack form (0359)')
   check(
     'a malformed signing secret is refused and described',
     r.error ?? '(accepted!)',
-    r.error?.includes('signing secret'),
+    r.error !== undefined && r.error.includes('signing secret'),
   )
 }
 
@@ -283,7 +283,11 @@ for (const [what, value, expect] of [
   ['a GitHub personal access token', GITHUB_PAT, 'GitHub personal access token'],
 ] as const) {
   const r = await call('app.hq_set_setting', [lit('google.client_id'), lit(value)])
-  check(`${what} in a setting is refused`, r.error ?? '(accepted!)', r.error?.includes(expect))
+  check(
+    `${what} in a setting is refused`,
+    r.error ?? '(accepted!)',
+    r.error !== undefined && r.error.includes(expect),
+  )
 }
 
 {

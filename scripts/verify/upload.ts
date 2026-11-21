@@ -302,7 +302,8 @@ for (const [what, bytes] of [
     sent.status === 200 &&
       broken.mime_type === 'application/pdf' &&
       Number(broken.size) === bytes.length &&
-      back?.equals(bytes),
+      back !== null &&
+      back.equals(bytes),
   )
   check(
     `${what} claims no text, so nothing can cite it as prose`,

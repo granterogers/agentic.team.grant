@@ -66,6 +66,11 @@ export const CRITICAL: readonly Proof[] = [
     'a saved arrangement is compare-and-swap: a save from a stale revision stores nothing, twelve simultaneous saves have one winner, an empty reset is also guarded (#442)',
   ),
   p(
+    'project-purge',
+    12,
+    'a project can be deleted for good by typing its name: the plan counts and changes nothing, a wrong or reserved name removes nothing, the exact name removes the project and what is stored for it and hands back its file paths, another project is untouched, one purge record is written, and the ledger triggers come back on (ADR-0077)',
+  ),
+  p(
     'background-storage',
     40,
     "a project's background picture is stored per office through the real gateway: another office reads and writes nothing, hostile image types are refused, the quota holds, and the emulator reached nothing but the replica (#445)",

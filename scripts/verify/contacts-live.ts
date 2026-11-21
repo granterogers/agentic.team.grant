@@ -226,7 +226,7 @@ check(
 const fetched = link.startsWith('http') ? await fetch(link) : null
 check(
   'and that link really fetches the photograph back',
-  fetched?.ok && Number(fetched.headers.get('content-length') ?? '0') > 0,
+  fetched !== null && fetched.ok && Number(fetched.headers.get('content-length') ?? '0') > 0,
   fetched === null ? 'there was no link to follow' : `http ${String(fetched.status)}`,
 )
 

@@ -562,6 +562,26 @@ function projectPane(p) {
         <span class="t-meta" data-said></span>
       </div>
 
+      <!--
+        Deleting for good (ADR-0077). Two steps: the first counts what would go, the second needs the exact name typed. It
+        removes only what is stored here; files in Google, Notion or Slack are not touched.
+
+        No backticks in this comment. Template literal.
+      -->
+      <div class="setblock warnblock" data-purgewrap>
+        <span class="t-label">Delete for good</span>
+        <p class="t-meta">This removes ${esc(p.name)} and everything stored here for it:
+          its documents, to-dos, contacts, jobs and decisions, and the activity about
+          it. Files that live in Google, Notion or Slack are not touched. It cannot be
+          undone.</p>
+        ${
+          canWrite()
+            ? `<button class="btn quiet" data-purge="${esc(p.slug)}"
+                 data-name="${esc(p.name)}">Delete ${esc(p.name)} for good…</button>`
+            : `<span class="t-meta">Read-only — no token in this browser.</span>`
+        }
+        <div data-purgestep></div>
+      </div>
 
       <div class="setblock">
         <span class="t-label">Elsewhere</span>
@@ -972,4 +992,74 @@ export function wire(root, p, people, redraw, openLook, reload) {
       }
     })
   }
+
+  /*
+    DELETING FOR GOOD (ADR-0077). Step one counts what would go and says it; step two needs the project's exact name typed
+    before the button works. Success leaves the page, because the project no longer exists.
+  */
+  for (const b of root.querySelectorAll('[data-purge]')) {
+    b.addEventListener('click', async () => {
+      const slug = b.dataset.purge ?? ''
+      const name = b.dataset.name ?? ''
+      const plan = await attempt(
+        b,
+        'Counting what would go…',
+        () => act('project_purge_plan', { p_slug: slug }),
+        () => 'Counted.',
+      )
+      if (plan === null) return
+      const slot = root.querySelector('[data-purgestep]')
+      if (slot === null) return
+      if (plan?.error !== undefined) {
+        slot.innerHTML = `<p class="t-meta" role="alert">${esc(String(plan.error))}</p>`
+        return
+      }
+      const words = Object.entries(plan?.counts ?? {})
+        .map(([k, v]) => `${String(v)} ${PURGE_WORDS[k] ?? k}`)
+        .join(', ')
+      const files = Number(plan?.stored_files ?? 0)
+      slot.innerHTML = `
+        <p class="t-meta">This will remove ${esc(words)}${
+          files > 0 ? `, and ${String(files)} stored file${files === 1 ? '' : 's'}` : ''
+        }. Nothing outside this office is touched.</p>
+        <label class="t-label" for="purge-typed">Type the project's name to confirm: ${esc(name)}</label>
+        <input id="purge-typed" class="input" autocomplete="off" aria-label="Type the project's name to confirm">
+        <div class="setrow">
+          <button class="btn" data-purge-go disabled>Delete for good</button>
+          <button class="btn quiet" data-purge-cancel>Cancel</button>
+        </div>
+        <span class="t-meta" data-said></span>`
+      const input = slot.querySelector('#purge-typed')
+      const go = slot.querySelector('[data-purge-go]')
+      input?.addEventListener('input', () => {
+        if (go) go.disabled = input.value.trim() !== name.trim()
+      })
+      slot.querySelector('[data-purge-cancel]')?.addEventListener('click', () => {
+        slot.innerHTML = ''
+      })
+      go?.addEventListener('click', async () => {
+        const done = await attempt(
+          go,
+          'Deleting…',
+          () => act('project_purge', { p_slug: slug, p_typed: input?.value ?? '' }),
+          (r) => `Deleted. ${String(r?.records ?? 0)} records were removed.`,
+        )
+        if (done !== null) globalThis.location?.assign('/')
+      })
+    })
+  }
+}
+
+/* What each table is called, in the words a person reads. Anything not listed is shown by its table name. */
+const PURGE_WORDS = {
+  tasks: 'to-dos',
+  events: 'activity rows',
+  documents: 'documents',
+  contacts: 'contacts',
+  jobs: 'jobs',
+  decisions: 'decisions',
+  signals: 'signals',
+  project_attachments: 'attachments',
+  project_aliases: 'names',
+  projects: 'project',
 }

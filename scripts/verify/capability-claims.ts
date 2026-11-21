@@ -95,7 +95,7 @@ const makesDocuments = cap.can.find((a) => a.tool === 'document.create') ?? null
 check(
   'the office knows it can produce a document',
   makesDocuments === null ? 'document.create is not held' : `${makesDocuments.tool}, in a reply`,
-  makesDocuments?.inReply,
+  makesDocuments !== null && makesDocuments.inReply,
 )
 
 /*
