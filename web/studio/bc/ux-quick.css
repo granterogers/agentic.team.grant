@@ -380,6 +380,25 @@ body.dock-yields #dock { display: none !important; }
   [data-experience='basecamp'] .bcmodhead { padding-right: 100px; }
   [data-experience='basecamp'] .bcmod:has(.bcmodbtn--cols) .bcmodhead { padding-right: 170px; }
 }
+/*
+  A15c, 21 November 2026 (phone, measured live at 390 px). A placed module's name is centred, and compose.css sets the
+  header's right padding to 0 !important, so the reserve above never applied: "To-dos" ran under its first control. On a
+  phone the name now sits at the left, the controls keep the right, and a long name ends in an ellipsis before them.
+*/
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcmod.bcmod--placed .bcmodhead {
+    justify-items: start !important;
+    padding-right: 150px !important;
+  }
+  [data-experience='basecamp'] .bcmod.bcmod--placed:has(.bcmodbtn--cols) .bcmodhead { padding-right: 190px !important; }
+  [data-experience='basecamp'] .bcmod.bcmod--placed .bcmodhead h2 {
+    justify-self: start;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  [data-experience='basecamp'] .bcmod.bcmod--placed .bcmodmeta { justify-self: start; }
+}
 
 /* The Card Table's Columns button and its popover (Option A, 22 October 2026). */
 [data-experience='basecamp'] .bcmodctl .bcmodbtn.bcmodbtn--cols {
