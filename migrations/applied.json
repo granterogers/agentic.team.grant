@@ -853,5 +853,6 @@
   "1104_the_document_archive_offers_its_undo_with_the_office.sql": "db798fa3359dffbff2b206a41dcdd201750d1d505b7a1269b716b834af467e65",
   "1105_the_activity_records_the_changes_that_were_missing.sql": "d2bf54cfd02a6313695726075e05c6c7d9ea05f75ad20381375e9cb9b2c0b05e",
   "1106_stale_questions_on_named_projects_are_withdrawn.sql": "5928b341735cfa9074f74ebc8347da3284c7fe9ba992c37acc2161210ca12d64",
-  "1107_the_activity_feed_finds_each_offices_newest_events_in_order.sql": "6a3984bdf6c6e22d11993aaa686e2f85ec50b3cf1e3c6daf8b64b0adaa99e5a5"
+  "1107_the_activity_feed_finds_each_offices_newest_events_in_order.sql": "6a3984bdf6c6e22d11993aaa686e2f85ec50b3cf1e3c6daf8b64b0adaa99e5a5",
+  "1108_the_activity_feed_works_out_the_office_actor_once.sql": "7f09dce70dc359027f2cff78343a8b92eca53b4c98e6752eee7bf217554d39a0"
 }

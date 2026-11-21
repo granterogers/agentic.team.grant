@@ -13,8 +13,9 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 855,
-    "highestAppliedAtRecord": "1107",
+    "appliedAtRecord": 856,
+    "highestAppliedAtRecord": "1108",
+    "note1108": "On 21 November 2026 migration 1108 changed app.hq_studio_lately to work out the office's own name once rather than per row. The feed's output was compared with a saved copy before and after and is identical. It did not measurably change the feed's time.",
     "note1107": "On 21 November 2026 migration 1107 added an index on events (office_id, occurred_at desc) so the activity feed (app.hq_studio_lately) reads an office's newest rows in order. The feed's database time went from about 3.2 s to about 1.4 s. Applied with npm run migrate:one and the production write flag. Reversible: drop index public.events_office_time_idx.",
     "note1106": "On 21 November 2026 migration 1106 withdrew the old open questions on named projects (eleven, asked in September and October), as the owner asked. Applied with npm run migrate:one and the production write flag. Zero open questions remain on named projects.",
     "note1105": "On 21 November 2026 migration 1105 (triggers that record project create, rename and archive, to-do removal, and contact edit and removal in the action ledger; D7 and A11) was applied with npm run migrate:one and the production write flag. The actor is recorded as Team HQ until the gateway passes the signed-in person.",
