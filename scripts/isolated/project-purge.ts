@@ -221,6 +221,42 @@ check(
   String(again.error ?? ''),
 )
 
+// 9. the lighter path (1113): a project holding only its creation record goes with no name typed
+const light = await mk(`Light ${run}`)
+const busy = await mk(`Busy ${run}`)
+await q(
+  main,
+  `insert into public.tasks (office_id, project_id, title, state, assigned_to_human) values (${lit(office)}::uuid, ${lit(busy.id)}::uuid, 'Busy to-do', 'todo', true)`,
+)
+const lightPlan = json(
+  (await one(`select app.hq_project_purge_plan(${lit(office)}::uuid, ${lit(light.slug)}) as r`)).r,
+)
+check(
+  '9. the plan says the lighter path applies to an empty project',
+  lightPlan.light === true,
+  JSON.stringify(lightPlan.counts),
+)
+const busyPlan = json(
+  (await one(`select app.hq_project_purge_plan(${lit(office)}::uuid, ${lit(busy.slug)}) as r`)).r,
+)
+check('9. the plan says it does not apply to a project with a to-do', busyPlan.light === false)
+const refusedBlank = json(
+  (await one(`select app.hq_project_purge(${lit(office)}::uuid, ${lit(busy.slug)}, '') as r`)).r,
+)
+check(
+  '9. a blank name is refused for a project with a to-do, and nothing is removed',
+  String(refusedBlank.error ?? '').includes('type its name') &&
+    (await count('tasks', busy.id)) === 1,
+)
+const lightDone = json(
+  (await one(`select app.hq_project_purge(${lit(office)}::uuid, ${lit(light.slug)}, '') as r`)).r,
+)
+check(
+  '9. an empty project is purged with no name typed',
+  lightDone.ok === true && (await count('projects', light.id)) === 0,
+  JSON.stringify(lightDone).slice(0, 120),
+)
+
 const failed = results.filter((ok) => !ok).length
 console.log(`\n${String(results.length - failed)}/${String(results.length)} ok`)
 await main.end()

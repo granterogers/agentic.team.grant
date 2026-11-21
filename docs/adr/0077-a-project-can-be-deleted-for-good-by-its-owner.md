@@ -1,6 +1,6 @@
 # ADR-0077 — A project can be deleted for good, by its owner, by typing its name
 
-**Status:** Accepted · 2026-11-21 · Amends ADR-0022 (a project is archived, not deleted) for one case · Migration 1111 · Gateway action `project_purge`
+**Status:** Accepted · 2026-11-21 · Amends ADR-0022 (a project is archived, not deleted) for one case · Migrations 1111 and 1113 · Gateway action `project_purge`
 
 ## Context
 
@@ -48,3 +48,10 @@ the gateway action, only for a named project, and only after the typed name matc
   named rather than hidden.
 - The guard for this is in the proofs: `scripts/isolated/` checks the archive-first behaviour, the name check, the
   reserved refusal, that another project is untouched, and that the triggers are back on afterwards.
+
+## Amendment, 21 November 2026: the lighter path (migration 1113)
+
+A project that holds nothing but its own creation record can be deleted without typing its name. "Nothing but" means
+no rows in any table except its own `project.*` activity (created, renamed, archived) and its connector and channel links.
+The database decides this (`app.project_is_empty`); the page only asks. Anything else keeps the typed-name step, and a
+blank name for such a project is refused. The purge record is still written.

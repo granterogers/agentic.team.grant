@@ -1014,6 +1014,30 @@ export function wire(root, p, people, redraw, openLook, reload) {
         slot.innerHTML = `<p class="t-meta" role="alert">${esc(String(plan.error))}</p>`
         return
       }
+      if (plan?.light === true) {
+        // Nothing here but the record that the project was made: no name to type (1113).
+        slot.innerHTML = `
+          <p class="t-meta">${esc(name)} holds nothing but the record that it was made. Deleting it removes that record too. Nothing outside this office is touched.</p>
+          <div class="setrow">
+            <button class="btn" data-purge-go>Delete for good</button>
+            <button class="btn quiet" data-purge-cancel>Cancel</button>
+          </div>
+          <span class="t-meta" data-said></span>`
+        slot.querySelector('[data-purge-cancel]')?.addEventListener('click', () => {
+          slot.innerHTML = ''
+        })
+        slot.querySelector('[data-purge-go]')?.addEventListener('click', async (ev) => {
+          const goButton = ev.currentTarget
+          const done = await attempt(
+            goButton,
+            'Deleting…',
+            () => act('project_purge', { p_slug: slug, p_typed: '' }),
+            (r) => `Deleted. ${String(r?.records ?? 0)} record${Number(r?.records ?? 0) === 1 ? '' : 's'} removed.`,
+          )
+          if (done !== null) globalThis.location?.assign('/')
+        })
+        return
+      }
       const words = Object.entries(plan?.counts ?? {})
         .map(([k, v]) => purgeCount(k, v))
         .join(', ')

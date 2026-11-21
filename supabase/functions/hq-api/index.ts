@@ -1557,7 +1557,9 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
     the name. The purge itself is handled below, because it also removes the files the database hands back.
   */
   project_purge_plan: { fn: 'hq_project_purge_plan', office: true, required: ['p_slug'] },
-  project_purge: { fn: 'hq_project_purge', office: true, required: ['p_slug', 'p_typed'] },
+  // A blank p_typed is the lighter path (1113), which the database allows only for a project with nothing in it but its
+  // creation record. So the name is optional here, and the database decides.
+  project_purge: { fn: 'hq_project_purge', office: true, required: ['p_slug'] },
   /*
     PICKING A FILE OUT OF DRIVE.
 
