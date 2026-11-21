@@ -1,6 +1,6 @@
 # ADR-0022 — A project is archived, not deleted
 
-**Status:** Accepted · 2026-09-12 · Issues #43, #45
+**Status:** Accepted · 2026-09-12 · Issues #43, #45 · Amended 2026-11-21 by ADR-0077: a project can be deleted for good by its owner, by typing its name. Archive remains the default.
 
 ## Context
 
