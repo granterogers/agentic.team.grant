@@ -44,6 +44,12 @@ import { SlackClient } from '../slack/api.ts'
 import { ChannelProvisioner } from '../slack/provision.ts'
 import { governEffect } from './approval-gate.ts'
 
+/**
+ * Whether a person having created a project counts as consent to its Slack channel (D2). Off since 21 November 2026:
+ * every channel is offered as a question first.
+ */
+const PERSON_CREATION_IS_CONSENT = false
+
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 export interface ChannelsDeps {
@@ -156,7 +162,12 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
           | { authorized_by?: string }
           | null
           | undefined
-        if (a !== null && a !== undefined && typeof a.authorized_by === 'string') {
+        /*
+          D2 (21 November 2026): the owner chose to be asked first. A person having created the project no longer counts as
+          a yes to a Slack channel, so the shortcut is off and every channel is offered as a question. The authority rows
+          are kept, so turning this back on is one line.
+        */
+        if (PERSON_CREATION_IS_CONSENT && a !== null && a !== undefined && typeof a.authorized_by === 'string') {
           because = `because ${a.authorized_by} created the project`
           spend = true
         } else {
