@@ -3278,6 +3278,16 @@ const documentRecord = (p) => {
           ${!isAudio && file !== '' ? button('Open the file', { 'data-bc-doc-tab': esc(file) }) : ''}
           ${file !== '' ? button('Download', { 'data-bc-doc-save': esc(file), 'data-bc-doc-title': esc(d.title ?? '') }) : ''}
         </div>
+        ${
+          ref.startsWith('id:')
+            ? `<form class="bcaddform bcgap-l" data-bc-docrenameform="${esc(ref.slice(3))}">
+                <label class="bcfield"><span class="bclabel" for="bc-docrename">Title</span>
+                  <input class="bcinput" id="bc-docrename" name="title" autocomplete="off" value="${esc(d.title ?? '')}"></label>
+                <div class="bcrow">${button('Rename', { 'data-bc-docrename-save': '1' })}${button('Archive', { kind: 'danger', 'data-bc-docarchive': esc(ref.slice(3)) })}</div>
+                <p class="bcpmeta">Archiving takes the document out of the project's lists. Nothing is deleted, and the undo strip brings it back.</p>
+              </form>`
+            : ''
+        }
         <p class="bcpmeta" data-bc-docsay role="status"></p>
         <div class="bcdocversions" data-bc-docversions="${esc(String(d.id ?? ''))}" hidden></div>
         ${e.src === 'generated' && String(d.id ?? '') !== '' ? `<div class="bcdocstyle" data-bc-docstyle="${esc(String(d.id))}" data-bc-docproject="${esc(String(p.slug ?? ''))}" hidden></div>` : ''}

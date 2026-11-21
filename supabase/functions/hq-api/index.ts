@@ -1733,6 +1733,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // `p_state` optional: an undo carries the state the document was in, and a
   // press of "this one is current again" carries nothing and means approved.
   document_restore: { fn: 'hq_document_restore', office: true, required: ['p_document_id'] },
+  // D3: archive a document (it leaves the project lists); the undo strip brings it back. Nothing is deleted.
+  document_archive: { fn: 'hq_document_archive', office: true, required: ['p_document_id'] },
   document_pin: { fn: 'hq_document_pin', office: true, required: ['p_document_id', 'p_pinned'] },
   /*
     VERSIONS AND IMPORT (0907). All three are a person's explicit press: none is on SERVICE_MAY, so the office key

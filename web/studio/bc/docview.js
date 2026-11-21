@@ -450,6 +450,62 @@ export const wire = (root, ctx, fileFor) => {
   for (const host of root.querySelectorAll('[data-bc-docversions]')) void paintVersions(host, ctx)
   for (const host of root.querySelectorAll('[data-bc-docstyle]')) void paintStyle(host, ctx)
 
+  /*
+    D3. RENAME, then ARCHIVE. Rename is the office's document_rename (its undo is offered by the strip). Archive is the
+    office's document_archive: the document leaves the project's lists, nothing is deleted, and the undo strip brings it back.
+    Archive takes two presses, like every removal here.
+  */
+  for (const b of root.querySelectorAll('[data-bc-docrename-save]')) {
+    b.addEventListener('click', async () => {
+      const form = b.closest('[data-bc-docrenameform]')
+      const id = form?.dataset.bcDocrenameform ?? ''
+      const title = String(form?.querySelector('input[name="title"]')?.value ?? '').trim()
+      if (id === '') return
+      if (title === '') {
+        say(b, 'A document needs a title.', 'warn')
+        return
+      }
+      try {
+        const out = await act('document_rename', { p_document_id: id, p_title: title })
+        if (out?.error) say(b, out.error, 'warn')
+        else {
+          say(b, 'Renamed.', 'good')
+          await ctx.refresh?.()
+        }
+      } catch (error) {
+        say(b, error instanceof Error ? error.message : String(error), 'warn')
+      }
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-docarchive]')) {
+    let armed = false
+    const label = b.textContent
+    b.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true
+        b.textContent = 'Press again to archive'
+        setTimeout(() => {
+          armed = false
+          if (b.isConnected) b.textContent = label
+        }, 6000)
+        return
+      }
+      const id = b.dataset.bcDocarchive ?? ''
+      try {
+        const out = await act('document_archive', { p_document_id: id })
+        if (out?.error) {
+          say(b, out.error, 'warn')
+          return
+        }
+        const slug = ctx.state?.project ?? ''
+        await ctx.refresh?.()
+        if (slug !== '') ctx.goAnywhere?.(`/p/${slug}/documents`)
+      } catch (error) {
+        say(b, error instanceof Error ? error.message : String(error), 'warn')
+      }
+    })
+  }
+
   /* --- import: only ever on a press */
   for (const b of root.querySelectorAll('[data-bc-docimport]')) {
     b.addEventListener('click', async () => {
