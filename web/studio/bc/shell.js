@@ -3311,7 +3311,7 @@ const settingsSurface = (p) => {
     </div>
     <p class="bcpmeta bcprose bcgap-l">
       Settings for ${esc(p.name)} alone. What the whole office does — the team,
-      its behaviour, what it is connected to — is under Settings for everything.
+      its behaviour, what it is connected to — is under Global Settings.
     </p>
     <div class="bcsetframe">${ctx?.projectSettingsBody?.(p) ?? ''}</div>`
 }

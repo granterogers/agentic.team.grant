@@ -587,7 +587,7 @@ function projectPane(p) {
         <span class="t-label">Elsewhere</span>
         <p class="t-meta">What this project reads from is in <b>Sources</b>, beside the
           documents it produced. How much the office does without asking is in the
-          office <b>Settings</b> sheet, under Behaviour — it is one answer for
+          <b>Global Settings</b>, under Autonomy and approvals — it is one answer for
           everywhere, not one per project.</p>
       </div>
     </div>`

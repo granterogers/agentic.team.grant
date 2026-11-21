@@ -587,8 +587,14 @@ const followChat = (root) => {
   const id = `${String(rows.length)}:${last?.textContent?.length ?? 0}:${last?.className ?? ''}`
   const changed = chatLastId !== '' && id !== chatLastId
   chatLastId = id
-  if (!changed || !chatAtEnd) return
+  /*
+    The messages scroll inside their own box, so "at the end" is the box's position as well as the page's (stress test CHT-05:
+    the page followed the reply but the box stayed on the older messages).
+  */
+  const boxAtEnd = thread.scrollHeight - (thread.scrollTop + thread.clientHeight) < 80
+  if (!changed || !(chatAtEnd || boxAtEnd)) return
   requestAnimationFrame(() => {
+    thread.scrollTop = thread.scrollHeight
     globalThis.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' })
     chatAtEnd = true
   })
@@ -925,6 +931,10 @@ export const wire = (root) => {
     b.addEventListener('click', () => {
       const open = ctx.toggleDock?.() ?? ctx.openDock()
       b.setAttribute('aria-pressed', open === true ? 'true' : 'false')
+      /* Stress test CHT-07: opening the chat puts the cursor in "Message the team", so a person can type at once. */
+      if (open === true) {
+        setTimeout(() => document.querySelector('[data-bc-sayform] #bc-say')?.focus({ preventScroll: true }), 350)
+      }
     })
   }
 
@@ -990,9 +1000,30 @@ export const wire = (root) => {
 
 /* ----------------------------------------------------------------- search */
 
+/*
+  Where the person was typing in search (stress test A11Y-02): when results arrive, the page is drawn again, and the box it
+  was typing in is a new node with no focus. Remembered here, put back by wireSearch, and forgotten when they click away.
+*/
+let searchTyping = null
+
 const wireSearch = (root) => {
   const box = root.querySelector('#bc-search-q')
+  if (box === null) searchTyping = null
+  if (box !== null && searchTyping !== null) {
+    box.focus({ preventScroll: true })
+    box.setSelectionRange(searchTyping.pos, searchTyping.pos)
+  }
   if (box !== null) {
+    box.addEventListener('focus', () => {
+      searchTyping = { pos: box.selectionStart ?? box.value.length }
+    })
+    box.addEventListener('input', () => {
+      searchTyping = { pos: box.selectionStart ?? box.value.length }
+    })
+    box.addEventListener('blur', (e) => {
+      // Clicking elsewhere ends it. A redraw removes the box without a real blur, so it is kept for the next draw.
+      if (e.relatedTarget !== null) searchTyping = null
+    })
     /*
       Search runs as you type, so Enter has nothing left to do. Left alone it submitted the form, which reloaded the page
       and threw the query away: the one key a person presses to say "go" cleared what they had written.
@@ -3298,8 +3329,9 @@ const wireTasks = (root) => {
         'Removed.',
       )
       if (done !== null) {
-        await ctx.refresh()
+        // Leave the form first (stress test FUN-05): the old form stayed on screen while the list was read again.
         ctx.goAnywhere(`/p/${ctx.state.project}/tasks`)
+        await ctx.refresh()
       }
     })
   }
@@ -3446,6 +3478,8 @@ const wireTasks = (root) => {
       if (done !== null) {
         f.reset()
         await (ctx.refreshMyTasks?.() ?? ctx.refresh())
+        // Back to the title box (stress test A11Y-03): a person adding several items should not tab back to it each time.
+        document.querySelector('#bc-mytask-title')?.focus({ preventScroll: true })
       }
     })
   }

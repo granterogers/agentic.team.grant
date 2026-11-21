@@ -148,13 +148,31 @@ export async function load(slug, projectId, token) {
     if (!Array.isArray(body.data)) return null
     office.set(slug, body.data.map(asBubble))
     resumeInFlight(slug, body.data, token)
-    // What was in flight has landed, so the optimistic copy would now be a
-    // duplicate of it. Only what was sent BEFORE this read began: a message typed while the read was on its way is not in the answer,
-    // and dropping it made a sent message vanish from the screen until the next read (a person then types it again).
-    write(
-      slug,
-      (all()[slug] ?? []).filter((m) => m.inflight !== true || Date.parse(String(m.at)) >= startedAt),
+    /*
+      What was in flight has landed, so the optimistic copy would now be a duplicate of it.
+
+      CHT-01 (stress test, 21 November 2026): a message sent a moment before a reload had not reached the office yet, and the
+      filter used to remove it as if it had landed, so it vanished. A local message is removed only when the office holds the
+      same words. One it does not hold, sent before this page visit, is sent again under the name it was first given, so the
+      office files it once. A message sent during this visit is left to the request that is already running.
+    */
+    const said = new Set(body.data.filter((m) => m.kind === 'said').map((m) => String(m.body ?? '').trim()))
+    const hasLanded = (m) => said.has(String(m.said || m.text || '').trim())
+    const keep = (all()[slug] ?? []).filter(
+      (m) => m.inflight !== true || Date.parse(String(m.at)) >= startedAt || !hasLanded(m),
     )
+    write(slug, keep)
+    for (const m of keep) {
+      const lost =
+        m.pending === true &&
+        m.inflight === true &&
+        typeof m.said === 'string' &&
+        m.said !== '' &&
+        m.bad !== true &&
+        Date.parse(String(m.at)) < startedAt &&
+        !hasLanded(m)
+      if (lost) void retry(slug, m.id, token)
+    }
     return thread(slug)
   } catch {
     return null

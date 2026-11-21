@@ -6337,6 +6337,20 @@ function memoryTab() {
   whether it was counted, reported by the provider or estimated, because an estimate presented as a fact is the
   defect this page exists to avoid.
 */
+/*
+  What a connection says about itself, in words a person reads (stress test SET-02). The office sends short codes such as
+  token_expired and valid; those are translated here, and anything else is shown as it came.
+*/
+function plainDetail(text) {
+  const t = String(text ?? '').trim()
+  if (t === '') return ''
+  if (/token_expired/i.test(t)) return 'The sign-in has expired. Reconnect it to keep it working.'
+  if (/invalid_grant/i.test(t)) return 'The sign-in was revoked. Reconnect it to keep it working.'
+  if (/^valid$/i.test(t)) return 'Working.'
+  if (/refresh token is in the vault/i.test(t)) return 'Connected and signed in.'
+  return t
+}
+
 function healthTab() {
   const ui = settingsUi
   const g = config.GOVERNANCE
@@ -6712,7 +6726,7 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
   const route = config.routeFor(c.key)
   const connected = config.isConnected(c.state)
   const expired = route.how === 'oauth' && !connected && c.state === 'dead'
-  const long = String(c.detail ?? '')
+  const long = plainDetail(c.detail)
   const detail = long.length > 120 ? `${long.slice(0, 118).replace(/[\s,;.]+\S*$/, '')}…` : long
   const checked = c.lastAt || c.last ? `Checked ${when.stamp(c.lastAt, c.last)}` : ''
   // (already HTML: the stamp is a time element that keeps itself current)
@@ -7150,7 +7164,7 @@ function channelsTab() {
     const route = config.routeFor(c.key)
     const connected = config.isConnected(c.state)
     const open = state.channel === c.key
-    const long = String(c.detail ?? '')
+    const long = plainDetail(c.detail)
     const detail = long.length > 120 ? `${long.slice(0, 118).replace(/[\s,;.]+\S*$/, '')}…` : long
     const disconnect =
       connected && route.off !== undefined && canWrite() && config.VIEWER.operator

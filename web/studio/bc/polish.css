@@ -78,14 +78,15 @@
   min-height: 44px;
   border-radius: 11px;
   transition: background 140ms ease, transform 140ms var(--bc-ease-out), box-shadow 140ms ease;
-  animation: bc-menu-row 240ms var(--bc-ease-out) both;
+  animation: bc-menu-row 160ms var(--bc-ease-out) both;
 }
-[data-experience='basecamp'] .bcmenulist .bcmenuitem:nth-child(1) { animation-delay: 30ms; }
-[data-experience='basecamp'] .bcmenulist .bcmenuitem:nth-child(2) { animation-delay: 60ms; }
-[data-experience='basecamp'] .bcmenulist .bcmenuitem:nth-child(3) { animation-delay: 90ms; }
-[data-experience='basecamp'] .bcmenulist .bcmenuitem:nth-child(4) { animation-delay: 120ms; }
-[data-experience='basecamp'] .bcmenulist .bcmenuitem:nth-child(n + 5) { animation-delay: 150ms; }
-[data-experience='basecamp'] .bcmenupanel > .bcmenuitem { animation-delay: 170ms; }
+/* 21 November 2026 (stress test ANI-01): the whole menu opens in about 250 ms, top to bottom (it took 410 ms). */
+[data-experience='basecamp'] .bcmenulist .bcmenuitem:nth-child(1) { animation-delay: 0ms; }
+[data-experience='basecamp'] .bcmenulist .bcmenuitem:nth-child(2) { animation-delay: 20ms; }
+[data-experience='basecamp'] .bcmenulist .bcmenuitem:nth-child(3) { animation-delay: 40ms; }
+[data-experience='basecamp'] .bcmenulist .bcmenuitem:nth-child(4) { animation-delay: 60ms; }
+[data-experience='basecamp'] .bcmenulist .bcmenuitem:nth-child(n + 5) { animation-delay: 80ms; }
+[data-experience='basecamp'] .bcmenupanel > .bcmenuitem { animation-delay: 90ms; }
 [data-experience='basecamp'] .bcmenuitem:hover:not(:disabled),
 [data-experience='basecamp'] .bcmenuitem:focus-visible {
   background: color-mix(in oklab, var(--bc-accent) 11%, transparent);
