@@ -13,8 +13,9 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 852,
-    "highestAppliedAtRecord": "1104",
+    "appliedAtRecord": 853,
+    "highestAppliedAtRecord": "1105",
+    "note1105": "On 21 November 2026 migration 1105 (triggers that record project create, rename and archive, to-do removal, and contact edit and removal in the action ledger; D7 and A11) was applied with npm run migrate:one and the production write flag. The actor is recorded as Team HQ until the gateway passes the signed-in person.",
     "note1104": "On 21 November 2026 migrations 1103 (a document can be archived, with an undo) and 1104 (the archive passes its office to the undo; 1103 had failed on every press) were applied with npm run migrate:one and the production write flag. Both under the D3 decision.",
     "note1102": "On 20 November 2026 migration 1102 renamed the catch-all project (slug unnamed) from Unnamed to Conversations, so the page and the agents use one name. Applied with npm run migrate:one and the production write flag.",
     "note1101": "On 19 November 2026 migration 1101 (app.project_context_brief, a read-only brief of a project's document count, recent titles and the permanent team, A20) was applied to production with npm run migrate:one and the production write flag, under Grant's instruction to make the worker change.",
