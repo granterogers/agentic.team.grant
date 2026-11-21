@@ -1015,7 +1015,7 @@ export function wire(root, p, people, redraw, openLook, reload) {
         return
       }
       const words = Object.entries(plan?.counts ?? {})
-        .map(([k, v]) => `${String(v)} ${PURGE_WORDS[k] ?? k}`)
+        .map(([k, v]) => purgeCount(k, v))
         .join(', ')
       const files = Number(plan?.stored_files ?? 0)
       slot.innerHTML = `
@@ -1052,14 +1052,21 @@ export function wire(root, p, people, redraw, openLook, reload) {
 
 /* What each table is called, in the words a person reads. Anything not listed is shown by its table name. */
 const PURGE_WORDS = {
-  tasks: 'to-dos',
-  events: 'activity rows',
-  documents: 'documents',
-  contacts: 'contacts',
-  jobs: 'jobs',
-  decisions: 'decisions',
-  signals: 'signals',
-  project_attachments: 'attachments',
-  project_aliases: 'names',
-  projects: 'project',
+  tasks: ['to-do', 'to-dos'],
+  events: ['activity row', 'activity rows'],
+  documents: ['document', 'documents'],
+  contacts: ['contact', 'contacts'],
+  jobs: ['job', 'jobs'],
+  decisions: ['decision', 'decisions'],
+  signals: ['signal', 'signals'],
+  project_attachments: ['attachment', 'attachments'],
+  project_aliases: ['other name', 'other names'],
+  slack_channel_authority: ['Slack channel link', 'Slack channel links'],
+  projects: ['project', 'projects'],
+}
+/* "1 to-do", "3 to-dos": a count and the right word for it. */
+const purgeCount = (k, v) => {
+  const w = PURGE_WORDS[k]
+  if (w === undefined) return `${String(v)} ${k.replaceAll('_', ' ')}`
+  return `${String(v)} ${Number(v) === 1 ? w[0] : w[1]}`
 }
