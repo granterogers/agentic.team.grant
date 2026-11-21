@@ -46,6 +46,13 @@ const PHONE = '(max-width: 860px)'
 /** Pixels kept under the stage for the tray and the page's own bottom margin. */
 const RESERVE = 24
 const SWALLOW_MS = 350
+/*
+  Canvases this page has already brought into the window once. A module placed past the right edge of a narrow window
+  (a tablet, a laptop under about 1330px) cannot be reached: the page does not scroll sideways. On the first paint of a
+  canvas, if anything sits past the right edge, the same view as Fit is used. Module-level, so a re-render never repeats it
+  and never undoes a zoom the person has made.
+*/
+const autoFitted = new Set()
 
 const calm = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
 
@@ -266,6 +273,13 @@ export const wireStage = (root, ctx) => {
     stageEl.style.width = `${String(st.w)}px`
     // An automatic layout can be taller than the window: the stage is as tall as its content, and the board scrolls.
     stageEl.style.height = `${String(Math.max(st.h, grid.contentBottom(slug)))}px`
+    if (!autoFitted.has(slug) && boxW > 0) {
+      autoFitted.add(slug)
+      const rects = [...grid.layout(slug), ...grid.postits(slug)]
+      // The right edge of what is on screen, in stage coordinates, at the view the page is about to paint.
+      const visibleRight = (board.clientWidth - view.x) / view.zoom
+      if (rects.some((r) => r.x + r.w > visibleRight)) view = grid.fitView(rects, board.clientWidth, board.clientHeight)
+    }
     paintView()
     paintAll()
   }
