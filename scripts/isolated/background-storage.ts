@@ -199,10 +199,23 @@ try {
   check("another person cannot remove somebody else's picture", xd.status === 404 && gw.objects.has(`${officeA}/backgrounds/${ps[0]?.id}.png`), `http ${xd.status}`)
   /* a project removed by the operator leaves its picture; the next write in that office sweeps it */
   const doomed = ps[1]
-  await db.execute(`select app.project_delete(${lit(doomed?.slug ?? '')})`).catch(async () => {
-    await db.execute(`delete from public.project_attachments where project_id = ${lit(doomed?.id ?? '')}::uuid`)
-    await db.execute(`delete from public.projects where project_id = ${lit(doomed?.id ?? '')}::uuid`)
-  })
+  /*
+    A project created in the app is recorded in the activity ledger (migration 1105), and that row refers to the project. The
+    ledger is append-only, so app.project_delete ARCHIVES such a project rather than deleting it (its own words: "archived,
+    which keeps it out of the project list"). That is the behaviour this check asserts. The sweep below needs the row gone, so
+    the test removes it directly, inside this disposable test database, the way the other cases break things on purpose.
+  */
+  const outcome = (await db.execute(`select app.project_delete(${lit(doomed?.slug ?? '')}) as r`)).rows[0] as {
+    r: { error?: string; ok?: boolean }
+  }
+  check(
+    'a project with activity history is archived by project_delete, not deleted',
+    String(outcome.r.error ?? '').includes('archived') || outcome.r.ok === true,
+    JSON.stringify(outcome.r).slice(0, 140),
+  )
+  await db.execute(
+    `begin; set local session_replication_role = replica; delete from public.project_attachments where project_id = ${lit(doomed?.id ?? '')}::uuid; delete from public.projects where project_id = ${lit(doomed?.id ?? '')}::uuid; commit;`,
+  )
   const stillThere = (await one(`select count(*)::int c from public.projects where project_id = ${lit(doomed?.id ?? '')}::uuid`)).c === 0
   check('(the project was deleted in the database)', stillThere)
   check('its picture is still in storage until something sweeps it', gw.objects.has(`${officeA}/backgrounds/${doomed?.id}.png`))
