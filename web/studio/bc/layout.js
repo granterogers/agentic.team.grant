@@ -1440,8 +1440,18 @@ export const place = (slug, id, rect) => {
   /* A move or a resize pins THAT module. The others stay automatic and are laid out around it. */
   const d = materialised(slug)
   const z = topZ(d) + 1
+  /*
+    Kept on the stage (21 November 2026, stress test LAY-01/LAY-03): a module cannot be dropped off the right edge, and cannot be
+    resized past the visible width or about twice the visible height. The stage is the measured window, so a narrow window
+    bounds the module to what it can show.
+  */
+  const st = stageSize()
   d.mods = makeRoom(
-    d.mods.map((m) => (m.id === id ? { ...clampRect({ ...m, ...rect, id, z }), placed: true } : { ...m })),
+    d.mods.map((m) =>
+      m.id === id
+        ? { ...clampRect({ ...m, ...rect, id, z }, { w: st.w, h: st.h * 2 }), placed: true }
+        : { ...m },
+    ),
     id,
   )
   commit(slug, d)

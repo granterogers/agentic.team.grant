@@ -2027,8 +2027,8 @@ const docRow = (d, i) => {
 
 const opensAs = (d) => {
   if (bcMini.isAudioDoc(d)) return 'Plays here'
-  if (d.file !== undefined && d.file !== null && d.file !== '') return 'Opens in a new tab'
-  if (d.id !== undefined && d.id !== null && d.id !== '') return 'Opens in a new tab'
+  if (d.file !== undefined && d.file !== null && d.file !== '') return 'Opens a preview'
+  if (d.id !== undefined && d.id !== null && d.id !== '') return 'Opens a preview'
   return 'Details'
 }
 
@@ -3583,7 +3583,7 @@ const myTasks = () => {
   */
   const addForm = `<form class="bcaddform bcgap-l" data-bc-mytaskform>
       <label class="bcfield"><span class="bclabel" for="bc-mytask-title">What needs doing</span>
-        <input class="bcinput" id="bc-mytask-title" name="title" autocomplete="off" required></label>
+        <input class="bcinput" id="bc-mytask-title" name="title" autocomplete="off"></label>
       <label class="bcfield"><span class="bclabel" for="bc-mytask-due">Due (leave blank for today)</span>
         <input class="bcinput" type="date" id="bc-mytask-due" name="due"></label>
       <div class="bcrow"><button type="submit" class="bcbtn bcbtn--primary" data-bc-mytaskadd="1">Add to my list</button></div>
@@ -3829,7 +3829,7 @@ const search = () => {
         : hits.length === 0
           ? empty({
               title: 'Nothing matches that',
-              body: `No project, task, document, person, source or output matches “${q.trim()}”. This searches what the office has sent this browser — it is not a claim about what does not exist anywhere.`,
+              body: `No project, task, document, person, source or output matches “${q.trim()}”. Try fewer words, or another filter.`,
             })
           : `<p class="bcpmeta bcprose bcgap-l">${esc(
               hits.length === 1 ? '1 result' : `${hits.length} results`,

@@ -278,7 +278,15 @@ export const wireStage = (root, ctx) => {
       const rects = [...grid.layout(slug), ...grid.postits(slug)]
       // The right edge of what is on screen, in stage coordinates, at the view the page is about to paint.
       const visibleRight = (board.clientWidth - view.x) / view.zoom
-      if (rects.some((r) => r.x + r.w > visibleRight)) view = grid.fitView(rects, board.clientWidth, board.clientHeight)
+      if (rects.some((r) => r.x + r.w > visibleRight)) {
+        /*
+          Never below 85% (stress test VIS-01): at 63% the text was 7 to 9 px. Below that, the canvas opens at 85% on its left
+          edge and the person pans to the rest; Fit still shows everything at once.
+        */
+        const fitted = grid.fitView(rects, board.clientWidth, board.clientHeight)
+        const left = Math.min(...rects.map((r) => r.x))
+        view = fitted.zoom >= 0.85 ? fitted : { zoom: 0.85, x: 40 - left * 0.85, y: fitted.y }
+      }
     }
     paintView()
     paintAll()

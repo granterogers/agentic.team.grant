@@ -941,7 +941,7 @@ export function wire(root, p, people, redraw, openLook, reload) {
         b,
         'Saving…',
         () => act('rename_project', { p_slug: f.dataset.projrenameForm, p_name: name }),
-        'Renamed.',
+        'Renamed. Any Slack or Telegram channel for this project updates within a minute.',
       )
       if (done) await reload?.()
     })
@@ -1056,7 +1056,7 @@ export function wire(root, p, people, redraw, openLook, reload) {
       const input = slot.querySelector('#purge-typed')
       const go = slot.querySelector('[data-purge-go]')
       input?.addEventListener('input', () => {
-        if (go) go.disabled = input.value.trim() !== name.trim()
+        if (go) go.disabled = !sameName(input.value, name)
       })
       slot.querySelector('[data-purge-cancel]')?.addEventListener('click', () => {
         slot.innerHTML = ''
@@ -1065,10 +1065,11 @@ export function wire(root, p, people, redraw, openLook, reload) {
         const done = await attempt(
           go,
           'Deleting…',
-          () => act('project_purge', { p_slug: slug, p_typed: input?.value ?? '' }),
+          // The project's own name is sent, not the typed text, so an en dash typed as a hyphen still matches.
+          () => act('project_purge', { p_slug: slug, p_typed: name }),
           (r) => `Deleted. ${String(r?.records ?? 0)} records were removed.`,
         )
-        if (done !== null) globalThis.location?.assign('/')
+        if (done !== null) setTimeout(() => globalThis.location?.assign('/'), 1500)
       })
     })
   }
@@ -1088,6 +1089,20 @@ const PURGE_WORDS = {
   slack_channel_authority: ['Slack channel link', 'Slack channel links'],
   projects: ['project', 'projects'],
 }
+/*
+  Two names match when they read the same to a person: dashes of any kind are one dash, spacing and capitals do not count.
+  An en dash is hard to type, so a hyphen typed in its place must still match.
+*/
+const sameName = (typed, name) => {
+  const norm = (s) =>
+    String(s ?? '')
+      .replace(/[‐-―−]/g, '-')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+  return norm(typed) !== '' && norm(typed) === norm(name)
+}
+
 /* "1 to-do", "3 to-dos": a count and the right word for it. */
 const purgeCount = (k, v) => {
   const w = PURGE_WORDS[k]

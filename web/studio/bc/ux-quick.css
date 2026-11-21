@@ -349,11 +349,20 @@
   boxes there is empty space at that width, so the button sits there. Checked automatically at 768, 1024 and 1280 wide.
 */
 @media (min-width: 761px) and (max-width: 1100px) {
+  /* 21 November 2026 (stress test LAY-05): 10px was under the top bar, so the button could not be clicked. Now below it. */
   [data-experience='basecamp'] .bcplus {
     position: fixed;
-    top: 10px;
+    top: 60px;
     right: 8px;
   }
+}
+
+/* 21 November 2026 (stress test LAY-06): a hidden module's chip is as wide as its name, on one line, never one letter per line. */
+[data-experience='basecamp'] .bcoffchip {
+  width: auto;
+  min-width: 32px;
+  padding-inline: 10px;
+  white-space: nowrap;
 }
 
 /* Return to automatic (21 October 2026): shown only on a module that is pinned. The button's own display would otherwise win. */

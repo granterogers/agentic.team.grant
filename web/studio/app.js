@@ -5819,9 +5819,9 @@ const HELP_TOPICS = [
   {
     title: 'Find your way around',
     steps: [
-      'The menu at the top left lists your projects. Press one to open it. Inside you will find its tasks, documents, contacts, sources and team.',
+      'Press Open the project menu in the top bar to see your projects. Press one to open it. Inside you will find its tasks, documents, contacts, sources and team.',
       'Use the same menu to create a project, or to open My Tasks and Activity.',
-      'The three dots at the top right open Settings, which apply to all of Team HQ. A single project has its own settings, in its menu under Project settings.',
+      'Global Settings, in the same menu, applies to all of Team HQ. A single project has its own settings, under Name, export and archive on its settings page.',
       'To leave Settings, press Back to workspace at the top left.',
     ],
     note: 'A project is the source of truth and it lives in Team HQ. A Notion database, a notebook or a Drive folder is something a project is attached to, never the project itself.',
@@ -7156,7 +7156,7 @@ function channelsTab() {
       connected && route.off !== undefined && canWrite() && config.VIEWER.operator
         ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-disconnect': route.off, 'data-service': c.name } })
         : ''
-    const how = ui.button({ label: open ? 'Hide details' : 'Details', tone: 'quiet', a: { 'data-channel': c.key, 'aria-expanded': open } })
+    const how = ui.button({ label: open ? 'Hide details' : 'Details', tone: 'quiet', a: { 'data-channel': c.key, 'aria-expanded': open, 'aria-label': `${open ? 'Hide' : 'Show'} details for ${c.name}` } })
     const extra = open
       ? `<div class="st-subpanel">
           ${c.steps ? `<p class="st-desc" style="margin:0">${esc(c.steps)}</p>` : ''}

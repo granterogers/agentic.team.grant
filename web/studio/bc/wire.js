@@ -2132,10 +2132,17 @@ const wireContacts = (root) => {
       for (const key of ['email', 'phone']) {
         const v = contacts.check(key, val(`bc-c-${key}`))
         if (!v.ok) {
-          if (say !== null) say.textContent = v.why
-          root.querySelector(`#bc-c-${key}`)?.focus()
+          if (say !== null) {
+            say.textContent = v.why
+            say.setAttribute('role', 'alert')
+            if (say.id !== '') root.querySelector(`#bc-c-${key}`)?.setAttribute('aria-describedby', say.id)
+          }
+          const bad = root.querySelector(`#bc-c-${key}`)
+          bad?.setAttribute('aria-invalid', 'true')
+          bad?.focus()
           return
         }
+        root.querySelector(`#bc-c-${key}`)?.removeAttribute('aria-invalid')
         fields[key] = v.value
       }
       if (canWrite() !== true) {

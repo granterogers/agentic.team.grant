@@ -167,7 +167,7 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = nul
         ? ''
         : ` style="${vars}"`
       : ` style="left:${String(rect.x)}px;top:${String(rect.y)}px;width:${String(rect.w)}px;height:${String(rect.h)}px;z-index:${String(rect.z ?? 1)}${vars === '' ? '' : `;${vars}`}"`
-  return `<section class="bcmod${wide ? ' bcmod--wide' : ''}${rect === null ? '' : ' bcmod--placed'}${hue === '' ? '' : ' bcmod--tinted'}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}"${style}>
+  return `<section class="bcmod${wide ? ' bcmod--wide' : ''}${rect === null ? '' : ' bcmod--placed'}${hue === '' ? '' : ' bcmod--tinted'}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}" aria-label="${esc(name)}"${style}>
     <!--
       THE HEADER IS STILL THE WHOLE POINTER TARGET (Grant, 22 September), but
       it is no longer pretending to be one button. As role=button it held
@@ -846,7 +846,6 @@ export const compositionC = (p) => {
     <div class="bcpanes" data-bc-board="${esc(p.slug)}" ${backdrop.attrsFor(grid.bgOf(p.slug), p.slug)} style="height:${String(st.h)}px;--bc-gx:${String(view.x)}px;--bc-gy:${String(view.y)}px;--bc-gz:${String(view.zoom)};--bc-gstep:${String(grid.gridStep(view.zoom))}px;${backdrop.styleFor(grid.bgOf(p.slug), p.slug)}">
       <canvas class="bcgridcv" aria-hidden="true"></canvas>
       ${plusMenu(p)}
-      <span class="bcstagever" aria-hidden="true">${esc(typeof window.HQ_VERSION === 'string' ? `v${window.HQ_VERSION}` : '')}</span>
       <div class="bcstage" style="width:${String(st.w)}px;height:${String(tall)}px;--bc-zoom:${String(view.zoom)};transform:translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.zoom)})">
         ${place
           .map((r) => {
