@@ -343,6 +343,19 @@
   [data-experience='basecamp'] .bcplus { top: -50px; }
 }
 
+/*
+  Q8 (21 November 2026). On a tablet held upright the canvas starts lower, and the arrange button, pinned to the canvas's
+  top right, sat on the close button of a box in that corner, so Reset view could not be reached. Between the header and the
+  boxes there is empty space at that width, so the button sits there. Checked automatically at 768, 1024 and 1280 wide.
+*/
+@media (min-width: 761px) and (max-width: 1100px) {
+  [data-experience='basecamp'] .bcplus {
+    position: fixed;
+    top: 60px;
+    right: 8px;
+  }
+}
+
 /* Return to automatic (21 October 2026): shown only on a module that is pinned. The button's own display would otherwise win. */
 .bcmodbtn--auto[hidden] {
   display: none;
