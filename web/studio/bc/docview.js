@@ -466,7 +466,8 @@ export const wire = (root, ctx, fileFor) => {
         return
       }
       try {
-        const out = await act('document_rename', { p_document_id: id, p_title: title })
+        // The rename route takes p_document (rename_document, 0720), not p_document_id.
+        const out = await act('document_rename', { p_document: id, p_title: title })
         if (out?.error) say(b, out.error, 'warn')
         else {
           say(b, 'Renamed.', 'good')

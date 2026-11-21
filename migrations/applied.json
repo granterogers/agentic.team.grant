@@ -849,5 +849,6 @@
   "1100_the_documents_payload_carries_the_preview_the_tile_draws.sql": "9b92ffea4661325c72bef747ea006f8de1befbcf387e3eb135f3ee1cbbb342ea",
   "1101_a_project_says_what_documents_and_people_it_holds.sql": "efe3bfc4a3a2add735a5f7fcac548896e4b1101d5a7c4c682b4c131509a57346",
   "1102_the_catch_all_project_is_called_conversations.sql": "01f0fccc91c50ed79559923671e9abe5c05e3a9275d00e565ad70e05ec3d1c31",
-  "1103_a_document_can_be_archived_and_brought_back.sql": "34cd20e6049f87a8899f28e98ec8e23201b641a3818a8055037a3ec613eba900"
+  "1103_a_document_can_be_archived_and_brought_back.sql": "34cd20e6049f87a8899f28e98ec8e23201b641a3818a8055037a3ec613eba900",
+  "1104_the_document_archive_offers_its_undo_with_the_office.sql": "db798fa3359dffbff2b206a41dcdd201750d1d505b7a1269b716b834af467e65"
 }
