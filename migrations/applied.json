@@ -855,5 +855,6 @@
   "1106_stale_questions_on_named_projects_are_withdrawn.sql": "5928b341735cfa9074f74ebc8347da3284c7fe9ba992c37acc2161210ca12d64",
   "1107_the_activity_feed_finds_each_offices_newest_events_in_order.sql": "6a3984bdf6c6e22d11993aaa686e2f85ec50b3cf1e3c6daf8b64b0adaa99e5a5",
   "1108_the_activity_feed_works_out_the_office_actor_once.sql": "7f09dce70dc359027f2cff78343a8b92eca53b4c98e6752eee7bf217554d39a0",
-  "1109_the_activity_feed_reads_each_job_once.sql": "c62aac658018317302e5c90c465d2a4fc53b718b44814829aa1d18cfaf5b6ae5"
+  "1109_the_activity_feed_reads_each_job_once.sql": "c62aac658018317302e5c90c465d2a4fc53b718b44814829aa1d18cfaf5b6ae5",
+  "1110_the_services_list_carries_the_google_sign_in.sql": "d1381bcf1dc7f6d8acd0da0b18fe5a3c0be6ad01057032a697a32861d8379eb0"
 }
