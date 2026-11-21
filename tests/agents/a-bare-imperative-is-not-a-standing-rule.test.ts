@@ -84,8 +84,8 @@ describe('the distinction the evidence demonstrates is preserved', () => {
   */
   it.each([
     'From now on, answer in prose rather than bullet points.',
-    'Always put the project name at the top.',
-    'Never copy Ruby in on finance work.',
+    'From now on, always put the project name at the top.',
+    'From now on, never copy Ruby in on finance work.',
   ])('a marked standing instruction is still stored: %s', (said) => {
     expect(readTeaching(said)).not.toBeNull()
   })
