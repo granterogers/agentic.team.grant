@@ -5414,6 +5414,8 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   background: var(--surface); color: var(--ink);
   font: 400 16px/1 var(--text);
 }
+/* VIS-08 (21 November 2026): the project name box was too narrow to read a long name. It takes the row, and keeps a usable width. */
+.setadd input[data-projname] { flex: 1 1 min(100%, 36ch); min-width: min(100%, 24ch); }
 /*
   44px, because it is a real touch target and not decoration — an × drawn at
   the size of the glyph is the control this repository already shipped once at

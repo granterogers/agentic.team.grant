@@ -48,6 +48,7 @@ import * as docorder from './docorder.js'
 import { button, errorState, esc, skeleton, status } from './parts.js'
 import { columnsOf } from './layout.js'
 import { source } from '../data.js'
+import { serverNow } from '../net.js'
 
 /** A module whose office did not answer: what was not loaded, and the way to ask again (22 October 2026, item 26). */
 const unreachable = (what) =>
@@ -522,6 +523,31 @@ const ROOM_VOICES = new Set(['', 'grant', 'you', 'office', 'chief-of-staff', 'cl
 export const roomVoices = (list) =>
   list.filter((m) => ROOM_VOICES.has(String(m.who ?? m.from ?? '').toLowerCase()))
 
+/*
+  SPD-03 (21 November 2026): a long reply showed no progress for 40 to 50 seconds. The legacy app counts a waiting
+  row up in seconds, but the Team HQ thread is drawn here and never started that count. This starts one page-wide
+  interval the first time a waiting row is drawn. It writes textContent only, so it never redraws under the composer,
+  and it stops when no waiting row is left.
+*/
+let waitTimer = null
+const tickWaitingAges = () => {
+  const marks = document.querySelectorAll('[data-waiting-since]')
+  if (marks.length === 0) {
+    if (waitTimer !== null) clearInterval(waitTimer)
+    waitTimer = null
+    return
+  }
+  for (const el of marks) {
+    const since = Number(el.dataset.waitingSince)
+    if (!Number.isFinite(since)) continue
+    const secs = Math.max(0, Math.round((serverNow() - since) / 1000))
+    el.textContent = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`
+  }
+}
+const startWaitingCount = () => {
+  if (waitTimer === null) waitTimer = setInterval(tickWaitingAges, 1000)
+}
+
 export const said_ = (m) => {
   const who = m.who ?? m.from ?? ''
   const mine = who === 'grant'
@@ -568,6 +594,7 @@ export const said_ = (m) => {
         thinking: 'With the team. They are working on it.',
         slow: 'No answer yet. The office may still be working — it also answers in Slack and Telegram.',
       }[m.waiting] ?? 'Waiting.'
+    startWaitingCount()
     return `<div class="bcsaid bcsaid--working" role="status" aria-live="polite">
       <span class="bcsaidspin" aria-hidden="true"></span>
       <div class="bcsaidbody">
