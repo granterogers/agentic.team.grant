@@ -49,6 +49,8 @@
   text-transform: uppercase;
   white-space: nowrap; /* A15e: "DOC" was breaking one letter per line in a narrow tile. */
 }
+/* VIS-05 (21 November 2026): a list row is 34px wide, and the pill ran past it. The row's meta line already names the kind. */
+[data-experience='basecamp'] .bcrowthumb[data-filekind]::after { display: none; }
 
 /* 9. Titles read in up to two lines, then end in an ellipsis, rather than breaking mid-word. */
 [data-experience='basecamp'] .bcdoctitle {
