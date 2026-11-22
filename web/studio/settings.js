@@ -1132,6 +1132,8 @@ export const GOVERNANCE = {
   stranded: { ...FALLBACK_GOVERNANCE.stranded },
   scoring: [...FALLBACK_GOVERNANCE.scoring],
   triggers: [...FALLBACK_GOVERNANCE.triggers],
+  // SET-03, option B: the one decisions count and list (null until read, and null when the read fails).
+  pending: null,
 }
 
 export async function hydrateGovernance(read) {
@@ -1149,12 +1151,14 @@ export async function hydrateGovernance(read) {
       Settled, not awaited as a pair: a failing trigger read must not take the
       governance page down with it.
     */
-    const [d, t] = await Promise.all([
+    const [d, t, pd] = await Promise.all([
       read('governance'),
       read('triggers').catch(() => null),
+      read('pending_decisions').catch(() => null),
     ])
     if (!d || !Array.isArray(d.lessons)) throw new Error('unexpected shape')
     Object.assign(GOVERNANCE, {
+      pending: pd !== null && typeof pd === 'object' && typeof pd.count === 'number' ? pd : null,
       at: d.at ?? null,
       lessons: d.lessons ?? [],
       proposals: d.proposals ?? [],

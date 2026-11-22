@@ -28,12 +28,14 @@ const office = String(
   (await one('select office_id::text o from public.offices order by created_at limit 1')).o,
 )
 
+type Item = { id: string; kind: string; title: string; who: string; overdue: boolean; at: string }
 type Parts = {
   count: number
   blockers: number
   proposals: number
   requests: number
   offers: number
+  items: Item[]
 }
 const fn = async (): Promise<Parts> => {
   const row = await one(`select app.pending_decisions(${lit(office)}::uuid) as v`)
@@ -83,6 +85,18 @@ check(
     got.requests === direct.requests &&
     got.offers === direct.offers,
   `blockers ${String(got.blockers)}/${String(direct.blockers)}, proposals ${String(got.proposals)}/${String(direct.proposals)}, requests ${String(got.requests)}/${String(direct.requests)}, offers ${String(got.offers)}/${String(direct.offers)}`,
+)
+
+// The list agrees with the count: each kind lists its items, at most twenty, and no item is listed twice.
+const listed = (kind: string): number => got.items.filter((i) => i.kind === kind).length
+check(
+  'the list shows each kind with the same count (capped at twenty)',
+  listed('approval') === Math.min(got.blockers, 20) &&
+    listed('proposal') === Math.min(got.proposals, 20) &&
+    listed('tool') === Math.min(got.requests, 20) &&
+    listed('offer') === Math.min(got.offers, 20) &&
+    new Set(got.items.map((i) => `${i.kind}:${i.id}`)).size === got.items.length,
+  `${String(got.items.length)} item(s)`,
 )
 
 // A positive control: one open request must raise the requests part and the total by exactly one. Run through the gate, which

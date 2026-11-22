@@ -6102,6 +6102,8 @@ const requestStateTone = { open: 'warn', approved: 'ok', done: 'ok', declined: '
 function openRequestCount() {
   const g = config.GOVERNANCE
   if (!g.loaded) return 0
+  // SET-03, option B: the same count the Activity page shows, when the office has answered for it.
+  if (g.pending !== null && typeof g.pending.count === 'number') return g.pending.count
   return (
     g.proposals.filter((p) => p.state === 'open').length +
     (g.requests ?? []).filter((r) => r.state === 'open').length +
@@ -6196,7 +6198,22 @@ function requestsTab() {
       actions: btn('Let it ask again', 'quiet', { 'data-reopen': r.id }),
     })
 
+  /*
+    SET-03, option B: the approvals are the one kind this page did not list, so they are listed here with the rest of what is
+    waiting, and the count above is the same total. An approval is answered from the project it belongs to.
+  */
+  const approvals = ((g.pending && Array.isArray(g.pending.items)) ? g.pending.items : [])
+    .filter((i) => i.kind === 'approval')
+    .map((i) =>
+      ui.row({
+        name: String(i.title ?? 'Something is waiting for you'),
+        note: `Asked by ${String(i.who ?? 'the team')}${i.overdue === true ? ' · overdue' : ''}. Answer it from the project it belongs to.`,
+        meta: ui.facts([]),
+        actions: '',
+      }),
+    )
   const waiting = [
+    ...approvals,
     ...g.proposals.filter((p) => p.state === 'open').map(proposal),
     ...(g.requests ?? []).filter((r) => r.state === 'open').map(request),
     ...g.noticed.filter((s) => s.offer && s.state === 'open').map(offer),

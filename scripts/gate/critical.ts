@@ -72,7 +72,7 @@ export const CRITICAL: readonly Proof[] = [
   ),
   p(
     'pending-decisions',
-    5,
+    6,
     'one count says how many decisions wait for the person: the total is the sum of blockers, proposals, requests and offers, each part matches its own table, an open request raises its part by exactly one, an unknown office is refused, and the answer is stable (SET-03, migration 1115)',
   ),
   p(
