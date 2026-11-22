@@ -43,7 +43,7 @@ describe('fromFeedRow', () => {
   it('a person is You, and an unknown specialist is never credited to anybody on the roster', () => {
     expect(describeEvent(fromFeedRow(row({ who: 'you', kind: 'user' }), 0, ctx), ctx).who).toBe('You')
     const ghost = describeEvent(fromFeedRow(row({ who: 'retired-director', kind: 'agent' }), 0, ctx), ctx)
-    expect(ghost.who).toMatch(/no longer on the roster/)
+    expect(ghost.who).toMatch(/former team member/)
     expect(ghost.slug).toBe('retired-director')
   })
 

@@ -77,14 +77,14 @@ export async function runAll(H: any): Promise<void> {
       rows.forEach((r, i) => {
         const e = oracleEvents[i]
         const want = e.actor_kind === 'user' ? 'You' : e.actor_kind === 'agent' ? (crewName(e.actor) ?? '(not on roster)') : e.actor_kind === 'external' ? 'Hermes (outside worker)' : 'Team HQ'
-        if (e.actor_kind === 'agent' && crewName(e.actor) === undefined) { if (!/no longer on the roster/.test(r.who)) bad.push(`${r.who} for ${e.actor}`) }
+        if (e.actor_kind === 'agent' && crewName(e.actor) === undefined) { if (!/former team member/.test(r.who)) bad.push(`${r.who} for ${e.actor}`) }
         else if (r.who !== want) bad.push(`${r.who} != ${want} (${e.type})`)
         if (e.actor_kind === 'external' && !r.reported) bad.push(`external row not marked Reported (${e.type})`)
         if (e.actor_kind !== 'external' && r.reported) bad.push(`non-external row marked Reported (${e.type})`)
       })
       check(`${tag}: agent attribution - Claire only for the chief, each specialist by their own name, a worker marked Reported, an unknown actor never credited`, bad.length === 0, bad.slice(0, 3).join(' | ') || 'every actor matches its record')
       const unknown = rows.find((r) => /A retired specialist was held back/.test(r.sentence))
-      check(`${tag}: a specialist the roster does not hold is named as such, never credited to Claire or another specialist, and the row is marked as a problem`, unknown !== undefined && /no longer on the roster/.test(unknown.who) && !/Claire|Emma|Daniel|Ruby|Oliver|Marcus|Tom|Grace/.test(unknown.who) && unknown.problem, unknown?.who ?? 'row not found')
+      check(`${tag}: a specialist the roster does not hold is named as such, never credited to Claire or another specialist, and the row is marked as a problem`, unknown !== undefined && /former team member/.test(unknown.who) && !/Claire|Emma|Daniel|Ruby|Oliver|Marcus|Tom|Grace/.test(unknown.who) && unknown.problem, unknown?.who ?? 'row not found')
       const heads = await page.$$eval('.bcact-dayhead', (n: Element[]) => n.map((x) => x.textContent?.trim() ?? ''))
       check(`${tag}: events are grouped under Today / Yesterday / dated headings, newest day first`, heads.length >= 1 && heads[0] === 'Today' && new Set(heads).size === heads.length, heads.join(' | '))
       const lap = rows.filter((r) => r.sr && r.tr && r.wr && !(r.tr.left >= r.sr.right - 1 || r.tr.bottom <= r.sr.top + 1 || r.tr.right <= r.sr.left + 1 || r.tr.top >= r.sr.bottom - 1)).map((r) => r.sentence.slice(0, 40))

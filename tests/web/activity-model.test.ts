@@ -31,7 +31,7 @@ describe('who did it', () => {
     expect(x.who).not.toBe('Claire')
     expect(x.who).not.toBe('Emma')
     expect(x).toMatchObject({ tone: 'unknown' })
-    expect(x.who).toMatch(/no longer on the roster/)
+    expect(x.who).toMatch(/former team member/)
   })
   it('an actor kind it does not know is the office, not a person', () => {
     expect(d({ actor_kind: 'banana', actor: 'x' }).tone).toBe('system')
