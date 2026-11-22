@@ -7062,6 +7062,17 @@ function connectionsTab() {
           : ['ok', 'Connected']
   const gmailMark = markFor('gmail')
   const notebookMark = markFor('notebooklm')
+  /*
+    SET-08, "Last checked" (22 November 2026). The gateway does not run a check on demand, so the row says when it was last
+    checked, or that it has not been, and that the team checks it on a schedule. This replaces the Check button the report asked for.
+  */
+  const checkedLine = (c) => {
+    const last = String(c.last ?? '').trim()
+    if (last === '' || /^(never|not checked)$/i.test(last)) {
+      return c.state === 'unchecked' || c.state === 'unknown' ? 'Not checked yet. The team checks it on a schedule.' : ''
+    }
+    return `Last checked ${last}. The team checks it on a schedule.`
+  }
   // The merged Google row above covers these keys, so the gateway's own rows for them (Google, Gmail, Drive, Calendar) are not drawn again.
   const GOOGLE_ROWS = ['gmail', 'google', 'drive', 'calendar']
   const others = main.filter((c) => c.key !== 'notebooklm' && !GOOGLE_ROWS.includes(c.key))
@@ -7102,7 +7113,7 @@ function connectionsTab() {
         tint: c.tint ?? '',
         tone: t,
         word: w,
-        detail: String(c.detail ?? ''),
+        detail: [String(c.detail ?? ''), checkedLine(c)].filter((x) => x !== '').join(' '),
         action: tileAction(c),
         body: setUp ? notionBody() : c.key === 'mcp' ? mcpBody : '',
       })
