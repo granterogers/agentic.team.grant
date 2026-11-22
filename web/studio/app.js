@@ -7031,7 +7031,6 @@ function connectionsTab() {
     : gOn
       ? ui.button({ label: 'Disconnect Google', tone: 'quiet', a: { 'data-disconnect': 'google', 'data-service': 'Google' } })
       : ui.button({ label: ledGoogle?.state === 'dead' ? 'Reconnect Google' : 'Connect Google', tone: 'primary', a: { 'data-google-connect': true } })
-  const sharedGoogle = 'The same Google sign-in as Gmail.'
   const nbTone = ledNotebook === null ? ['off', 'Checking…'] : copy.state[ledNotebook.state] ?? ['off', 'Not checked']
   const nbOk = ledNotebook?.state === 'ok'
   // Vikunja's word, from the task sync's own reading: asking, not set up, not working, or connected.
@@ -7045,14 +7044,25 @@ function connectionsTab() {
           ? ['bad', 'Not working']
           : ['ok', 'Connected']
   const gmailMark = markFor('gmail')
-  const driveMark = markFor('drive')
-  const calendarMark = markFor('calendar')
   const notebookMark = markFor('notebooklm')
-  const others = main.filter((c) => c.key !== 'notebooklm')
+  // The merged Google row above covers these keys, so the gateway's own rows for them (Google, Gmail, Drive, Calendar) are not drawn again.
+  const GOOGLE_ROWS = ['gmail', 'google', 'drive', 'calendar']
+  const others = main.filter((c) => c.key !== 'notebooklm' && !GOOGLE_ROWS.includes(c.key))
+  /*
+    SET-08 (22 November 2026): Gmail, Google Drive and Google Calendar share one Google sign-in, so they had three rows with
+    the same status and the same action. They are one row now, with one status, one action and one line saying what it covers.
+  */
   const tiles = [
-    tile({ key: 'gmail', name: 'Gmail', svg: gmailMark.svg, tint: gmailMark.tint, tone: gTone[0], word: gTone[1], detail: ledGoogle?.detail ?? '', action: gAction }),
-    tile({ key: 'drive', name: 'Google Drive', svg: driveMark.svg, tint: driveMark.tint, tone: gTone[0], word: gTone[1], detail: sharedGoogle }),
-    tile({ key: 'calendar', name: 'Google Calendar', svg: calendarMark.svg, tint: calendarMark.tint, tone: gTone[0], word: gTone[1], detail: sharedGoogle }),
+    tile({
+      key: 'gmail',
+      name: 'Google: Gmail, Drive and Calendar',
+      svg: gmailMark.svg,
+      tint: gmailMark.tint,
+      tone: gTone[0],
+      word: gTone[1],
+      detail: [ledGoogle?.detail ?? '', 'One Google sign-in covers Gmail, Google Drive and Google Calendar.'].filter((x) => x !== '').join(' '),
+      action: gAction,
+    }),
     tile({
       key: 'notebooklm',
       name: 'NotebookLM',
