@@ -864,6 +864,8 @@ const SECTIONS: Readonly<
     paint touches, and governance is a screen you navigate TO.
   */
   governance: { fn: 'hq_governance', office: true, args: { p_limit: 40 } },
+  // SET-03 (22 November 2026): the one count of decisions waiting for the person, in four parts (migration 1115).
+  pending_decisions: { fn: 'pending_decisions', office: true },
   /*
     What the office may do without asking, and what Grant has said not to ask
     about again (#15, migrations 0421 and 0422).
