@@ -313,14 +313,22 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
   const sentBody = (await sent.json().catch(() => null)) as { job_id?: unknown } | null
   const job = typeof sentBody?.job_id === 'string' ? sentBody.job_id : ''
   let reply = ''
-  let state = job === '' ? 'no job' : 'waiting'
+  // A send that starts no job is answered in the response itself (`speak`), as the page reads it. That answer counts; only a
+  // send with neither a job nor an answer is "no job".
+  const speak =
+    typeof (sentBody as { speak?: unknown } | null)?.speak === 'string'
+      ? String((sentBody as { speak?: unknown }).speak)
+      : ''
+  let state = job === '' ? (speak.trim() !== '' ? 'answered in the response' : 'no job') : 'waiting'
+  if (job === '' && speak.trim() !== '') reply = speak
   const endAt = began + 600000
   while (job !== '' && Date.now() < endAt) {
     await sleep(5000)
     const st = (await gateway(s)
       .read('turn_status', `&id=${job}`)
-      .catch(() => null)) as { data?: unknown } | null
-    const data = (st !== null && typeof st === 'object' && 'data' in st ? st.data : st) as {
+      .catch(() => null)) as { json?: { data?: unknown }; data?: unknown } | null
+    // The gateway read answers { status, json: { section, data } }; the turn status is under json.data.
+    const data = (st?.json?.data ?? st?.data ?? null) as {
       state?: string
       live?: number
       outputs?: { body?: string }[]
@@ -340,7 +348,11 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
   const ctx: Ctx = { started, reply, words, bullets, jobsSince: jobs, tasksSince: tasks }
   // Every task first asks whether the team finished the turn at all. A turn that did not finish fails, whatever its reply.
   const checks = [
-    { what: 'the team finished the turn', ok: state === 'done', detail: state },
+    {
+      what: 'the team finished the turn',
+      ok: state === 'done' || state === 'answered in the response',
+      detail: state,
+    },
     ...(await c.checks(ctx)),
   ]
   const passed = checks.length > 0 && checks.every((k) => k.ok)
