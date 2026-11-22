@@ -3570,6 +3570,18 @@ const myTasks = () => {
         .join(' · '),
     )
   }
+  /*
+    FUN-02: completed items stay visible, under their own heading, so a tick is never a disappearance. The
+    list above is the open work; these are the finished rows. An item that is already in the list above is not
+    repeated (the Done bucket can be the one on screen).
+  */
+  const doneBelow = (() => {
+    if (!signedIn || trouble) return []
+    const finished = ctx.myDone?.()
+    if (!Array.isArray(finished)) return []
+    const shown = new Set((Array.isArray(mine) ? mine : []).map((t) => String(t.id ?? '')))
+    return finished.filter((t) => !shown.has(String(t.id ?? '')))
+  })()
   const seriesBelow = (() => {
     if (!signedIn || trouble) return []
     const all = ctx.myRepeating?.()
@@ -3627,6 +3639,26 @@ const myTasks = () => {
                 </div>`,
               )
               .join('')}</div>`
+    }
+    ${
+      doneBelow.length === 0
+        ? ''
+        : `<h2 class="bcsubhead">Done</h2>
+          <p class="bcpmeta bcprose bcgap-l">Finished items stay here. Untick one to put it back on your list.</p>
+          <div class="bclist bclist--done" data-bc-done-list>${doneBelow
+            .map(
+              (t) => `<div class="bcitem bcitem--done">
+                <input type="checkbox" class="bccheck" checked
+                  data-bc-mytick="${esc(t.id ?? '')}"
+                  aria-label="${esc(`Completed: ${t.title}`)}">
+                <div class="bcitembody">
+                  <span class="bcitemtitle">${esc(t.title)}</span>
+                  <span class="bcitemmeta">${myMeta(t)}</span>
+                </div>
+                ${t.id === undefined || String(t.id) === '' ? '' : button('Remove', { 'data-bc-mytaskremove': esc(String(t.id)), 'aria-label': `Remove: ${t.title}` })}
+              </div>`,
+            )
+            .join('')}</div>`
     }
     ${
       seriesBelow.length === 0

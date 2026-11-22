@@ -211,6 +211,12 @@ const mine = {
   bucket: 'today',
   lists: {},
   counts: null,
+  /*
+    Completed items (FUN-02, 21 November 2026). The open buckets leave a finished task out by design, so a tick made it vanish
+    with no way back to it. The `done` bucket already exists on the gateway; it is read beside the open list and kept here, and
+    the page draws it under its own heading. Null until read; a failed read leaves it null rather than an empty list.
+  */
+  done: null,
   editing: null,
   trouble: {},
   /*
@@ -14755,6 +14761,8 @@ const bcContext = {
     return Array.isArray(rows) ? rows : null
   },
   myTasksTrouble: () => mine.trouble[mineKey()] === true,
+  // Completed items, or null until they have been read (FUN-02).
+  myDone: () => (Array.isArray(mine.done) ? mine.done : null),
   /*
     START THE FETCH, from the renderer, the way the default studio's review
     block does.
@@ -15951,10 +15959,12 @@ async function needMine(bucket) {
   if (mine.lists[key] !== undefined) return
   mine.lists[key] = null
   try {
-    const [rows, counts] = await Promise.all([
+    const [rows, counts, finished] = await Promise.all([
       settles(read('my_tasks', bucket, { q: mine.query, sort: mine.sort })),
       mine.counts === null ? settles(read('my_task_counts')) : Promise.resolve(mine.counts),
+      mine.done === null ? settles(read('my_tasks', 'done', { q: '', sort: 'smart' })) : Promise.resolve(mine.done),
     ])
+    if (Array.isArray(finished)) mine.done = finished
     /*
       `settles` answers null for a request that failed without throwing, so
       "not an array" is the same news as the catch below and must not become
@@ -15999,6 +16009,7 @@ async function needMine(bucket) {
 function forgetMine() {
   for (const k of Object.keys(mine.lists)) delete mine.lists[k]
   mine.counts = null
+  mine.done = null
   mine.repeating = undefined
 }
 
@@ -16012,11 +16023,13 @@ async function reloadMine() {
   const key = mineKey()
   const kept = mine.lists[key]
   try {
-    const [rows, counts, all] = await Promise.all([
+    const [rows, counts, all, finished] = await Promise.all([
       settles(read('my_tasks', mine.bucket, { q: mine.query, sort: mine.sort })),
       settles(read('my_task_counts')),
       settles(read('my_tasks', 'all', { q: '', sort: 'smart' })),
+      settles(read('my_tasks', 'done', { q: '', sort: 'smart' })),
     ])
+    if (Array.isArray(finished)) mine.done = finished
     for (const k of Object.keys(mine.lists)) if (k !== key) delete mine.lists[k]
     if (Array.isArray(rows)) {
       mine.lists[key] = rows
