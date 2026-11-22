@@ -15,7 +15,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import type { Page } from 'playwright'
 import { newPage, settle, signIn, startStudio } from './browser.ts'
-import { rows, sampleOffice, session } from './lib.ts'
+import { gateway, rows, sampleOffice, session } from './lib.ts'
 
 const label = process.argv[2] ?? 'run'
 const only = (process.argv[3] ?? '').split(',').filter((x) => x !== '')
@@ -301,51 +301,48 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
     await sleep(5000)
   }
   await page.locator('[data-docksay]').first().fill(c.message)
-  await page.locator('[data-dockform] button[type=submit]').click()
+  // The send returns the job it started. The reply is read from THAT job's tree (turn_status), so no reply can be taken from
+  // another question, a late answer, or a placeholder line in the thread.
+  const [sent] = await Promise.all([
+    page.waitForResponse(
+      (r) => new URL(r.url()).pathname.endsWith('/turn') && r.request().method() === 'POST',
+      { timeout: 60000 },
+    ),
+    page.locator('[data-dockform] button[type=submit]').click(),
+  ])
+  const sentBody = (await sent.json().catch(() => null)) as { job_id?: unknown } | null
+  const job = typeof sentBody?.job_id === 'string' ? sentBody.job_id : ''
   let reply = ''
-  /*
-    An acknowledgement is not an answer. The page first shows "I have put that to the team … has not answered yet", and the
-    real reply arrives minutes later. So a placeholder never counts, and the answer is taken only once the thread has held
-    still for two polls with at least one real message after the question. Ten minutes at most per task.
-  */
-  const PLACEHOLDER =
-    /has not answered yet|nobody has picked it up|put (that |this |it )?to the team|working on it|sending|waiting|checking|\.\.\.|…$/i
-  const end = began + 600000
-  let last = ''
-  let stillFor = 0
-  while (Date.now() < end) {
+  let state = job === '' ? 'no job' : 'waiting'
+  const endAt = began + 600000
+  while (job !== '' && Date.now() < endAt) {
     await sleep(5000)
-    const now = await thread(page)
-    // The LAST echo of this question, not the first: the thread shows a window of the conversation, so an index taken before
-    // sending does not line up with it, and an earlier run's echo of the same words would be found instead.
-    let mine = -1
-    now.forEach((m, i) => {
-      if (m.includes(c.message.slice(0, 30))) mine = i
-    })
-    // The person's own echo ("You, 08:18 PM …") is not a reply, so it never counts.
-    const real = (mine < 0 ? [] : now.slice(mine + 1)).filter(
-      (m) =>
-        m.length > 0 &&
-        !PLACEHOLDER.test(m) &&
-        !/^you\b/i.test(m) &&
-        !m.includes(c.message.slice(0, 30)),
-    )
-    const snapshot = real.join('\n')
-    if (real.length > 0 && snapshot === last) stillFor += 1
-    else stillFor = 0
-    last = snapshot
-    if (stillFor >= 2) {
-      reply = snapshot
+    const st = (await gateway(s)
+      .read('turn_status', `&id=${job}`)
+      .catch(() => null)) as { data?: unknown } | null
+    const data = (st !== null && typeof st === 'object' && 'data' in st ? st.data : st) as {
+      state?: string
+      live?: number
+      outputs?: { body?: string }[]
+    } | null
+    state = String(data?.state ?? 'waiting')
+    if (['done', 'failed', 'cancelled'].includes(state) && (data?.live ?? 0) === 0) {
+      reply = (data?.outputs ?? []).map((o) => String(o.body ?? '')).join('\n')
       break
     }
   }
+  if (job !== '' && reply === '' && state !== 'done') state = `${state} (did not finish)`
   const seconds = Math.round((Date.now() - began) / 1000)
   const jobs = await jobsSince(started)
   const tasks = await tasksSince(started)
   const words = reply.split(/\s+/).filter((w) => w !== '').length
   const bullets = reply.split('\n').filter((l) => /^\s*([-*•]|\d+[.)])\s/.test(l)).length
   const ctx: Ctx = { started, reply, words, bullets, jobsSince: jobs, tasksSince: tasks }
-  const checks = await c.checks(ctx)
+  // Every task first asks whether the team finished the turn at all. A turn that did not finish fails, whatever its reply.
+  const checks = [
+    { what: 'the team finished the turn', ok: state === 'done', detail: state },
+    ...(await c.checks(ctx)),
+  ]
   const passed = checks.length > 0 && checks.every((k) => k.ok)
   results.push({ id: c.id, area: c.area, passed, checks, reply, seconds })
   console.log(`${passed ? 'PASS' : 'FAIL'} ${c.id} ${c.area} (${String(seconds)}s)`)
@@ -353,7 +350,10 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
     console.log(
       `     ${k.ok ? 'ok  ' : 'FAIL'} ${k.what}${k.detail === '' ? '' : ` - ${k.detail}`}`,
     )
-  writeFileSync(`${out}/${c.id}.txt`, `QUESTION: ${c.message}\n\nREPLY:\n${reply}\n`)
+  writeFileSync(
+    `${out}/${c.id}.txt`,
+    `QUESTION: ${c.message}\nJOB STATE: ${state}\n\nREPLY:\n${reply}\n`,
+  )
 }
 
 writeFileSync(`${out}/results.json`, JSON.stringify(results, null, 2))
