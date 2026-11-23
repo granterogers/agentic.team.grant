@@ -270,6 +270,18 @@ export const createActivity = (deps) => {
   const pendingItems = () => (S.pending.data !== null && Array.isArray(S.pending.data.items) ? S.pending.data.items : [])
   const pendingCount = () => (S.pending.data !== null && typeof S.pending.data.count === 'number' ? S.pending.data.count : null)
   const KIND_WORDS = { approval: 'Approval', proposal: 'Proposal', tool: 'Tool request', offer: 'Offer' }
+  /*
+    A person's name, not the office's role id ("operations-director") (stress test of 23 November 2026). A role the roster does not
+    hold reads as "A team member", never as its raw id.
+  */
+  const personName = (who) => {
+    const w = String(who ?? '')
+    if (w === '' || w === 'the team') return 'The team'
+    const found = ctxFor().crew?.find((c) => c.slug === w || c.staffSlug === w)
+    if (found?.name) return found.name
+    if (/^[a-z0-9]+(-[a-z0-9]+)+$/.test(w)) return 'A team member'
+    return w
+  }
 
   const attentionPanel = () => {
     const items = pendingItems()
@@ -278,7 +290,7 @@ export const createActivity = (deps) => {
         (it) => `<li class="bcact-need">
           <span class="bcact-mark bcact-mark--wait" aria-hidden="true">${icon('approval')}</span>
           <span class="bcact-needbody"><span class="bcact-needtitle">${esc(String(it.title ?? 'Something is waiting for you'))}</span>
-          <span class="bcact-meta"><span class="bcact-proj">${esc(KIND_WORDS[it.kind] ?? 'Decision')}</span>${it.who ? `<span class="bcact-via">${esc(String(it.who))}</span>` : ''}${it.overdue === true ? '<span class="bcact-result bcact-result--wait">Overdue</span>' : '<span class="bcact-result bcact-result--wait">Waiting for you</span>'}</span></span>
+          <span class="bcact-meta"><span class="bcact-proj">${esc(KIND_WORDS[it.kind] ?? 'Decision')}</span>${it.who ? `<span class="bcact-via">${esc(personName(it.who))}</span>` : ''}${it.overdue === true ? '<span class="bcact-result bcact-result--wait">Overdue</span>' : '<span class="bcact-result bcact-result--wait">Waiting for you</span>'}</span></span>
         </li>`,
       )
       .join('')

@@ -6388,7 +6388,12 @@ function plainDetail(text) {
   if (/invalid_grant/i.test(t)) return 'The sign-in was revoked. Reconnect it to keep it working.'
   if (/^valid$/i.test(t)) return 'Working.'
   if (/refresh token is in the vault/i.test(t)) return 'Connected and signed in.'
-  return t
+  /*
+    Google's permission addresses are not for a person to read (stress test of 23 November 2026: "scopes: https://www.googleapis.com/
+    auth/calendar.events …" was printed on the Services row). The sentence keeps what it says, and the addresses are dropped.
+  */
+  const withoutScopes = t.replace(/;?\s*scopes?:\s*[^.]*$/i, '').trim()
+  return withoutScopes === '' ? 'Connected.' : withoutScopes.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim()
 }
 
 function healthTab() {
