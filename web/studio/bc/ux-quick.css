@@ -531,3 +531,18 @@ body.dock-yields #dock { display: none !important; }
     min-height: 44px;
   }
 }
+
+/*
+  THE CHAT PANEL FITS A PHONE (stress test of 23 November 2026). A width the person set on a desktop is kept in --dock-w, and the
+  panel took it on a 390 px phone: the message box was 443 px wide and the Send button ran off the screen. On a phone the panel is
+  the screen's width, whatever was set on the desktop.
+*/
+@media (max-width: 600px) {
+  [data-experience='basecamp'] .dock {
+    width: 100vw;
+    max-width: 100vw;
+  }
+  [data-experience='basecamp'] body.docked {
+    padding-right: 0;
+  }
+}

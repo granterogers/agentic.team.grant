@@ -30,9 +30,20 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   gives: convert-then-escape turns the tags you just added into visible text.
 */
 const NUMBERED = /^\s*(\d+)[.)]\s+(.*)$/
+const BULLET = /^\s*[-*•]\s+(.*)$/
 export const prose = (s) =>
   String(s ?? '')
     .replace(/\r\n?/g, '\n')
+    /*
+      A list written inline after a colon ("these three items: - first - second") is put on lines of its own (stress test of 23
+      November 2026: the dashes showed as literal text). Only a dash that follows a colon and a space is taken, so a hyphenated word
+      is left alone.
+    */
+    .replace(/:\s+-\s+(?=\S)/g, ':\n- ')
+    // The later items of the same run: a dash after a full stop and before a capital letter starts the next one.
+    .split('\n')
+    .map((l) => (l.startsWith('- ') ? l.replace(/\.\s+-\s+(?=[A-Z])/g, '.\n- ') : l))
+    .join('\n')
     .trim()
     .split(/\n{2,}/)
     .map((para) => {
@@ -67,6 +78,25 @@ export const prose = (s) =>
           .map((m) => `<li>${esc(m[2])}</li>`)
           .join('')}</ol>`
       }
-      return `<p>${esc(para).replace(/\n/g, '<br>')}</p>`
+      /*
+        A lead-in line followed by bullets ("these three items:" then the dashes) is a paragraph and then a list, in that order. Each
+        run of bullet lines becomes one list; the other lines stay together as a paragraph.
+      */
+      const runs = []
+      for (const l of lines) {
+        const m = BULLET.exec(l)
+        const kind = m === null ? 'text' : 'bullet'
+        const last = runs[runs.length - 1]
+        if (last !== undefined && last.kind === kind) last.lines.push(m === null ? l : m[1])
+        else runs.push({ kind, lines: [m === null ? l : m[1]] })
+      }
+      if (runs.every((r) => r.kind === 'text')) return `<p>${esc(para).replace(/\n/g, '<br>')}</p>`
+      return runs
+        .map((r) =>
+          r.kind === 'bullet'
+            ? `<ul class="msglist">${r.lines.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`
+            : `<p>${r.lines.map((x) => esc(x)).join('<br>')}</p>`,
+        )
+        .join('')
     })
     .join('')
