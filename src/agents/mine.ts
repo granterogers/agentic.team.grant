@@ -726,7 +726,14 @@ export function personalTaskRequest(
             ' ',
           )
         : askedSans
+  /*
+    "to this project: book the venue walkthrough" filed "This project: Book the venue walkthrough" as the name (stress test of 22
+    November 2026). A project named as a label, with a colon, is not part of the work.
+  */
   const base = stripFraming(titled.replace(/^(?:also|and|then|plus)[,\s]+/i, ''))
+    .replace(/^\s*(?:(?:this|the)\s+)?project\s*:\s*/i, '')
+    // "…, due" left once its date has been read into the due column: the word is not part of the work.
+    .replace(/[,\s]+due\s*$/i, '')
   const title = unsupported === null || base.length < 3 ? base : `${base} (${unsupported})`
   /*
     A title of nothing is not a task. "Remind me" on its own is a sentence with

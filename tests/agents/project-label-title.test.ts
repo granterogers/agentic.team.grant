@@ -32,3 +32,19 @@ describe('a project label with a colon is not part of the title', () => {
     expect(titleOf('Add a task to chase the roofer on this project')).not.toMatch(/^project\s*:/i)
   })
 })
+
+// The live path for a to-do is the personal-task reader in mine.ts, not the one above; it filed the label too.
+import { personalTaskRequest } from '../../src/agents/mine.ts'
+
+describe('the personal-task reader drops a project label as well', () => {
+  const NOW = new Date('2026-11-23T10:00:00Z')
+  it('files the work under its own name, with the date in the due column', () => {
+    const got = personalTaskRequest(
+      'Add a to-do to this project: Book the venue walkthrough, due next Friday.',
+      NOW,
+      'Europe/London',
+    )
+    expect(got?.title).toBe('Book the venue walkthrough')
+    expect(got?.due).toBe('2026-12-04')
+  })
+})
