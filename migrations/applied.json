@@ -862,5 +862,6 @@
   "1113_a_project_with_only_its_creation_record_can_be_deleted_without_its_name.sql": "3bacf7bfe3b7a5399ea96ebbf0974a274827b1903cf53c5816b5fbff0176f5ac",
   "1114_a_project_address_keeps_its_accented_letters.sql": "3fcf37e261bc1f7c0421b64e84483e657bd52faac65027ef5cadc8d1f2b995ae",
   "1115_one_count_says_how_many_decisions_wait_for_the_person.sql": "db1bcb8b5023d6e4e2f74b10b0d9a169a1242fb7693ea8668cdbc6d7d62903c5",
-  "1116_the_decisions_waiting_for_the_person_come_as_one_list.sql": "5b3a37db38896c1fd0a2e238c1641439cddc4c13001816dc5080fd4cc5ff935c"
+  "1116_the_decisions_waiting_for_the_person_come_as_one_list.sql": "5b3a37db38896c1fd0a2e238c1641439cddc4c13001816dc5080fd4cc5ff935c",
+  "1117_a_rename_says_what_happens_in_plain_words.sql": "fd55e8aaa67ba86e1066bb4a70e61020baeb0b2dfbec84783e97bdf2f96f1224"
 }
