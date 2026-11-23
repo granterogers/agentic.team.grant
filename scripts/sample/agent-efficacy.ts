@@ -286,7 +286,30 @@ const results: {
   seconds: number
 }[] = []
 
+/*
+  Each task goes to a project of its own (the sample office has four), so one task's answer is less likely to be read as part of
+  another's conversation. T2 stays on the project its check reads. Isolation is partial: a project still holds a few tasks.
+*/
+const PROJECT_FOR: Record<string, string> = {
+  T1: '2027-financial-plan',
+  T2: 'wellness-studio-launch',
+  T3: 'japan-spring-trip',
+  T4: 'unnamed',
+  T5: '2027-financial-plan',
+  T6: 'japan-spring-trip',
+  T7: 'unnamed',
+  T8: 'wellness-studio-launch',
+  T9: '2027-financial-plan',
+  T10: 'japan-spring-trip',
+}
+let onProject = ''
 for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
+  const slug = PROJECT_FOR[c.id] ?? 'wellness-studio-launch'
+  if (slug !== onProject) {
+    await page.goto(`${studio.base}/p/${slug}`, { waitUntil: 'domcontentloaded' })
+    await settle(page)
+    onProject = slug
+  }
   await openDock(page)
   const started = new Date().toISOString()
   const began = Date.now()
