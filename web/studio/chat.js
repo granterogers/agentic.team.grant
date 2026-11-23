@@ -651,7 +651,12 @@ export async function ask(slug, text, context, token, to, also, onState) {
     at once; the answer is written minutes later by somebody else, and until now it only reached a person who happened to
     open the Chat tab. Follow the job and bring the answer into this conversation (see `follow`).
   */
-  if (reply.did === 'delegated' && typeof reply.job === 'string' && reply.job !== '') {
+  /*
+    Any job the reply names is followed, not only a delegated one (stress test of 23 November 2026). A direct answer can still start a
+    job whose answer is written a few minutes later; when only delegations were followed, that answer reached the page only on a
+    later reload, and the dock never showed it.
+  */
+  if (typeof reply.job === 'string' && reply.job !== '') {
     void follow(slug, reply.job, token, onState)
   }
   return next
