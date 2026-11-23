@@ -482,7 +482,7 @@ const headRow = (p, extra = '') => {
             <button type="button" role="menuitem" data-bc-expand="team"><span class="bcmi-t">The team</span><span class="bcmi-d">Who works on this project, and their roles</span></button>
             <button type="button" role="menuitem" data-bc-sources="1"><span class="bcmi-t">Sources</span><span class="bcmi-d">Where the material comes from: Drive, Notion, notebooks and links</span></button>
             <button type="button" role="menuitem" data-bc-go="${esc(at(`/p/${p.slug}/settings`))}"><span class="bcmi-t">Project settings</span><span class="bcmi-d">This project's name, icon and what it switches on</span></button>
-            <button type="button" role="menuitem" data-bc-settings="1" title="Global Settings: the whole office, outside any project"><span class="bcmi-t">Global Settings</span><span class="bcmi-d">The whole office: connections, text size and how it works</span></button>
+            <button type="button" role="menuitem" data-bc-settings="1" title="Settings: the whole office, outside any project"><span class="bcmi-t">Settings</span><span class="bcmi-d">The whole office: connections, text size and how it works</span></button>
             <!--
               THE OFFICE'S OWN SETTINGS ARE NOT IN HERE ANY MORE.
 

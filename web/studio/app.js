@@ -5880,7 +5880,7 @@ const HELP_TOPICS = [
     title: 'Documents and sources',
     steps: [
       'Open a project, then Documents. Opening one shows its whole text.',
-      'Documents arrive through a connection rather than an upload: open Sources and attach Drive, Notion or NotebookLM. Pasting a Google Drive link there works out the rest.',
+      'Documents come in two ways: upload a file under Docs & Files, or attach a source under Sources (Drive, Notion or NotebookLM). Pasting a Google Drive link under Sources works out the rest.',
       'The speech icon on a document starts a conversation about it with the team.',
     ],
     note: 'A PDF that came in as extracted text shows its text. Where Team HQ holds the actual file, it opens in a viewer with a link to the real thing.',
@@ -5889,7 +5889,7 @@ const HELP_TOPICS = [
     title: 'Tasks',
     steps: [
       'Open a project, then Tasks, then Add a task. A title is all that is required.',
-      'The circle beside a task marks it done, and that is saved.',
+      'The box beside a task marks it done, and that is saved. Untick it to put the task back.',
       'To see dated tasks in your Google Calendar, turn on Show dated tasks in Google Calendar under Settings, then Autonomy and approvals.',
     ],
     note: 'Calendar sync is one way. A task with a due date becomes an all-day event and is removed when the task is done; the calendar never changes a task.',

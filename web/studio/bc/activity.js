@@ -16,7 +16,7 @@
   A NOTE ON COMMENTS IN THIS FILE: functions here return template literals, and a backtick inside a comment inside one ends the
   string. Comments inside returned templates use plain words only, and this file keeps its comments outside them.
 */
-import { activeFilters, appendPage, clock, describe, destinationFor, exactTime, filterFeed, fromFeedRow, groupByDay, howWeKnow, kindWords, queryFor, RANGES, safeFacts, sortFeed, stageOf, VIEWS } from './activity-model.js'
+import { activeFilters, appendPage, clock, describe, destinationFor, exactTime, filterFeed, fromFeedRow, groupByDay, howWeKnow, kindWords, plainTitle, queryFor, RANGES, safeFacts, sortFeed, stageOf, VIEWS } from './activity-model.js'
 
 const PAGE = 40
 const HELD_MAX = 400
@@ -410,7 +410,8 @@ export const createActivity = (deps) => {
         const who = crew().find((c) => c.slug === r.who || c.staffSlug === r.who)?.name ?? ''
         const said = String(r.ask ?? '').replace(/\s+/g, ' ').trim()
         // A request with no text of its own is stored under its job kind; a kind is never shown as wording.
-        const ask = said === '' || /^[a-z]+(\.[a-z_]+)+$/.test(said) ? kindWords(said === '' ? 'office.instruction' : said) : said
+        // "Office pursue" is the office's own job name, as the feed also names it (stress test of 23 November 2026).
+        const ask = said === '' || /^[a-z]+(\.[a-z_]+)+$/.test(said) ? kindWords(said === '' ? 'office.instruction' : said) : plainTitle(said)
         return `<li class="bcact-nowrow"><span class="bcact-pulse" aria-hidden="true"></span><span class="bcact-nowbody"><span class="bcact-nowtitle">${esc(ask.length > 140 ? `${ask.slice(0, 137)}…` : ask)}</span><span class="bcact-meta">${who === '' ? '' : `<span>${esc(who)} is working on it</span>`}<span class="bcact-proj">${esc(p.name)}</span></span></span><button type="button" class="bcbtn bcbtn--outline" data-act-go="${esc(`/p/${p.slug}/team`)}" data-act-focus="now:${esc(String(r.id ?? p.slug))}">Open</button></li>`
       })
       .join('')

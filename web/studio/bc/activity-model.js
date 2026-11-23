@@ -74,7 +74,7 @@ export const activeFilters = ({ view, agent, project, range }, { agentName = (s)
   The server should write the plain title itself; this is the page's stop-gap until it does.
 */
 const PLAIN_TITLES = { 'Office pursue': 'Working through a request', 'office.pursue': 'Working through a request' }
-const plainTitle = (s) => PLAIN_TITLES[s] ?? s
+export const plainTitle = (s) => PLAIN_TITLES[s] ?? s
 
 /** One event, as the screen needs it. Never throws; a field the record does not carry is simply absent. */
 export const describe = (e, { crew = [], projects = [] } = {}) => {

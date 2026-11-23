@@ -546,3 +546,23 @@ body.dock-yields #dock { display: none !important; }
     padding-right: 0;
   }
 }
+
+/*
+  THE PROJECT NAME IN THE TOP BAR SHORTENS, IT DOES NOT GO UNDER THE BUTTON (stress test of 23 November 2026: "Cowork test: Empty"
+  showed as "Cowork test: Em" with Chat with Team on top of it at 1440 px). The name takes the room it has and ends in an ellipsis; the
+  full name stays in the switcher's title and its accessible label.
+*/
+[data-experience='basecamp'] .bchere {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+[data-experience='basecamp'] .bcjumpname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bchere-link {
+  min-width: 0;
+  max-width: 100%;
+}

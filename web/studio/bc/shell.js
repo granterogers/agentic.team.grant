@@ -172,7 +172,7 @@ export const TOOLS = [
   */
   { id: 'chat', name: 'Chat', own: true },
   { id: 'schedule', name: 'Schedule', own: true },
-  { id: 'team', name: 'Agentic Team', own: true },
+  { id: 'team', name: 'Team', own: true },
   /*
     And "Assets" is the same word twice with a marketing coat on. A document
     is a document; the gallery shows PDFs, written pages and uploads, and
@@ -402,7 +402,7 @@ const menuPanel = () => {
         )
         .join('')}
       <button type="button" role="menuitem" class="bcmenuitem" data-bc-global-menu="1"
-        title="Global Settings: the whole office, outside any project"><span class="bcmenuname">Global Settings</span></button>
+        title="Settings: the whole office, outside any project"><span class="bcmenuname">Settings</span></button>
     </div>
     ${
       here === null
@@ -1223,7 +1223,7 @@ const tasksSurface = (whole) => {
         container rather than a way to make a to-do.
       -->
       <span class="bcactions">
-        ${button('Add a Task', { kind: 'primary', 'data-bc-addtask': esc(named[0]?.id === undefined || named[0]?.id === '' ? 'loose' : named[0].id) })}
+        ${button('Add a task', { kind: 'primary', 'data-bc-addtask': esc(named[0]?.id === undefined || named[0]?.id === '' ? 'loose' : named[0].id) })}
         ${button('New list', { 'data-bc-addlist': '1' })}
       </span>
     </div>
@@ -1692,7 +1692,7 @@ const teamSurface = (p) => {
     : people.find((c) => c.slug === String(editing))
   return `${crumbFor(p, 'team')}
     <div class="bcrecordhead">
-      <h1>Agentic Team</h1>
+      <h1>Team</h1>
       <span class="bcactions">${button('Bring someone in', { 'data-bc-hire': '1' })}</span>
     </div>
     ${
@@ -3311,7 +3311,7 @@ const settingsSurface = (p) => {
     </div>
     <p class="bcpmeta bcprose bcgap-l">
       Settings for ${esc(p.name)} alone. What the whole office does — the team,
-      its behaviour, what it is connected to — is under Global Settings.
+      its behaviour, what it is connected to — is under Settings.
     </p>
     <div class="bcsetframe">${ctx?.projectSettingsBody?.(p) ?? ''}</div>`
 }
@@ -3390,7 +3390,7 @@ const waitingRecord = (p) => {
 
   return `${breadcrumb([
     { name: p.name, to: at(`/p/${p.slug}`) },
-    { name: 'Agentic Team', to: at(`/p/${p.slug}/team`) },
+    { name: 'Team', to: at(`/p/${p.slug}/team`) },
     { name: w.what },
   ])}
     <!--
