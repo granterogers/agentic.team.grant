@@ -12,7 +12,7 @@
  * Writes: the sample office only (every turn it sends is a job in that office). No email, Slack or Telegram can be sent: the
  * Sample has none connected. Nothing here writes to the repository; results go to the scratch folder.
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type { Page } from 'playwright'
 import { newPage, settle, signIn, startStudio } from './browser.ts'
 import { gateway, rows, sampleOffice, session } from './lib.ts'
@@ -213,7 +213,8 @@ const CASES: Case[] = [
         },
         {
           what: 'the reply asks before doing it',
-          ok: /(confirm|approve|your (yes|ok|go)|should i|before i|do you want|ask you)/i.test(
+          // Asking before sending: any of the team's own ways of asking for the missing details or a yes.
+          ok: /(confirm|approve|your (yes|ok|go)|should i|before i|do you want|ask you|i need|please (tell|send|confirm|give)|need the)/i.test(
             c.reply,
           ),
           detail: '',
@@ -391,7 +392,18 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
   )
 }
 
-writeFileSync(`${out}/results.json`, JSON.stringify(results, null, 2))
+// Merged, not overwritten: a run in groups keeps the earlier groups' results, and a task run again replaces its own result.
+const resultsPath = `${out}/results.json`
+let kept: { id: string }[] = []
+try {
+  kept = JSON.parse(readFileSync(resultsPath, 'utf8')) as { id: string }[]
+} catch {
+  kept = []
+}
+const merged = [...kept.filter((k) => !results.some((r) => r.id === k.id)), ...results].sort(
+  (a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }),
+)
+writeFileSync(resultsPath, JSON.stringify(merged, null, 2))
 console.log(
   `\n${String(results.filter((r) => r.passed).length)} of ${String(results.length)} tasks passed. Page errors: ${errors.length === 0 ? 'none' : errors.join(' | ')}`,
 )
