@@ -217,6 +217,12 @@ const mine = {
     the page draws it under its own heading. Null until read; a failed read leaves it null rather than an empty list.
   */
   done: null,
+  /*
+    Every open item, whatever its date (stress test of 23 November 2026). The page shows the Today bucket, so a task due later, or with
+    no date, was filed and never seen. This is the same list the repeating reminders already read; it is kept so the page can show
+    the rest under "Coming up".
+  */
+  all: null,
   editing: null,
   trouble: {},
   /*
@@ -1914,6 +1920,14 @@ function wireDockKeyboard() {
 
 // One named listener, so reopening during the fade can take back the one that was waiting for the exit to end.
 const onDockExited = () => paintDock()
+
+/*
+  The dock redraws whenever the thread changes, wherever the change came from: an answer that arrives after a reload, a delegated
+  answer, a retry (stress test of 23 November 2026: answers reached the Team page but not the chat until the panel was reopened).
+*/
+chat.onThreadChange(() => {
+  if (typeof paintDock === 'function') paintDock()
+})
 
 function paintDock() {
   const el = $('#dock')
@@ -14801,6 +14815,8 @@ const bcContext = {
   myTasksTrouble: () => mine.trouble[mineKey()] === true,
   // Completed items, or null until they have been read (FUN-02).
   myDone: () => (Array.isArray(mine.done) ? mine.done : null),
+  // Every open item, or null until read (stress test of 23 November 2026).
+  myAll: () => (Array.isArray(mine.all) ? mine.all : null),
   /*
     START THE FETCH, from the renderer, the way the default studio's review
     block does.
@@ -16003,6 +16019,8 @@ async function needMine(bucket) {
       mine.done === null ? settles(read('my_tasks', 'done', { q: '', sort: 'smart' })) : Promise.resolve(mine.done),
     ])
     if (Array.isArray(finished)) mine.done = finished
+    const everything = await settles(read('my_tasks', 'all', { q: '', sort: 'smart' }))
+    if (Array.isArray(everything)) mine.all = everything
     /*
       `settles` answers null for a request that failed without throwing, so
       "not an array" is the same news as the catch below and must not become
@@ -16048,6 +16066,7 @@ function forgetMine() {
   for (const k of Object.keys(mine.lists)) delete mine.lists[k]
   mine.counts = null
   mine.done = null
+  mine.all = null
   mine.repeating = undefined
 }
 
@@ -16076,6 +16095,7 @@ async function reloadMine() {
       delete mine.lists[key]
     }
     if (counts !== null && typeof counts === 'object') mine.counts = counts
+    if (Array.isArray(all)) mine.all = all
     if (Array.isArray(all))
       mine.repeating = all.filter(
         (r) => r?.repeats?.series === true && r.state !== 'done' && r.state !== 'cancelled',

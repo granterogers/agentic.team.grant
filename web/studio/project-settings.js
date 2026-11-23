@@ -988,7 +988,11 @@ export function wire(root, p, people, redraw, openLook, reload) {
               : ''
           }. It has left your project list. Nothing was deleted, and you can bring it back from the archive list.`,
         }
-        await reload?.()
+        /*
+          An archived project has no settings page of its own to stay on (stress test of 23 November 2026: the same address went on
+          to show another project's settings). The person goes Home, as after a purge.
+        */
+        globalThis.location?.assign('/')
       }
     })
   }

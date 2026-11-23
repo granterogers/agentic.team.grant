@@ -2804,6 +2804,18 @@ const wireTasks = (root) => {
     })
   }
 
+  /*
+    ENTER IN A TITLE SAVES THE TASK, IN PLACE (stress test of 23 November 2026). The form had no submit button, so Enter made the
+    browser submit it the old way: the whole page reloaded to /tasks?title=…, and the task was not made. Enter now runs the same
+    save as the button, and the default submit is stopped.
+  */
+  for (const f of root.querySelectorAll('[data-bc-taskform]')) {
+    f.addEventListener('submit', (e) => {
+      e.preventDefault()
+      f.querySelector('[data-bc-tasksave]')?.click()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-bc-tasksave]')) {
     b.addEventListener('click', async () => {
       const f = form(b, root)

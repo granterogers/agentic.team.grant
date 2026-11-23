@@ -163,9 +163,18 @@ function namedProject(text: string): string | null {
  * Null is the common case and must stay cheap: every message to every bot comes
  * through here.
  */
+/*
+  A link the person says they are NOT asking about, or says not to open (stress test of 23 November 2026: "Our supplier's page is
+  https://example.com, but I am not asking about it. Do not open it." was read and filed as a document). Such a message is not a
+  link request at all; the rest of it is answered as it stands.
+*/
+const NOT_ASKED_ABOUT_LINK =
+  /\b(?:not\s+(?:asking|asked|requesting|telling\s+you\s+to)\s+(?:you\s+)?(?:about|to)\s+(?:it|this|that|the\s+(?:link|page))|do\s+not\s+(?:open|visit|read|click|browse|go\s+to|fetch)|don['’]t\s+(?:open|visit|read|click|browse|go\s+to|fetch))\b/i
+
 export function linkRequest(message: string): LinkRequest | null {
   const found = message.match(URL_PATTERN)
   if (found === null || found.length === 0) return null
+  if (NOT_ASKED_ABOUT_LINK.test(message)) return null
 
   const links = found.map(classifyLink)
   const text = message.toLowerCase()

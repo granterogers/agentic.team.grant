@@ -3582,6 +3582,24 @@ const myTasks = () => {
     const shown = new Set((Array.isArray(mine) ? mine : []).map((t) => String(t.id ?? '')))
     return finished.filter((t) => !shown.has(String(t.id ?? '')))
   })()
+  /*
+    COMING UP (stress test of 23 November 2026). The Today bucket is what the list above shows, so a task due later, or with no date,
+    was filed and never seen. Every other open task is listed here, once, with the same tick and Remove as the rest. Repeating
+    reminders have their own list below, so they are left out here.
+  */
+  const comingUp = (() => {
+    if (!signedIn || trouble) return []
+    const everything = ctx.myAll?.()
+    if (!Array.isArray(everything)) return []
+    const shown = new Set((Array.isArray(mine) ? mine : []).map((t) => String(t.id ?? '')))
+    return everything.filter(
+      (t) =>
+        t.state !== 'done' &&
+        t.state !== 'cancelled' &&
+        t.repeats?.series !== true &&
+        !shown.has(String(t.id ?? '')),
+    )
+  })()
   const seriesBelow = (() => {
     if (!signedIn || trouble) return []
     const all = ctx.myRepeating?.()
@@ -3639,6 +3657,26 @@ const myTasks = () => {
                 </div>`,
               )
               .join('')}</div>`
+    }
+    ${
+      comingUp.length === 0
+        ? ''
+        : `<h2 class="bcsubhead">Coming up</h2>
+          <p class="bcpmeta bcprose bcgap-l">Open to-dos due later, or with no date. They are yours too.</p>
+          <div class="bclist" data-bc-coming-list>${comingUp
+            .map(
+              (t) => `<div class="bcitem">
+                <input type="checkbox" class="bccheck" ${t.state === 'done' ? 'checked' : ''}
+                  data-bc-mytick="${esc(t.id ?? '')}"
+                  aria-label="${esc(`Not completed: ${t.title}`)}">
+                <div class="bcitembody">
+                  <span class="bcitemtitle">${esc(t.title)}</span>
+                  <span class="bcitemmeta">${myMeta(t)}</span>
+                </div>
+                ${t.id === undefined || String(t.id) === '' ? '' : button('Remove', { 'data-bc-mytaskremove': esc(String(t.id)), 'aria-label': `Remove: ${t.title}` })}
+              </div>`,
+            )
+            .join('')}</div>`
     }
     ${
       doneBelow.length === 0

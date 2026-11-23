@@ -196,12 +196,28 @@ const resumeInFlight = (slug, rows, token) => {
   for (const j of jobs) void follow(slug, j, token)
 }
 
+/*
+  WHO IS TOLD WHEN THE THREAD CHANGES (stress test of 23 November 2026). An answer that arrived after a reload was written to the
+  thread, but no screen was told, so it appeared only when the panel was closed and reopened. Every write now tells the listeners
+  which project changed; the dock redraws from that.
+*/
+const listeners = new Set()
+export const onThreadChange = (fn) => {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
 const write = (slug, messages) => {
   try {
     const store = all()
     store[slug] = messages.slice(-200) // a thread is not an archive
     localStorage.setItem(KEY, JSON.stringify(store))
   } catch { /* not fatal — the thread is a convenience, not the record */ }
+  for (const fn of listeners) {
+    try {
+      fn(slug)
+    } catch { /* a screen that cannot redraw does not stop the thread */ }
+  }
 }
 
 export const clear = (slug) => write(slug, [])
