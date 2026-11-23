@@ -85,6 +85,7 @@ import {
 import { addressedDirectly } from '../agents/addressing.ts'
 import type { AnotherGo } from '../agents/again.ts'
 import { alreadyPursuing, alreadyWithSentence } from '../agents/already.ts'
+import { answeringNowLine } from '../agents/answering-now.ts'
 import {
   capabilityBrief,
   capabilityNow,
@@ -6734,7 +6735,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                       'message is what you are answering. He corrects himself, changes his ' +
                       'mind and checks you have followed — read the latest message as a ' +
                       'continuation, not as a fresh request, and do not repeat what you ' +
-                      'have already said.\n\n') +
+                      'have already said.\n\n' +
+                      /*
+                        Off-topic replies (stress tests of 22 November 2026): the team answered an EARLIER question in the thread,
+                        because the rule above names the latest message only by its place. The exact words are repeated here, so
+                        the answer is to them and to nothing earlier.
+                      */
+                      answeringNowLine(instruction)) +
                   /*
                       Where the line is between what was said and what is true
                       (#231).
