@@ -13,8 +13,8 @@
   },
   "migrations": {
     "ledger": "migrations/applied.json",
-    "appliedAtRecord": 868,
-    "highestAppliedAtRecord": "1120",
+    "appliedAtRecord": 869,
+    "highestAppliedAtRecord": "1121",
     "note1117": "On 23 November 2026 migration 1117 was applied with npm run migrate:one and the production write flags, under the owner's full approval. It changes one sentence in the live app.hq_rename_project (the rename answer now says 'Slack and Telegram channels will update within a minute', not internal wording), by taking the live definition and replacing the sentence. Read back from production: the new sentence is present and the old is absent; 865 applied. Replica: rebuilt from the repository; the same check passes.",
     "deploy23NovG": "On 23 November 2026 the page and gateway were deployed with npm run deploy:hq from 0.107.0 (gateway v1042), with the production flags for that run. Step 3 finished: one name per place (Settings, Team, Add a task); Help copy corrected; Happening now shows plain job names. Step 4 started: the project name in the top bar shortens and no longer runs under Chat with Team. The live site was checked to serve the new code.",
     "deploy23NovF": "On 23 November 2026 the page and gateway were deployed with npm run deploy:hq from 0.106.0 (gateway v1040), with the production flags for that run: search shows plain kind names and no highlight tags; Activity shows a person's name, not a role id; the Services row drops Google's permission addresses. The live site was checked to serve the new code. Migration 1117 is recorded separately.",
