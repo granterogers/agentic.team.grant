@@ -566,3 +566,10 @@ body.dock-yields #dock { display: none !important; }
   min-width: 0;
   max-width: 100%;
 }
+
+/* THE ZOOM READOUT STAYS ON ONE LINE (stress test of 23 November 2026: "100%" in the project menu broke into "10" and "0%"). */
+[data-experience='basecamp'] .bczoomval {
+  white-space: nowrap;
+  min-width: 3.4em;
+  font-variant-numeric: tabular-nums;
+}
