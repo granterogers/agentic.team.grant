@@ -174,6 +174,8 @@ import { asksForChange } from '../agents/request.ts'
 import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
+import { asksToSendOutside, OUTSIDE_SEND_LINE } from '../agents/outside-send.ts'
+import { asksWhatIsNext, NAME_THE_PROJECT_LINE } from '../agents/name-the-project.ts'
 import { optionFor } from '../agents/spoken-answer.ts'
 import { nameSubjects } from '../agents/subject.ts'
 import {
@@ -6758,6 +6760,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   // Extracted to `say-what-you-dropped.ts` so #277 can MEASURE
                   // a candidate against it rather than argue about it.
                   `${SET_ASIDE_LINE}\n\n` +
+                  (asksToSendOutside(instruction) ? `${OUTSIDE_SEND_LINE}\n\n` : '') +
+                  (asksWhatIsNext(instruction) ? `${NAME_THE_PROJECT_LINE}\n\n` : '') +
                   (turns.length === 0
                     ? // A first message has no earlier turns to answer by mistake, but the model still
                       // needs the exact words it is answering, or it answers from the office's other context.
