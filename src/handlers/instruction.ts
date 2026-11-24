@@ -6730,7 +6730,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   // a candidate against it rather than argue about it.
                   `${SET_ASIDE_LINE}\n\n` +
                   (turns.length === 0
-                    ? ''
+                    ? // A first message has no earlier turns to answer by mistake, but the model still
+                      // needs the exact words it is answering, or it answers from the office's other context.
+                      answeringNowLine(instruction)
                     : 'You are mid-conversation. The turns before this one follow; the last ' +
                       'message is what you are answering. He corrects himself, changes his ' +
                       'mind and checks you have followed — read the latest message as a ' +
