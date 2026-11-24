@@ -15,22 +15,18 @@ await signIn(studio, page, s)
 await page.goto(`${studio.base}/p/wellness-studio-launch`, { waitUntil: 'domcontentloaded' })
 await settle(page)
 await page.evaluate(`document.documentElement.dataset.scheme = 'dark'`)
-await page.getByRole('button', { name: 'Chat with Team' }).first().click().catch(() => {})
+await page
+  .getByRole('button', { name: 'Chat with Team' })
+  .first()
+  .click()
+  .catch(() => {})
 await settle(page)
 await page.locator('[data-docksay]').first().fill(QUESTION)
 await page.locator('[data-dockform] button[type=submit]').first().click()
-const deadline = Date.now() + 150000
-let answered = false
-while (Date.now() < deadline) {
-  await page.waitForTimeout(4000)
-  const text = await page.evaluate(`(document.querySelector('[data-dockthread], .dockthread, .bcdock-thread')?.innerText ?? document.body.innerText)`)
-  if (Date.now() > deadline - 90000) {
-    answered = true
-    break
-  }
-}
+// The team answers in its own time; a fixed wait is enough for this capture, and the screenshot is checked by eye.
+await page.waitForTimeout(150000)
 await page.waitForTimeout(1500)
 await page.screenshot({ path: 'docs/readme/shots/chat-answer.png' })
-console.log('answered', answered, 'errors', errors.length)
+console.log('captured, errors', errors.length)
 await ctx.close()
 await studio.close()

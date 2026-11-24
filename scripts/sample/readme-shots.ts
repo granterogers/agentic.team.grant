@@ -14,7 +14,14 @@ const s = await session()
 
 const shot = async (
   label: string,
-  opts: { width: number; height: number; scheme?: 'light' | 'dark'; path: string; dock?: boolean; scale?: number },
+  opts: {
+    width: number
+    height: number
+    scheme?: 'light' | 'dark'
+    path: string
+    dock?: boolean
+    scale?: number
+  },
 ) => {
   const { ctx, page, errors } = await newPage(studio, { width: opts.width, height: opts.height })
   await signIn(studio, page, s)
@@ -25,7 +32,11 @@ const shot = async (
     await settle(page)
   }
   if (opts.dock === true) {
-    await page.getByRole('button', { name: 'Chat with Team' }).first().click().catch(() => {})
+    await page
+      .getByRole('button', { name: 'Chat with Team' })
+      .first()
+      .click()
+      .catch(() => {})
     await settle(page)
   }
   await page.waitForTimeout(800)
@@ -34,11 +45,32 @@ const shot = async (
   console.log(label, 'errors', errors.length)
 }
 
-await shot('project-desktop-light', { width: 1440, height: 900, scheme: 'light', path: '/p/wellness-studio-launch' })
-await shot('project-desktop-dark', { width: 1440, height: 900, scheme: 'dark', path: '/p/wellness-studio-launch' })
-await shot('chat-with-team', { width: 1440, height: 900, scheme: 'dark', path: '/p/wellness-studio-launch', dock: true })
+await shot('project-desktop-light', {
+  width: 1440,
+  height: 900,
+  scheme: 'light',
+  path: '/p/wellness-studio-launch',
+})
+await shot('project-desktop-dark', {
+  width: 1440,
+  height: 900,
+  scheme: 'dark',
+  path: '/p/wellness-studio-launch',
+})
+await shot('chat-with-team', {
+  width: 1440,
+  height: 900,
+  scheme: 'dark',
+  path: '/p/wellness-studio-launch',
+  dock: true,
+})
 await shot('my-tasks', { width: 1440, height: 900, scheme: 'dark', path: '/tasks' })
 await shot('activity', { width: 1440, height: 900, scheme: 'dark', path: '/activity' })
 await shot('services', { width: 1440, height: 900, scheme: 'dark', path: '/settings/connections' })
-await shot('project-phone', { width: 390, height: 844, scheme: 'dark', path: '/p/wellness-studio-launch' })
+await shot('project-phone', {
+  width: 390,
+  height: 844,
+  scheme: 'dark',
+  path: '/p/wellness-studio-launch',
+})
 await studio.close()
