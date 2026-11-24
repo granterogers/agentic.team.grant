@@ -138,6 +138,7 @@ import {
   subtaskRequest,
   taskStateChange,
 } from '../agents/mine.ts'
+import { asksWhatIsNext, NAME_THE_PROJECT_LINE } from '../agents/name-the-project.ts'
 import { carryReportBacks, groundedIn, namedColleague, reportsBackOn } from '../agents/named.ts'
 import {
   asksWhatWasSaid,
@@ -152,6 +153,7 @@ import {
   contractFor,
   sayWhatHappened,
 } from '../agents/outcome.ts'
+import { asksToSendOutside, OUTSIDE_SEND_LINE } from '../agents/outside-send.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import { performable } from '../agents/perform.ts'
 import {
@@ -174,8 +176,6 @@ import { asksForChange } from '../agents/request.ts'
 import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
-import { asksToSendOutside, OUTSIDE_SEND_LINE } from '../agents/outside-send.ts'
-import { asksWhatIsNext, NAME_THE_PROJECT_LINE } from '../agents/name-the-project.ts'
 import { optionFor } from '../agents/spoken-answer.ts'
 import { nameSubjects } from '../agents/subject.ts'
 import {

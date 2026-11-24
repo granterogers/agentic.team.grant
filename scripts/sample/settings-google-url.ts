@@ -26,7 +26,9 @@ for (const [name, width, height] of [
   await signIn(studio, page, s)
   await page.goto(`${studio.base}/settings/google`, { waitUntil: 'domcontentloaded' })
   await settle(page)
-  await page.waitForFunction(`!!document.querySelector('[data-tile="gmail"]')`, null, { timeout: 20000 }).catch(() => {})
+  await page
+    .waitForFunction(`!!document.querySelector('[data-tile="gmail"]')`, null, { timeout: 20000 })
+    .catch(() => {})
   const probe = (await page.evaluate(`(() => {
     const tile = document.querySelector('[data-tile="gmail"]')
     const view = document.querySelector('[data-tab]')
@@ -38,10 +40,18 @@ for (const [name, width, height] of [
     }
     return { path: location.pathname, tab: view ? view.dataset.tab : null, tileFound: !!tile, tileInView: inView,
       focused: document.activeElement === tile }
-  })()`)) as { path: string; tab: string | null; tileFound: boolean; tileInView: boolean; focused: boolean }
+  })()`)) as {
+    path: string
+    tab: string | null
+    tileFound: boolean
+    tileInView: boolean
+    focused: boolean
+  }
   await page.screenshot({ path: `${out}/${name}.png` })
   const ok = probe.tileFound && probe.tab === 'connections' && probe.path === '/settings/google'
-  results.push(`${ok ? 'PASS' : 'FAIL'} ${name}: path ${probe.path}, tab ${probe.tab}, tile found ${probe.tileFound}, in view ${probe.tileInView}, focused ${probe.focused}, errors ${errors.length}`)
+  results.push(
+    `${ok ? 'PASS' : 'FAIL'} ${name}: path ${probe.path}, tab ${probe.tab}, tile found ${probe.tileFound}, in view ${probe.tileInView}, focused ${probe.focused}, errors ${errors.length}`,
+  )
   await ctx.close()
 }
 for (const r of results) console.log(r)
