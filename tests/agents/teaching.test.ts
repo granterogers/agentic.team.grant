@@ -33,7 +33,7 @@ describe('readTeaching — a standing preference is a lesson', () => {
   })
 
   it('reads a prohibition', () => {
-    const t = readTeaching('Never send me two messages for one voice note.')
+    const t = readTeaching('From now on, never send me two messages for one voice note.')
     expect(t?.kind).toBe('lesson')
   })
 
@@ -126,7 +126,9 @@ describe('readTeaching — a procedure is a skill', () => {
   it('does not promote a short conditional into a procedure', () => {
     // "When you finish, tell me" is a preference, not a method, and filing it
     // as a skill buries one sentence in a library.
-    const t = readTeaching('Whenever you finish something, always tell me straight away.')
+    const t = readTeaching(
+      'From now on, whenever you finish something, always tell me straight away.',
+    )
     expect(t?.kind).toBe('lesson')
   })
 })
@@ -209,9 +211,9 @@ describe('the rule is the sentence that carries the marker (final audit, invaria
   it('the rule sits between two other sentences', () => {
     expect(
       lesson(
-        'Please research sponsors then write the outreach note. Always keep it brief. What is on my plate today?',
+        'Please research sponsors then write the outreach note. From now on, always keep it brief. What is on my plate today?',
       ),
-    ).toBe('Always keep it brief.')
+    ).toBe('From now on, always keep it brief.')
   })
 
   it('CONTROL: a question ABOUT a rule is still not stored as one', () => {
@@ -232,9 +234,15 @@ describe('the rule is the sentence that carries the marker (final audit, invaria
   })
 
   it.each([
-    ['Do not use bullet points. I never read them.', 'Do not use bullet points.'],
-    ['Keep it short. I always read on my phone.', 'Keep it short.'],
-    ['Please use British spelling. I always forget to say.', 'Please use British spelling.'],
+    [
+      'From now on, do not use bullet points. I never read them.',
+      'From now on, do not use bullet points.',
+    ],
+    ['From now on, keep it short. I always read on my phone.', 'From now on, keep it short.'],
+    [
+      'From now on, please use British spelling. I always forget to say.',
+      'From now on, please use British spelling.',
+    ],
     ['Keep replies short. From now on use bullet points.', 'Keep replies short.'],
   ])(
     'an incidental "never"/"always" later does not displace the rule before it (review R2-2): %s',
@@ -255,8 +263,8 @@ describe('the rule is the sentence that carries the marker (final audit, invaria
   )
 
   it('CONTROL: a first-person preference is still a rule', () => {
-    expect(lesson('I always want the conclusion first. Research the venue.')).toBe(
-      'I always want the conclusion first.',
+    expect(lesson('From now on, I always want the conclusion first. Research the venue.')).toBe(
+      'From now on, I always want the conclusion first.',
     )
   })
 })

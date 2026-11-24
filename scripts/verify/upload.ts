@@ -299,6 +299,7 @@ for (const [what, bytes] of [
     `http ${String(sent.status)} · ${String(broken.size ?? 0)} of ${String(bytes.length)} bytes · ${
       back === null ? 'NO URL' : back.equals(bytes) ? 'identical' : 'ALTERED'
     }`,
+    // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
     sent.status === 200 &&
       broken.mime_type === 'application/pdf' &&
       Number(broken.size) === bytes.length &&

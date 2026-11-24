@@ -489,7 +489,7 @@ await page.waitForTimeout(500)
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(800)
   check('reload while maximised keeps the module open', (await expanded()) === 1)
-  await page.goto(home + '/x/schedule', { waitUntil: 'domcontentloaded' })
+  await page.goto(`${home}/x/schedule`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(800)
   check('a deep link to /x/schedule opens it maximised', (await expanded()) === 1)
   const deepLen = (await page.evaluate(inPage('return history.length'))) as number

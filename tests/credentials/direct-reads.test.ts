@@ -56,6 +56,7 @@ describe('findDirectReads / violations', () => {
       problems("`select 1 from vault.decrypted_secrets where name = 'mystery.token'`")[0],
     ).toContain('no credential class')
     expect(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
       problems('`select 1 from vault.decrypted_secrets where name = ${lit(name)}`')[0],
     ).toContain('built at run time')
   })
@@ -63,6 +64,7 @@ describe('findDirectReads / violations', () => {
   it('lets only the vault export read a name nobody can predict', () => {
     expect(
       problems(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
         '`select 1 from vault.decrypted_secrets where name = ${lit(n)}`',
         'src/handlers/vault-export.ts',
       ),

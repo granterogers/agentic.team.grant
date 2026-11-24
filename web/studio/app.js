@@ -34,6 +34,7 @@ import { act, alreadyAnswered, attempt, canWrite, onWrite, read, say, sure, toke
 import * as bc from './bc/shell.js'
 import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
+import { serverNow } from './net.js'
 import { mountSetPassword } from './set-password.js'
 import * as bcExpand from './bc/expand.js'
 import * as bcGrid from './bc/layout.js'
@@ -210,6 +211,18 @@ const mine = {
   bucket: 'today',
   lists: {},
   counts: null,
+  /*
+    Completed items (FUN-02, 21 November 2026). The open buckets leave a finished task out by design, so a tick made it vanish
+    with no way back to it. The `done` bucket already exists on the gateway; it is read beside the open list and kept here, and
+    the page draws it under its own heading. Null until read; a failed read leaves it null rather than an empty list.
+  */
+  done: null,
+  /*
+    Every open item, whatever its date (stress test of 23 November 2026). The page shows the Today bucket, so a task due later, or with
+    no date, was filed and never seen. This is the same list the repeating reminders already read; it is kept so the page can show
+    the rest under "Coming up".
+  */
+  all: null,
   editing: null,
   trouble: {},
   /*
@@ -1907,6 +1920,14 @@ function wireDockKeyboard() {
 
 // One named listener, so reopening during the fade can take back the one that was waiting for the exit to end.
 const onDockExited = () => paintDock()
+
+/*
+  The dock redraws whenever the thread changes, wherever the change came from: an answer that arrives after a reload, a delegated
+  answer, a retry (stress test of 23 November 2026: answers reached the Team page but not the chat until the panel was reopened).
+*/
+chat.onThreadChange(() => {
+  if (typeof paintDock === 'function') paintDock()
+})
 
 function paintDock() {
   const el = $('#dock')
@@ -3731,9 +3752,16 @@ function teamTab(p) {
   they are indistinguishable — which is right. Non-visually there is nothing
   else to go on, so it is said.
 */
+/*
+  WHO SAID IT, EXACTLY (A1, 18 November 2026). `crewBy` answers the first teammate (Claire) for an id it does not know, so a reply
+  from "the-office" (the team's own answers, which the Chief of Staff relays) was named, drawn and avatared as Claire. The team's
+  replies carry their own name here, and only a real crew member is named as one.
+*/
+const senderOf = (who) => CREW.find((c) => c.slug === who || c.staffSlug === who) ?? null
+const THE_TEAM = { slug: 'the-team', hue: 'p-slate', tone: 210, name: 'The team', role: '', face: '', state: 'idle', doing: '' }
 const saidBy = (who, m) => {
-  const name = who === 'grant' ? 'You' : (crewBy(who)?.name ?? 'The office')
-  const role = who === 'grant' ? '' : `, ${crewBy(who)?.role ?? ''}`
+  const name = who === 'grant' ? 'You' : (senderOf(who)?.name ?? THE_TEAM.name)
+  const role = who === 'grant' ? '' : `, ${senderOf(who)?.role ?? ''}`
   /* A message with no usable time says nothing about one: a screen reader was told "Invalid Date". */
   const when = m.at === undefined || m.at === null || m.at === '' ? null : new Date(m.at)
   const at = when === null || Number.isNaN(when.getTime())
@@ -3827,7 +3855,7 @@ const bubble = (m) => {
       </div>`
     }
 
-    const c = crewBy(m.from)
+    const c = senderOf(m.from) ?? THE_TEAM
     return `<div class="msg theirs ${m.bad ? 'bad' : ''}" role="listitem"
          style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
       ${face(c, 30)}
@@ -5811,9 +5839,9 @@ const HELP_TOPICS = [
   {
     title: 'Find your way around',
     steps: [
-      'The menu at the top left lists your projects. Press one to open it. Inside you will find its tasks, documents, contacts, sources and team.',
+      'Press Open the project menu in the top bar to see your projects. Press one to open it. Inside you will find its tasks, documents, contacts, sources and team.',
       'Use the same menu to create a project, or to open My Tasks and Activity.',
-      'The three dots at the top right open Settings, which apply to all of Team HQ. A single project has its own settings, in its menu under Project settings.',
+      'Global Settings, in the same menu, applies to all of Team HQ. A single project has its own settings, under Name, export and archive on its settings page.',
       'To leave Settings, press Back to workspace at the top left.',
     ],
     note: 'A project is the source of truth and it lives in Team HQ. A Notion database, a notebook or a Drive folder is something a project is attached to, never the project itself.',
@@ -5852,7 +5880,7 @@ const HELP_TOPICS = [
     title: 'Documents and sources',
     steps: [
       'Open a project, then Documents. Opening one shows its whole text.',
-      'Documents arrive through a connection rather than an upload: open Sources and attach Drive, Notion or NotebookLM. Pasting a Google Drive link there works out the rest.',
+      'Documents come in two ways: upload a file under Docs & Files, or attach a source under Sources (Drive, Notion or NotebookLM). Pasting a Google Drive link under Sources works out the rest.',
       'The speech icon on a document starts a conversation about it with the team.',
     ],
     note: 'A PDF that came in as extracted text shows its text. Where Team HQ holds the actual file, it opens in a viewer with a link to the real thing.',
@@ -5861,7 +5889,7 @@ const HELP_TOPICS = [
     title: 'Tasks',
     steps: [
       'Open a project, then Tasks, then Add a task. A title is all that is required.',
-      'The circle beside a task marks it done, and that is saved.',
+      'The box beside a task marks it done, and that is saved. Untick it to put the task back.',
       'To see dated tasks in your Google Calendar, turn on Show dated tasks in Google Calendar under Settings, then Autonomy and approvals.',
     ],
     note: 'Calendar sync is one way. A task with a due date becomes an all-day event and is removed when the task is done; the calendar never changes a task.',
@@ -5889,9 +5917,12 @@ function directLinks() {
     ['Activity', '/activity'],
     ['Search', '/search'],
   ]
-  const settings = config.TABS.map((t) => [`Settings: ${t.name}`, `/settings/${t.id}`])
+  /*
+    Settings is not listed here (stress test FUN-01): a Settings address typed into the bar redirects to the home page, so a
+    link to it was a lie. Settings is reached from Open the project menu, then Global Settings.
+  */
   const projects = PROJECTS.filter((x) => x.slug !== 'unnamed').map((x) => [`Project: ${x.name}`, `/p/${x.slug}`])
-  const rows = [...views, ...settings, ...projects]
+  const rows = [...views, ...projects]
   return `<section class="st-sec">
       <h3 class="st-sectitle">Direct links</h3>
       <div class="st-card"><ul class="st-links">${rows
@@ -6084,6 +6115,9 @@ const requestStateTone = { open: 'warn', approved: 'ok', done: 'ok', declined: '
 /** What is waiting for a decision: open proposals, open tool requests and open offers. Zero until the page has been read. */
 function openRequestCount() {
   const g = config.GOVERNANCE
+  // SET-03, option B: the same count the Activity page shows, when the office has answered for it. This is read first, so
+  // the badge and Needs attention agree from the moment the office's count lands, not only once the whole Requests list has loaded.
+  if (g.pending !== null && typeof g.pending.count === 'number') return g.pending.count
   if (!g.loaded) return 0
   return (
     g.proposals.filter((p) => p.state === 'open').length +
@@ -6179,7 +6213,22 @@ function requestsTab() {
       actions: btn('Let it ask again', 'quiet', { 'data-reopen': r.id }),
     })
 
+  /*
+    SET-03, option B: the approvals are the one kind this page did not list, so they are listed here with the rest of what is
+    waiting, and the count above is the same total. An approval is answered from the project it belongs to.
+  */
+  const approvals = ((g.pending && Array.isArray(g.pending.items)) ? g.pending.items : [])
+    .filter((i) => i.kind === 'approval')
+    .map((i) =>
+      ui.row({
+        name: String(i.title ?? 'Something is waiting for you'),
+        note: `Asked by ${String(i.who ?? 'the team')}${i.overdue === true ? ' · overdue' : ''}. Answer it from the project it belongs to.`,
+        meta: ui.facts([]),
+        actions: '',
+      }),
+    )
   const waiting = [
+    ...approvals,
     ...g.proposals.filter((p) => p.state === 'open').map(proposal),
     ...(g.requests ?? []).filter((r) => r.state === 'open').map(request),
     ...g.noticed.filter((s) => s.offer && s.state === 'open').map(offer),
@@ -6226,6 +6275,30 @@ function memoryTab() {
   }
   const off = canWrite() ? false : true
 
+  /*
+    A19c. The same rule was recorded more than once (each time it was taught, as its own row), so the list showed one
+    rule three or seven times. One card per rule: the rows that say the same thing in the same place are merged, and
+    "Forget this" retires every row in the card.
+  */
+  const lessonKey = (l) =>
+    `${l.scope}|${String(l.where ?? '').toLowerCase()}|${String(l.body ?? '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[\s.!?]+$/, '')
+      .trim()}`
+  const merged = new Map()
+  for (const l of g.lessons) {
+    const k = lessonKey(l)
+    const seen = Number(l.seen ?? 1)
+    const hit = merged.get(k)
+    if (hit === undefined) merged.set(k, { ...l, ids: [l.id], seen })
+    else {
+      hit.ids.push(l.id)
+      hit.seen = Math.max(hit.seen, seen)
+    }
+  }
+  const rules = [...merged.values()]
+
   const lesson = (l) =>
     ui.caseCard({
       title: `${SCOPE_WORD[l.scope] ?? l.scope}${String(l.where ?? '').toLowerCase() === 'everywhere' || !l.where ? '' : `: ${l.where}`}`,
@@ -6239,7 +6312,7 @@ function memoryTab() {
       actions: ui.button({
         label: 'Forget this',
         tone: 'quiet',
-        a: { 'data-retract': l.id, disabled: off, 'aria-label': 'Forget this rule' },
+        a: { 'data-retract': l.ids.join(','), disabled: off, 'aria-label': 'Forget this rule' },
       }),
     })
 
@@ -6269,11 +6342,11 @@ function memoryTab() {
     ui.section({
       title: 'Rules and habits it has picked up',
       note: 'The team follows these in its work. Forgetting one stops the team being shown it from now on.',
-      count: g.lessons.length,
+      count: rules.length,
       body: ui.card(
-        g.lessons.length === 0
+        rules.length === 0
           ? [ui.empty('Nothing yet. When you correct the team and the correction sticks, it is written down here.')]
-          : g.lessons.map(lesson),
+          : rules.map(lesson),
       ),
     }),
     ui.section({
@@ -6305,27 +6378,60 @@ function memoryTab() {
   whether it was counted, reported by the provider or estimated, because an estimate presented as a fact is the
   defect this page exists to avoid.
 */
+/*
+  What a connection says about itself, in words a person reads (stress test SET-02). The office sends short codes such as
+  token_expired and valid; those are translated here, and anything else is shown as it came.
+*/
+function plainDetail(text) {
+  const t = String(text ?? '').trim()
+  if (t === '') return ''
+  if (/token_expired/i.test(t)) return 'The sign-in has expired. Reconnect it to keep it working.'
+  if (/invalid_grant/i.test(t)) return 'The sign-in was revoked. Reconnect it to keep it working.'
+  if (/^valid$/i.test(t)) return 'Working.'
+  if (/refresh token is in the vault/i.test(t)) return 'Connected and signed in.'
+  /*
+    Google's permission addresses are not for a person to read (stress test of 23 November 2026: "scopes: https://www.googleapis.com/
+    auth/calendar.events …" was printed on the Services row). The sentence keeps what it says, and the addresses are dropped.
+  */
+  const withoutScopes = t.replace(/;?\s*scopes?:\s*[^.]*$/i, '').trim()
+  return withoutScopes === '' ? 'Connected.' : withoutScopes.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim()
+}
+
 function healthTab() {
   const ui = settingsUi
   const g = config.GOVERNANCE
   const list = config.services()
   const wrong = list.filter((c) => ['degraded', 'dead'].includes(String(c.state)))
   const anyConnected = list.some((c) => config.isConnected(c.state))
+  // A reading older than a day is "unchecked" (migration 1086): that means NOT CONFIRMED, not "not connected".
+  const unchecked = list.some((c) => String(c.state) === 'unchecked')
   const stuck = Number((g.stranded ?? {}).total ?? 0)
   const waiting = openRequestCount()
   const open = (label, tab) => ui.button({ label, tone: 'quiet', a: { 'data-goto-setting': tab } })
 
+  /*
+    A19a. "Nothing is connected" is a claim about the office, so it is made only when the list has actually been read. While
+    the list is on its way, or when it could not be read, Health says that instead of reading the placeholder list as the truth.
+  */
+  const listRead = config.CONNECTIONS_SOURCE.state === 'ready'
   const summary = ui.card([
     ui.row({
       name: 'Services',
-      desc:
-        wrong.length === 0
+      desc: !listRead
+        ? config.CONNECTIONS_SOURCE.state === 'failed'
+          ? 'Could not read which connections are working. Close Settings and open it again.'
+          : 'Checking which connections are working…'
+        : wrong.length === 0
           ? anyConnected
             ? 'Everything that is connected is working.'
-            : 'Nothing is connected yet. Connect Google, Slack or Telegram when you want the team to use them.'
+            : unchecked
+              ? 'Nothing has been checked recently, so none of it is confirmed. Open Connections to check it again.'
+              : 'Nothing is connected yet. Connect Google, Slack or Telegram when you want the team to use them.'
           : `${wrong.map((c) => c.name).join(', ')} ${wrong.length === 1 ? 'needs' : 'need'} attention.`,
       control:
-        ui.chip(wrong.length === 0 ? (anyConnected ? 'ok' : 'off') : 'warn', wrong.length === 0 ? (anyConnected ? 'Working' : 'Nothing connected') : `${wrong.length} to look at`) +
+        (listRead
+          ? ui.chip(wrong.length === 0 ? (anyConnected ? 'ok' : 'off') : 'warn', wrong.length === 0 ? (anyConnected ? 'Working' : unchecked ? 'Not checked' : 'Nothing connected') : `${wrong.length} to look at`)
+          : ui.chip('off', config.CONNECTIONS_SOURCE.state === 'failed' ? 'Not read' : 'Checking')) +
         (wrong.length === 0 ? '' : open('Review', 'connections')),
     }),
     ui.row({
@@ -6666,7 +6772,7 @@ function serviceRow(c, { showDetail = true, sub = false } = {}) {
   const route = config.routeFor(c.key)
   const connected = config.isConnected(c.state)
   const expired = route.how === 'oauth' && !connected && c.state === 'dead'
-  const long = String(c.detail ?? '')
+  const long = plainDetail(c.detail)
   const detail = long.length > 120 ? `${long.slice(0, 118).replace(/[\s,;.]+\S*$/, '')}…` : long
   const checked = c.lastAt || c.last ? `Checked ${when.stamp(c.lastAt, c.last)}` : ''
   // (already HTML: the stamp is a time element that keeps itself current)
@@ -6962,7 +7068,6 @@ function connectionsTab() {
     : gOn
       ? ui.button({ label: 'Disconnect Google', tone: 'quiet', a: { 'data-disconnect': 'google', 'data-service': 'Google' } })
       : ui.button({ label: ledGoogle?.state === 'dead' ? 'Reconnect Google' : 'Connect Google', tone: 'primary', a: { 'data-google-connect': true } })
-  const sharedGoogle = 'The same Google sign-in as Gmail.'
   const nbTone = ledNotebook === null ? ['off', 'Checking…'] : copy.state[ledNotebook.state] ?? ['off', 'Not checked']
   const nbOk = ledNotebook?.state === 'ok'
   // Vikunja's word, from the task sync's own reading: asking, not set up, not working, or connected.
@@ -6976,14 +7081,36 @@ function connectionsTab() {
           ? ['bad', 'Not working']
           : ['ok', 'Connected']
   const gmailMark = markFor('gmail')
-  const driveMark = markFor('drive')
-  const calendarMark = markFor('calendar')
   const notebookMark = markFor('notebooklm')
-  const others = main.filter((c) => c.key !== 'notebooklm')
+  /*
+    SET-08, "Last checked" (22 November 2026). The gateway does not run a check on demand, so the row says when it was last
+    checked, or that it has not been, and that the team checks it on a schedule. This replaces the Check button the report asked for.
+  */
+  const checkedLine = (c) => {
+    const last = String(c.last ?? '').trim()
+    if (last === '' || /^(never|not checked)$/i.test(last)) {
+      return c.state === 'unchecked' || c.state === 'unknown' ? 'Not checked yet. The team checks it on a schedule.' : ''
+    }
+    return `Last checked ${last}. The team checks it on a schedule.`
+  }
+  // The merged Google row above covers these keys, so the gateway's own rows for them (Google, Gmail, Drive, Calendar) are not drawn again.
+  const GOOGLE_ROWS = ['gmail', 'google', 'drive', 'calendar']
+  const others = main.filter((c) => c.key !== 'notebooklm' && !GOOGLE_ROWS.includes(c.key))
+  /*
+    SET-08 (22 November 2026): Gmail, Google Drive and Google Calendar share one Google sign-in, so they had three rows with
+    the same status and the same action. They are one row now, with one status, one action and one line saying what it covers.
+  */
   const tiles = [
-    tile({ key: 'gmail', name: 'Gmail', svg: gmailMark.svg, tint: gmailMark.tint, tone: gTone[0], word: gTone[1], detail: ledGoogle?.detail ?? '', action: gAction }),
-    tile({ key: 'drive', name: 'Google Drive', svg: driveMark.svg, tint: driveMark.tint, tone: gTone[0], word: gTone[1], detail: sharedGoogle }),
-    tile({ key: 'calendar', name: 'Google Calendar', svg: calendarMark.svg, tint: calendarMark.tint, tone: gTone[0], word: gTone[1], detail: sharedGoogle }),
+    tile({
+      key: 'gmail',
+      name: 'Google: Gmail, Drive and Calendar',
+      svg: gmailMark.svg,
+      tint: gmailMark.tint,
+      tone: gTone[0],
+      word: gTone[1],
+      detail: [ledGoogle?.detail ?? '', 'One Google sign-in covers Gmail, Google Drive and Google Calendar.'].filter((x) => x !== '').join(' '),
+      action: gAction,
+    }),
     tile({
       key: 'notebooklm',
       name: 'NotebookLM',
@@ -7006,7 +7133,7 @@ function connectionsTab() {
         tint: c.tint ?? '',
         tone: t,
         word: w,
-        detail: String(c.detail ?? ''),
+        detail: [String(c.detail ?? ''), checkedLine(c)].filter((x) => x !== '').join(' '),
         action: tileAction(c),
         body: setUp ? notionBody() : c.key === 'mcp' ? mcpBody : '',
       })
@@ -7104,13 +7231,13 @@ function channelsTab() {
     const route = config.routeFor(c.key)
     const connected = config.isConnected(c.state)
     const open = state.channel === c.key
-    const long = String(c.detail ?? '')
+    const long = plainDetail(c.detail)
     const detail = long.length > 120 ? `${long.slice(0, 118).replace(/[\s,;.]+\S*$/, '')}…` : long
     const disconnect =
       connected && route.off !== undefined && canWrite() && config.VIEWER.operator
         ? ui.button({ label: 'Disconnect', tone: 'quiet', a: { 'data-disconnect': route.off, 'data-service': c.name } })
         : ''
-    const how = ui.button({ label: open ? 'Hide details' : 'Details', tone: 'quiet', a: { 'data-channel': c.key, 'aria-expanded': open } })
+    const how = ui.button({ label: open ? 'Hide details' : 'Details', tone: 'quiet', a: { 'data-channel': c.key, 'aria-expanded': open, 'aria-label': `${open ? 'Hide' : 'Show'} details for ${c.name}` } })
     const extra = open
       ? `<div class="st-subpanel">
           ${c.steps ? `<p class="st-desc" style="margin:0">${esc(c.steps)}</p>` : ''}
@@ -7642,6 +7769,16 @@ function settingsSheet() {
   }
   const main = v.querySelector('.stg-main')
   if (main !== null) main.scrollTop = keptTop
+  // A link that names a part of a tab (/settings/google): bring that part into view once, then forget it.
+  if (state.settingsFocus) {
+    const part = v.querySelector(`[data-tile="${state.settingsFocus}"]`)
+    state.settingsFocus = null
+    if (part !== null) {
+      part.scrollIntoView({ block: 'center', behavior: 'auto' })
+      part.setAttribute('tabindex', '-1')
+      part.focus({ preventScroll: true })
+    }
+  }
   /*
     Leaving the page, in the one place that knows which screen you are on.
 
@@ -8108,8 +8245,12 @@ function settingsSheet() {
       ) {
         return
       }
-      const done = await attempt(b, 'Retracting…', () =>
-        act('lesson_retract', { p_lesson_id: b.dataset.retract }), 'Retracted.')
+      // One card can stand for several recorded rows (A19c); each is retracted in turn.
+      const ids = String(b.dataset.retract ?? '').split(',').filter((x) => x !== '')
+      const done = await attempt(b, 'Retracting…', async () => {
+        for (const id of ids) await act('lesson_retract', { p_lesson_id: id })
+        return true
+      }, 'Retracted.')
       if (done) await afterGovernance()
     })
   }
@@ -9475,6 +9616,17 @@ function pathNow() {
   */
   // Team HQ owns the plain addresses (#382); the older studio keeps its own prefix.
   const at = state.experience === 'basecamp' ? '' : '/classic'
+  /*
+    SETTINGS IS A PLACE TOO (0.111.0). While the Settings page is open its address is the tab's own, /settings/<tab>, so a
+    link to one part of it can be bookmarked and shared. `state.settingsAddress` keeps the spelling the person arrived
+    with (for example /settings/google) for as long as that tab is still the one showing.
+  */
+  const settingsSheet0 = $('#settings')
+  if (settingsSheet0 !== null && isOpenNow(settingsSheet0)) {
+    const named = state.settingsAddress ?? null
+    const shown = named !== null && (config.TAB_ALIAS[named] ?? named) === state.setting ? named : state.setting
+    return `${at}/settings/${shown}`
+  }
   if (state.view === 'project' && state.project !== null) {
     /*
       AN EXPANDED VIEW IS A PLACE TOO.
@@ -9582,9 +9734,14 @@ function goToPath(path) {
     always pointed. The older studio is kept at /classic, which nothing links
     to, for as long as it is useful.
   */
-  if (bits[0] === 'basecamp' || bits[0] === 'studio') bits.shift()
-  state.experience = bits[0] === 'classic' ? 'default' : 'basecamp'
-  if (state.experience === 'default') bits.shift()
+  /*
+    /classic is retired too (20 Nov 2026): the older studio is no longer reachable by any address. It is read as the same
+    address without the prefix, exactly as /basecamp and /studio are, and the first paint writes the canonical form.
+  */
+  if (bits[0] === 'basecamp' || bits[0] === 'studio' || bits[0] === 'classic') bits.shift()
+  // A18. /my-tasks is the My Tasks screen, which lives at /tasks. It used to fall back to home.
+  if (bits[0] === 'my-tasks') bits = ['tasks']
+  state.experience = 'basecamp'
   // Cleared here, once, rather than at each of the callers that navigate.
   state.bcTask = null
   // An expanded module does not survive a navigation: the page underneath it
@@ -9748,17 +9905,29 @@ function keepUrl() {
       !path.includes('/x/') &&
       history.state?.path === before &&
       history.state?.from === undefined
-    if (first || deepLinkClosing) history.replaceState({ path }, '', to)
+    // Settings opened by a click has already added its own entry; its address replaces that entry rather than adding another,
+    // so Back still returns to where the person was.
+    const settingsReplace = path.startsWith(`${state.experience === 'basecamp' ? '' : '/classic'}/settings/`)
+    if (first || deepLinkClosing || settingsReplace) history.replaceState({ path }, '', to)
     else history.pushState({ path, from: before }, '', to)
   } catch {
     /* A page opened from a file has no history to write to. It still works. */
   }
 }
 
+/*
+  A15d. The Chat page is the dock's larger self, so while it is showing the dock yields to it rather than covering its
+  text. The dock's own open state is kept, so it comes back when the person leaves the page.
+*/
+function syncDockYield() {
+  document.body.classList.toggle('dock-yields', dockOpen() && /\/chat\/?$/.test(location.pathname))
+}
+
 function render() {
   const key = focusKey()
   try {
     drawShell()
+    syncDockYield()
     keepUrl()
     restoreFocus(key)
     painting = false
@@ -14187,11 +14356,18 @@ function cameBackFromGoogle() {
       form still works. Any name that is not a tab, an alias or `health` is ignored.
     */
     const fromPath = /^\/settings\/([a-z]+)\/?$/.exec(location.pathname)
-    const wanted = fromPath !== null ? fromPath[1] : said.get('settings')
+    /*
+      A18. The bare /settings address used to fall back to home, so a link to Settings bounced. It now opens the first tab.
+    */
+    const bareSettings = /^\/settings\/?$/.test(location.pathname)
+    const wanted = bareSettings ? (config.TABS[0]?.id ?? null) : fromPath !== null ? fromPath[1] : said.get('settings')
     const known =
       wanted !== null && (wanted === 'health' || config.TABS.some((t) => t.id === (config.TAB_ALIAS[wanted] ?? wanted)))
     if (!known) return false
     state.setting = wanted === 'health' ? 'models' : (config.TAB_ALIAS[wanted] ?? wanted)
+    state.settingsAddress = wanted
+    // A part of a tab to bring into view once it is drawn (see TAB_FOCUS). Cleared after it is used, so a redraw does not jump back.
+    state.settingsFocus = config.TAB_FOCUS[wanted] ?? null
     // On a phone a section replaces the menu: land on the section itself, not on the list of sections.
     state.settingsPane = 'detail'
     /*
@@ -14670,6 +14846,10 @@ const bcContext = {
     return Array.isArray(rows) ? rows : null
   },
   myTasksTrouble: () => mine.trouble[mineKey()] === true,
+  // Completed items, or null until they have been read (FUN-02).
+  myDone: () => (Array.isArray(mine.done) ? mine.done : null),
+  // Every open item, or null until read (stress test of 23 November 2026).
+  myAll: () => (Array.isArray(mine.all) ? mine.all : null),
   /*
     START THE FETCH, from the renderer, the way the default studio's review
     block does.
@@ -15866,10 +16046,14 @@ async function needMine(bucket) {
   if (mine.lists[key] !== undefined) return
   mine.lists[key] = null
   try {
-    const [rows, counts] = await Promise.all([
+    const [rows, counts, finished] = await Promise.all([
       settles(read('my_tasks', bucket, { q: mine.query, sort: mine.sort })),
       mine.counts === null ? settles(read('my_task_counts')) : Promise.resolve(mine.counts),
+      mine.done === null ? settles(read('my_tasks', 'done', { q: '', sort: 'smart' })) : Promise.resolve(mine.done),
     ])
+    if (Array.isArray(finished)) mine.done = finished
+    const everything = await settles(read('my_tasks', 'all', { q: '', sort: 'smart' }))
+    if (Array.isArray(everything)) mine.all = everything
     /*
       `settles` answers null for a request that failed without throwing, so
       "not an array" is the same news as the catch below and must not become
@@ -15914,6 +16098,8 @@ async function needMine(bucket) {
 function forgetMine() {
   for (const k of Object.keys(mine.lists)) delete mine.lists[k]
   mine.counts = null
+  mine.done = null
+  mine.all = null
   mine.repeating = undefined
 }
 
@@ -15927,11 +16113,13 @@ async function reloadMine() {
   const key = mineKey()
   const kept = mine.lists[key]
   try {
-    const [rows, counts, all] = await Promise.all([
+    const [rows, counts, all, finished] = await Promise.all([
       settles(read('my_tasks', mine.bucket, { q: mine.query, sort: mine.sort })),
       settles(read('my_task_counts')),
       settles(read('my_tasks', 'all', { q: '', sort: 'smart' })),
+      settles(read('my_tasks', 'done', { q: '', sort: 'smart' })),
     ])
+    if (Array.isArray(finished)) mine.done = finished
     for (const k of Object.keys(mine.lists)) if (k !== key) delete mine.lists[k]
     if (Array.isArray(rows)) {
       mine.lists[key] = rows
@@ -15940,6 +16128,7 @@ async function reloadMine() {
       delete mine.lists[key]
     }
     if (counts !== null && typeof counts === 'object') mine.counts = counts
+    if (Array.isArray(all)) mine.all = all
     if (Array.isArray(all))
       mine.repeating = all.filter(
         (r) => r?.repeats?.series === true && r.state !== 'done' && r.state !== 'cancelled',
@@ -16279,7 +16468,7 @@ function tickWaiting() {
   for (const el of marks) {
     const since = Number(el.dataset.waitingSince)
     if (!Number.isFinite(since)) continue
-    const secs = Math.max(0, Math.round((Date.now() - since) / 1000))
+    const secs = Math.max(0, Math.round((serverNow() - since) / 1000))
     el.textContent = secs < 60
       ? `${secs}s`
       : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`
@@ -16669,7 +16858,15 @@ async function startOfficeReads(token) {
   `refresh` is passed so an undo redraws through the same path a write does.
 */
 onWrite((_action, result) => {
-  undo.offer(result, refresh)
+  /*
+    A9. An undo put a task back on the server, but the refresh it asked for did not clear the My Tasks list, so the list
+    stayed as it was until a reload. Every write forgets my tasks; an undo must do the same and then read them again.
+  */
+  undo.offer(result, async () => {
+    forgetMine()
+    await refresh()
+    if (state.view === 'tasks') void needMine(mine.bucket)
+  })
 })
 
 live()

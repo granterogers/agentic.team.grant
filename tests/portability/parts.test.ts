@@ -205,7 +205,7 @@ describe('a part: round trip and each way it is refused', () => {
     const extra = buildPart({
       index: idx,
       number: 1,
-      files: [{ name: 'files/' + 'a'.repeat(64) + '.bin', data: bytesOf(10, 9) }],
+      files: [{ name: `files/${'a'.repeat(64)}.bin`, data: bytesOf(10, 9) }],
       pkg: PKG,
       exportedAt: '2026-10-14T12:00:00.000Z',
     })

@@ -16,7 +16,7 @@
   A NOTE ON COMMENTS IN THIS FILE: functions here return template literals, and a backtick inside a comment inside one ends the
   string. Comments inside returned templates use plain words only, and this file keeps its comments outside them.
 */
-import { activeFilters, appendPage, clock, describe, destinationFor, exactTime, filterFeed, fromFeedRow, groupByDay, howWeKnow, kindWords, queryFor, RANGES, safeFacts, sortFeed, stageOf, VIEWS } from './activity-model.js'
+import { activeFilters, appendPage, clock, describe, destinationFor, exactTime, filterFeed, fromFeedRow, groupByDay, howWeKnow, kindWords, plainTitle, queryFor, RANGES, safeFacts, sortFeed, stageOf, VIEWS } from './activity-model.js'
 
 const PAGE = 40
 const HELD_MAX = 400
@@ -71,6 +71,8 @@ export const createActivity = (deps) => {
     open: new Set(),
     chain: new Map(),
     attn: { state: 'idle', events: [] },
+    // SET-03, option B: the one decisions count and list (gateway pending_decisions). `data` stays until a newer read lands.
+    pending: { state: 'idle', data: null },
     legacy: () => '',
     header: () => '',
     note: '',
@@ -248,23 +250,47 @@ export const createActivity = (deps) => {
       .map((g) => `<section class="bcact-day" aria-labelledby="bcact-h-${esc(g.key)}"><h2 class="bcact-dayhead" id="bcact-h-${esc(g.key)}">${esc(g.label)}</h2>${g.events.map(item).join('')}</section>`)
       .join('')
 
-  const attentionItems = () => {
-    const scope = scopeProject()
-    return projects()
-      .filter((p) => S.scope === '' || p.slug === S.scope)
-      .flatMap((p) => (Array.isArray(p.waiting) ? p.waiting.map((w) => ({ p, w })) : []))
-      .map(({ p, w }, i) => ({ p, w, i, scope }))
+  const loadPending = async () => {
+    if (S.pending.state === 'loading') return
+    S.pending = { state: 'loading', data: S.pending.data }
+    try {
+      const d = await withDeadline(read('pending_decisions'), 12000)
+      S.pending = { state: 'done', data: d !== null && typeof d === 'object' ? d : null }
+    } catch {
+      S.pending = { state: 'error', data: S.pending.data }
+    }
+    paint()
+  }
+
+  /*
+    SET-03, option B (22 November 2026). One count and one list of the decisions waiting for the person, from the office's
+    pending_decisions read. The banner, the chip and this list all read it, so they cannot disagree. Until it has been read the
+    count is null and nothing is claimed; a failed read keeps the last answer rather than showing zero.
+  */
+  const pendingItems = () => (S.pending.data !== null && Array.isArray(S.pending.data.items) ? S.pending.data.items : [])
+  const pendingCount = () => (S.pending.data !== null && typeof S.pending.data.count === 'number' ? S.pending.data.count : null)
+  const KIND_WORDS = { approval: 'Approval', proposal: 'Proposal', tool: 'Tool request', offer: 'Offer' }
+  /*
+    A person's name, not the office's role id ("operations-director") (stress test of 23 November 2026). A role the roster does not
+    hold reads as "A team member", never as its raw id.
+  */
+  const personName = (who) => {
+    const w = String(who ?? '')
+    if (w === '' || w === 'the team') return 'The team'
+    const found = ctxFor().crew?.find((c) => c.slug === w || c.staffSlug === w)
+    if (found?.name) return found.name
+    if (/^[a-z0-9]+(-[a-z0-9]+)+$/.test(w)) return 'A team member'
+    return w
   }
 
   const attentionPanel = () => {
-    const items = attentionItems()
+    const items = pendingItems()
     const waiting = items
       .map(
-        ({ p, w, i }) => `<li class="bcact-need">
+        (it) => `<li class="bcact-need">
           <span class="bcact-mark bcact-mark--wait" aria-hidden="true">${icon('approval')}</span>
-          <span class="bcact-needbody"><span class="bcact-needtitle">${esc(String(w.what ?? 'Something is waiting for you'))}</span>
-          <span class="bcact-meta"><span class="bcact-proj">${esc(p.name)}</span>${w.when ? `<span class="bcact-via">${esc(String(w.when))}</span>` : ''}<span class="bcact-result bcact-result--wait">Waiting for you</span></span></span>
-          <button type="button" class="bcbtn bcbtn--outline" data-act-go="${esc(`/p/${p.slug}/team`)}" data-act-focus="need:${String(i)}">Review</button>
+          <span class="bcact-needbody"><span class="bcact-needtitle">${esc(String(it.title ?? 'Something is waiting for you'))}</span>
+          <span class="bcact-meta"><span class="bcact-proj">${esc(KIND_WORDS[it.kind] ?? 'Decision')}</span>${it.who ? `<span class="bcact-via">${esc(personName(it.who))}</span>` : ''}${it.overdue === true ? '<span class="bcact-result bcact-result--wait">Overdue</span>' : '<span class="bcact-result bcact-result--wait">Waiting for you</span>'}</span></span>
         </li>`,
       )
       .join('')
@@ -288,7 +314,17 @@ export const createActivity = (deps) => {
                 .join('')}</ul>`
     return `<section class="bcact-attn" aria-labelledby="bcact-attn-h">
       <h2 class="bcact-subhead" id="bcact-attn-h">Waiting for you</h2>
-      ${items.length === 0 ? '<p class="bcact-note">Nothing is waiting for a decision from you. Approvals and blocked work appear here the moment they need you.</p>' : `<ul class="bcact-needs">${waiting}</ul>`}
+      ${
+        pendingCount() === null
+          ? S.pending.state === 'error'
+            ? '<p class="bcact-note bcact-note--warn">The decisions waiting for you could not be read just now.</p>'
+            : '<p class="bcact-note" role="status">Checking what is waiting for you…</p>'
+          : items.length === 0 && pendingCount() === 0
+            ? '<p class="bcact-note">Nothing is waiting for a decision from you. Approvals, proposals, tool requests and offers appear here the moment they need you.</p>'
+            : items.length === 0
+              ? `<p class="bcact-note bcact-note--warn">${esc(String(pendingCount()))} ${pendingCount() === 1 ? 'decision is' : 'decisions are'} waiting for you, but the list could not be read just now. The count is the office's own.</p>`
+              : `<ul class="bcact-needs">${waiting}</ul>`
+      }
       ${
         legacyOn()
           ? ''
@@ -304,7 +340,7 @@ export const createActivity = (deps) => {
     // Completed and Errors are queries over a recorded outcome; the older feed records none, so it offers only what it can answer.
     const chips = VIEWS.filter((v) => !legacyOn() || v.id === 'all' || v.id === 'attention').map((v) => {
       const on = S.view === v.id
-      const waiting = v.id === 'attention' ? attentionItems().length : 0
+      const waiting = v.id === 'attention' ? (pendingCount() ?? 0) : 0
       // A phone has room for one word: the short name is shown there and the full one stays the accessible name.
       return `<button type="button" class="bcsrcchip${on ? ' is-on' : ''}" data-act-view="${esc(v.id)}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${esc(v.name)}${waiting > 0 ? `, ${String(waiting)}` : ''}" data-act-focus="view:${esc(v.id)}"><span class="bcact-long" aria-hidden="true">${esc(v.name)}</span><span class="bcact-short" aria-hidden="true">${esc(v.short)}</span>${waiting > 0 ? ` <span class="bcact-count">${String(waiting)}</span>` : ''}</button>`
     }).join('')
@@ -374,7 +410,8 @@ export const createActivity = (deps) => {
         const who = crew().find((c) => c.slug === r.who || c.staffSlug === r.who)?.name ?? ''
         const said = String(r.ask ?? '').replace(/\s+/g, ' ').trim()
         // A request with no text of its own is stored under its job kind; a kind is never shown as wording.
-        const ask = said === '' || /^[a-z]+(\.[a-z_]+)+$/.test(said) ? kindWords(said === '' ? 'office.instruction' : said) : said
+        // "Office pursue" is the office's own job name, as the feed also names it (stress test of 23 November 2026).
+        const ask = said === '' || /^[a-z]+(\.[a-z_]+)+$/.test(said) ? kindWords(said === '' ? 'office.instruction' : said) : plainTitle(said)
         return `<li class="bcact-nowrow"><span class="bcact-pulse" aria-hidden="true"></span><span class="bcact-nowbody"><span class="bcact-nowtitle">${esc(ask.length > 140 ? `${ask.slice(0, 137)}…` : ask)}</span><span class="bcact-meta">${who === '' ? '' : `<span>${esc(who)} is working on it</span>`}<span class="bcact-proj">${esc(p.name)}</span></span></span><button type="button" class="bcbtn bcbtn--outline" data-act-go="${esc(`/p/${p.slug}/team`)}" data-act-focus="now:${esc(String(r.id ?? p.slug))}">Open</button></li>`
       })
       .join('')
@@ -382,7 +419,7 @@ export const createActivity = (deps) => {
   }
 
   const bannerHtml = () => {
-    const waiting = attentionItems().length
+    const waiting = pendingCount() ?? 0
     return S.view !== 'attention' && waiting > 0
       ? `<button type="button" class="bcact-banner" data-act-view="attention" data-act-focus="banner"><span class="bcact-mark bcact-mark--wait" aria-hidden="true">${icon('approval')}</span><span><b>${String(waiting)} ${waiting === 1 ? 'thing needs' : 'things need'} you</b><span>See what is waiting for your decision</span></span><span aria-hidden="true">›</span></button>`
       : ''
@@ -456,10 +493,14 @@ export const createActivity = (deps) => {
       S.started = true
       queueMicrotask(() => {
         void load()
+        void loadPending()
         if (S.view === 'attention') void loadAttention()
       })
     } else if (!S.loading && S.enabled === true && Date.now() - S.loadedAt > STALE_MS) {
-      queueMicrotask(() => void load())
+      queueMicrotask(() => {
+        void load()
+        void loadPending()
+      })
     }
     return `<div class="bcact" data-bc-activity data-act-scope="${esc(scope)}">${html()}</div>`
   }

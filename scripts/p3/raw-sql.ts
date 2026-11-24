@@ -26,6 +26,7 @@ const keyOf = (file: string, body: string): string =>
   `${file}#${createHash('sha1')
     .update(
       body
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
         .replace(/\$\{[^}]*\}/g, '${}')
         .replace(/\s+/g, ' ')
         .trim(),

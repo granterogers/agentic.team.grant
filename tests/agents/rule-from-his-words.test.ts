@@ -27,11 +27,11 @@ describe('a standing rule is read from his words (completion pass)', () => {
 
   // Semantic neighbours of the sentence that failed: his words carry the rule.
   it.each([
-    "I've told you to always give your information in the form of clear bullet points. Also, I want you to tell me what my current tasks are.",
+    "From now on, I've told you to give your information in the form of clear bullet points. Also, I want you to tell me what my current tasks are.",
     'From now on use bullet points. Also, I want you to tell me what is on my list.',
-    "I've asked you to always keep it short. Also, tell me what Emma found.",
+    "From now on, I've asked you to keep it short. Also, tell me what Emma found.",
     'From now on, answer in bullet points. And I want to know what my tasks are.',
-    'Never put a due date on anything unless I give one. Also add a task to ring the venue.',
+    'From now on, never put a due date on anything unless I give one. Also add a task to ring the venue.',
   ])('his words keep the rule: %s', (said) => {
     expect(readTeaching(said)).not.toBeNull()
   })
@@ -61,7 +61,7 @@ describe('a standing rule is read from his words (completion pass)', () => {
     the three clauses it actually produced across two runs.
   */
   const HIS =
-    "I've told you to always give your information in the form of clear bullet points. Also, I want you to tell me what my current tasks are."
+    "From now on, I've told you to give your information in the form of clear bullet points. Also, I want you to tell me what my current tasks are."
   it.each([
     'Give your information in the form of clear bullet points.',
     'Give information in the form of clear bullet points.',

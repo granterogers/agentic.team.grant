@@ -74,8 +74,11 @@ export type Teaching = LessonTaught | SkillTaught
   should behave rather than a thing to go and do. "Send me the report" is work;
   "from now on send me the report as a PDF" is a rule about work.
 */
-const STANDING =
-  /\b(?:from now on|going forward|in future|in the future|always|never|whenever you|every time you|as a rule|by default|remember that|remember to|bear in mind|keep in mind|make sure you always|don't ever|do not ever)\b/i
+/*
+  D5 (21 November 2026): only an explicit "from now on" makes a sentence a standing rule. "Always", "never", "by default"
+  and the rest are preferences said in passing, not rules; a chat message must not turn them into one.
+*/
+const STANDING = /\bfrom now on\b/i
 
 /*
   A procedure announces itself as one.
@@ -128,7 +131,7 @@ const ASKS_FOR_WORK =
 
 /** Explicitly asking for it to be kept, which settles the question. */
 const ASKS_TO_STORE =
-  /\b(?:learn this|remember this|write this down|note this down|save this|store this|add this to your|make this a (?:rule|skill|habit)|this is a (?:rule|skill))\b/i
+  /\b(?:learn this|remember this|remember that|write this down|note this down|save this|store this|add this to your|make this a (?:rule|skill|habit)|this is a (?:rule|skill))\b/i
 
 /**
  * WHICH SENTENCE IS THE RULE, when a message has several (final audit, invariant 4; reviews R2-1, R2-2).

@@ -172,7 +172,7 @@ export const TOOLS = [
   */
   { id: 'chat', name: 'Chat', own: true },
   { id: 'schedule', name: 'Schedule', own: true },
-  { id: 'team', name: 'Agentic Team', own: true },
+  { id: 'team', name: 'Team', own: true },
   /*
     And "Assets" is the same word twice with a marketing coat on. A document
     is a document; the gallery shows PDFs, written pages and uploads, and
@@ -262,11 +262,14 @@ const TRAY_MARKS = {
   home: '<path d="M3.5 10.5 12 3.8l8.5 6.7"/><path d="M5.5 9.2V20h13V9.2"/><path d="M10 20v-5.5h4V20"/>',
   tasks: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8.2 12.2 2.6 2.6 5-5.4"/>',
   activity: '<path d="M3 12h4l2.5-6.5 5 13L17 12h4"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
 }
 const trayItems = () => [
   { name: 'Home', to: at('/'), glyph: trayMark(TRAY_MARKS.home) },
   { name: 'My Tasks', to: at('/tasks'), glyph: trayMark(TRAY_MARKS.tasks) },
   { name: 'Activity', to: at('/activity'), glyph: trayMark(TRAY_MARKS.activity) },
+  // D9: Search is a screen of its own at /search; it had no entry in the menu.
+  { name: 'Search', to: at('/search'), glyph: trayMark(TRAY_MARKS.search) },
 ]
 
 /*
@@ -339,7 +342,11 @@ const switcherPanel = (here) => {
         : `<div class="bcmenulist">${projects.map(row).join('')}</div>`
     }
     ${
-      here === null
+      /*
+        A17d. On the project's own overview this item went to the address already on screen, so it did nothing. It is
+        offered only where it would take the person somewhere.
+      */
+      here === null || (globalThis.location?.pathname ?? '').replace(/\/+$/, '') === at(`/p/${here.slug}`)
         ? ''
         : `<hr class="bcmenusep"><button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(at(`/p/${here.slug}`))}"><span class="bcmenuname">Overview of ${esc(here.name)}</span></button>`
     }
@@ -386,6 +393,17 @@ const menuPanel = () => {
            <p class="bcmenunone" role="status" aria-live="polite" data-bc-restore-said>${esc(compose.restoreSaid())}</p>`
         : ''
     }
+    <p class="bcmenuhead">Go to</p>
+    <div class="bcmenulist" data-bc-menu-go>
+      ${trayItems()
+        .map(
+          (t) =>
+            `<button type="button" role="menuitem" class="bcmenuitem" data-bc-go="${esc(t.to)}"><span class="bcmenuname">${esc(t.name)}</span></button>`,
+        )
+        .join('')}
+      <button type="button" role="menuitem" class="bcmenuitem" data-bc-global-menu="1"
+        title="Settings: the whole office, outside any project"><span class="bcmenuname">Settings</span></button>
+    </div>
     ${
       here === null
         ? ''
@@ -397,9 +415,6 @@ const menuPanel = () => {
       )
       .join('')}${item(at(`/p/${here}/chat`), 'Team Chat', rowMark('chat'))}<button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem" data-bc-sources="1">${rowMark('sources')}<span class="bcmenuname">Sources</span></button></div>`
     }
-    <hr class="bcmenusep">
-    <button type="button" role="${menu.isMaking() ? 'button' : 'menuitem'}" class="bcmenuitem bcmenuglobal" data-bc-global-menu="1"
-      title="Global Settings: the whole office, outside any project"><span class="bcmenuname">Global Settings</span></button>
   </div>`
 }
 
@@ -1208,7 +1223,7 @@ const tasksSurface = (whole) => {
         container rather than a way to make a to-do.
       -->
       <span class="bcactions">
-        ${button('Add a Task', { kind: 'primary', 'data-bc-addtask': esc(named[0]?.id === undefined || named[0]?.id === '' ? 'loose' : named[0].id) })}
+        ${button('Add a task', { kind: 'primary', 'data-bc-addtask': esc(named[0]?.id === undefined || named[0]?.id === '' ? 'loose' : named[0].id) })}
         ${button('New list', { 'data-bc-addlist': '1' })}
       </span>
     </div>
@@ -1677,7 +1692,7 @@ const teamSurface = (p) => {
     : people.find((c) => c.slug === String(editing))
   return `${crumbFor(p, 'team')}
     <div class="bcrecordhead">
-      <h1>Agentic Team</h1>
+      <h1>Team</h1>
       <span class="bcactions">${button('Bring someone in', { 'data-bc-hire': '1' })}</span>
     </div>
     ${
@@ -2012,8 +2027,8 @@ const docRow = (d, i) => {
 
 const opensAs = (d) => {
   if (bcMini.isAudioDoc(d)) return 'Plays here'
-  if (d.file !== undefined && d.file !== null && d.file !== '') return 'Opens in a new tab'
-  if (d.id !== undefined && d.id !== null && d.id !== '') return 'Opens in a new tab'
+  if (d.file !== undefined && d.file !== null && d.file !== '') return 'Opens a preview'
+  if (d.id !== undefined && d.id !== null && d.id !== '') return 'Opens a preview'
   return 'Details'
 }
 
@@ -3240,7 +3255,7 @@ const documentRecord = (p) => {
     </div>
     ${provenanceLine}
     <div class="bcdocgrid">
-      <div class="bcdocpreview" role="region" tabindex="0" aria-label="${esc(`Preview of ${d.title ?? 'the document'}`)}" data-bc-docpreview="${esc(ref)}" data-bc-docaudio="${isAudio ? '1' : ''}" data-bc-doctitle="${esc(d.title ?? '')}"${
+      <div class="bcdocpreview" role="region" tabindex="0" aria-label="${esc(`Preview of ${d.title ?? 'the document'}`)}" data-bc-docpreview="${esc(ref)}" data-bc-docaudio="${isAudio ? '1' : ''}" data-bc-docexcerpt="${esc(d.kind === 'doc' || d.kind === 'made' ? String(d.excerpt ?? '') : '')}" data-bc-doctitle="${esc(d.title ?? '')}"${
         onDemand && !isAudio
           ? ` data-bc-docmode="ondemand" data-bc-docid="${esc(String(d.id))}" data-bc-docproject="${esc(String(p.slug ?? ''))}" data-bc-docsourcename="${esc(sourceName)}" data-bc-docsourceurl="${esc(sourceHref)}" data-bc-docimportable="${canImport && !importPending ? '1' : ''}"`
           : ''
@@ -3263,6 +3278,16 @@ const documentRecord = (p) => {
           ${!isAudio && file !== '' ? button('Open the file', { 'data-bc-doc-tab': esc(file) }) : ''}
           ${file !== '' ? button('Download', { 'data-bc-doc-save': esc(file), 'data-bc-doc-title': esc(d.title ?? '') }) : ''}
         </div>
+        ${
+          ref.startsWith('id:')
+            ? `<form class="bcaddform bcgap-l" data-bc-docrenameform="${esc(ref.slice(3))}">
+                <label class="bcfield"><span class="bclabel" for="bc-docrename">Title</span>
+                  <input class="bcinput" id="bc-docrename" name="title" autocomplete="off" value="${esc(d.title ?? '')}"></label>
+                <div class="bcrow">${button('Rename', { 'data-bc-docrename-save': '1' })}${button('Archive', { kind: 'danger', 'data-bc-docarchive': esc(ref.slice(3)) })}</div>
+                <p class="bcpmeta">Archiving takes the document out of the project's lists. Nothing is deleted, and the undo strip brings it back.</p>
+              </form>`
+            : ''
+        }
         <p class="bcpmeta" data-bc-docsay role="status"></p>
         <div class="bcdocversions" data-bc-docversions="${esc(String(d.id ?? ''))}" hidden></div>
         ${e.src === 'generated' && String(d.id ?? '') !== '' ? `<div class="bcdocstyle" data-bc-docstyle="${esc(String(d.id))}" data-bc-docproject="${esc(String(p.slug ?? ''))}" hidden></div>` : ''}
@@ -3286,7 +3311,7 @@ const settingsSurface = (p) => {
     </div>
     <p class="bcpmeta bcprose bcgap-l">
       Settings for ${esc(p.name)} alone. What the whole office does — the team,
-      its behaviour, what it is connected to — is under Settings for everything.
+      its behaviour, what it is connected to — is under Settings.
     </p>
     <div class="bcsetframe">${ctx?.projectSettingsBody?.(p) ?? ''}</div>`
 }
@@ -3365,7 +3390,7 @@ const waitingRecord = (p) => {
 
   return `${breadcrumb([
     { name: p.name, to: at(`/p/${p.slug}`) },
-    { name: 'Agentic Team', to: at(`/p/${p.slug}/team`) },
+    { name: 'Team', to: at(`/p/${p.slug}/team`) },
     { name: w.what },
   ])}
     <!--
@@ -3545,6 +3570,36 @@ const myTasks = () => {
         .join(' · '),
     )
   }
+  /*
+    FUN-02: completed items stay visible, under their own heading, so a tick is never a disappearance. The
+    list above is the open work; these are the finished rows. An item that is already in the list above is not
+    repeated (the Done bucket can be the one on screen).
+  */
+  const doneBelow = (() => {
+    if (!signedIn || trouble) return []
+    const finished = ctx.myDone?.()
+    if (!Array.isArray(finished)) return []
+    const shown = new Set((Array.isArray(mine) ? mine : []).map((t) => String(t.id ?? '')))
+    return finished.filter((t) => !shown.has(String(t.id ?? '')))
+  })()
+  /*
+    COMING UP (stress test of 23 November 2026). The Today bucket is what the list above shows, so a task due later, or with no date,
+    was filed and never seen. Every other open task is listed here, once, with the same tick and Remove as the rest. Repeating
+    reminders have their own list below, so they are left out here.
+  */
+  const comingUp = (() => {
+    if (!signedIn || trouble) return []
+    const everything = ctx.myAll?.()
+    if (!Array.isArray(everything)) return []
+    const shown = new Set((Array.isArray(mine) ? mine : []).map((t) => String(t.id ?? '')))
+    return everything.filter(
+      (t) =>
+        t.state !== 'done' &&
+        t.state !== 'cancelled' &&
+        t.repeats?.series !== true &&
+        !shown.has(String(t.id ?? '')),
+    )
+  })()
   const seriesBelow = (() => {
     if (!signedIn || trouble) return []
     const all = ctx.myRepeating?.()
@@ -3552,11 +3607,24 @@ const myTasks = () => {
     const shown = new Set((Array.isArray(mine) ? mine : []).map((t) => String(t.id ?? '')))
     return all.filter((t) => !shown.has(String(t.id ?? '')))
   })()
+  /*
+    D4: My Tasks can add and remove its own items, as the older studio's My Tasks always could. The add is the office's
+    my_task_add; removing is my_task_delete, which keeps the row for history and offers an undo.
+  */
+  const addForm = `<form class="bcaddform bcgap-l" data-bc-mytaskform>
+      <label class="bcfield"><span class="bclabel" for="bc-mytask-title">What needs doing</span>
+        <input class="bcinput" id="bc-mytask-title" name="title" autocomplete="off"></label>
+      <label class="bcfield"><span class="bclabel" for="bc-mytask-due">Due (leave blank for today)</span>
+        <input class="bcinput" type="date" id="bc-mytask-due" name="due"></label>
+      <div class="bcrow"><button type="submit" class="bcbtn bcbtn--primary" data-bc-mytaskadd="1">Add to my list</button></div>
+      <p class="bcpmeta" data-bc-mytasksay role="status"></p>
+    </form>`
   return `<h1 class="bcsectiontitle">My Tasks</h1>
     <p class="bcpmeta bcprose bcgap-l">
       Your own list. Separate from what any project has committed to, and from
       what the team is running.
     </p>
+    ${signedIn && !trouble ? addForm : ''}
     ${
       !signedIn
         ? empty({
@@ -3585,9 +3653,50 @@ const myTasks = () => {
                     only, and only where the row has an id to write to. No backticks in this comment. Template literal.
                   -->
                   ${stopSeries(t)}
+                  ${t.id === undefined || String(t.id) === '' ? '' : button('Remove', { 'data-bc-mytaskremove': esc(String(t.id)), 'aria-label': `Remove: ${t.title}` })}
                 </div>`,
               )
               .join('')}</div>`
+    }
+    ${
+      comingUp.length === 0
+        ? ''
+        : `<h2 class="bcsubhead">Coming up</h2>
+          <p class="bcpmeta bcprose bcgap-l">Open to-dos due later, or with no date. They are yours too.</p>
+          <div class="bclist" data-bc-coming-list>${comingUp
+            .map(
+              (t) => `<div class="bcitem">
+                <input type="checkbox" class="bccheck" ${t.state === 'done' ? 'checked' : ''}
+                  data-bc-mytick="${esc(t.id ?? '')}"
+                  aria-label="${esc(`Not completed: ${t.title}`)}">
+                <div class="bcitembody">
+                  <span class="bcitemtitle">${esc(t.title)}</span>
+                  <span class="bcitemmeta">${myMeta(t)}</span>
+                </div>
+                ${t.id === undefined || String(t.id) === '' ? '' : button('Remove', { 'data-bc-mytaskremove': esc(String(t.id)), 'aria-label': `Remove: ${t.title}` })}
+              </div>`,
+            )
+            .join('')}</div>`
+    }
+    ${
+      doneBelow.length === 0
+        ? ''
+        : `<h2 class="bcsubhead">Done</h2>
+          <p class="bcpmeta bcprose bcgap-l">Finished items stay here. Untick one to put it back on your list.</p>
+          <div class="bclist bclist--done" data-bc-done-list>${doneBelow
+            .map(
+              (t) => `<div class="bcitem bcitem--done">
+                <input type="checkbox" class="bccheck" checked
+                  data-bc-mytick="${esc(t.id ?? '')}"
+                  aria-label="${esc(`Completed: ${t.title}`)}">
+                <div class="bcitembody">
+                  <span class="bcitemtitle">${esc(t.title)}</span>
+                  <span class="bcitemmeta">${myMeta(t)}</span>
+                </div>
+                ${t.id === undefined || String(t.id) === '' ? '' : button('Remove', { 'data-bc-mytaskremove': esc(String(t.id)), 'aria-label': `Remove: ${t.title}` })}
+              </div>`,
+            )
+            .join('')}</div>`
     }
     ${
       seriesBelow.length === 0
@@ -3790,7 +3899,7 @@ const search = () => {
         : hits.length === 0
           ? empty({
               title: 'Nothing matches that',
-              body: `No project, task, document, person, source or output matches “${q.trim()}”. This searches what the office has sent this browser — it is not a claim about what does not exist anywhere.`,
+              body: `No project, task, document, person, source or output matches “${q.trim()}”. Try fewer words, or another filter.`,
             })
           : `<p class="bcpmeta bcprose bcgap-l">${esc(
               hits.length === 1 ? '1 result' : `${hits.length} results`,

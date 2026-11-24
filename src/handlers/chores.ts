@@ -132,7 +132,7 @@ export function choresHandler(db: SqlExecutor): Handler {
             ? 'Every credential the office holds is working.'
             : `Nothing changed. ${count(open, 'credential', 'credentials')} still ` +
               'on your list to reconnect.'
-          : [
+          : `${[
               raised === 0
                 ? ''
                 : `${count(raised, 'credential', 'credentials')} on your list to reconnect` +
@@ -140,7 +140,7 @@ export function choresHandler(db: SqlExecutor): Handler {
               cleared === 0 ? '' : `${count(cleared, 'chore', 'chores')} cleared, working again`,
             ]
               .filter((x) => x !== '')
-              .join('. ') + `. ${count(open, 'open', 'open')} in all.`
+              .join('. ')}. ${count(open, 'open', 'open')} in all.`
 
       return { ...base, body: body + backupNote } satisfies HandlerOutput
     },

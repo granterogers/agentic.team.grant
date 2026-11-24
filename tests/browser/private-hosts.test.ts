@@ -92,7 +92,7 @@ describe('a name that resolves to a private address', () => {
       asked.push(u)
       if (u.includes('hop.example'))
         return new Response('', { status: 302, headers: { location: 'https://rebind.example/' } })
-      return new Response('<html><body>' + 'a real page '.repeat(40) + '</body></html>', {
+      return new Response(`<html><body>${'a real page '.repeat(40)}</body></html>`, {
         status: 200,
       })
     }) as unknown as typeof fetch

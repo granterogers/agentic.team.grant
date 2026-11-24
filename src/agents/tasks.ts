@@ -175,6 +175,12 @@ const OBJECT_NOUN =
 /** What is left once the frame has gone, if it is only a link word. */
 const LINKING =
   /^\s*(?:to|for|about|that|which|and|then|called|named|titled|saying|which\s+is)\b\s*/i
+/*
+  A project named as a label, with a colon: "Add a to-do to this project: book the venue walkthrough". Stress test of 22
+  November 2026 filed the whole label as the title ("This project: Book the venue walkthrough, due"). The colon is what makes it a
+  label; without one, "this project" is left to the adjunct rule above, which needs the words that follow it to be a verb phrase.
+*/
+const PROJECT_LABEL = /^\s*(?:(?:this|the)\s+)?project\s*:\s*/i
 /** Politeness at the end, which the opening strip cannot reach. */
 const TRAILING_PLEASE =
   /\s*\b(?:please|pls|thanks|ta|instead|if\s+you\s+(?:can|could|would))\b[\s,.]*$/i
@@ -313,6 +319,7 @@ export const taskTitle = (clause: string): string | null => {
   text = text.replace(/^\s*\w+(?:ing|ed)\s+(?=(?:to|for)\b)/i, '')
   text = text.replace(PROJECT_ADJUNCT, '')
   text = text.replace(LINKING, '')
+  text = text.replace(PROJECT_LABEL, '')
   /*
     The capability noun can come LAST: "make the pricing review a task". The
     object identifies which capability was asked for wherever it sits, so it is
@@ -557,6 +564,7 @@ export const titleReply = (
     sentence and a wrong mutation costs Grant's trust in every confirmation
     after it.
   */
+  // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
   const pending = previousAnswer !== null && previousAnswer.includes(TITLE_ASKED)
   const read = readFollowUp(instruction, pending, resolvesAnotherAction)
   if (read.kind !== 'answered' || read.value === null) return null

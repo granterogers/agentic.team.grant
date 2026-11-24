@@ -48,6 +48,7 @@ import * as docorder from './docorder.js'
 import { button, errorState, esc, skeleton, status } from './parts.js'
 import { columnsOf } from './layout.js'
 import { source } from '../data.js'
+import { serverNow } from '../net.js'
 
 /** A module whose office did not answer: what was not loaded, and the way to ask again (22 October 2026, item 26). */
 const unreachable = (what) =>
@@ -322,7 +323,7 @@ export const todosMini = (whole, { lists = 2, per = 3 } = {}) => {
         return `<p class="bcmpty">Nothing here under ${esc(f.name)}.
           <button type="button" class="bclinky" data-bc-filter-off="1">Show everything</button></p>`
       }
-      return emptyWith('No to-dos on this project yet.', 'Add a to-do', `/p/${whole.slug}/tasks`)
+      return emptyWith('No to-dos on this project yet.', 'Open To-dos to add one', `/p/${whole.slug}/tasks`)
     }
     return `<ul class="bctasks">${flat.slice(0, per * lists).map(taskLine).join('')}</ul>`
   }
@@ -423,7 +424,7 @@ export const cardsMini = (p) => {
   const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
   if (tasks.length === 0 && source.fetching === true) return skeleton(4)
   if (tasks.length === 0 && source.state === 'unreachable') return unreachable('to-dos')
-  if (tasks.length === 0) return emptyWith('No to-dos yet. Add one to start this list.', 'Add a to-do', `/p/${p.slug}/tasks`)
+  if (tasks.length === 0) return emptyWith('No to-dos yet. Add one to start this list.', 'Open To-dos to add one', `/p/${p.slug}/tasks`)
   const at = (id) =>
     tasks.filter((t) => {
       const st = t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')
@@ -522,6 +523,31 @@ const ROOM_VOICES = new Set(['', 'grant', 'you', 'office', 'chief-of-staff', 'cl
 export const roomVoices = (list) =>
   list.filter((m) => ROOM_VOICES.has(String(m.who ?? m.from ?? '').toLowerCase()))
 
+/*
+  SPD-03 (21 November 2026): a long reply showed no progress for 40 to 50 seconds. The legacy app counts a waiting
+  row up in seconds, but the Team HQ thread is drawn here and never started that count. This starts one page-wide
+  interval the first time a waiting row is drawn. It writes textContent only, so it never redraws under the composer,
+  and it stops when no waiting row is left.
+*/
+let waitTimer = null
+const tickWaitingAges = () => {
+  const marks = document.querySelectorAll('[data-waiting-since]')
+  if (marks.length === 0) {
+    if (waitTimer !== null) clearInterval(waitTimer)
+    waitTimer = null
+    return
+  }
+  for (const el of marks) {
+    const since = Number(el.dataset.waitingSince)
+    if (!Number.isFinite(since)) continue
+    const secs = Math.max(0, Math.round((serverNow() - since) / 1000))
+    el.textContent = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`
+  }
+}
+const startWaitingCount = () => {
+  if (waitTimer === null) waitTimer = setInterval(tickWaitingAges, 1000)
+}
+
 export const said_ = (m) => {
   const who = m.who ?? m.from ?? ''
   const mine = who === 'grant'
@@ -568,6 +594,7 @@ export const said_ = (m) => {
         thinking: 'With the team. They are working on it.',
         slow: 'No answer yet. The office may still be working — it also answers in Slack and Telegram.',
       }[m.waiting] ?? 'Waiting.'
+    startWaitingCount()
     return `<div class="bcsaid bcsaid--working" role="status" aria-live="polite">
       <span class="bcsaidspin" aria-hidden="true"></span>
       <div class="bcsaidbody">
@@ -979,8 +1006,22 @@ export const docRef = (d) =>
  */
 const TYPE_TAG = { pdf: 'PDF', doc: 'DOC', made: 'DOC', image: 'IMG' }
 
+/*
+  The excerpt is the document's own first words, so it carries its markdown: a tile read "# People - Grant Rogers" and
+  "# A7 check". The markers are taken out for the tile (A15g); the text itself is not changed.
+*/
+const plainExcerpt = (s) =>
+  s
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*(?:[-*+>]|\d+\.)\s+/gm, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`~]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
 const drawnPage = (d, most = 9, small = false) => {
-  const excerpt = typeof d.excerpt === 'string' ? d.excerpt.trim() : ''
+  const excerpt = typeof d.excerpt === 'string' ? plainExcerpt(d.excerpt.trim()) : ''
   if (excerpt !== '' && !small) {
     return `<span class="bcpage bcxpage" aria-hidden="true"><span class="bcxpagetext">${esc(excerpt)}</span></span>`
   }
@@ -1012,6 +1053,8 @@ const drawnPage = (d, most = 9, small = false) => {
 const SHORT_KIND = { Document: 'DOC', Written: 'DOC', PDF: 'PDF', Spreadsheet: 'XLS', Presentation: 'PPT', Note: 'NOTE', Image: 'IMG' }
 const shortKind = (d) => {
   const word = kindWordOf(d)
+  // A kind word the map does not list was cut to four letters, which read "WRIT" for a written page (A15e).
+  if (/^writ/i.test(word)) return 'DOC'
   return SHORT_KIND[word] ?? String(word || 'FILE').slice(0, 4).toUpperCase()
 }
 

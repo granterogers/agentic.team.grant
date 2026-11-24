@@ -513,7 +513,7 @@ function cover(
   let note: string | undefined
   let logo = logoIn
   let box = logo === null ? null : logoBox(logo)
-  if (logo !== null && box !== null && box.tooThin) {
+  if (logo && box?.tooThin) {
     note = 'The logo is too thin to read at cover size, so it was left off.'
     logo = null
     box = null

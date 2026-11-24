@@ -38,7 +38,10 @@ const recorder = (): { db: SqlExecutor; sql: string[]; calls: (name: string) => 
     calls: (name) => sql.filter((q) => q.includes(name)),
     db: {
       kind: 'fake',
-      execute: async (q: string) => (sql.push(q), { rows: [{ r: { ok: true } }] }),
+      execute: async (q: string) => {
+        sql.push(q)
+        return { rows: [{ r: { ok: true } }] }
+      },
     } as unknown as SqlExecutor,
   }
 }

@@ -50,6 +50,16 @@ export interface WorkBrief {
   readonly tasks: readonly WorkTask[]
   /** True for the project this conversation is filed under, so "this project" has a referent in front of the model. */
   readonly here?: boolean
+  /**
+   * What else the project holds (A20): its document count with the most recent titles, and the permanent team. Read by
+   * app.project_context_brief (1101). Absent when that read failed, which is "not read", never "none".
+   */
+  readonly context?: ProjectContext
+}
+
+export interface ProjectContext {
+  readonly documents: { readonly total: number; readonly titles: readonly string[] }
+  readonly team: readonly { readonly name: string; readonly role: string }[]
 }
 
 const sentence = (t: WorkTask): string => {
@@ -69,6 +79,22 @@ const sentence = (t: WorkTask): string => {
   }`
 }
 
+/** The documents line: a count, and the most recent titles so a question about a named document has something to match. */
+const documentsLine = (b: WorkBrief): string => {
+  const d = b.context?.documents
+  if (d === undefined) return ''
+  if (d.total === 0) return `The project "${b.name}" holds no documents.`
+  const titles =
+    d.titles.length === 0 ? '' : ` Most recent: ${d.titles.map((t) => `"${t}"`).join('; ')}.`
+  return `The project "${b.name}" holds ${String(d.total)} document${d.total === 1 ? '' : 's'}.${titles}`
+}
+
+/** The team, once: each permanent role and the person in it, so "who handles finance" has an answer in front of the model. */
+const teamLine = (c: ProjectContext): string =>
+  c.team.length === 0
+    ? 'No team roles are recorded.'
+    : `The team, and who holds each role: ${c.team.map((m) => `${m.name} (${m.role})`).join('; ')}.`
+
 /** One project's work as a prompt fragment. Empty for nothing, so the caller can tell a project with no tasks from no read. */
 export function projectWorkSpine(briefs: readonly WorkBrief[]): string {
   if (briefs.length === 0) return ''
@@ -83,7 +109,10 @@ export function projectWorkSpine(briefs: readonly WorkBrief[]): string {
             (b.shown < c.total
               ? ` The ${String(b.shown)} most pressing are listed; the other ${String(c.total - b.shown)} are not shown here.`
               : ' All of them are listed.')
-      return c.total === 0 ? head : `${head}\n${b.tasks.map(sentence).join('\n')}`
+      const tasks = c.total === 0 ? head : `${head}\n${b.tasks.map(sentence).join('\n')}`
+      return b.context === undefined
+        ? tasks
+        : `${tasks}\n${documentsLine(b)}${b.here === true ? `\n${teamLine(b.context)}` : ''}`
     })
     .join('\n\n')
 }
@@ -129,7 +158,22 @@ export async function readProjectWork(
       const raw = (r.rows[0] as { b?: unknown } | undefined)?.b
       if (raw === null || raw === undefined) continue
       const brief = (typeof raw === 'string' ? JSON.parse(raw) : raw) as WorkBrief
-      out.push({ ...brief, here: id === projectId })
+      /*
+        The documents and the team (A20). A failed read leaves `context` absent, which the prompt says is "not read"
+        rather than "none": a read that failed is not the claim that a project holds no documents.
+      */
+      let context: ProjectContext | undefined
+      try {
+        const c = await db.execute(
+          `select app.project_context_brief(${office}, ${lit(id)}::uuid) as c`,
+        )
+        const cr = (c.rows[0] as { c?: unknown } | undefined)?.c
+        if (cr !== null && cr !== undefined)
+          context = (typeof cr === 'string' ? JSON.parse(cr) : cr) as ProjectContext
+      } catch {
+        context = undefined
+      }
+      out.push({ ...brief, here: id === projectId, ...(context === undefined ? {} : { context }) })
     }
     return out
   } catch {

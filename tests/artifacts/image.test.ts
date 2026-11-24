@@ -110,6 +110,7 @@ describe('readImage: what is drawn', () => {
   })
 
   it('keeps proportions when fitting a box', () => {
+    // biome-ignore lint/suspicious/noFocusedTests: fit is this module's own function, not the test runner's focus command
     const f = fit({ height: 80, width: 240 }, 150, 52)
     expect(f.w / f.h).toBeCloseTo(3, 5)
     expect(f.w).toBeLessThanOrEqual(150)

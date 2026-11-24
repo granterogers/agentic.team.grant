@@ -41,11 +41,19 @@ import * as cal from './calendar.js'
 import * as grid from './layout.js'
 import { NAMES, note } from './compose.js'
 import { esc } from './parts.js'
+import * as undo from '../undo.js'
 
 const PHONE = '(max-width: 860px)'
 /** Pixels kept under the stage for the tray and the page's own bottom margin. */
 const RESERVE = 24
 const SWALLOW_MS = 350
+/*
+  Canvases this page has already brought into the window once. A module placed past the right edge of a narrow window
+  (a tablet, a laptop under about 1330px) cannot be reached: the page does not scroll sideways. On the first paint of a
+  canvas, if anything sits past the right edge, the same view as Fit is used. Module-level, so a re-render never repeats it
+  and never undoes a zoom the person has made.
+*/
+const autoFitted = new Set()
 
 const calm = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
 
@@ -246,7 +254,11 @@ export const wireStage = (root, ctx) => {
     FIT: measure the real room, tell the engine, repaint. Runs synchronously
     after the markup is in, so the first paint is already the measured one.
   */
-  const fit = () => {
+  /*
+    `reflow` is true when the window or the dock changed size. The first open always fits what is cut off; after a resize it
+    fits again, so a note or a module that was on the right is not left past the edge. Only the view moves, never the layout.
+  */
+  const fit = (reflow = false) => {
     if (stacked()) {
       board.classList.add('bcpanes--stack')
       board.style.height = ''
@@ -266,6 +278,21 @@ export const wireStage = (root, ctx) => {
     stageEl.style.width = `${String(st.w)}px`
     // An automatic layout can be taller than the window: the stage is as tall as its content, and the board scrolls.
     stageEl.style.height = `${String(Math.max(st.h, grid.contentBottom(slug)))}px`
+    if ((reflow || !autoFitted.has(slug)) && boxW > 0) {
+      autoFitted.add(slug)
+      const rects = [...grid.layout(slug), ...grid.postits(slug)]
+      // The right edge of what is on screen, in stage coordinates, at the view the page is about to paint.
+      const visibleRight = (board.clientWidth - view.x) / view.zoom
+      if (rects.some((r) => r.x + r.w > visibleRight)) {
+        /*
+          Never below 85% (stress test VIS-01): at 63% the text was 7 to 9 px. Below that, the canvas opens at 85% on its left
+          edge and the person pans to the rest; Fit still shows everything at once.
+        */
+        const fitted = grid.fitView(rects, board.clientWidth, board.clientHeight)
+        const left = Math.min(...rects.map((r) => r.x))
+        view = fitted.zoom >= 0.85 ? fitted : { zoom: 0.85, x: 40 - left * 0.85, y: fitted.y }
+      }
+    }
     paintView()
     paintAll()
   }
@@ -362,6 +389,11 @@ export const wireStage = (root, ctx) => {
       if (id !== was.id) was.el.dataset.bcNoteId = id
     } else {
       grid.place(slug, was.id, was.next)
+      // The way back, for this change (stress test LAY-02). Ctrl+Z does the same while the canvas has focus.
+      undo.offerLocal('Moved.', () => {
+        grid.undoLayout(slug)
+        paintAll()
+      })
     }
     paintAll()
     cal.recheck()
@@ -466,6 +498,10 @@ export const wireStage = (root, ctx) => {
         ? { w: now.w + step[0], h: now.h + step[1] }
         : { x: now.x + step[0], y: now.y + step[1] }
       grid.place(slug, id, want)
+      undo.offerLocal('Moved.', () => {
+        grid.undoLayout(slug)
+        paintAll()
+      })
       paintAll()
       const rz = stageEl.querySelector(`[data-mod="${id}"] [data-bc-resize]`)
       rz?.setAttribute('aria-valuenow', String(grid.layout(slug).find((m) => m.id === id)?.w ?? 0))
@@ -707,6 +743,13 @@ export const wireStage = (root, ctx) => {
     if (e.key === 'Escape' && pop !== null) {
       shut()
     }
+    // Ctrl+Z (Cmd+Z on a Mac) takes back the last change to this canvas, unless a person is typing somewhere (LAY-02).
+    const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable="true"]') !== null
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z') && !typing && grid.canUndoLayout(slug)) {
+      e.preventDefault()
+      grid.undoLayout(slug)
+      paintAll()
+    }
   }
   document.addEventListener('keydown', onKey)
   /*
@@ -726,6 +769,20 @@ export const wireStage = (root, ctx) => {
   document.addEventListener('pointerdown', gone, true)
 
   const popAt = (anchor, html, cls) => {
+    /*
+      The anchor is measured BEFORE anything is shut. Layouts is an item in the arrange menu, and closing that menu hides it, so
+      a rectangle read after shut() is all zeros and the popover opened in the top-left corner (0.113.0, layout audit).
+    */
+    let a = anchor.getBoundingClientRect()
+    /*
+      A press on an item of the arrange menu closes the menu before the item's click runs, so the item can already be hidden by
+      now. A hidden anchor is all zeros, which put the popover in the corner (layout audit, 0.113.0); the arrange button is the
+      anchor the item belongs to, so it is used instead.
+    */
+    if (a.width === 0 && a.height === 0) {
+      const plusBtn = document.querySelector('[data-bc-plus]')
+      if (plusBtn !== null) a = plusBtn.getBoundingClientRect()
+    }
     shut()
     popOpener = anchor
     pop = document.createElement('div')
@@ -734,7 +791,6 @@ export const wireStage = (root, ctx) => {
     /* Fixed and on the body: the board clips its contents (it is a viewport onto an infinite canvas), and the anchor may be above it. */
     pop.style.position = 'fixed'
     document.body.append(pop)
-    const a = anchor.getBoundingClientRect()
     const w = pop.offsetWidth
     const h = pop.offsetHeight
     const vw = globalThis.innerWidth ?? 1200
@@ -905,6 +961,11 @@ export const wireStage = (root, ctx) => {
         glide()
         grid.applyPreset(slug, b.dataset.preset)
         view = grid.viewOf(slug)
+        /*
+          A5: the preset is written to the arrangement, but the module elements only take their place in paintAll;
+          a redraw of the page alone left them where they were, so the Layouts options did nothing on screen.
+        */
+        paintAll()
         shut()
         ctx.render()
       })
@@ -957,13 +1018,28 @@ export const wireStage = (root, ctx) => {
       })
     }
   }
-  dock.querySelector('[data-bc-layouts]')?.addEventListener('click', (e) => {
-    if (pop !== null && pop.classList.contains('bcpop--layouts')) {
-      shut()
-      return
+  /*
+    Every Layouts button, not just the dock's: the arrange menu has its own (A5, 18 November 2026). Attaching to the dock's alone left
+    the one in the + menu with no listener, so pressing it did nothing.
+  */
+  /*
+    One listener per button, and it calls the handler of the LATEST draw (A5). The button persists across redraws, so a
+    listener added by each draw made an older draw open the popover; that draw's board had left the page, its `gone`
+    listener closed the popover on the next press, and the preset was never reached.
+  */
+  for (const layoutsButton of new Set([...dock.querySelectorAll('[data-bc-layouts]'), ...root.querySelectorAll('[data-bc-layouts]')])) {
+    layoutsButton.__bcLayoutsPress = (e) => {
+      if (pop !== null && pop.classList.contains('bcpop--layouts')) {
+        shut()
+        return
+      }
+      openLayouts(e.currentTarget)
     }
-    openLayouts(e.currentTarget)
-  })
+    if (layoutsButton.dataset.layoutsWired !== '1') {
+      layoutsButton.dataset.layoutsWired = '1'
+      layoutsButton.addEventListener('click', (e) => layoutsButton.__bcLayoutsPress?.(e))
+    }
+  }
 
   /* ---------------------------------------------------------------- notes */
 
@@ -1100,7 +1176,7 @@ export const wireStage = (root, ctx) => {
       globalThis.removeEventListener('bc-dock-resized', onResize)
       return
     }
-    fit()
+    fit(true)
   }
   globalThis.addEventListener('resize', onResize)
   /* The chat dock opening, closing or being resized changes the board's width without a window resize. */

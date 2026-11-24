@@ -191,11 +191,17 @@ describe('free placement', () => {
     expect(lost.y).toBe(L.REACH)
   })
 
-  it('lets a module sit beyond the original stage (infinite canvas, 8 Oct 2026)', () => {
+  /*
+    Superseded (21 November 2026, stress test LAY-01): the 8 October "infinite canvas" let a dropped module sit off the edge, and
+    the stress test found modules lost there (positions of -588 px and 1924 px, unreachable without Fit). A module now stays on
+    the visible stage, so it is never lost. The test asserts the new rule.
+  */
+  it('keeps a dropped module on the stage, so it cannot be lost off the edge (stress test LAY-01)', () => {
     const out = L.place('p', 'tasks', { x: 5000, y: -3000 }) as Rect[]
     const t = out.find((m) => m.id === 'tasks') as Rect
-    expect(t.x).toBe(5000)
-    expect(t.y).toBe(-3000)
+    expect(t.x).toBeGreaterThanOrEqual(0)
+    expect(t.y).toBeGreaterThanOrEqual(0)
+    expect(t.x + t.w).toBeLessThanOrEqual(1200)
   })
 })
 

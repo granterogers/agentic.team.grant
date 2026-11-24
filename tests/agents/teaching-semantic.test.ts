@@ -25,10 +25,10 @@ describe('marked is stored, unmarked is offered', () => {
   */
   const marked = [
     'from now on keep your answers to a couple of paragraphs',
-    'always put the numbers in a table',
-    'never send anything without checking with me',
-    'as a rule, lead with the conclusion',
-    'by default give me the headline first',
+    'from now on, always put the numbers in a table',
+    'from now on, never send anything without checking with me',
+    'from now on, lead with the conclusion',
+    'from now on, give me the headline first',
     'remember this: I want plain english',
   ]
 
@@ -112,7 +112,9 @@ describe('a preference the meaning-reader already recognised', () => {
   })
 
   it('leaves the lexical route exactly as it was', () => {
-    expect(readTeaching('always ask me before anything goes out')?.kind).toBe('lesson')
+    expect(readTeaching('from now on, always ask me before anything goes out')?.kind).toBe('lesson')
+    // D5: without "from now on", "always" is a preference said in passing, not a rule.
+    expect(readTeaching('always ask me before anything goes out')).toBeNull()
     expect(readTeaching('send me the quarterly report by friday please')).toBeNull()
     expect(readTeaching('can you look at the pricing and tell me what you think')).toBeNull()
   })

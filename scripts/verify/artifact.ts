@@ -327,7 +327,7 @@ if (serviceKey !== '') {
   mintable = url !== null
   if (url !== null) {
     const got = await fetch(url).catch(() => null)
-    if (got !== null && got.ok) {
+    if (got?.ok) {
       const buf = new Uint8Array(await got.arrayBuffer())
       bytes = buf.byteLength
       header = new TextDecoder().decode(buf.slice(0, 5))

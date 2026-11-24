@@ -130,6 +130,7 @@ const sheet = (await page.evaluate(
   words: string
 } | null
 
+// biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
 check('pressing it opens the picker', sheet !== null && sheet.shown, JSON.stringify(sheet))
 if (sheet !== null) {
   const name = (await page.evaluate(

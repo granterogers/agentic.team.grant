@@ -58,7 +58,7 @@ try {
   const consequentialInSlice = Number((await one(`select count(*) as c from public.activity_events a join public.activity_event_types t on t.event_type = a.event_type where ${slicePredicate} and t.durability <> 'diagnostic'`)).c)
   console.log(`seeded ${original.n} events over a year; ${sliceCount} diagnostic events are older than ${HORIZON_DAYS} days`)
   check('slice: it holds diagnostic native events only (no consequential type, no outside worker, ever)', sliceCount > 0 && consequentialInSlice === 0, `${sliceCount} selected, ${consequentialInSlice} consequential`)
-  const rest = await fingerprint(`${mine} and not (${slicePredicate.replace(mine + ' and ', '')})`)
+  const rest = await fingerprint(`${mine} and not (${slicePredicate.replace(`${mine} and `, '')})`)
 
   // ---- a page over the old window, to compare after the round trip
   const windowEnd = `now() - interval '${HORIZON_DAYS} days'`

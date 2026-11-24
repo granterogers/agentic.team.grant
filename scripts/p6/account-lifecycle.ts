@@ -606,13 +606,13 @@ try {
   for (const l of Object.values(logins)) {
     if (l.id === '') continue
     const d = await admin(`/users/${l.id}`, { method: 'DELETE' }).catch(() => null)
-    if (d !== null && d.ok) deleted += 1
+    if (d?.ok) deleted += 1
     else {
       const b = await admin(`/users/${l.id}`, {
         method: 'PUT',
         body: JSON.stringify({ ban_duration: '876000h' }),
       }).catch(() => null)
-      if (b !== null && b.ok) banned += 1
+      if (b?.ok) banned += 1
     }
   }
   console.log(

@@ -29,7 +29,9 @@ describe('check:door-origins', () => {
   it('the dashboard say path and the Slack and MCP doors count too', () => {
     for (const src of [
       "fetch(base, { body: JSON.stringify({ action: 'say', args: {} }) })",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
       'fetch(`${ref}/functions/v1/slack-events`)',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
       'fetch(`${ref}/functions/v1/mcp`)',
     ])
       expect(doorViolations([{ path: 'scripts/verify/new.ts', src }])).toHaveLength(1)

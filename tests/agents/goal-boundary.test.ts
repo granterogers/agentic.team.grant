@@ -61,7 +61,7 @@ const plan = async (content: string) => await planFor(SAID, catalogue, roster, s
 
 describe('what the planner does with bytes it did not expect', () => {
   it('reads a plan wrapped in a markdown fence, which is how models actually answer', async () => {
-    const got = await plan('```json\n' + GOOD + '\n```')
+    const got = await plan(`\`\`\`json\n${GOOD}\n\`\`\``)
     expect(got.how).toBe('model')
     expect(got.steps).toHaveLength(2)
   })

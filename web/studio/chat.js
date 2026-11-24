@@ -28,6 +28,7 @@
 import { HQ_API, UNCONFIGURED, VOICE } from './backend.js'
 import * as session from './session.js'
 import { CREW, PROJECTS } from './data.js'
+import { noteServerDate, serverNow } from './net.js'
 
 const KEY = 'studio.chat'
 
@@ -140,22 +141,70 @@ export async function load(slug, projectId, token) {
     const r = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     })
+    noteServerDate(r)
     if (!r.ok) return null
     const body = await r.json()
     if (began !== session.epoch()) return null
     if (!Array.isArray(body.data)) return null
     office.set(slug, body.data.map(asBubble))
-    // What was in flight has landed, so the optimistic copy would now be a
-    // duplicate of it. Only what was sent BEFORE this read began: a message typed while the read was on its way is not in the answer,
-    // and dropping it made a sent message vanish from the screen until the next read (a person then types it again).
-    write(
-      slug,
-      (all()[slug] ?? []).filter((m) => m.inflight !== true || Date.parse(String(m.at)) >= startedAt),
+    resumeInFlight(slug, body.data, token)
+    /*
+      What was in flight has landed, so the optimistic copy would now be a duplicate of it.
+
+      CHT-01 (stress test, 21 November 2026): a message sent a moment before a reload had not reached the office yet, and the
+      filter used to remove it as if it had landed, so it vanished. A local message is removed only when the office holds the
+      same words. One it does not hold, sent before this page visit, is sent again under the name it was first given, so the
+      office files it once. A message sent during this visit is left to the request that is already running.
+    */
+    const said = new Set(body.data.filter((m) => m.kind === 'said').map((m) => String(m.body ?? '').trim()))
+    const hasLanded = (m) => said.has(String(m.said || m.text || '').trim())
+    const keep = (all()[slug] ?? []).filter(
+      (m) => m.inflight !== true || Date.parse(String(m.at)) >= startedAt || !hasLanded(m),
     )
+    write(slug, keep)
+    for (const m of keep) {
+      const lost =
+        m.pending === true &&
+        m.inflight === true &&
+        typeof m.said === 'string' &&
+        m.said !== '' &&
+        m.bad !== true &&
+        Date.parse(String(m.at)) < startedAt &&
+        !hasLanded(m)
+      if (lost) void retry(slug, m.id, token)
+    }
     return thread(slug)
   } catch {
     return null
   }
+}
+
+/*
+  A4. An acknowledgement that the team has the request is not stored anywhere, so a reload lost it while the work was still
+  running. The thread already says which messages started a job, so a recent one whose job has not finished is followed
+  again on load, and its waiting line (the acknowledgement) comes back from the office's own status. A job that has
+  finished is remembered and never followed again, so a reload cannot loop.
+*/
+const settledJobs = new Set()
+const resumeInFlight = (slug, rows, token) => {
+  const cutoff = Date.now() - 60 * 60 * 1000
+  const jobs = rows
+    .filter((r) => typeof r.job === 'string' && r.job !== '' && Date.parse(String(r.at ?? '')) >= cutoff)
+    .map((r) => r.job)
+    .filter((j) => !settledJobs.has(j))
+    .slice(-5)
+  for (const j of jobs) void follow(slug, j, token)
+}
+
+/*
+  WHO IS TOLD WHEN THE THREAD CHANGES (stress test of 23 November 2026). An answer that arrived after a reload was written to the
+  thread, but no screen was told, so it appeared only when the panel was closed and reopened. Every write now tells the listeners
+  which project changed; the dock redraws from that.
+*/
+const listeners = new Set()
+export const onThreadChange = (fn) => {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
 }
 
 const write = (slug, messages) => {
@@ -164,6 +213,11 @@ const write = (slug, messages) => {
     store[slug] = messages.slice(-200) // a thread is not an archive
     localStorage.setItem(KEY, JSON.stringify(store))
   } catch { /* not fatal — the thread is a convenience, not the record */ }
+  for (const fn of listeners) {
+    try {
+      fn(slug)
+    } catch { /* a screen that cannot redraw does not stop the thread */ }
+  }
 }
 
 export const clear = (slug) => write(slug, [])
@@ -232,7 +286,7 @@ export function routeTo(text, context, to) {
 */
 
 /** The moment a request was handed over, for the waiting row to count from. */
-const startedAt = () => Date.now()
+const startedAt = () => serverNow()
 
 /*
   Where a typed message goes (#103).
@@ -327,7 +381,7 @@ export function newMessageId() {
 }
 
 export function send(slug, text, context, to, also = []) {
-  const now = new Date().toISOString()
+  const now = new Date(serverNow()).toISOString()
   const mine = {
     id: `m${Date.now()}`, from: 'grant', text, at: now,
     context: context ? { kind: context.kind, id: context.id, title: context.title } : null,
@@ -501,6 +555,8 @@ export async function ask(slug, text, context, token, to, also, onState) {
             }
           : {
               said: text,
+              // D8: typed in Team HQ, so the office records it as "teamhq", not "voice" (the same endpoint serves both).
+              typed: true,
               session: visit,
               message: messageId,
               // The thread's project, so the office files it there and nowhere else.
@@ -595,7 +651,12 @@ export async function ask(slug, text, context, token, to, also, onState) {
     at once; the answer is written minutes later by somebody else, and until now it only reached a person who happened to
     open the Chat tab. Follow the job and bring the answer into this conversation (see `follow`).
   */
-  if (reply.did === 'delegated' && typeof reply.job === 'string' && reply.job !== '') {
+  /*
+    Any job the reply names is followed, not only a delegated one (stress test of 23 November 2026). A direct answer can still start a
+    job whose answer is written a few minutes later; when only delegations were followed, that answer reached the page only on a
+    later reload, and the dock never showed it.
+  */
+  if (typeof reply.job === 'string' && reply.job !== '') {
     void follow(slug, reply.job, token, onState)
   }
   return next
@@ -625,7 +686,8 @@ const statusWords = (st) => {
   const who = names.length === 0 ? '' : names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
   switch (st.state) {
     case 'queued':
-      return 'Waiting its turn. Nobody has picked it up yet.'
+      // The acknowledgement (A4): the same words the office gave when the request was taken.
+      return 'I have put that to the team. Nobody has picked it up yet, and the answer will appear here.'
     case 'working':
       return who === '' ? 'The team is working on it.' : `${who} ${names.length === 1 ? 'is' : 'are'} working on it.`
     case 'waiting':
@@ -663,6 +725,7 @@ export async function follow(slug, job, token, onState) {
       }
       if (st === null || typeof st.state !== 'string') continue
       if (st.state === 'done' || st.state === 'failed') {
+        settledJobs.add(job)
         upsert(null)
         const pid = PROJECTS.find((x) => x.slug === slug)?.id
         const loaded = await load(slug, pid, token)
@@ -670,7 +733,7 @@ export async function follow(slug, job, token, onState) {
           write(slug, [
             ...(all()[slug] ?? []),
             {
-              id: `turn-failed-${job}`, from: 'the-office', at: new Date().toISOString(),
+              id: `turn-failed-${job}`, from: 'the-office', at: new Date(serverNow()).toISOString(),
               text: 'The team could not finish that. Nothing was lost: what you asked is recorded. You can ask again.',
               pending: false, bad: true, waiting: null, inflight: true,
             },
@@ -689,8 +752,8 @@ export async function follow(slug, job, token, onState) {
         return
       }
       upsert({
-        id: rowId, from: 'the-office', at: new Date().toISOString(), inflight: true, pending: true,
-        waiting: st.state, say: statusWords(st), since: Date.parse(String(st.asked_at ?? '')) || Date.now(),
+        id: rowId, from: 'the-office', at: new Date(serverNow()).toISOString(), inflight: true, pending: true,
+        waiting: st.state, say: statusWords(st), since: Date.parse(String(st.asked_at ?? '')) || serverNow(),
       })
     }
   } finally {

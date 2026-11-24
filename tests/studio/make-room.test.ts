@@ -9,7 +9,7 @@ import * as L from '../../web/studio/bc/layout.js'
 const rect = (id: string, x: number, y: number, w: number, h: number) => ({ id, x, y, w, h })
 const byId = (mods: { id: string; x: number; y: number; w: number; h: number }[], id: string) => {
   const found = mods.find((m) => m.id === id)
-  if (found === undefined) throw new Error('no module ' + id)
+  if (found === undefined) throw new Error(`no module ${id}`)
   return found
 }
 

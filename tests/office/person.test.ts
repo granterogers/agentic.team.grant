@@ -243,6 +243,7 @@ describe('the source: no new string literal names Grant', () => {
   it('CONTROL: the scanner sees a string and a template that name Grant, and ignores a comment, a regex and a verb', () => {
     const src = [
       "const a = 'Put on Grant\\'s list'",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
       'const b = `Write ${x} to Grant`',
       '// Grant said this',
       '/* Grant: "this" */',

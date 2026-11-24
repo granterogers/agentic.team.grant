@@ -451,9 +451,16 @@ export const tidy = (mods, st) => {
       back without anything landing on its neighbour: clamping afterwards would
       move the last module on top of the one beside it.
     */
+    /*
+      The minimum width is kept only while the row still fits the stage. A row of five 240px modules in a 1200px stage
+      scales to 230px, and flooring each back to 240px made the row 1248px wide: the right-to-left pass then pushed the
+      first two modules onto each other (A6, Tidy overlap). A row that cannot keep its minimum shrinks proportionally.
+    */
+    const floored = items.map((m) => Math.max(MIN.w, Math.round(m.w * scale)))
+    const fits = floored.reduce((n, w) => n + w, 0) + gaps <= st.w
     let cursor = 0
-    const row2 = items.map((m) => {
-      const w = Math.max(MIN.w, Math.round(m.w * scale))
+    const row2 = items.map((m, i) => {
+      const w = fits ? floored[i] : Math.max(1, Math.round(m.w * scale))
       const x = Math.max(cursor, m.x)
       cursor = x + w + GAP
       return { ...m, x, w }
@@ -477,13 +484,45 @@ export const tidy = (mods, st) => {
       m.h = Math.max(MIN.h, Math.round(m.h * f))
     }
   }
-  return placed.map((m) => clampRect(m, st))
+  /*
+    Keep each module inside the stage without resizing it. clampRect would raise a width back to its minimum here, which
+    undid the shrink above and put modules over their neighbours (A6).
+  */
+  return placed.map((m) => ({
+    ...m,
+    x: Math.max(0, Math.min(Math.max(0, st.w - m.w), m.x)),
+    y: Math.max(0, Math.min(Math.max(0, st.h - m.h), m.y)),
+  }))
 }
 
 /* ----------------------------------------------------------- the document --- */
 
 const KEY = (slug) => `bc.stage.${slug}`
 const slugOf = (s) => (typeof s === 'string' ? s : (s?.slug ?? ''))
+
+/*
+  WHAT CAN BE TAKEN BACK (stress test LAY-02). Before a person's own change to a canvas (a move, a resize, a preset, Tidy,
+  Arrange, Reset view), the canvas as it was is kept here, a few steps deep, per project, for this page visit. Undo puts the
+  last one back through the same save as any other change, so it is not a second, separate notion of the layout.
+*/
+const layoutHistory = new Map()
+const rememberLayout = (slug) => {
+  const s = slugOf(slug)
+  if (s === '') return
+  const list = layoutHistory.get(s) ?? []
+  list.push(JSON.parse(JSON.stringify(doc(s))))
+  if (list.length > 20) list.shift()
+  layoutHistory.set(s, list)
+}
+export const canUndoLayout = (slug) => (layoutHistory.get(slugOf(slug))?.length ?? 0) > 0
+export const undoLayout = (slug) => {
+  const s = slugOf(slug)
+  const list = layoutHistory.get(s) ?? []
+  const before = list.pop()
+  if (before === undefined) return false
+  commit(s, before)
+  return true
+}
 
 const emptyDoc = () => ({
   mods: null,
@@ -1349,6 +1388,7 @@ export const contentBottom = (slug) => Math.max(0, ...layout(slug).map((m) => m.
  */
 export const arrangeAutomatically = (slug) => {
   const d = doc(slug)
+  rememberLayout(slug)
   if (isAutomatic(slug)) return false
   const layouts = { ...d.layouts, 'Before automatic arrangement': { mods: d.mods, zoom: d.zoom } }
   commit(slug, { ...d, mods: null, layouts })
@@ -1422,11 +1462,22 @@ export const makeRoom = (mods, id) => {
 
 /** Move or resize one module. Any module it lands on is pushed down to make room (makeRoom). */
 export const place = (slug, id, rect) => {
+  rememberLayout(slug)
   /* A move or a resize pins THAT module. The others stay automatic and are laid out around it. */
   const d = materialised(slug)
   const z = topZ(d) + 1
+  /*
+    Kept on the stage (21 November 2026, stress test LAY-01/LAY-03): a module cannot be dropped off the right edge, and cannot be
+    resized past the visible width or about twice the visible height. The stage is the measured window, so a narrow window
+    bounds the module to what it can show.
+  */
+  const st = stageSize()
   d.mods = makeRoom(
-    d.mods.map((m) => (m.id === id ? { ...clampRect({ ...m, ...rect, id, z }), placed: true } : { ...m })),
+    d.mods.map((m) =>
+      m.id === id
+        ? { ...clampRect({ ...m, ...rect, id, z }, { w: st.w, h: st.h * 2 }), placed: true }
+        : { ...m },
+    ),
     id,
   )
   commit(slug, d)
@@ -1475,6 +1526,7 @@ export const off = (slug) => {
 
 /** Lightly tidy this page. */
 export const autoArrange = (slug) => {
+  rememberLayout(slug)
   /* Tidy is a person's own choice to lay everything out, so every module is pinned to the tidy layout. */
   const d = materialised(slug)
   d.mods = tidy(d.mods, stage).map((m) => ({ ...m, placed: true }))
@@ -1491,6 +1543,7 @@ export const autoArrange = (slug) => {
  * arrangement.
  */
 export const reset = (slug) => {
+  rememberLayout(slug)
   commit(slug, { ...doc(slug), mods: null, zoom: 1, pan: { x: 0, y: 0 } })
 }
 
@@ -1687,6 +1740,7 @@ export const fitToWindow = (slug) => {
 export const applyPreset = (slug, key) => {
   const p = PRESETS[key]
   if (p === undefined) return false
+  rememberLayout(slug)
   commit(slug, { ...doc(slug), mods: fromFractions(p.frac, stage).map((m) => ({ ...m, placed: true })) })
   return true
 }

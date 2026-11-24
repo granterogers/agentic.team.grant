@@ -68,6 +68,14 @@ export const activeFilters = ({ view, agent, project, range }, { agentName = (s)
   return out
 }
 
+/*
+  CNT-02 (22 November 2026): the server titles a running request with its internal kind, so the feed said "Office pursue".
+  The known kinds are given a plain name here. A title the map does not know is shown unchanged, so this cannot hide a real title.
+  The server should write the plain title itself; this is the page's stop-gap until it does.
+*/
+const PLAIN_TITLES = { 'Office pursue': 'Working through a request', 'office.pursue': 'Working through a request' }
+export const plainTitle = (s) => PLAIN_TITLES[s] ?? s
+
 /** One event, as the screen needs it. Never throws; a field the record does not carry is simply absent. */
 export const describe = (e, { crew = [], projects = [] } = {}) => {
   const str = (x) => (typeof x === 'string' ? x : '')
@@ -86,7 +94,8 @@ export const describe = (e, { crew = [], projects = [] } = {}) => {
     who = known?.name ?? 'Claire'
     tone = 'chief'
   } else if (kind === 'agent') {
-    who = known?.name ?? 'A team member who is no longer on the roster'
+    // CNT-02 (22 November 2026): a plain phrase, not the roster's wording. The name is not kept on the event, so it cannot be recovered here.
+    who = known?.name ?? 'A former team member'
     tone = known === undefined ? 'unknown' : 'agent'
   } else if (kind === 'external') {
     who = worker === '' ? 'An outside worker' : `${worker.charAt(0).toUpperCase()}${worker.slice(1)} (outside worker)`
@@ -122,7 +131,7 @@ export const describe = (e, { crew = [], projects = [] } = {}) => {
     tone,
     slug,
     // The stored marker an outside worker's report carries is bookkeeping, not wording; the worker is named by the actor line.
-    sentence: str(e?.summary).replace(/^\[external:[^\]\s]{1,60}\]\s*/, ''),
+    sentence: plainTitle(str(e?.summary).replace(/^\[external:[^\]\s]{1,60}\]\s*/, '')),
     category,
     severity: str(e?.severity),
     status,

@@ -996,12 +996,10 @@ export const evaluate = (input: EvaluationInput): Verdicts => {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length > 3 && !STOPWORDS.has(w))
-  const actedOnTheWithdrawn =
-    o.effects !== undefined &&
-    o.effects.createdTitles.some((title) => {
-      const t = title.toLowerCase()
-      return withdrawnWords.filter((w) => t.includes(w)).length >= 2
-    })
+  const actedOnTheWithdrawn = o.effects?.createdTitles.some((title) => {
+    const t = title.toLowerCase()
+    return withdrawnWords.filter((w) => t.includes(w)).length >= 2
+  })
   const reallyActed = actedOnTheWithdrawn
   const preconditionOnly = o.effects === undefined && o.withdrawalSeen === false
   if (withdrawn.length > 0 && (reallyActed || preconditionOnly)) {

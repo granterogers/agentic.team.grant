@@ -121,6 +121,7 @@ describe("the handler answers only this conversation's ONE open question", () =>
   it('the clarification binds its turn to the question, and the next reply may answer only that one', () => {
     const i = src.indexOf("if (q !== undefined && spoken === 'unclear') {")
     expect(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
       src.indexOf("jsonb_build_object('awaiting_answer', ${lit(q.id)}::text)", i),
     ).toBeGreaterThan(i)
     // Read back from the turn immediately before (ours), never searched for across the chat. The query moved into

@@ -340,8 +340,14 @@ export async function cases(c: Ctx): Promise<void> {
     "hq_studio_lately: the feed is the office's own",
     '',
   )
+  /*
+    Each office's views-proj insert above is recorded as an activity event by app.record_change_activity (migration 1105:
+    creating a project is an activity row, actor 'Team HQ'), so the day's event count is the fixture events plus one project
+    creation per office. The expectation says so, rather than pretending the project is not there.
+  */
+  const PROJECT_EVENTS = 1
   c.check(
-    latA.today.events === N.A.events &&
+    latA.today.events === N.A.events + PROJECT_EVENTS &&
       latA.today.jobs_done === N.A.done &&
       latA.today.jobs_failed === N.A.failed,
     "hq_studio_lately: the day's counters are the office's own",
@@ -349,7 +355,7 @@ export async function cases(c: Ctx): Promise<void> {
   )
   const latB = (await call(tx(B, 'hq_studio_lately', '40'))) as typeof latA
   c.check(
-    latB.today.events === N.B.events &&
+    latB.today.events === N.B.events + PROJECT_EVENTS &&
       latB.today.jobs_done === N.B.done &&
       latB.today.jobs_failed === N.B.failed,
     "hq_studio_lately: and B's are B's",

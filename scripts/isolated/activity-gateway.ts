@@ -334,7 +334,7 @@ try {
   await state(true, 'null', 'master on, allowlist null', false, false)
   await state(true, '[]', 'master on, empty allowlist', false, false)
   await state(true, '"all"', 'master on, bare string all', false, false)
-  await state(true, '"' + officeA + '"', 'master on, a scalar office id', false, false)
+  await state(true, `"${officeA}"`, 'master on, a scalar office id', false, false)
   await state(true, '{"mode":"all"}', 'master on, object without a version', false, false)
   await state(true, '{"version":2,"mode":"all"}', 'master on, unknown version', false, false)
   await state(

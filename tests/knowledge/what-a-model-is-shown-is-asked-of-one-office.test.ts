@@ -219,11 +219,13 @@ describe('every call in src/ to a converted function names an office first', () 
     }
     expect(offenders).toEqual([])
     // the control: the same scan has to see a file that does it
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
     const sample = strip('function f(office: RetrievalOffice) { return `where o = ${office}` }')
     expect(/\boffice: RetrievalOffice\b/.test(sample) && bare.test(sample)).toBe(true)
   })
 
   it('and the control can fail: a call that leaves the office out is seen as bad', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal string, meant to contain the characters, not a template
     const sample = strip('select app.lessons_for(${uuid(projectId)}, null, null, 8)')
     const m = /\bapp\.lessons_for\(\s*([^,)]*(?:\([^)]*\))?[^,)]*)/.exec(sample)
     expect(OK.test((m?.[1] ?? '').trim())).toBe(false)

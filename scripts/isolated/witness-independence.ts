@@ -100,7 +100,7 @@ await sent(`result:${run}:${forged}`, forged) // #379: a turn no adapter produce
 await sent(`result:${run}:${orphan}`, orphan) // #379: a root no creator makes
 await sent(`result:${run}:${duty}`, duty) // control: a scheduled duty
 
-const rows = (await db.execute(provenanceSql(lit(since) + '::timestamptz'))).rows as {
+const rows = (await db.execute(provenanceSql(`${lit(since)}::timestamptz`))).rows as {
   key: string
   breach: string | null
   guard_says_harness: boolean
@@ -111,8 +111,8 @@ const breachOf = (prefix: string) =>
   rows.find((r) => r.key.startsWith(prefix))?.breach ?? 'not seen'
 check(
   'a harness narration with no job on the row is caught (job from its key)',
-  breachOf('narration:' + harness.slice(0, 8)) === 'HARNESS_SENT',
-  breachOf('narration:' + harness.slice(0, 8)),
+  breachOf(`narration:${harness.slice(0, 8)}`) === 'HARNESS_SENT',
+  breachOf(`narration:${harness.slice(0, 8)}`),
 )
 check(
   'a sent message naming a harness job is caught',

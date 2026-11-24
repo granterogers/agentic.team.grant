@@ -76,7 +76,9 @@ export const WITNESS_OPERATOR_NAMESPACES = [
   'mcp-token',
   'hq-token',
 ]
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const HARNESS_NAME = String.raw`(^|:)(verify|fixture|probe|gate|scenario-a|deploy[0-9]+)([-:_.]|$)`
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const JOB_IN_KEY = String.raw`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`
 /*
   #379: what this witness accepts as a root Grant or the office could have
@@ -126,6 +128,7 @@ const WITNESS_ROOT_TRUSTED = `(
   And, with no send needed, `ignoredOriginSql`: a turn that arrived in a
   declared conversation and was NOT written synthetic.
 */
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 export const WITNESS_CONVERSATION = String.raw`^(-?[A-Za-z0-9_-]+)[:/]`
 const ORIGIN_CH = `coalesce(cmd.origin_channel::text, j.pinned_config ->> 'origin_channel')`
 const ORIGIN_CONV = `substring(coalesce(cmd.origin_ref, j.pinned_config ->> 'origin_ref') from '${WITNESS_CONVERSATION}')`

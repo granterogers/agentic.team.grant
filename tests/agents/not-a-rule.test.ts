@@ -21,12 +21,21 @@ describe('not a rule', () => {
 describe('NEGATIVE CONTROL: rules are still rules', () => {
   it.each([
     'From now on, always answer in bullet points.',
+    'From now on, always CC me when you email the venue',
+    'From now on, please never use emojis in anything you send me',
+    'From now on, Oliver should always sign off as Oliver',
+    'From now on, never put a due date on anything unless I give you one',
+  ])('%s', (s) => {
+    expect(readTeaching(s)?.kind).toBe('lesson')
+  })
+  // D5: only "from now on" makes a standing rule. The same wording without it is a preference said in passing.
+  it.each([
     'Always CC me when you email the venue',
     'Please never use emojis in anything you send me',
     'Oliver should always sign off as Oliver',
     'Never put a due date on anything unless I give you one',
-  ])('%s', (s) => {
-    expect(readTeaching(s)?.kind).toBe('lesson')
+  ])('without "from now on" it is not stored as a rule: %s', (s) => {
+    expect(readTeaching(s)).toBeNull()
   })
   it('an explicit ask to remember a fact is still stored', () => {
     expect(readTeaching('Remember that my accountant always sends invoices late.')?.kind).toBe(

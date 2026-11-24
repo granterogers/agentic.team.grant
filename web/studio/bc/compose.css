@@ -1112,7 +1112,8 @@
   min-width: 0;
   text-align: right;
   font-size: 12px;
-  color: var(--bc-text-muted);
+  /* VIS-02 (21 November 2026): the hint was the muted token and failed contrast. It now takes the body text colour. */
+  color: var(--bc-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

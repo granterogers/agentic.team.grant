@@ -196,8 +196,8 @@ section = 'establishing and forgetting'
   ok('a real jar establishes the session', asJson(got.made).ok === true)
   ok(
     'and it then reads as live',
-    (list(got.live)[0] ?? {}).state === 'live',
-    String((list(got.live)[0] ?? {}).state),
+    list(got.live)[0]?.state === 'live',
+    String(list(got.live)[0]?.state),
   )
   /*
     The control for the refusals above. Without it they would both pass against
@@ -216,9 +216,8 @@ section = 'establishing and forgetting'
   )
   ok(
     'the session reads as revoked afterwards, with no credential',
-    (list(got.after)[0] ?? {}).state === 'revoked' &&
-      (list(got.after)[0] ?? {}).has_credential === false,
-    String((list(got.after)[0] ?? {}).state),
+    list(got.after)[0]?.state === 'revoked' && list(got.after)[0]?.has_credential === false,
+    String(list(got.after)[0]?.state),
   )
   ok(
     'and the reader never carries the jar itself, at any point',

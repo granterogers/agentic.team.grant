@@ -47,7 +47,10 @@
   font: 700 12px/1 var(--bc-font, inherit);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap; /* A15e: "DOC" was breaking one letter per line in a narrow tile. */
 }
+/* VIS-05 (21 November 2026): a list row is 34px wide, and the pill ran past it. The row's meta line already names the kind. */
+[data-experience='basecamp'] .bcrowthumb[data-filekind]::after { display: none; }
 
 /* 9. Titles read in up to two lines, then end in an ellipsis, rather than breaking mid-word. */
 [data-experience='basecamp'] .bcdoctitle {
@@ -200,7 +203,9 @@
     top: auto;
     transform: none;
     min-width: 0;
-    overflow: hidden;
+    /* Not `overflow: hidden`: that clipped the project switcher's menu to the 36 px label (A2, 18 November 2026). The title itself
+       keeps its ellipsis on .bcjumpname. */
+    overflow: visible;
   }
 }
 
@@ -288,9 +293,19 @@
 [data-experience='basecamp'] .bcvia { font-size: 12px; color: var(--bc-text-muted); }
 [data-experience='basecamp'] .bceventwhat { font-size: 13px; color: var(--bc-text); }
 
+/* A15b. The grip bar is a fixed strip, so the "Note" label sits inside it and does not run into the text beneath. */
+[data-experience='basecamp'] .bcpostit .bcpostitbar {
+  flex: 0 0 28px;
+  min-height: 28px;
+  height: 28px;
+  align-items: center;
+  overflow: hidden;
+}
+
 /* 99. A sticky note's grip bar says what it is. */
+/* 21 November 2026 (stress test CNT-05): the word was clipped to "No" in the narrow grip, so the grip is left as a grip. */
 [data-experience='basecamp'] .bcpostitbar::before {
-  content: 'Note';
+  content: '';
   margin-right: auto;
   padding-left: 6px;
   font: 600 12px/1 var(--bc-font);
@@ -331,6 +346,31 @@
   [data-experience='basecamp'] .bcplus { top: -50px; }
 }
 
+/*
+  Q8 (21 November 2026). On a tablet held upright the canvas starts lower, and the arrange button, pinned to the canvas's
+  top right, sat on the close button of a box in that corner, so Reset view could not be reached. Between the header and the
+  boxes there is empty space at that width, so the button sits there. Checked automatically at 768, 1024 and 1280 wide.
+*/
+@media (min-width: 761px) and (max-width: 1100px) {
+  /*
+    21 November 2026 (stress test LAY-05): 10px was under the top bar, so the button could not be clicked. The bar wraps to two
+    rows at these widths and ends at about 104px, so the button now sits just below it.
+  */
+  [data-experience='basecamp'] .bcplus {
+    position: fixed;
+    top: 112px;
+    right: 8px;
+  }
+}
+
+/* 21 November 2026 (stress test LAY-06): a hidden module's chip is as wide as its name, on one line, never one letter per line. */
+[data-experience='basecamp'] .bcoffchip {
+  width: auto;
+  min-width: 32px;
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+
 /* Return to automatic (21 October 2026): shown only on a module that is pinned. The button's own display would otherwise win. */
 .bcmodbtn--auto[hidden] {
   display: none;
@@ -340,6 +380,57 @@
 [data-experience='basecamp'] .bcmod--sizing {
   outline: 2px dashed var(--bc-accent);
   outline-offset: 3px;
+}
+
+/* A15d: on the Chat page the open dock yields to it (set by syncDockYield in app.js). */
+body.dock-yields #dock { display: none !important; }
+
+/*
+  A15a/c. The module controls float at the top right, over the centred title of a narrow module. The header reserves the
+  room they take, so the title sits clear of them; the Card Table reserves more for its wider Columns button.
+*/
+[data-experience='basecamp'] .bcmodhead { padding-right: 64px; }
+[data-experience='basecamp'] .bcmod:has(.bcmodbtn--cols) .bcmodhead { padding-right: 150px; }
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcmodhead { padding-right: 100px; }
+  [data-experience='basecamp'] .bcmod:has(.bcmodbtn--cols) .bcmodhead { padding-right: 170px; }
+}
+/*
+  A15c, 21 November 2026 (phone, measured live at 390 px). A placed module's name is centred, and compose.css sets the
+  header's right padding to 0 !important, so the reserve above never applied: "To-dos" ran under its first control. On a
+  phone the name now sits at the left, the controls keep the right, and a long name ends in an ellipsis before them.
+*/
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcmod.bcmod--placed .bcmodhead {
+    justify-items: start !important;
+    padding-right: 150px !important;
+  }
+  [data-experience='basecamp'] .bcmod.bcmod--placed:has(.bcmodbtn--cols) .bcmodhead { padding-right: 190px !important; }
+  [data-experience='basecamp'] .bcmod.bcmod--placed .bcmodhead h2 {
+    justify-self: start;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  [data-experience='basecamp'] .bcmod.bcmod--placed .bcmodmeta { justify-self: start; }
+}
+
+/*
+  The meta line (for the Card Table, "14 not started · 2 in progress · 2 stuck · 4 done") sat on the first row of the columns: it
+  was placed in grid row 2, which the header did not reserve, so it printed over the column headings (layout audit, 0.113.0).
+  On a placed module the header wraps, and the meta takes its own full-width line inside the header, so the body starts below it.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead {
+  grid-template-rows: auto auto;
+  row-gap: 4px;
+  height: auto;
+  min-height: min-content;
+}
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead .bcmodmeta {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: center;
+  text-align: center;
 }
 
 /* The Card Table's Columns button and its popover (Option A, 22 October 2026). */
@@ -411,4 +502,92 @@
 [data-experience='basecamp'] .bcact-time {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/*
+  Phone touch targets (A14, 18 November 2026). The header's navigation, voice, project-menu and Chat buttons, and each
+  module's Maximise and Take-off buttons, were 24 to 38 px at 390 px wide, under the 44 px floor. The visible glyph keeps
+  its size; the button's box does not shrink below the floor.
+*/
+/*
+  The compose sheet loads after this file and sets these buttons' height at (0,3,0), so the floor is written one level
+  heavier (:root adds a level) rather than relying on load order.
+*/
+@media (max-width: 760px) {
+  :root[data-experience='basecamp'] .bcbtn.bcburger,
+  :root[data-experience='basecamp'] .bcbtn.bcmic,
+  :root[data-experience='basecamp'] .bcbtn.bcpagemenu,
+  :root[data-experience='basecamp'] button.bcmodbtn,
+  :root[data-experience='basecamp'] .bcbtn[data-bc-dock] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  :root[data-experience='basecamp'] .bcbtn.bcmic,
+  :root[data-experience='basecamp'] .bcbtn.bcpagemenu {
+    width: 44px;
+    min-width: 44px;
+  }
+  /* A14 (21 Nov 2026): the calendar's previous and next, the New button and the Day, Week and Month switch were 26 to 30 px. */
+  :root[data-experience='basecamp'] .bccal2btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* A14: the empty-state action, the "View all" link and the sort control were 21 to 42 px tall on a phone. */
+  :root[data-experience='basecamp'] .bcmptyact {
+    min-height: 44px;
+  }
+  :root[data-experience='basecamp'] .bcdocsall a {
+    display: inline-block;
+    min-height: 44px;
+    line-height: 44px;
+  }
+  :root[data-experience='basecamp'] .bcdocsort .bcdocsortpick {
+    min-height: 44px;
+  }
+  /* Every other button of the studio: the page's own buttons are 26 to 36 px tall on a phone. */
+  :root[data-experience='basecamp'] .bcbtn {
+    min-height: 44px;
+  }
+}
+
+/*
+  THE CHAT PANEL FITS A PHONE (stress test of 23 November 2026). A width the person set on a desktop is kept in --dock-w, and the
+  panel took it on a 390 px phone: the message box was 443 px wide and the Send button ran off the screen. On a phone the panel is
+  the screen's width, whatever was set on the desktop.
+*/
+@media (max-width: 600px) {
+  [data-experience='basecamp'] .dock {
+    width: 100vw;
+    max-width: 100vw;
+  }
+  [data-experience='basecamp'] body.docked {
+    padding-right: 0;
+  }
+}
+
+/*
+  THE PROJECT NAME IN THE TOP BAR SHORTENS, IT DOES NOT GO UNDER THE BUTTON (stress test of 23 November 2026: "Cowork test: Empty"
+  showed as "Cowork test: Em" with Chat with Team on top of it at 1440 px). The name takes the room it has and ends in an ellipsis; the
+  full name stays in the switcher's title and its accessible label.
+*/
+[data-experience='basecamp'] .bchere {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+[data-experience='basecamp'] .bcjumpname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bchere-link {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* THE ZOOM READOUT STAYS ON ONE LINE (stress test of 23 November 2026: "100%" in the project menu broke into "10" and "0%"). */
+[data-experience='basecamp'] .bczoomval {
+  white-space: nowrap;
+  min-width: 3.4em;
+  font-variant-numeric: tabular-nums;
 }

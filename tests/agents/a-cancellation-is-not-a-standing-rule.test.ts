@@ -44,8 +44,8 @@ describe('and a real standing rule still is one', () => {
   */
   it.each([
     'From now on there is no need to cc me on the supplier emails',
-    'Never send me a summary without the numbers underneath it',
-    'Always give your information in the form of clear bullet points',
+    'From now on, never send me a summary without the numbers underneath it',
+    'From now on, always give your information in the form of clear bullet points',
     'From now on, always paste the image URLs into the reply as well',
   ])('%j is still a rule', (said) => {
     expect(opensByDroppingIt(said)).toBe(false)

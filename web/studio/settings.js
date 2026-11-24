@@ -81,7 +81,13 @@ export const TAB_GROUPS = [
 export const TABS = TAB_GROUPS.flatMap((g) => g.tabs)
 
 /** Old ids that still resolve, to the tab that now holds what they held. */
-export const TAB_ALIAS = { governance: 'requests', setup: 'connections' }
+export const TAB_ALIAS = { governance: 'requests', setup: 'connections', google: 'connections' }
+
+/*
+  An address that names a PART of a tab, not only the tab. /settings/google opens Services and brings the Google tile into
+  view, so a link to "set up Google" lands on the one thing it names. The key is the tile's data-tile value in app.js.
+*/
+export const TAB_FOCUS = { google: 'gmail' }
 export const tabId = (id) => {
   const want = TAB_ALIAS[id] ?? id
   return TABS.some((t) => t.id === want) ? want : 'team'
@@ -562,7 +568,12 @@ export async function hydrateSettings(read) {
         if (Array.isArray(rows)) replace(DECISIONS, rows)
       })
       .catch(() => undefined)
-    replace(CONNECTIONS, d.connections ?? [])
+    /*
+      The Services list has its own read (hydrateConnections), which carries the Google sign-in. This payload's copy does not,
+      and it arrives in either order, so it may only fill the list while that read has not landed (21 November 2026: the
+      payload's seven rows overwrote the eight, and Health said nothing was connected while Google was dead).
+    */
+    if (CONNECTIONS_SOURCE.state !== 'ready') replace(CONNECTIONS, d.connections ?? [])
     /*
       Three places have to learn a new key and two of them fail SILENTLY.
       CLAUDE.md records 0420: the Governance page rendered "0 open" over
@@ -1127,6 +1138,8 @@ export const GOVERNANCE = {
   stranded: { ...FALLBACK_GOVERNANCE.stranded },
   scoring: [...FALLBACK_GOVERNANCE.scoring],
   triggers: [...FALLBACK_GOVERNANCE.triggers],
+  // SET-03, option B: the one decisions count and list (null until read, and null when the read fails).
+  pending: null,
 }
 
 export async function hydrateGovernance(read) {
@@ -1144,12 +1157,14 @@ export async function hydrateGovernance(read) {
       Settled, not awaited as a pair: a failing trigger read must not take the
       governance page down with it.
     */
-    const [d, t] = await Promise.all([
+    const [d, t, pd] = await Promise.all([
       read('governance'),
       read('triggers').catch(() => null),
+      read('pending_decisions').catch(() => null),
     ])
     if (!d || !Array.isArray(d.lessons)) throw new Error('unexpected shape')
     Object.assign(GOVERNANCE, {
+      pending: pd !== null && typeof pd === 'object' && typeof pd.count === 'number' ? pd : null,
       at: d.at ?? null,
       lessons: d.lessons ?? [],
       proposals: d.proposals ?? [],

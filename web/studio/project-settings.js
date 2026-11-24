@@ -90,6 +90,10 @@ const panes = () => PANES.filter((x) => x.teamHq !== true || isTeamHq())
   project's team can never appear under another's name.
 */
 const held = new Map()
+// Whether "Name, export and archive" is open. Survives redraws; see wire().
+let foldOpen = false
+// "Archived." for the project just put away, shown where the archive button was (A10e). Cleared by any other archive.
+let archivedNote = null
 
 const esc = (s) =>
   String(s ?? '').replace(
@@ -558,12 +562,32 @@ function projectPane(p) {
         <span class="t-meta" data-said></span>
       </div>
 
+      <!--
+        Deleting for good (ADR-0077). Two steps: the first counts what would go, the second needs the exact name typed. It
+        removes only what is stored here; files in Google, Notion or Slack are not touched.
+
+        No backticks in this comment. Template literal.
+      -->
+      <div class="setblock warnblock" data-purgewrap>
+        <span class="t-label">Delete for good</span>
+        <p class="t-meta">This removes ${esc(p.name)} and everything stored here for it:
+          its documents, to-dos, contacts, jobs and decisions, and the activity about
+          it. Files that live in Google, Notion or Slack are not touched. It cannot be
+          undone.</p>
+        ${
+          canWrite()
+            ? `<button class="btn quiet" data-purge="${esc(p.slug)}"
+                 data-name="${esc(p.name)}">Delete ${esc(p.name)} for good…</button>`
+            : `<span class="t-meta">Read-only — no token in this browser.</span>`
+        }
+        <div data-purgestep></div>
+      </div>
 
       <div class="setblock">
         <span class="t-label">Elsewhere</span>
         <p class="t-meta">What this project reads from is in <b>Sources</b>, beside the
           documents it produced. How much the office does without asking is in the
-          office <b>Settings</b> sheet, under Behaviour — it is one answer for
+          <b>Settings</b>, under Autonomy and approvals — it is one answer for
           everywhere, not one per project.</p>
       </div>
     </div>`
@@ -601,8 +625,13 @@ export function section(p, pane, people) {
 
 /** Rename, export and archive: what the Project tab held, kept reachable without a tab of its own. */
 function projectFold(p) {
-  return `<details class="setfold">
+  const note =
+    archivedNote !== null && archivedNote.slug === p.slug
+      ? `<p class="t-meta" role="status">${esc(archivedNote.words)}</p>`
+      : ''
+  return `<details class="setfold"${foldOpen ? ' open' : ''}>
     <summary>Name, export and archive</summary>
+    ${note}
     ${projectPane(p)}
   </details>`
 }
@@ -664,6 +693,12 @@ function download(name, payload) {
  * row and wrong about the rest.
  */
 export function wire(root, p, people, redraw, openLook, reload) {
+  /*
+    The fold is rebuilt on every redraw, and a rebuilt <details> comes back closed. Its open state is kept here so a save
+    or a timer redraw does not close the section the person is using (A8).
+  */
+  const fold = root.querySelector('details.setfold')
+  if (fold) fold.addEventListener('toggle', () => { foldOpen = fold.open })
   appearanceWire(root, p)
   /*
     The picker is built in `app.js`, where the sheet and its 451 marks live, so
@@ -906,7 +941,7 @@ export function wire(root, p, people, redraw, openLook, reload) {
         b,
         'Saving…',
         () => act('rename_project', { p_slug: f.dataset.projrenameForm, p_name: name }),
-        'Renamed.',
+        'Renamed. Any Slack or Telegram channel for this project updates within a minute.',
       )
       if (done) await reload?.()
     })
@@ -925,7 +960,7 @@ export function wire(root, p, people, redraw, openLook, reload) {
       ) {
         return
       }
-      await attempt(
+      const archived = await attempt(
         b,
         'Putting it away…',
         () => act('project_archive', { p_slug: b.dataset.archive }),
@@ -938,6 +973,143 @@ export function wire(root, p, people, redraw, openLook, reload) {
               : ''
           }.`,
       )
+      /*
+        The redraw below replaces the button that carried the sentence, so the sentence was never seen (A10e). It is kept
+        and shown in the section until the person leaves this project.
+      */
+      if (archived !== null) {
+        archivedNote = {
+          slug: b.dataset.archive ?? '',
+          words: `Archived${
+            Number(archived?.automations_stopped ?? 0) > 0
+              ? `, and ${String(archived.automations_stopped)} automation${
+                  Number(archived.automations_stopped) === 1 ? '' : 's'
+                } stopped`
+              : ''
+          }. It has left your project list. Nothing was deleted, and you can bring it back from the archive list.`,
+        }
+        /*
+          An archived project has no settings page of its own to stay on (stress test of 23 November 2026: the same address went on
+          to show another project's settings). The person goes Home, as after a purge.
+        */
+        globalThis.location?.assign('/')
+      }
     })
   }
+
+  /*
+    DELETING FOR GOOD (ADR-0077). Step one counts what would go and says it; step two needs the project's exact name typed
+    before the button works. Success leaves the page, because the project no longer exists.
+  */
+  for (const b of root.querySelectorAll('[data-purge]')) {
+    b.addEventListener('click', async () => {
+      const slug = b.dataset.purge ?? ''
+      const name = b.dataset.name ?? ''
+      const plan = await attempt(
+        b,
+        'Counting what would go…',
+        () => act('project_purge_plan', { p_slug: slug }),
+        () => 'Counted.',
+      )
+      if (plan === null) return
+      const slot = root.querySelector('[data-purgestep]')
+      if (slot === null) return
+      if (plan?.error !== undefined) {
+        slot.innerHTML = `<p class="t-meta" role="alert">${esc(String(plan.error))}</p>`
+        return
+      }
+      if (plan?.light === true) {
+        // Nothing here but the record that the project was made: no name to type (1113).
+        slot.innerHTML = `
+          <p class="t-meta">${esc(name)} holds nothing but the record that it was made. Deleting it removes that record too. Nothing outside this office is touched.</p>
+          <div class="setrow">
+            <button class="btn" data-purge-go>Delete for good</button>
+            <button class="btn quiet" data-purge-cancel>Cancel</button>
+          </div>
+          <span class="t-meta" data-said></span>`
+        slot.querySelector('[data-purge-cancel]')?.addEventListener('click', () => {
+          slot.innerHTML = ''
+        })
+        slot.querySelector('[data-purge-go]')?.addEventListener('click', async (ev) => {
+          const goButton = ev.currentTarget
+          const done = await attempt(
+            goButton,
+            'Deleting…',
+            () => act('project_purge', { p_slug: slug, p_typed: '' }),
+            (r) => `Deleted. ${String(r?.records ?? 0)} record${Number(r?.records ?? 0) === 1 ? '' : 's'} removed.`,
+          )
+          if (done !== null) globalThis.location?.assign('/')
+        })
+        return
+      }
+      const words = Object.entries(plan?.counts ?? {})
+        .map(([k, v]) => purgeCount(k, v))
+        .join(', ')
+      const files = Number(plan?.stored_files ?? 0)
+      slot.innerHTML = `
+        <p class="t-meta">This will remove ${esc(words)}${
+          files > 0 ? `, and ${String(files)} stored file${files === 1 ? '' : 's'}` : ''
+        }. Nothing outside this office is touched.</p>
+        <label class="t-label" for="purge-typed">Type the project's name to confirm: ${esc(name)}</label>
+        <input id="purge-typed" class="input" autocomplete="off" aria-label="Type the project's name to confirm">
+        <div class="setrow">
+          <button class="btn" data-purge-go disabled>Delete for good</button>
+          <button class="btn quiet" data-purge-cancel>Cancel</button>
+        </div>
+        <span class="t-meta" data-said></span>`
+      const input = slot.querySelector('#purge-typed')
+      const go = slot.querySelector('[data-purge-go]')
+      input?.addEventListener('input', () => {
+        if (go) go.disabled = !sameName(input.value, name)
+      })
+      slot.querySelector('[data-purge-cancel]')?.addEventListener('click', () => {
+        slot.innerHTML = ''
+      })
+      go?.addEventListener('click', async () => {
+        const done = await attempt(
+          go,
+          'Deleting…',
+          // The project's own name is sent, not the typed text, so an en dash typed as a hyphen still matches.
+          () => act('project_purge', { p_slug: slug, p_typed: name }),
+          (r) => `Deleted. ${String(r?.records ?? 0)} records were removed.`,
+        )
+        if (done !== null) setTimeout(() => globalThis.location?.assign('/'), 1500)
+      })
+    })
+  }
+}
+
+/* What each table is called, in the words a person reads. Anything not listed is shown by its table name. */
+const PURGE_WORDS = {
+  tasks: ['to-do', 'to-dos'],
+  events: ['activity row', 'activity rows'],
+  documents: ['document', 'documents'],
+  contacts: ['contact', 'contacts'],
+  jobs: ['job', 'jobs'],
+  decisions: ['decision', 'decisions'],
+  signals: ['signal', 'signals'],
+  project_attachments: ['attachment', 'attachments'],
+  project_aliases: ['other name', 'other names'],
+  slack_channel_authority: ['Slack channel link', 'Slack channel links'],
+  projects: ['project', 'projects'],
+}
+/*
+  Two names match when they read the same to a person: dashes of any kind are one dash, spacing and capitals do not count.
+  An en dash is hard to type, so a hyphen typed in its place must still match.
+*/
+const sameName = (typed, name) => {
+  const norm = (s) =>
+    String(s ?? '')
+      .replace(/[‐-―−]/g, '-')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+  return norm(typed) !== '' && norm(typed) === norm(name)
+}
+
+/* "1 to-do", "3 to-dos": a count and the right word for it. */
+const purgeCount = (k, v) => {
+  const w = PURGE_WORDS[k]
+  if (w === undefined) return `${String(v)} ${k.replaceAll('_', ' ')}`
+  return `${String(v)} ${Number(v) === 1 ? w[0] : w[1]}`
 }

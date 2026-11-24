@@ -864,6 +864,8 @@ const SECTIONS: Readonly<
     paint touches, and governance is a screen you navigate TO.
   */
   governance: { fn: 'hq_governance', office: true, args: { p_limit: 40 } },
+  // SET-03 (22 November 2026): the one count of decisions waiting for the person, in four parts (migration 1115).
+  pending_decisions: { fn: 'pending_decisions', office: true },
   /*
     What the office may do without asking, and what Grant has said not to ask
     about again (#15, migrations 0421 and 0422).
@@ -1553,6 +1555,14 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   },
   project_background_delete: { fn: 'hq_upload_target', office: true, required: ['p_slug'] },
   /*
+    DELETING A PROJECT FOR GOOD (ADR-0077). The plan is read-only: what would be removed, counted, before the person types
+    the name. The purge itself is handled below, because it also removes the files the database hands back.
+  */
+  project_purge_plan: { fn: 'hq_project_purge_plan', office: true, required: ['p_slug'] },
+  // A blank p_typed is the lighter path (1113), which the database allows only for a project with nothing in it but its
+  // creation record. So the name is optional here, and the database decides.
+  project_purge: { fn: 'hq_project_purge', office: true, required: ['p_slug'] },
+  /*
     PICKING A FILE OUT OF DRIVE.
 
     A reference, not a copy: the office records which file it is and where it
@@ -1733,6 +1743,8 @@ const ACTIONS: Readonly<Record<string, ActionSpec>> = {
   // `p_state` optional: an undo carries the state the document was in, and a
   // press of "this one is current again" carries nothing and means approved.
   document_restore: { fn: 'hq_document_restore', office: true, required: ['p_document_id'] },
+  // D3: archive a document (it leaves the project lists); the undo strip brings it back. Nothing is deleted.
+  document_archive: { fn: 'hq_document_archive', office: true, required: ['p_document_id'] },
   document_pin: { fn: 'hq_document_pin', office: true, required: ['p_document_id', 'p_pinned'] },
   /*
     VERSIONS AND IMPORT (0907). All three are a person's explicit press: none is on SERVICE_MAY, so the office key
@@ -2563,6 +2575,9 @@ const json = (body: unknown, status = 200): Response =>
       // credential for another origin to ride on.
       'access-control-allow-origin': '*',
       'access-control-allow-headers': 'authorization, content-type',
+      // The server's clock, so the page can correct a computer clock that is wrong (A3, 18 November 2026). Without this the browser
+      // hides the Date header from the page.
+      'access-control-expose-headers': 'date',
       'cache-control': 'no-store',
     },
   })
@@ -2771,47 +2786,9 @@ const createOffice = async (
 }
 
 /*
-  THE FIRST LOAD IN ONE REQUEST (26 October 2026).
-
-  A first load used to send about seventeen separate requests, and each one repeated the sign-in check (the identity service and the
-  session lookup), so the host spent much of its time re-answering the same question. `first_load` answers the sections the home
-  board needs in ONE request. It runs each section through this same handler, so every answer is what that section would have
-  answered on its own: the same checks, the same office, the same status. The sign-in check is shared, because the calls arrive
-  together and share one in-flight answer (`sessionAllowed`).
-
-  Only sections that take no argument are listed, so there is no parameter to get wrong. The studio payload and the project list are
-  NOT in the bundle: the board waits for them, so they are asked on their own and never held behind the slowest of the rest. A
-  section that fails reports its own status and body; the bundle itself is answered 200.
+  `first_load` (a bundle of the home board's sections in one request, 26 October 2026) was removed in 0.60.0 (K2): no page
+  has called it since 0.33.0. Each section is still asked on its own.
 */
-const FIRST_LOAD = [
-  'pulse',
-  'thinking',
-  'team_work',
-  'unseen',
-  'workspace',
-  'portfolio_tasks',
-  'activity_ledger',
-  'lately',
-  'google_connection',
-] as const
-
-const firstLoad = async (
-  request: Request,
-  answer: (asked: Request) => Promise<Response>,
-): Promise<Response> => {
-  const url = new URL(request.url)
-  const parts = await Promise.all(
-    FIRST_LOAD.map(async (section) => {
-      const asked = new URL(url)
-      asked.searchParams.set('section', section)
-      const reply = await answer(new Request(asked, { method: 'GET', headers: request.headers }))
-      const body: unknown = await reply.json().catch(() => ({}))
-      return [section, { status: reply.status, body }] as const
-    }),
-  )
-  return json({ section: 'first_load', data: Object.fromEntries(parts) })
-}
-
 const answer = async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') return json({ ok: true })
 
@@ -2820,13 +2797,6 @@ const answer = async (request: Request): Promise<Response> => {
     // present at all. An unauthenticated caller learning which sections exist
     // is a probing aid.
     return json({ ok: true, endpoint: 'hq-api', token_configured: HQ_TOKEN !== '' })
-  }
-
-  if (
-    request.method === 'GET' &&
-    new URL(request.url).searchParams.get('section') === 'first_load'
-  ) {
-    return await firstLoad(request, answer)
   }
 
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
@@ -3363,6 +3333,77 @@ const answer = async (request: Request): Promise<Response> => {
       return json({
         result: recorded,
         photo: signedURL === undefined ? null : `${DB_URL}/storage/v1${signedURL}`,
+      })
+    }
+
+    /*
+      DELETING A PROJECT FOR GOOD (ADR-0077). Only a person, signed in as themselves, may do it: never a guest, a machine or
+      a test member. The database removes the project's rows in one transaction, or nothing, and returns the files it held.
+      Only then are those files removed from this office's storage, so a refusal never leaves a file gone and a row kept.
+      A file that fails to go is reported by its path, not hidden; the rows are already gone and the path can be removed again.
+    */
+    if (actionName === 'project_purge') {
+      if (!office) return json({ error: 'no_office' }, 403)
+      if (kind !== 'person') {
+        return json(
+          { error: 'Only you can delete a project for good, signed in as yourself.' },
+          403,
+        )
+      }
+      const slug = String(args.p_slug ?? '').trim()
+      if (slug === '' || slug.length > 120) return json({ error: 'which project?' }, 400)
+      const typed = String(args.p_typed ?? '')
+      const r = await fetch(`${DB_URL}/rest/v1/rpc/hq_project_purge`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_office: office, p_slug: slug, p_typed: typed }),
+      }).catch(() => null)
+      if (r === null)
+        return json({ error: 'the project could not be reached; nothing was removed' }, 503)
+      const out = (await r.json().catch(() => ({}))) as {
+        ok?: boolean
+        error?: string
+        message?: string
+        project_id?: string
+        purged?: string
+        records?: number
+        counts?: Record<string, number>
+        stored_files?: string[]
+      }
+      if (!r.ok) {
+        return json(
+          { error: out.message ?? 'the project was not deleted; nothing was removed' },
+          r.status >= 500 ? 502 : 400,
+        )
+      }
+      if (out.error !== undefined) return json({ error: out.error }, 400)
+      const store = originalStore()
+      const filesLeft: string[] = []
+      for (const path of out.stored_files ?? []) {
+        const gone = await store.remove(path).catch(() => false)
+        if (!gone) filesLeft.push(path)
+      }
+      let picturesLeft = false
+      if (typeof out.project_id === 'string') {
+        const listed = await bgList(office)
+        const mine = (listed ?? [])
+          .map((o) => o.name)
+          .filter((name) => projectOfKey(office, name) === out.project_id)
+        if (mine.length > 0) picturesLeft = !(await bgRemove(office, mine))
+      }
+      return json({
+        result: {
+          ok: true,
+          purged: out.purged ?? slug,
+          records: out.records ?? 0,
+          counts: out.counts ?? {},
+          files_left: filesLeft,
+          picture_left: picturesLeft,
+        },
       })
     }
 

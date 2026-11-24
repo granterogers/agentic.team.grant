@@ -822,11 +822,29 @@ const openEditor = (p, existing, seed, fromEl = null) => {
   form.elements.allDay.addEventListener('change', sync)
   sync()
   for (const b of dialog.querySelectorAll('[data-cal-close]')) b.addEventListener('click', closeDialog)
-  dialog.querySelector('[data-cal-del]')?.addEventListener('click', async () => {
-    const r = await write(slug, 'delete', { id: e.id })
-    if (r.error) say(r.error)
-    else closeDialog()
-  })
+  /*
+    Two presses, as removing a task and a contact already are (A10c). The first press says what the second will do, so an
+    event is never lost to a single stray tap.
+  */
+  const delButton = dialog.querySelector('[data-cal-del]')
+  if (delButton) {
+    let armed = false
+    delButton.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true
+        delButton.textContent = 'Press again to delete'
+        say('Press Delete again to remove this event.')
+        setTimeout(() => {
+          armed = false
+          if (delButton.isConnected) delButton.textContent = 'Delete'
+        }, 8000)
+        return
+      }
+      const r = await write(slug, 'delete', { id: e.id })
+      if (r.error) say(r.error)
+      else closeDialog()
+    })
+  }
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault()
     say('')

@@ -171,11 +171,15 @@ export const officeHits = (q, env) => {
   return hit.rows
     .filter((r) => !COVERED.has(r.kind))
     .map((r) => ({
-      kind: LABEL[r.kind] ?? r.kind,
+      /*
+        Stress test of 23 November 2026: the office's own kind names ("office.instruction") were printed as labels, and its highlight
+        tags were printed as text. A kind with no label is named plainly, and the tags are removed.
+      */
+      kind: LABEL[r.kind] ?? (String(r.kind ?? '').includes('.') ? 'Team' : String(r.kind ?? '')),
       project: names.get(r.project_slug) ?? r.project_slug ?? '',
       slug: r.project_slug,
-      title: String(r.title ?? r.snippet ?? ''),
-      excerpt: String(r.snippet ?? ''),
+      title: String(r.title ?? r.snippet ?? '').replace(/<\/?b>/g, ''),
+      excerpt: String(r.snippet ?? '').replace(/<\/?b>/g, ''),
       who: '',
       when: String(r.at ?? '').slice(0, 10),
       to: String(r.url_hint ?? `/p/${r.project_slug}`).split('?')[0],

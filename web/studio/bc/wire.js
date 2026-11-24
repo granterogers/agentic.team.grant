@@ -587,8 +587,14 @@ const followChat = (root) => {
   const id = `${String(rows.length)}:${last?.textContent?.length ?? 0}:${last?.className ?? ''}`
   const changed = chatLastId !== '' && id !== chatLastId
   chatLastId = id
-  if (!changed || !chatAtEnd) return
+  /*
+    The messages scroll inside their own box, so "at the end" is the box's position as well as the page's (stress test CHT-05:
+    the page followed the reply but the box stayed on the older messages).
+  */
+  const boxAtEnd = thread.scrollHeight - (thread.scrollTop + thread.clientHeight) < 80
+  if (!changed || !(chatAtEnd || boxAtEnd)) return
   requestAnimationFrame(() => {
+    thread.scrollTop = thread.scrollHeight
     globalThis.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' })
     chatAtEnd = true
   })
@@ -804,6 +810,17 @@ export const wire = (root) => {
   }
   for (const item of root.querySelectorAll('#bc-plus-menu [role="menuitem"]')) {
     item.addEventListener('click', () => {
+      /*
+        Layouts opens its own popover. The redraw that follows a pick would take that popover's board away, and the
+        preset that is pressed next was then never reached (A5). So a Layouts pick closes the menu without a redraw.
+      */
+      if (item.matches('[data-bc-layouts]')) {
+        compose.plus.open = false
+        const menu = root.ownerDocument.querySelector('#bc-plus-menu')
+        if (menu !== null) menu.hidden = true
+        root.ownerDocument.querySelector('[data-bc-plus]')?.setAttribute('aria-expanded', 'false')
+        return
+      }
       globalThis.setTimeout(() => {
         compose.plus.open = false
         ctx.render()
@@ -914,6 +931,10 @@ export const wire = (root) => {
     b.addEventListener('click', () => {
       const open = ctx.toggleDock?.() ?? ctx.openDock()
       b.setAttribute('aria-pressed', open === true ? 'true' : 'false')
+      /* Stress test CHT-07: opening the chat puts the cursor in "Message the team", so a person can type at once. */
+      if (open === true) {
+        setTimeout(() => document.querySelector('[data-bc-sayform] #bc-say')?.focus({ preventScroll: true }), 350)
+      }
     })
   }
 
@@ -979,9 +1000,30 @@ export const wire = (root) => {
 
 /* ----------------------------------------------------------------- search */
 
+/*
+  Where the person was typing in search (stress test A11Y-02): when results arrive, the page is drawn again, and the box it
+  was typing in is a new node with no focus. Remembered here, put back by wireSearch, and forgotten when they click away.
+*/
+let searchTyping = null
+
 const wireSearch = (root) => {
   const box = root.querySelector('#bc-search-q')
+  if (box === null) searchTyping = null
+  if (box !== null && searchTyping !== null) {
+    box.focus({ preventScroll: true })
+    box.setSelectionRange(searchTyping.pos, searchTyping.pos)
+  }
   if (box !== null) {
+    box.addEventListener('focus', () => {
+      searchTyping = { pos: box.selectionStart ?? box.value.length }
+    })
+    box.addEventListener('input', () => {
+      searchTyping = { pos: box.selectionStart ?? box.value.length }
+    })
+    box.addEventListener('blur', (e) => {
+      // Clicking elsewhere ends it. A redraw removes the box without a real blur, so it is kept for the next draw.
+      if (e.relatedTarget !== null) searchTyping = null
+    })
     /*
       Search runs as you type, so Enter has nothing left to do. Left alone it submitted the form, which reloaded the page
       and threw the query away: the one key a person presses to say "go" cleared what they had written.
@@ -2074,6 +2116,14 @@ const saidIn = (el, words) => {
   const say = el?.closest('form')?.querySelector('[data-bc-contact-said]')
   if (say !== null && say !== undefined) say.textContent = words
 }
+/*
+  A contact save redraws the page, and the redraw removes the sentence the save wrote beside its button, so "Saved" was
+  never seen (A10d). The sentence is written again on the new button after the redraw.
+*/
+const saidAfterRedraw = (key, words) => {
+  const b = globalThis.document?.querySelector(`[data-bc-contact-save="${String(key).replace(/"/g, '\\"')}"]`)
+  saidIn(b, words)
+}
 
 const wireContacts = (root) => {
   for (const b of root.querySelectorAll('[data-bc-contact]')) {
@@ -2113,10 +2163,20 @@ const wireContacts = (root) => {
       for (const key of ['email', 'phone']) {
         const v = contacts.check(key, val(`bc-c-${key}`))
         if (!v.ok) {
-          if (say !== null) say.textContent = v.why
-          root.querySelector(`#bc-c-${key}`)?.focus()
+          if (say !== null) {
+            say.textContent = v.why
+            say.setAttribute('role', 'alert')
+            // The message is what the field says is wrong, so the field names it (an unnamed message was not read out with the field).
+            if (say.id === '') say.id = 'bc-c-said'
+            root.querySelector(`#bc-c-${key}`)?.setAttribute('aria-describedby', say.id)
+          }
+          const bad = root.querySelector(`#bc-c-${key}`)
+          bad?.setAttribute('aria-invalid', 'true')
+          bad?.focus()
           return
         }
+        root.querySelector(`#bc-c-${key}`)?.removeAttribute('aria-invalid')
+        root.querySelector(`#bc-c-${key}`)?.removeAttribute('aria-describedby')
         fields[key] = v.value
       }
       if (canWrite() !== true) {
@@ -2165,14 +2225,15 @@ const wireContacts = (root) => {
       }
       if (localKey(key)) {
         await contacts.save(ctx.state.project, key, patch)
-        saidIn(b, 'Saved.')
         ctx.render()
+        saidAfterRedraw(key, 'Saved.')
         return
       }
       const done = await attempt(b, 'Saving…', () => contacts.save(ctx.state.project, key, patch), 'Saved.')
       if (done !== null) {
         ctx.render()
         await ctx.refresh()
+        saidAfterRedraw(key, 'Saved.')
       }
     })
   }
@@ -2190,10 +2251,11 @@ const wireContacts = (root) => {
       if (!armed) {
         armed = true
         b.textContent = 'Press again to remove'
+        // Long enough to read the words and reach the button; a slow second press used to reset silently (A10b).
         setTimeout(() => {
           armed = false
           if (b.isConnected) b.textContent = 'Remove contact'
-        }, 6000)
+        }, 15000)
         return
       }
       const key = b.dataset.bcContactAway ?? ''
@@ -2547,6 +2609,37 @@ const warmNext = async () => {
 */
 const isSmallTile = (host) => host.classList.contains('bccompact') || host.classList.contains('bcrowthumb')
 
+/*
+  A7. Every tile that has no kept thumbnail asked the gateway for its document at once: about two dozen reads on opening
+  Docs & Files, several of them repeated on each redraw. They took the browser's connections, and the document the person
+  had just opened waited behind them for twenty seconds before its preview appeared. Thumbnail reads now run two at a
+  time, and a read already in flight for the same document is shared rather than repeated. The opened document's own
+  preview is not routed through here.
+*/
+const THUMB_READS = { active: 0, waiting: [], inflight: new Map() }
+const THUMB_READS_MAX = 2
+const readForThumb = (ref) => {
+  const pending = THUMB_READS.inflight.get(ref)
+  if (pending !== undefined) return pending
+  const p = new Promise((resolve, reject) => {
+    const run = () => {
+      THUMB_READS.active += 1
+      fileFor(ref)
+        .then(resolve, reject)
+        .finally(() => {
+          THUMB_READS.active -= 1
+          THUMB_READS.inflight.delete(ref)
+          const next = THUMB_READS.waiting.shift()
+          if (next !== undefined) next()
+        })
+    }
+    if (THUMB_READS.active < THUMB_READS_MAX) run()
+    else THUMB_READS.waiting.push(run)
+  })
+  THUMB_READS.inflight.set(ref, p)
+  return p
+}
+
 const paintThumb = async (host, ref) => {
   /*
     A small tile is drawn by the render (its glyph or type card), so nothing is fetched for it: no record, no bytes.
@@ -2572,7 +2665,7 @@ const paintThumb = async (host, ref) => {
       return
     }
   }
-  const file = await fileFor(ref)
+  const file = await readForThumb(ref)
   if (ref.startsWith('id:') && (file === null || file.url === '')) {
     /* A document Team HQ reads on demand and nobody has opened yet: make its first-page picture ourselves (below). */
     void warmThumb(host, ref.slice(3))
@@ -2711,6 +2804,18 @@ const wireTasks = (root) => {
       for (const i of f.querySelectorAll('input')) i.value = ''
       f.hidden = true
       b.closest('[data-bc-tasklist]')?.querySelector('[data-bc-addtask]')?.focus()
+    })
+  }
+
+  /*
+    ENTER IN A TITLE SAVES THE TASK, IN PLACE (stress test of 23 November 2026). The form had no submit button, so Enter made the
+    browser submit it the old way: the whole page reloaded to /tasks?title=…, and the task was not made. Enter now runs the same
+    save as the button, and the default submit is stopped.
+  */
+  for (const f of root.querySelectorAll('[data-bc-taskform]')) {
+    f.addEventListener('submit', (e) => {
+      e.preventDefault()
+      f.querySelector('[data-bc-tasksave]')?.click()
     })
   }
 
@@ -3239,8 +3344,9 @@ const wireTasks = (root) => {
         'Removed.',
       )
       if (done !== null) {
-        await ctx.refresh()
+        // Leave the form first (stress test FUN-05): the old form stayed on screen while the list was read again.
         ctx.goAnywhere(`/p/${ctx.state.project}/tasks`)
+        await ctx.refresh()
       }
     })
   }
@@ -3360,6 +3466,58 @@ const wireTasks = (root) => {
       }
       // The kept lists are behind after a tick (a repeating reminder has just moved to its next time): read them again.
       await (ctx.refreshMyTasks?.() ?? ctx.refresh())
+    })
+  }
+
+  /*
+    D4. ADDING TO MY LIST. The office's my_task_add, with the title and an optional due date. The page then reads the list again.
+  */
+  for (const f of root.querySelectorAll('[data-bc-mytaskform]')) {
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const title = String(f.querySelector('#bc-mytask-title')?.value ?? '').trim()
+      const due = String(f.querySelector('#bc-mytask-due')?.value ?? '').trim()
+      const say = f.querySelector('[data-bc-mytasksay]')
+      const btn = f.querySelector('[data-bc-mytaskadd]')
+      if (title === '') {
+        if (say !== null) say.textContent = 'A task needs words. What needs doing?'
+        return
+      }
+      const done = await attempt(
+        btn ?? f,
+        'Adding…',
+        // A task with no date is not due today, so it would not appear on the Today list the page opens on. A blank date is today.
+        () => act('my_task_add', { p_title: title, p_due_on: due === '' ? new Date().toISOString().slice(0, 10) : due }),
+        'Added.',
+      )
+      if (done !== null) {
+        f.reset()
+        await (ctx.refreshMyTasks?.() ?? ctx.refresh())
+        // Back to the title box (stress test A11Y-03): a person adding several items should not tab back to it each time.
+        document.querySelector('#bc-mytask-title')?.focus({ preventScroll: true })
+      }
+    })
+  }
+
+  /*
+    D4. REMOVING FROM MY LIST. Two presses, like every other removal here: the first says what the second will do. The office
+    keeps the row, and the undo strip brings it back.
+  */
+  for (const b of root.querySelectorAll('[data-bc-mytaskremove]')) {
+    let armed = false
+    const label = b.textContent
+    b.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true
+        b.textContent = 'Press again to remove'
+        setTimeout(() => {
+          armed = false
+          if (b.isConnected) b.textContent = label
+        }, 6000)
+        return
+      }
+      const done = await attempt(b, 'Removing…', () => act('my_task_delete', { p_task_id: b.dataset.bcMytaskremove }), 'Removed.')
+      if (done !== null) await (ctx.refreshMyTasks?.() ?? ctx.refresh())
     })
   }
 

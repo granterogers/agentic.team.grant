@@ -34,13 +34,6 @@
  */
 import '../../src/safety/require-production-site.ts'
 
-/*
-  This file imports nothing — it needs only `fetch`, which is global — and a TS
-  file with no import or export is a SCRIPT, not a module, so top-level await is
-  a type error even though tsx runs it happily. One empty export settles it.
-*/
-export {}
-
 const PRODUCTION = 'https://ai-team-hq.vercel.app'
 const LOCAL = 'http://localhost:5173'
 const HOSTILE = 'https://not-grants-site.example'

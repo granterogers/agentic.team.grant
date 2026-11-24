@@ -26,6 +26,7 @@ const O = office.officeId
 const RUN = Date.now().toString(36).slice(-5)
 
 const results: { what: string; ok: boolean; detail: string }[] = []
+// biome-ignore lint/suspicious/noConfusingVoidType: a step may return a sentence, or nothing at all
 const step = async (what: string, fn: () => Promise<string | undefined | void>): Promise<void> => {
   try {
     const detail = (await fn()) ?? ''

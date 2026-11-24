@@ -331,6 +331,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
     run: async ({ step, from, request, router }): Promise<Observation | Later> => {
       const upstream = step.needs
         .map((id) => from[id] as Observation | undefined)
+        // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
         .filter((o): o is Observation => o !== undefined && o.found)
       if (upstream.length === 0) {
         return nothing(
@@ -461,6 +462,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
       */
       const upstream = step.needs
         .map((id) => from[id] as Observation | undefined)
+        // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
         .filter((o): o is Observation => o !== undefined && o.found)
       if (step.needs.length > 0 && upstream.length === 0) {
         return nothing(
@@ -574,6 +576,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
       */
       const upstream = step.needs
         .map((id) => from[id] as Observation | undefined)
+        // biome-ignore lint/complexity/useOptionalChain: the explicit check keeps a boolean result and a null-safe read; optional chaining would change the value
         .filter((o): o is Observation => o !== undefined && o.found)
       if (step.needs.length > 0 && upstream.length === 0) {
         return nothing(

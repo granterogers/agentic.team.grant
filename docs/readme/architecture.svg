@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="530" viewBox="0 0 1200 530" role="img" aria-labelledby="t d">
+  <title id="t">How Team HQ fits together</title>
+  <desc id="d">Surfaces send work into one database. Adapters only translate. A worker runs the team and writes results back to the same database.</desc>
+  <rect width="1200" height="520" fill="#FFFFFF"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#F95411"/>
+    </marker>
+  </defs>
+  <g font-family="Poppins, Century Gothic, Futura, Avenir Next, Helvetica, Arial, sans-serif">
+    <text x="40" y="52" font-size="16" font-weight="600" letter-spacing="3" fill="#F95411">SURFACES</text>
+    <text x="440" y="52" font-size="16" font-weight="600" letter-spacing="3" fill="#F95411">ADAPTERS (TRANSLATE ONLY)</text>
+    <text x="800" y="52" font-size="16" font-weight="600" letter-spacing="3" fill="#F95411">THE DATABASE IS THE SYSTEM</text>
+
+    <rect x="40" y="76" width="300" height="72" rx="14" fill="#F2F1F7"/>
+    <text x="64" y="106" font-size="20" font-weight="600" fill="#333345">Team HQ (web)</text>
+    <text x="64" y="132" font-size="15" fill="#333345">Projects, to-dos, documents, chat</text>
+    <rect x="40" y="172" width="300" height="72" rx="14" fill="#F2F1F7"/>
+    <text x="64" y="202" font-size="20" font-weight="600" fill="#333345">Slack</text>
+    <text x="64" y="228" font-size="15" fill="#333345">The office, in the thread that asked</text>
+    <rect x="40" y="268" width="300" height="72" rx="14" fill="#F2F1F7"/>
+    <text x="64" y="298" font-size="20" font-weight="600" fill="#333345">Telegram</text>
+    <text x="64" y="324" font-size="15" fill="#333345">The pager: only what needs you</text>
+    <rect x="40" y="364" width="300" height="72" rx="14" fill="#F2F1F7"/>
+    <text x="64" y="394" font-size="20" font-weight="600" fill="#333345">Voice</text>
+    <text x="64" y="420" font-size="15" fill="#333345">Speak to the team, hear it back</text>
+
+    <rect x="440" y="150" width="280" height="200" rx="14" fill="#FFFFFF" stroke="#A3A2C1" stroke-width="2"/>
+    <text x="464" y="186" font-size="20" font-weight="600" fill="#333345">Gateways</text>
+    <text x="464" y="214" font-size="15" fill="#333345">Accept a request,</text>
+    <text x="464" y="236" font-size="15" fill="#333345">record it once,</text>
+    <text x="464" y="258" font-size="15" fill="#333345">and never decide</text>
+    <text x="464" y="280" font-size="15" fill="#333345">what it means.</text>
+    <text x="464" y="326" font-size="13" fill="#A3A2C1">Edge functions + adapters</text>
+
+    <rect x="800" y="150" width="360" height="200" rx="14" fill="#333345"/>
+    <text x="824" y="188" font-size="20" font-weight="600" fill="#FFFFFF">Postgres</text>
+    <text x="824" y="216" font-size="15" fill="#A3A2C1">Projects, tasks, documents,</text>
+    <text x="824" y="238" font-size="15" fill="#A3A2C1">decisions, approvals, the ledger.</text>
+    <text x="824" y="270" font-size="15" fill="#F95411">Refuses illegal changes itself.</text>
+    <text x="824" y="326" font-size="13" fill="#A3A2C1">869 migrations, all recorded</text>
+
+    <rect x="440" y="400" width="280" height="90" rx="14" fill="#F2F1F7"/>
+    <text x="464" y="432" font-size="20" font-weight="600" fill="#333345">Worker</text>
+    <text x="464" y="458" font-size="15" fill="#333345">Runs the team and the model router</text>
+  </g>
+  <g fill="none" stroke="#F95411" stroke-width="3" marker-end="url(#a)">
+    <line x1="340" y1="112" x2="440" y2="200"/>
+    <line x1="340" y1="208" x2="440" y2="230"/>
+    <line x1="340" y1="304" x2="440" y2="270"/>
+    <line x1="340" y1="400" x2="440" y2="300"/>
+    <line x1="720" y1="250" x2="800" y2="250"/>
+    <line x1="800" y1="312" x2="720" y2="412"/>
+  </g>
+  <text x="440" y="512" font-family="Poppins, Century Gothic, Futura, Avenir Next, Helvetica, Arial, sans-serif" font-size="14" fill="#333345">Results go back to the surface that asked.</text>
+</svg>

@@ -98,6 +98,7 @@ const WORK_ONLY = [
   "instead" is another request, and the match must end before it.
 */
 const NAMED = String.raw`(?:the\s+)?([a-z0-9](?:(?!\s(?:and|then|but|instead|so|or)\b)[a-z0-9'’\- ]){0,40}?)`
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const PRO = String.raw`(?:that one|this one|that|it|this|those|these|the lot|all (?:of )?(?:that|it))`
 
 /*
@@ -117,6 +118,7 @@ const PRO = String.raw`(?:that one|this one|that|it|this|those|these|the lot|all
   had just said he did not want, and the correction reader offered his
   withdrawal back to him as a standing rule.
 */
+// biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
 const AGAIN = String.raw`(?:forget (?:it|that|about it)|(?:do(?:n'?t| not) bother)(?: with (?:it|that|this))?|leave it|never ?mind|scrap (?:it|that)|no need)`
 const DID_IT_MYSELF = String.raw`(?:i|we)(?:'ve|'ll| have| will)? (?:already |just )?(?:sorted|done|handled|fixed|booked|found|got|dealt with|arranged|organised|organized|decided|do)\b[^.!?]{0,60}`
 const TAIL = String.raw`(?:[,.!;\s\u2014-]+(?:please|now|for now|i (?:do not|don't|dont) need (?:it|that|them)(?: any ?more)?|i (?:no longer|don't|do not) need (?:it|that|them)|no longer needed|it(?:'s| is) not needed(?: any ?more)?|never ?mind|thanks?(?: you)?|${AGAIN}|${DID_IT_MYSELF}))*`
@@ -200,6 +202,7 @@ export function callsItOff(text: string): CalledOff | null {
     reported as a name: a caller matching "that" against work in flight would
     find nothing and correctly conclude there was nothing to stop.
   */
+  // biome-ignore lint/complexity/noUselessStringRaw: a regular expression source; String.raw keeps its backslash escapes
   if (new RegExp(String.raw`^${PRO}$`, 'i').test(named)) {
     return { target: null, pivot: (byName[1] ?? '').toLowerCase() }
   }

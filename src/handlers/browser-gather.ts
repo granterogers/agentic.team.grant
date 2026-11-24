@@ -166,7 +166,7 @@ export function browserGatherHandler(deps: BrowserGatherDeps): Handler {
                             and sp.office_id = app.job_office(${lit(job.jobId)}::uuid))`)
       ).rows[0] as SessionRow | undefined
 
-      if (session !== undefined && session.gone) {
+      if (session?.gone) {
         return say(
           `The session for ${host} was revoked, so I have not opened anything. ` +
             'Sign in again in the project’s Browser tab and I will carry on.',

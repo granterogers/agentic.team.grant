@@ -108,11 +108,8 @@ const callback = async (state: string, extra = ''): Promise<string> => {
 }
 const word = (loc: string): string => /slack=(\w+)/.exec(loc)?.[1] ?? loc
 const workspaceOf = async (team: string): Promise<string | null> =>
-  ((
-    (await one(
-      `select office_id::text o from public.slack_workspaces where team_id = ${lit(team)}`,
-    )) ?? {}
-  ).o as string | null) ?? null
+  ((await one(`select office_id::text o from public.slack_workspaces where team_id = ${lit(team)}`))
+    ?.o as string | null) ?? null
 const installs = async (o: string): Promise<number> =>
   Number(
     (
