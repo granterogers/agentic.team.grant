@@ -192,7 +192,7 @@ const CASES: Case[] = [
       },
       {
         what: 'the reply says it cannot find that project, or asks what is meant',
-        ok: /(can(no|'?)t|cannot|couldn.?t|don.?t|not (find|see|aware)|no project|which|what do you mean|not sure)/i.test(
+        ok: /(can(no|'?)t|cannot|couldn.?t|don.?t|do not (have|find|see)|not (find|see|aware)|no project|which|what do you mean|not sure)/i.test(
           c.reply,
         ),
         detail: '',
