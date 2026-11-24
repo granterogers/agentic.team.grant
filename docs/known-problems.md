@@ -6,6 +6,17 @@ something is unknown, it says unknown rather than guessing.
 Ordered by what would hurt most. `npm run inventory` regenerates the credential
 half of this live, and is the thing to trust when this file and it disagree.
 
+## Open, found 24 November 2026 (version 0.115.0)
+
+**The team answers some questions about overdue and blocked work wrongly.** On the Sample Office, "What is overdue on this
+project?" was answered "There are no overdue items recorded", and "Which tasks are blocked…?" was answered "There are no
+blocked tasks recorded". The records hold overdue and blocked tasks, and the project-work read returns them when called
+directly. The likely cause is that the reply is shaped by the earlier messages in the same thread (test questions from
+earlier runs), not by the records it was given. This is an accuracy defect, not a data loss. Until it is fixed, check any
+answer about overdue or blocked work against the project page before acting on it.
+
+Fixed the same day, live: a question about blocked tasks was answered with the list of pending approvals (migration 1121).
+
 Defects already found and fixed are in
 [`defects-fixed.md`](defects-fixed.md), kept because the shapes recur — and
 distilled into the seven habits at the end of
