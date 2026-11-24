@@ -19,3 +19,13 @@ const NOT_TO_SEND =
 
 export const asksToSendOutside = (request: string): boolean =>
   !NOT_TO_SEND.test(request) && SENDS_TO_SOMEONE.test(request)
+
+/**
+ * The reply to a request to send to somebody outside ends by asking, whatever the model wrote (0.113.0). The prompt line asks
+ * for this; this makes sure of it. A reply that already ends with a question is left as it is.
+ */
+export const endsByAskingBeforeSending = (reply: string): string => {
+  const tail = reply.trim().slice(-300)
+  if (/\?\s*$/.test(tail)) return reply
+  return `${reply.trimEnd()}\n\nShall I send it?`
+}

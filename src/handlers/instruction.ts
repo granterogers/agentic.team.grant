@@ -153,7 +153,11 @@ import {
   contractFor,
   sayWhatHappened,
 } from '../agents/outcome.ts'
-import { asksToSendOutside, OUTSIDE_SEND_LINE } from '../agents/outside-send.ts'
+import {
+  asksToSendOutside,
+  endsByAskingBeforeSending,
+  OUTSIDE_SEND_LINE,
+} from '../agents/outside-send.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import { performable } from '../agents/perform.ts'
 import {
@@ -7320,6 +7324,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           wroteInCode = true
         }
       }
+      // A send to somebody outside the office ends by asking before it sends (0.113.0), whatever the model wrote.
+      if (answering && asksToSendOutside(instruction)) said = endsByAskingBeforeSending(said)
       // Assigned inside `answerRouter`, which the compiler cannot see through.
       const keptRequest = completionRequest as unknown as CompletionRequest | null
       // The passages themselves, not the block that wraps them: its fence and headings are words the answer could share by accident.

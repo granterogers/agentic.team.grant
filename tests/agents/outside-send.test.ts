@@ -26,3 +26,14 @@ describe('a send to somebody outside the office is said as a draft that waits', 
     expect(OUTSIDE_SEND_LINE).toMatch(/ask/)
   })
 })
+
+describe('the reply to a send ends by asking', () => {
+  it('adds the question when the reply has none', async () => {
+    const { endsByAskingBeforeSending } = await import('../../src/agents/outside-send.ts')
+    expect(endsByAskingBeforeSending('Here is the draft: Dear Sam.')).toBe('Here is the draft: Dear Sam.\n\nShall I send it?')
+  })
+  it('leaves a reply that already asks', async () => {
+    const { endsByAskingBeforeSending } = await import('../../src/agents/outside-send.ts')
+    expect(endsByAskingBeforeSending('Here is the draft. Shall I send it?')).toBe('Here is the draft. Shall I send it?')
+  })
+})
