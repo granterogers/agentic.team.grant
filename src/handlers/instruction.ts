@@ -170,7 +170,7 @@ import {
   provenanceNote,
 } from '../agents/provenance.ts'
 import { remember } from '../agents/remember.ts'
-import { asksForWork } from '../agents/request.ts'
+import { asksForChange } from '../agents/request.ts'
 import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
@@ -1789,6 +1789,35 @@ interface Candidate {
  * which is right for answering a question and wrong for filing a source: the
  * cost of guessing is a permanent, silent misfiling rather than one odd reply.
  */
+/*
+  A project the message names, by a capitalised name, that the office does not have (0.111.0, decided by Grant on 24 November
+  2026). "What is the status of the Zephyr project?" was answered with a list of the office's projects, because the model
+  reached for the list. This finds the name and says in code that there is no such project. Only a capitalised name is
+  read, so "the budget project" in ordinary prose is not refused, and any active project whose name contains the words
+  counts as the same project.
+*/
+const UNKNOWN_PROJECT_NAMED = /\bthe\s+([A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*){0,3})\s+project\b/
+export async function unknownProjectNamed(
+  db: SqlExecutor,
+  job: Job,
+  message: string,
+): Promise<{ named: string; active: string[] } | null> {
+  const m = UNKNOWN_PROJECT_NAMED.exec(message)
+  if (m === null || m[1] === undefined) return null
+  const named = m[1]
+  const { rows } = await db.execute(`
+    select name from public.projects
+     where office_id = app.job_office(${lit(job.jobId)}::uuid) and status = 'active' order by updated_at desc
+  `)
+  const active = (rows as unknown as { name: string }[]).map((r) => String(r.name))
+  const want = named.toLowerCase()
+  const known = active.some((n) => {
+    const l = n.toLowerCase()
+    return l.includes(want) || want.includes(l)
+  })
+  return known ? null : { named, active }
+}
+
 async function whichProject(
   db: SqlExecutor,
   job: Job,
@@ -5992,7 +6021,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         `wanted` is unchanged, so nothing here widens what an answer may
         claim - which is what keeps the insurance-renewal escape closed.
       */
-      const askedForWork = requests.some((text) => asksForWork(text, clauses))
+      const askedForWork = requests.some((text) => asksForChange(text, clauses))
 
       /*
         What this turn actually put in the world, from the tables.
@@ -7272,6 +7301,21 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // True when the text is the limitation composed in code: no model wrote it, and the record must not say one did.
       let wroteInCode = false
       let said = scrub(completion.content)
+      /*
+        A project the question names that the office does not have is said in code, never by the model (0.111.0). The model's
+        reply is dropped for this one case, and the sentence the filing path uses takes its place.
+      */
+      if (answering) {
+        const unknown = await unknownProjectNamed(deps.db, job, instruction).catch(() => null)
+        if (unknown !== null) {
+          said = `I do not have a project called “${unknown.named}”. ${
+            unknown.active.length === 0
+              ? 'There are no active projects yet.'
+              : `The active ones are ${unknown.active.map((n) => `“${n}”`).join(', ')}.`
+          }`
+          wroteInCode = true
+        }
+      }
       // Assigned inside `answerRouter`, which the compiler cannot see through.
       const keptRequest = completionRequest as unknown as CompletionRequest | null
       // The passages themselves, not the block that wraps them: its fence and headings are words the answer could share by accident.

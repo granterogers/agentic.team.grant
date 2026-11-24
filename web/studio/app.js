@@ -7768,6 +7768,16 @@ function settingsSheet() {
   }
   const main = v.querySelector('.stg-main')
   if (main !== null) main.scrollTop = keptTop
+  // A link that names a part of a tab (/settings/google): bring that part into view once, then forget it.
+  if (state.settingsFocus) {
+    const part = v.querySelector(`[data-tile="${state.settingsFocus}"]`)
+    state.settingsFocus = null
+    if (part !== null) {
+      part.scrollIntoView({ block: 'center', behavior: 'auto' })
+      part.setAttribute('tabindex', '-1')
+      part.focus({ preventScroll: true })
+    }
+  }
   /*
     Leaving the page, in the one place that knows which screen you are on.
 
@@ -9605,6 +9615,17 @@ function pathNow() {
   */
   // Team HQ owns the plain addresses (#382); the older studio keeps its own prefix.
   const at = state.experience === 'basecamp' ? '' : '/classic'
+  /*
+    SETTINGS IS A PLACE TOO (0.111.0). While the Settings page is open its address is the tab's own, /settings/<tab>, so a
+    link to one part of it can be bookmarked and shared. `state.settingsAddress` keeps the spelling the person arrived
+    with (for example /settings/google) for as long as that tab is still the one showing.
+  */
+  const settingsSheet0 = $('#settings')
+  if (settingsSheet0 !== null && isOpenNow(settingsSheet0)) {
+    const named = state.settingsAddress ?? null
+    const shown = named !== null && (config.TAB_ALIAS[named] ?? named) === state.setting ? named : state.setting
+    return `${at}/settings/${shown}`
+  }
   if (state.view === 'project' && state.project !== null) {
     /*
       AN EXPANDED VIEW IS A PLACE TOO.
@@ -9883,7 +9904,10 @@ function keepUrl() {
       !path.includes('/x/') &&
       history.state?.path === before &&
       history.state?.from === undefined
-    if (first || deepLinkClosing) history.replaceState({ path }, '', to)
+    // Settings opened by a click has already added its own entry; its address replaces that entry rather than adding another,
+    // so Back still returns to where the person was.
+    const settingsReplace = path.startsWith(`${state.experience === 'basecamp' ? '' : '/classic'}/settings/`)
+    if (first || deepLinkClosing || settingsReplace) history.replaceState({ path }, '', to)
     else history.pushState({ path, from: before }, '', to)
   } catch {
     /* A page opened from a file has no history to write to. It still works. */
@@ -14340,6 +14364,9 @@ function cameBackFromGoogle() {
       wanted !== null && (wanted === 'health' || config.TABS.some((t) => t.id === (config.TAB_ALIAS[wanted] ?? wanted)))
     if (!known) return false
     state.setting = wanted === 'health' ? 'models' : (config.TAB_ALIAS[wanted] ?? wanted)
+    state.settingsAddress = wanted
+    // A part of a tab to bring into view once it is drawn (see TAB_FOCUS). Cleared after it is used, so a redraw does not jump back.
+    state.settingsFocus = config.TAB_FOCUS[wanted] ?? null
     // On a phone a section replaces the menu: land on the section itself, not on the list of sections.
     state.settingsPane = 'detail'
     /*

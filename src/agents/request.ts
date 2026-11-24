@@ -854,6 +854,16 @@ export const asksForWork = (message: string, split: (t: string) => readonly stri
   readRequest(message, split).some((c) => c.mood === 'ask' && !WANTS_TELLING.test(c.text))
 
 /*
+  The verbs of a change in the world. Used with asksForWork for the sentence "I have not done this yet, and nothing has been
+  changed": a question about the office, or a request to read or look something up, never gets that sentence (0.111.0, the
+  honesty guard narrowed at Grant's word). The claim that nothing was done is still made whenever the request names a change.
+*/
+const CHANGE_VERB =
+  /\b(?:send|email|e-?mail|text|message|post|publish|share|file|create|add|make|book|schedule|remind|delete|remove|move|change|set|update|rename|archive|cancel|invite|pay|connect|disconnect|mark|tick|assign|draft|write|compose|prepare|sign|approve|reject|buy|order|upload|save|register|fix|build|forward|submit|reply|call)\b/i
+export const asksForChange = (message: string, split: (t: string) => readonly string[]): boolean =>
+  asksForWork(message, split) && CHANGE_VERB.test(message)
+
+/*
   TWO CLASSES THAT BOTH TASK WRITERS NEED.
 
   The office has two of them - `tasks.ts` for a task on a project and

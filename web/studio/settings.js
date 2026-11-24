@@ -81,7 +81,13 @@ export const TAB_GROUPS = [
 export const TABS = TAB_GROUPS.flatMap((g) => g.tabs)
 
 /** Old ids that still resolve, to the tab that now holds what they held. */
-export const TAB_ALIAS = { governance: 'requests', setup: 'connections' }
+export const TAB_ALIAS = { governance: 'requests', setup: 'connections', google: 'connections' }
+
+/*
+  An address that names a PART of a tab, not only the tab. /settings/google opens Services and brings the Google tile into
+  view, so a link to "set up Google" lands on the one thing it names. The key is the tile's data-tile value in app.js.
+*/
+export const TAB_FOCUS = { google: 'gmail' }
 export const tabId = (id) => {
   const want = TAB_ALIAS[id] ?? id
   return TABS.some((t) => t.id === want) ? want : 'team'
