@@ -34,12 +34,32 @@ export interface ChatMessage {
   readonly content: string
 }
 
-/** The same messages with the envelope instruction added to the system message (or as a new first one). */
+/**
+ * Said again at the very end of the conversation, where a model is most likely to act on it. The system message alone
+ * was not enough: on long prompts the free models returned plain text with no tags, which the router then refused.
+ */
+export const ENVELOPE_REMINDER = `Reply now, with the reply inside ${ANSWER_OPEN} and ${ANSWER_CLOSE} and nothing outside them.`
+
+/**
+ * The same messages with the envelope instruction added to the system message (or as a new first one), and the short
+ * reminder added to the last user message. Nothing here changes what is accepted back: the router still returns only what
+ * is inside the tags.
+ */
 export function withEnvelope(messages: readonly ChatMessage[]): ChatMessage[] {
   const at = messages.findIndex((m) => m.role === 'system')
-  if (at < 0) return [{ role: 'system', content: ENVELOPE_INSTRUCTION }, ...messages]
-  return messages.map((m, i) =>
-    i === at ? { ...m, content: `${m.content}\n\n${ENVELOPE_INSTRUCTION}` } : m,
+  const withSystem: ChatMessage[] =
+    at < 0
+      ? [{ role: 'system', content: ENVELOPE_INSTRUCTION }, ...messages]
+      : messages.map((m, i) =>
+          i === at ? { ...m, content: `${m.content}\n\n${ENVELOPE_INSTRUCTION}` } : m,
+        )
+  let last = -1
+  withSystem.forEach((m, i) => {
+    if (m.role === 'user') last = i
+  })
+  if (last < 0) return withSystem
+  return withSystem.map((m, i) =>
+    i === last ? { ...m, content: `${m.content}\n\n${ENVELOPE_REMINDER}` } : m,
   )
 }
 

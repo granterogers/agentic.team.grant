@@ -4,6 +4,7 @@ import type { SqlExecutor, SqlResult } from '../../src/db/executor.ts'
 import {
   ENVELOPE_INSTRUCTION,
   ENVELOPE_MISS_CEILING,
+  ENVELOPE_REMINDER,
   EnvelopeCeilingError,
   envelopeDecision,
   extractAnswer,
@@ -130,12 +131,29 @@ describe('the instruction is added without disturbing what is already there', ()
     expect(out).toHaveLength(2)
     expect(out[0]?.content.startsWith('You are Claire.')).toBe(true)
     expect(out[0]?.content.endsWith(ENVELOPE_INSTRUCTION)).toBe(true)
-    expect(out[1]).toEqual({ role: 'user', content: 'hi' })
+    expect(out[1]?.role).toBe('user')
+    expect(out[1]?.content.startsWith('hi')).toBe(true)
+    expect(out[1]?.content.endsWith(ENVELOPE_REMINDER)).toBe(true)
   })
   it('adds a system message when there is none', () => {
     const out = withEnvelope([{ role: 'user', content: 'hi' }])
     expect(out[0]).toEqual({ role: 'system', content: ENVELOPE_INSTRUCTION })
     expect(out).toHaveLength(2)
+    expect(out[1]?.content.endsWith(ENVELOPE_REMINDER)).toBe(true)
+  })
+  it('repeats the reminder on the LAST user message only, and leaves the assistant turns alone', () => {
+    const out = withEnvelope([
+      { role: 'system', content: 'S' },
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: 'ok' },
+      { role: 'user', content: 'second' },
+    ])
+    expect(out[1]?.content).toBe('first')
+    expect(out[2]).toEqual({ role: 'assistant', content: 'ok' })
+    expect(out[3]?.content).toBe(`second\n\n${ENVELOPE_REMINDER}`)
+  })
+  it('says nothing that would reach a person about issues or the format rules in the reminder', () => {
+    expect(ENVELOPE_REMINDER).not.toMatch(/#\d|issue|§/i)
   })
   it('does not mutate its input', () => {
     const input = [{ role: 'system', content: 'S' }] as const
