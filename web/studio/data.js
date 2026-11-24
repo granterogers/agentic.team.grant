@@ -677,6 +677,9 @@ const replace = (target, rows) => {
  */
 export const FROM_OFFICE = { appearance: null }
 
+/** A section as a list: an array is kept, anything else (absent, null, an object, a count) is an empty list. */
+const asList = (x) => (Array.isArray(x) ? x : [])
+
 /*
   What the list shows for each project. The early list (see hydrateOnce) and the full payload both use it, so the two cannot drift.
 */
@@ -693,16 +696,18 @@ const projectRows = (list) => {
     // #151. Guaranteed an array like every other section: an absent one
     // and an empty one are the same thing to a reader, and only one of
     // them can throw.
-    waiting: p.waiting ?? [],
-    modules: p.modules ?? [],
-    documents: p.documents ?? [],
+    // 0.116.0. `??` only catches null and undefined: a section that came back as an object or a number was passed on and threw
+    // "(p.documents ?? []).map is not a function" on a project page (a Cowork test, 24 November). Only an array is accepted.
+    waiting: asList(p.waiting),
+    modules: asList(p.modules),
+    documents: asList(p.documents),
     // A removed task is kept by the office for history and is not shown: it used to come back as a struck-through
     // "done" one, so removing a task looked like completing it.
-    tasks: (p.tasks ?? []).filter((t) => t.state_raw !== 'cancelled'),
-    contacts: p.contacts ?? [],
-    sources: p.sources ?? [],
-    activity: p.activity ?? [],
-    requests: p.requests ?? [],
+    tasks: asList(p.tasks).filter((t) => t.state_raw !== 'cancelled'),
+    contacts: asList(p.contacts),
+    sources: asList(p.sources),
+    activity: asList(p.activity),
+    requests: asList(p.requests),
   }))
 }
 
