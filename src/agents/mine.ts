@@ -1111,6 +1111,8 @@ const CREATES_A_TASK =
 export function taskStateChange(text: string): TaskStateChange | null {
   const said = withoutOpeningAffirmation(String(text ?? '').trim())
   if (said === '') return null
+  // A request that contradicts itself ("mark it done, and keep it open") is asked back, not guessed (0.116.1).
+  if (/\bkeep\b[^.!?]*\bopen\b/i.test(said)) return null
   // A question about it is not a request — unless it is the polite imperative.
   if (said.endsWith('?') && !/^(?:can|could|would|will)\s+you\b/i.test(said)) return null
   // A prohibition is not a request: "don't delete that one yet", "can you not
@@ -1148,6 +1150,11 @@ export function taskStateChange(text: string): TaskStateChange | null {
         return null
       }
       const name = hit.groups?.name?.trim().toLowerCase() ?? null
+      /*
+        A named task whose name was not read is not "the only task": with no name, the only fallback is a pronoun (0.116.1). A
+        Cowork test asked for "Mark the Test task one task done" and the one open task in the conversation was ticked instead.
+      */
+      if (name === null && !/\b(?:it|that|this)\b/i.test(hit[0])) return null
       return { state, name: name === '' ? null : name }
     }
   }

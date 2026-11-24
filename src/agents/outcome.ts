@@ -256,7 +256,13 @@ export const classifyOutcome = (c: CanonicalOutcome): OutcomeClass => {
     the first draft's mistake and it would have put "I could not do that" on
     the end of every "thanks".
   */
-  if (c.wanted === 0) return 'completed'
+  /*
+    A request that names a change ("move the task…", "rename the column…") is never complete while nothing has landed, even
+    when the classifier did not read it as work (0.116.1). Without this, such a turn was `completed`, and the model could claim
+    "Moved" or "Renamed" past the gate: the Cowork test of 24 November found this three times. `asked` is true only for a
+    change request (see asksForChange), so questions and reads stay complete.
+  */
+  if (c.wanted === 0 && !(c.asked && c.landed === 0)) return 'completed'
   /*
     Nothing landed, and we have NOT established that it cannot be done.
 

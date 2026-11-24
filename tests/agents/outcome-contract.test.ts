@@ -126,9 +126,10 @@ describe('a turn that wanted nothing is complete, not blocked', () => {
     off, which this repository records twice.
   */
   for (const [what, c] of [
-    ['a bare question', at()],
-    ['a question with something missing named', at({ missing: ['which project'] })],
-    ['an acknowledgement on the last attempt', at({ attempt: 4, maxAttempts: 4 })],
+    // A question or an acknowledgement does not name a change, so `asked` (which means a change was requested) is false.
+    ['a bare question', at({ asked: false })],
+    ['a question with something missing named', at({ asked: false, missing: ['which project'] })],
+    ['an acknowledgement on the last attempt', at({ asked: false, attempt: 4, maxAttempts: 4 })],
   ] as [string, CanonicalOutcome][]) {
     it(`is completed: ${what}`, () => {
       expect(classifyOutcome(c)).toBe('completed')

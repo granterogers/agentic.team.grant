@@ -390,6 +390,10 @@ export const resolveElliptical = (text: string, antecedent: string): string =>
     ? text.replace(ELLIPTICAL, '$1 a task ').replace(BARE_ELLIPTICAL, '$1$2add a task ')
     : text
 
+/** A message that opens by asking for information. Only the opening words count: a task named later in the message is still a task. */
+const READS_FIRST =
+  /^\s*(?:please\s+)?(?:can\s+you\s+|could\s+you\s+)?(?:find|list|show|say|tell|which|what|who|how|where|when|check|summari[sz]e|look\s+up|give\s+me\s+(?:a\s+)?(?:list|summary|rundown))\b/i
+
 export const taskRequest = (
   rawText: string,
   classification: Classification,
@@ -413,6 +417,12 @@ export const taskRequest = (
   */
   const instruction = withoutOpeningAffirmation(rawInstruction)
   if (!wasAsked(instruction, classification)) return null
+  /*
+    A request to read is not a request to write (0.116.1). "Find the two most overdue tasks on this project…" named tasks and a
+    project, so it was filed as a task titled "the two most overdue tasks on this project" (a Cowork test, 24 November). A message
+    that opens by asking for something to be found, listed, said or shown is a question about the work, so it writes nothing.
+  */
+  if (READS_FIRST.test(instruction)) return null
   /*
     A prohibition stops the clause it is in, not the one beside it (#249).
 

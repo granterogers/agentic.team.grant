@@ -168,6 +168,12 @@ import {
   type Step,
 } from '../agents/plan.ts'
 import {
+  asksWhichProject,
+  claimsNoRecord,
+  contradictedCounts,
+  projectReadingLine,
+} from '../agents/project-work.ts'
+import {
   type Context,
   complete,
   consulted,
@@ -180,6 +186,7 @@ import { asksForChange } from '../agents/request.ts'
 import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
+import { refusalFor } from '../agents/sensitive.ts'
 import { optionFor } from '../agents/spoken-answer.ts'
 import { nameSubjects } from '../agents/subject.ts'
 import {
@@ -2492,6 +2499,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const saidWords = asHumanWords(instruction)
       instruction = cleanDictation(instruction)
+      // Answered in code before any tool runs (0.116.1): a request for a secret, a connection or an archive is never planned.
+      const refused = refusalFor(instruction)
+      if (refused !== null) {
+        return {
+          body: refused,
+          confidence: 'high',
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: 'deterministic_retrieval',
+          model: null,
+        }
+      }
 
       // Two messages that are one instruction. Grant shares a video and then
       // says what to do with it, or the reverse; both halves are correct alone
@@ -7321,6 +7341,25 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               ? 'There are no active projects yet.'
               : `The active ones are ${unknown.active.map((n) => `“${n}”`).join(', ')}.`
           }`
+          wroteInCode = true
+        }
+      }
+      // A reply that says there is no record of this project, or asks which project is meant, is checked against the project's own read (0.116.1).
+      if (
+        answering &&
+        (claimsNoRecord(said) ||
+          asksWhichProject(said) ||
+          projectWorkBriefs.some((b) => b.here === true))
+      ) {
+        const here = projectWorkBriefs.find((b) => b.here === true)
+        const counted = here === undefined ? null : contradictedCounts(said, here)
+        const line =
+          counted ??
+          (here === undefined || !(claimsNoRecord(said) || asksWhichProject(said))
+            ? null
+            : projectReadingLine(here))
+        if (line !== null) {
+          said = `${line} I wrote that from the project's own records. Ask for any part you want in more detail.`
           wroteInCode = true
         }
       }

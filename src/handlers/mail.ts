@@ -116,6 +116,8 @@ export function mailHandler(db: SqlExecutor): Handler {
       if (recovered !== null) return recovered
 
       return {
+        // A routine refresh is not news; it is said only when something was pruned or forgotten (0.116.1).
+        announce: pruned !== 0 || forgotten !== 0,
         body: `Mail refreshed: ${outcome.note}${
           pruned === 0 ? '' : `, and ${String(pruned)} older than 180 days forgotten`
         }${

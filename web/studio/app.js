@@ -7266,16 +7266,31 @@ function channelsTab() {
     </div>`
   }
 
+  // The Slack row above is the one that says whether the sign-in works (0.116.1).
+  const slackDetail = (config.CHANNELS ?? []).find((c) => String(c.key) === 'slack')?.detail ?? ''
   const convo = (config.CONVO_CHANNELS ?? [])
     // Telegram and Slack are the deployment's own: a person who is not the operator is not told how they are doing
     .filter((c) => operator || !/telegram|slack/i.test(String(c.label ?? '')))
     .map((c) => {
-    const tone = { here: 'ok', carrying: 'ok', quiet: 'ok', degraded: 'warn', disconnected: 'bad', never: 'off', unchecked: 'off' }[String(c.state)] ?? 'off'
+    /*
+      The same Slack connection is listed twice: above with its sign-in state, here with how its messages are going. When the
+      sign-in has expired the messages are not being carried, so this row says so rather than "Carrying" (0.116.1, a Cowork
+      test on 24 November found the two rows on one page disagreeing).
+    */
+    const slackBroken = /slack/i.test(String(c.label ?? '')) && /token_expired|invalid_grant/i.test(String(slackDetail))
+    const tone = slackBroken
+      ? 'warn'
+      : ({ here: 'ok', carrying: 'ok', quiet: 'ok', degraded: 'warn', disconnected: 'bad', never: 'off', unchecked: 'off' }[String(c.state)] ?? 'off')
     const bits = [
       c.messages > 0 ? `${c.messages} message${c.messages === 1 ? '' : 's'}, last ${c.last_at ? when.words(c.last_at) : 'never'}` : 'No messages yet',
       c.recent_failures > 0 ? `${c.recent_failures} could not be delivered today` : '',
     ].filter(Boolean)
-    return ui.row({ name: String(c.label), desc: `${String(c.says)} ${bits.join('. ')}.`, control: ui.chip(tone, CONVO_WORD[String(c.state)] ?? String(c.state)) })
+    const says = slackBroken ? 'Messages stop when the sign-in has expired. Reconnect Slack to keep it working.' : String(c.says)
+    return ui.row({
+      name: String(c.label),
+      desc: `${says} ${bits.join('. ')}.`,
+      control: ui.chip(tone, slackBroken ? 'Needs attention' : (CONVO_WORD[String(c.state)] ?? String(c.state))),
+    })
   })
 
   /*

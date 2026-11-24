@@ -180,3 +180,77 @@ export async function readProjectWork(
     return []
   }
 }
+
+/**
+ * The reply says there is no record of this project (0.116.1). A Cowork test of 24 November 2026 asked for a status of the Legacy
+ * Coaching Course, which holds 46 documents, and was told "I have no record of this project". The reply is checked against what
+ * the project's own read holds, and when that read has documents or tasks the claim is replaced by what the read shows.
+ */
+export const claimsNoRecord = (reply: string): boolean =>
+  /\b(?:no|any)\s+record\s+of\s+(?:this|the|that)\s+project\b|\bcan(?:'|’)?t\s+(?:locate|find)\s+any\s+(?:documents|tasks)\b|\bno\s+record\s+of\s+(?:this|the|that)\b/i.test(
+    reply,
+  )
+
+/** What the project's own read holds, as one plain sentence, or null when it holds nothing. */
+export function projectReadingLine(brief: WorkBrief): string | null {
+  const docs = brief.context?.documents.total ?? 0
+  const titles = brief.context?.documents.titles ?? []
+  const tasks = brief.tasks.length
+  if (docs === 0 && tasks === 0) return null
+  const docPart =
+    docs === 0
+      ? 'no documents'
+      : `${String(docs)} document${docs === 1 ? '' : 's'}${
+          titles.length > 0 ? ` (for example ${titles.slice(0, 3).join(', ')})` : ''
+        }`
+  const taskPart =
+    tasks === 0
+      ? 'no open tasks on the project page'
+      : `${String(tasks)} task${tasks === 1 ? '' : 's'}`
+  return `${brief.name} holds ${docPart} and ${taskPart}.`
+}
+
+/**
+ * The reply asks which project is meant (0.116.1). From a project's own page the project is known, so asking is wrong; the Cowork
+ * test of 24 November 2026 was asked "which project?" on the Conversations page more than once.
+ */
+export const asksWhichProject = (reply: string): boolean =>
+  /\b(?:which|what)\s+project\b|\bproject\s+name\b|\bwhich\s+(?:one|project)\s+you\s+mean\b/i.test(
+    reply,
+  )
+
+/**
+ * The reply says nothing is overdue or blocked, and the project's own read says otherwise (0.116.1). Cowork tests of 24 November 2026
+ * were told "No overdue items are recorded" and "There are no blocked tasks recorded" for a project whose page showed both. The sentence
+ * written from the read names the tasks; null when the reply agrees with the read.
+ */
+export function contradictedCounts(reply: string, brief: WorkBrief): string | null {
+  const overdue = brief.tasks.filter((t) => t.late === true && t.state !== 'done')
+  const blocked = brief.tasks.filter((t) => t.state === 'blocked')
+  if (
+    overdue.length > 0 &&
+    /\bno\s+overdue\b|\bnothing\s+(?:is\s+)?overdue\b|\bnone\s+(?:are|is)\s+overdue\b/i.test(reply)
+  ) {
+    const list = overdue
+      .slice(0, 5)
+      .map((t) => `${t.title}${t.due_on === null ? '' : ` (due ${t.due_on})`}`)
+      .join('; ')
+    return `${String(overdue.length)} task${overdue.length === 1 ? ' is' : 's are'} overdue on ${brief.name}: ${list}.`
+  }
+  if (
+    blocked.length > 0 &&
+    /\bno\s+blocked\b|\bnothing\s+(?:is\s+)?blocked\b|\bno\s+tasks?\s+(?:are\s+|is\s+)?blocked\b/i.test(
+      reply,
+    )
+  ) {
+    const list = blocked
+      .slice(0, 5)
+      .map(
+        (t) =>
+          `${t.title}${t.blocked_on === null || t.blocked_on === '' ? '' : ` (waiting for: ${t.blocked_on})`}`,
+      )
+      .join('; ')
+    return `${String(blocked.length)} task${blocked.length === 1 ? ' is' : 's are'} blocked on ${brief.name}: ${list}.`
+  }
+  return null
+}
