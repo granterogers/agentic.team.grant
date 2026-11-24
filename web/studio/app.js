@@ -6115,9 +6115,10 @@ const requestStateTone = { open: 'warn', approved: 'ok', done: 'ok', declined: '
 /** What is waiting for a decision: open proposals, open tool requests and open offers. Zero until the page has been read. */
 function openRequestCount() {
   const g = config.GOVERNANCE
-  if (!g.loaded) return 0
-  // SET-03, option B: the same count the Activity page shows, when the office has answered for it.
+  // SET-03, option B: the same count the Activity page shows, when the office has answered for it. This is read first, so
+  // the badge and Needs attention agree from the moment the office's count lands, not only once the whole Requests list has loaded.
   if (g.pending !== null && typeof g.pending.count === 'number') return g.pending.count
+  if (!g.loaded) return 0
   return (
     g.proposals.filter((p) => p.state === 'open').length +
     (g.requests ?? []).filter((r) => r.state === 'open').length +

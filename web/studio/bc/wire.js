@@ -2166,7 +2166,9 @@ const wireContacts = (root) => {
           if (say !== null) {
             say.textContent = v.why
             say.setAttribute('role', 'alert')
-            if (say.id !== '') root.querySelector(`#bc-c-${key}`)?.setAttribute('aria-describedby', say.id)
+            // The message is what the field says is wrong, so the field names it (an unnamed message was not read out with the field).
+            if (say.id === '') say.id = 'bc-c-said'
+            root.querySelector(`#bc-c-${key}`)?.setAttribute('aria-describedby', say.id)
           }
           const bad = root.querySelector(`#bc-c-${key}`)
           bad?.setAttribute('aria-invalid', 'true')
@@ -2174,6 +2176,7 @@ const wireContacts = (root) => {
           return
         }
         root.querySelector(`#bc-c-${key}`)?.removeAttribute('aria-invalid')
+        root.querySelector(`#bc-c-${key}`)?.removeAttribute('aria-describedby')
         fields[key] = v.value
       }
       if (canWrite() !== true) {

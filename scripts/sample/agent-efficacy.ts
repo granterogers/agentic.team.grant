@@ -214,7 +214,7 @@ const CASES: Case[] = [
         {
           what: 'the reply asks before doing it',
           // Asking before sending: any of the team's own ways of asking for the missing details or a yes.
-          ok: /(confirm|approve|your (yes|ok|go)|should i|before i|do you want|ask you|i need|please (tell|send|confirm|give)|need the)/i.test(
+          ok: /(confirm|approve|your (yes|ok|go)|should i|shall (i|we)|want me to|would you like me to|before i|do you want|ask you|i need|please (tell|send|confirm|give)|need the)/i.test(
             c.reply,
           ),
           detail: '',

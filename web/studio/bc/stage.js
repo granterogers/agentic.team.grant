@@ -254,7 +254,11 @@ export const wireStage = (root, ctx) => {
     FIT: measure the real room, tell the engine, repaint. Runs synchronously
     after the markup is in, so the first paint is already the measured one.
   */
-  const fit = () => {
+  /*
+    `reflow` is true when the window or the dock changed size. The first open always fits what is cut off; after a resize it
+    fits again, so a note or a module that was on the right is not left past the edge. Only the view moves, never the layout.
+  */
+  const fit = (reflow = false) => {
     if (stacked()) {
       board.classList.add('bcpanes--stack')
       board.style.height = ''
@@ -274,7 +278,7 @@ export const wireStage = (root, ctx) => {
     stageEl.style.width = `${String(st.w)}px`
     // An automatic layout can be taller than the window: the stage is as tall as its content, and the board scrolls.
     stageEl.style.height = `${String(Math.max(st.h, grid.contentBottom(slug)))}px`
-    if (!autoFitted.has(slug) && boxW > 0) {
+    if ((reflow || !autoFitted.has(slug)) && boxW > 0) {
       autoFitted.add(slug)
       const rects = [...grid.layout(slug), ...grid.postits(slug)]
       // The right edge of what is on screen, in stage coordinates, at the view the page is about to paint.
@@ -765,6 +769,20 @@ export const wireStage = (root, ctx) => {
   document.addEventListener('pointerdown', gone, true)
 
   const popAt = (anchor, html, cls) => {
+    /*
+      The anchor is measured BEFORE anything is shut. Layouts is an item in the arrange menu, and closing that menu hides it, so
+      a rectangle read after shut() is all zeros and the popover opened in the top-left corner (0.113.0, layout audit).
+    */
+    let a = anchor.getBoundingClientRect()
+    /*
+      A press on an item of the arrange menu closes the menu before the item's click runs, so the item can already be hidden by
+      now. A hidden anchor is all zeros, which put the popover in the corner (layout audit, 0.113.0); the arrange button is the
+      anchor the item belongs to, so it is used instead.
+    */
+    if (a.width === 0 && a.height === 0) {
+      const plusBtn = document.querySelector('[data-bc-plus]')
+      if (plusBtn !== null) a = plusBtn.getBoundingClientRect()
+    }
     shut()
     popOpener = anchor
     pop = document.createElement('div')
@@ -773,7 +791,6 @@ export const wireStage = (root, ctx) => {
     /* Fixed and on the body: the board clips its contents (it is a viewport onto an infinite canvas), and the anchor may be above it. */
     pop.style.position = 'fixed'
     document.body.append(pop)
-    const a = anchor.getBoundingClientRect()
     const w = pop.offsetWidth
     const h = pop.offsetHeight
     const vw = globalThis.innerWidth ?? 1200
@@ -1159,7 +1176,7 @@ export const wireStage = (root, ctx) => {
       globalThis.removeEventListener('bc-dock-resized', onResize)
       return
     }
-    fit()
+    fit(true)
   }
   globalThis.addEventListener('resize', onResize)
   /* The chat dock opening, closing or being resized changes the board's width without a window resize. */

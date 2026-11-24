@@ -415,6 +415,24 @@ body.dock-yields #dock { display: none !important; }
   [data-experience='basecamp'] .bcmod.bcmod--placed .bcmodmeta { justify-self: start; }
 }
 
+/*
+  The meta line (for the Card Table, "14 not started · 2 in progress · 2 stuck · 4 done") sat on the first row of the columns: it
+  was placed in grid row 2, which the header did not reserve, so it printed over the column headings (layout audit, 0.113.0).
+  On a placed module the header wraps, and the meta takes its own full-width line inside the header, so the body starts below it.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead {
+  grid-template-rows: auto auto;
+  row-gap: 4px;
+  height: auto;
+  min-height: min-content;
+}
+[data-experience='basecamp'] .bccomp--c .bcmod.bcmod--placed .bcmodhead .bcmodmeta {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: center;
+  text-align: center;
+}
+
 /* The Card Table's Columns button and its popover (Option A, 22 October 2026). */
 [data-experience='basecamp'] .bcmodctl .bcmodbtn.bcmodbtn--cols {
   width: auto;
