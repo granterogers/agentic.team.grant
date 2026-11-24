@@ -17,6 +17,11 @@ answer about overdue or blocked work against the project page before acting on i
 
 Fixed the same day, live: a question about blocked tasks was answered with the list of pending approvals (migration 1121).
 
+**0.117.0 (same day):** a reply that says nothing is overdue or blocked, or that there is no record of the project, is now checked
+against the project's own read and corrected in code. Not yet confirmed in a live conversation. Still open: replies are slow and
+can land under the wrong question; messages can vanish on reload; the Settings pages Memory and Requests stay on "Asking the team…" on
+a cold visit (the gateway answers 200 and the cause in the page is not yet found); Tidy overlap was not reproduced on the Sample Office.
+
 Defects already found and fixed are in
 [`defects-fixed.md`](defects-fixed.md), kept because the shapes recur — and
 distilled into the seven habits at the end of
