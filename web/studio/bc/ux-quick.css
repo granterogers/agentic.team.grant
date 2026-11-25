@@ -591,3 +591,14 @@ body.dock-yields #dock { display: none !important; }
   min-width: 3.4em;
   font-variant-numeric: tabular-nums;
 }
+
+/*
+  Module titles on a light surface (0.117.2). The tint mixed at 72% was 3.4:1 for the SCHEDULE title (sand) in light theme, under the
+  4.5:1 a 13px title needs; a larger share of the text colour keeps the tint as the title's hue and reads. Measured in the browser.
+*/
+html:not([data-scheme='dark']) .bcmod--tinted .bcmodtitle {
+  color: color-mix(in srgb, var(--bc-tint) 50%, var(--bc-text-strong));
+}
+html:not([data-scheme='dark']) [data-modmode='edge'] .bcmod.bcmod--tinted .bcmodtitle {
+  color: color-mix(in srgb, var(--bc-tint) 50%, var(--bc-text-strong));
+}

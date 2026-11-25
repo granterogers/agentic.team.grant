@@ -127,6 +127,7 @@ import { answerOutranks, decideEarlyGate, type EarlyGate } from '../agents/gates
 import { type Capability, planFor, planningCatalogue } from '../agents/goal.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { type Handoff, handoffIn } from '../agents/handoff.ts'
+import { bookingReplyFor, undeliveredPromiseFor } from '../agents/honest-replies.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest } from '../agents/links.ts'
 import {
@@ -7360,6 +7361,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             : projectReadingLine(here))
         if (line !== null) {
           said = `${line} I wrote that from the project's own records. Ask for any part you want in more detail.`
+          wroteInCode = true
+        }
+      }
+      // A booking is never claimed, and a promise to come back is kept only while work is running (0.117.2).
+      if (answering) {
+        const booked = bookingReplyFor(instruction, said)
+        if (booked !== null) {
+          said = booked
+          wroteInCode = true
+        }
+        const promised = undeliveredPromiseFor(said, outcome.pendingActions)
+        if (promised !== null) {
+          said = promised
           wroteInCode = true
         }
       }
