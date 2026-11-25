@@ -7706,6 +7706,17 @@ function settingsSheet() {
   void needSettings(v.hidden)
   // An old id (governance, setup) resolves to the tab that now holds what it held.
   state.setting = config.tabId(state.setting)
+  /*
+    A COLD OPEN ON A TAB THAT NEEDS THE GOVERNANCE READ (0.117.1). The read was started only when a tab was clicked (needFor), so an
+    address such as /settings/memory or a link from a message opened the tab on "Asking the team…" for ever: the governance read
+    never ran (Cowork test, 24 November 2026). Opening the sheet on such a tab starts that read once, and the page draws again when it
+    lands, if the person is still there.
+  */
+  if (v.hidden !== false && ['requests', 'memory', 'models'].includes(state.setting) && !config.GOVERNANCE.loaded) {
+    void config.hydrateGovernance(read).then(() => {
+      if (state.setting && !v.hidden && ['requests', 'memory', 'models'].includes(state.setting)) settingsSheet()
+    })
+  }
   const tabs = config.TABS
   const here = tabs.find((t) => t.id === state.setting) ?? tabs[0]
   /*
