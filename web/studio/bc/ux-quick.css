@@ -11,6 +11,74 @@
   [data-experience='basecamp'] .bcpanes { margin-top: 12px; }
 }
 
+/*
+  25 November 2026: THE STACKED COLUMN (below 1100px). stage.js adds bcpanes--stack in this band and on a phone; the modules
+  then stand one under another at full width, in reading order, with no zoom. This is the phone's own stack, now keyed to
+  the class so the 861 to 1099px band gets it too.
+*/
+[data-experience='basecamp'] .bcpanes--stack {
+  height: auto !important;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 16px;
+}
+[data-experience='basecamp'] .bcpanes--stack .bcstage {
+  position: static;
+  width: auto !important;
+  height: auto !important;
+  transform: none !important;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding-inline: 16px;
+  box-sizing: border-box;
+}
+[data-experience='basecamp'] .bcpanes--stack .bcmod--placed { grid-column: auto !important; grid-row: auto !important; }
+/* Between 761 and 1099px the arrange plus sits at the board's top right: the first module starts below it, not under it. */
+@media (min-width: 761px) and (max-width: 1099px) {
+  [data-experience='basecamp'] .bcpanes--stack .bcstage { padding-top: 44px; }
+}
+[data-experience='basecamp'] .bccomp--c .bcpanes--stack .bcmod.bcmod--placed,
+[data-experience='basecamp'] .bcpanes--stack .bcpostit {
+  position: relative;
+  left: auto !important;
+  top: auto !important;
+  width: auto !important;
+  height: auto !important;
+  max-height: 62vh;
+  min-height: 140px;
+}
+[data-experience='basecamp'] .bcpanes--stack .bcpostit { height: 180px !important; }
+[data-experience='basecamp'] .bcpanes--stack .bcmod--placed .bcresize,
+[data-experience='basecamp'] .bcpanes--stack .bcpostitresize,
+[data-experience='basecamp'] .bcpanes--stack .bcguides,
+[data-experience='basecamp'] .bcpanes--stack .bcdock [data-bc-tidy],
+[data-experience='basecamp'] .bcpanes--stack .bcdock [data-bc-layouts],
+[data-experience='basecamp'] .bcpanes--stack .bcdock [data-bc-viewreset],
+[data-experience='basecamp'] .bcpanes--stack .bczoom,
+[data-experience='basecamp'] .bcpanes--stack .bcfitnow { display: none; }
+[data-experience='basecamp'] .bcpanes--stack .bcmodhead { cursor: default; }
+
+/* The visible Fit (stage.js): shown only when the arrangement runs past the window's edge, at 1100px and wider. */
+[data-experience='basecamp'] .bcfitnow {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 30;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--bc-text-strong) 28%, transparent);
+  background: var(--bc-surface);
+  color: var(--bc-text-strong);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcfitnow[hidden] { display: none; }
+[data-experience='basecamp'] .bcfitnow:focus-visible { outline: 2px solid var(--bc-text-strong); outline-offset: 2px; }
+
 /* 4. Coloured module accents stay, with a subtler glow and a thinner edge. */
 [data-experience='basecamp'] .bcmod.bcmod--tinted {
   border-width: 1.5px;

@@ -25,7 +25,7 @@ The browser app. It is plain HTML, CSS and JavaScript with **no build step**: th
 - **Every control has a name and a handler.** `npm run verify:wired` fails if a button is bare or points nowhere.
 - **Text is at least 12 px, and touch targets are at least 44 px.** `npm run verify:ui` enforces both at three device sizes.
 - **Light and dark themes are both designed.** A colour that only works in one is a defect.
-- **Words are plain.** Internal names such as "Basecamp" never reach a person; `npm run check:branding` checks it.
+- **Words are plain.** Internal names (the old product name among them) never reach a person; `npm run check:branding` checks it.
 
 ## Try it
 

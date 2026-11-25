@@ -43,7 +43,12 @@ import { NAMES, note } from './compose.js'
 import { esc } from './parts.js'
 import * as undo from '../undo.js'
 
-const PHONE = '(max-width: 860px)'
+/*
+  THE STACKED MODE: below 1100px the modules stand in one column in reading order, at full width, with no zoom and no
+  drag or resize (Grant's layout decision, 25 November 2026: a tablet or a narrow laptop cannot hold the arrangement
+  legibly). Phones were already stacked; this widens that to the column band. Above it, the arrangement is free.
+*/
+const STACK = '(max-width: 1099px)'
 /** Pixels kept under the stage for the tray and the page's own bottom margin. */
 const RESERVE = 24
 const SWALLOW_MS = 350
@@ -72,7 +77,7 @@ export const wireStage = (root, ctx) => {
   const stageEl = board.querySelector('.bcstage')
   const guides = board.querySelector('.bcguides')
   if (stageEl === null) return
-  const stacked = () => globalThis.matchMedia?.(PHONE)?.matches === true
+  const stacked = () => globalThis.matchMedia?.(STACK)?.matches === true
   /* A picture of the person's own is held in this browser: draw it once it is loaded. Built-in materials are drawn by the template. */
   if (grid.bgOf(slug)?.id === 'custom') {
     void backdrop.hydrate(board, slug).then((why) => {
@@ -223,7 +228,33 @@ export const wireStage = (root, ctx) => {
     board.style.setProperty('--bc-gstep', `${String(grid.gridStep(view.zoom))}px`)
     const val = dock.querySelector('.bczoomval')
     if (val !== null) val.textContent = `${String(Math.round(view.zoom * 100))}%`
+    updateFitNow()
   }
+  /*
+    A VISIBLE FIT when the arrangement runs past the window's right or left edge. Fit lived only in the plus menu, so a person
+    who had dragged a module off screen had nothing to see. This changes the view only, never the saved layout.
+  */
+  const fitNow = document.createElement('button')
+  fitNow.type = 'button'
+  fitNow.className = 'bcfitnow'
+  fitNow.hidden = true
+  fitNow.textContent = 'Fit to screen'
+  fitNow.title = 'Bring every module and note into view'
+  board.append(fitNow)
+  fitNow.addEventListener('click', () => {
+    setView(grid.fitView([...grid.layout(slug), ...grid.postits(slug)], board.clientWidth, board.clientHeight))
+  })
+  function updateFitNow() {
+    if (stacked()) {
+      fitNow.hidden = true
+      return
+    }
+    const rects = [...grid.layout(slug), ...grid.postits(slug)]
+    const left = -view.x / view.zoom
+    const right = (board.clientWidth - view.x) / view.zoom
+    fitNow.hidden = !rects.some((r) => r.x < left - 1 || r.x + r.w > right + 1)
+  }
+
   const commitView = () => {
     if (zoomTimer !== null) globalThis.clearTimeout(zoomTimer)
     zoomTimer = globalThis.setTimeout(() => {
