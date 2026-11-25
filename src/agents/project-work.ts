@@ -187,7 +187,7 @@ export async function readProjectWork(
  * the project's own read holds, and when that read has documents or tasks the claim is replaced by what the read shows.
  */
 export const claimsNoRecord = (reply: string): boolean =>
-  /\b(?:no|any)\s+record\s+of\s+(?:this|the|that)\s+project\b|\bcan(?:'|’)?t\s+(?:locate|find)\s+any\s+(?:documents|tasks)\b|\bno\s+record\s+of\s+(?:this|the|that)\b/i.test(
+  /\b(?:no|any)\s+record\s+of\s+(?:this|the|that)\s+project\b|\bcan(?:'|’)?t\s+(?:locate|find)\s+any\s+(?:documents|tasks)\b|\bno\s+record\s+of\s+(?:this|the|that)\b|\bno\s+record\s+of\s+any\s+(?:tasks?|items?|documents?)\b|\bI\s+have\s+no\s+record\s+of\s+any\b/i.test(
     reply,
   )
 
@@ -224,25 +224,23 @@ export const asksWhichProject = (reply: string): boolean =>
  * were told "No overdue items are recorded" and "There are no blocked tasks recorded" for a project whose page showed both. The sentence
  * written from the read names the tasks; null when the reply agrees with the read.
  */
+/** Wordings the team has used for "none blocked" or "none overdue" (live check, 25 November 2026: "nothing is flagged as blocked"). */
+const CLAIMS_NONE_BLOCKED =
+  /\bno\s+(?:tasks?\s+|items?\s+)?(?:(?:are|is)\s+)?(?:(?:currently|recorded|flagged)\s+)*blocked\b|\bnothing\s+(?:is\s+|are\s+)?(?:(?:currently|recorded)\s+)*(?:flagged\s+as\s+)?blocked\b|\bno\s+blocked\s+(?:tasks?|items?)\b/i
+const CLAIMS_NONE_OVERDUE =
+  /\bno\s+(?:tasks?\s+|items?\s+)?(?:(?:are|is)\s+)?(?:(?:currently|recorded)\s+)*overdue\b|\bnothing\s+(?:is\s+|are\s+)?(?:(?:currently|recorded)\s+)*overdue\b|\bnone\s+(?:are|is)\s+overdue\b/i
+
 export function contradictedCounts(reply: string, brief: WorkBrief): string | null {
   const overdue = brief.tasks.filter((t) => t.late === true && t.state !== 'done')
   const blocked = brief.tasks.filter((t) => t.state === 'blocked')
-  if (
-    overdue.length > 0 &&
-    /\bno\s+overdue\b|\bnothing\s+(?:is\s+)?overdue\b|\bnone\s+(?:are|is)\s+overdue\b/i.test(reply)
-  ) {
+  if (overdue.length > 0 && CLAIMS_NONE_OVERDUE.test(reply)) {
     const list = overdue
       .slice(0, 5)
       .map((t) => `${t.title}${t.due_on === null ? '' : ` (due ${t.due_on})`}`)
       .join('; ')
     return `${String(overdue.length)} task${overdue.length === 1 ? ' is' : 's are'} overdue on ${brief.name}: ${list}.`
   }
-  if (
-    blocked.length > 0 &&
-    /\bno\s+blocked\b|\bnothing\s+(?:is\s+)?blocked\b|\bno\s+tasks?\s+(?:are\s+|is\s+)?blocked\b/i.test(
-      reply,
-    )
-  ) {
+  if (blocked.length > 0 && CLAIMS_NONE_BLOCKED.test(reply)) {
     const list = blocked
       .slice(0, 5)
       .map(

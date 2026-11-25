@@ -99,3 +99,34 @@ describe('a reply that says nothing is overdue or blocked agrees with the projec
     expect(contradictedCounts('No overdue items are recorded.', withTasks([task({})]))).toBeNull()
   })
 })
+
+describe('the wordings the live check received are corrected', () => {
+  it('corrects "I have no record of any tasks… nothing is flagged as blocked"', async () => {
+    const { contradictedCounts, claimsNoRecord } = await import('../../src/agents/project-work.ts')
+    const reply =
+      'I have no record of any tasks in the system, so nothing is flagged as blocked. If you point me to the task list or where it’s saved, I can check each item.'
+    const brief = {
+      name: 'Wellness Studio Launch',
+      tasks: [
+        {
+          title: 'Agree instructor pay rates',
+          state: 'blocked',
+          late: true,
+          due_on: null,
+          blocked_on: 'the budget figures',
+        },
+        {
+          title: 'Hang the studio signage',
+          state: 'blocked',
+          late: false,
+          due_on: null,
+          blocked_on: 'the sign wording',
+        },
+      ],
+    } as never
+    expect(claimsNoRecord(reply)).toBe(true)
+    expect(contradictedCounts(reply, brief)).toMatch(
+      /^2 tasks are blocked on Wellness Studio Launch/,
+    )
+  })
+})
