@@ -23,9 +23,9 @@ can land under the wrong question; messages can vanish on reload; the Settings p
 a cold visit (fixed in 0.117.1); Tidy overlap was not reproduced on the Sample Office.
 
 **0.117.3 state.** Checked on the Sample Office: the replies come out in the order asked, and a question sent before a reload stays
-in the thread (an earlier 'vanishing' result was a test that closed the dock). Still open: a refusal written by the team (for example
-the password refusal) is in the server's thread, but the dock does not draw it after a reload; the cause is in the page, not the
-database, and is not yet found. Slow replies (one to several minutes) are model latency.
+in the thread (an earlier 'vanishing' result was a test that closed the dock). The refusal the team writes (for example the password refusal) did not show
+in the dock: the dock hid every sender but the person and the Chief of Staff. Fixed in 0.117.4 and checked live, before and after a reload.
+Slow replies (one to several minutes) are model latency and remain open.
 
 Defects already found and fixed are in
 [`defects-fixed.md`](defects-fixed.md), kept because the shapes recur — and
