@@ -168,6 +168,7 @@ import {
   type Plan,
   type Step,
 } from '../agents/plan.ts'
+import { projectCreateReplyFor } from '../agents/project-create.ts'
 import {
   asksWhichProject,
   claimsNoRecord,
@@ -7361,6 +7362,14 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             : projectReadingLine(here))
         if (line !== null) {
           said = `${line} I wrote that from the project's own records. Ask for any part you want in more detail.`
+          wroteInCode = true
+        }
+      }
+      // A project is not created from a chat "yes", and the reply says what a project needs (0.117.3).
+      if (answering) {
+        const created = projectCreateReplyFor(instruction, hisLastTurn)
+        if (created !== null) {
+          said = created
           wroteInCode = true
         }
       }
