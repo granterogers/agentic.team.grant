@@ -20,7 +20,12 @@ Fixed the same day, live: a question about blocked tasks was answered with the l
 **0.117.0 (same day):** a reply that says nothing is overdue or blocked, or that there is no record of the project, is now checked
 against the project's own read and corrected in code. Not yet confirmed in a live conversation. Still open: replies are slow and
 can land under the wrong question; messages can vanish on reload; the Settings pages Memory and Requests stay on "Asking the team…" on
-a cold visit (the gateway answers 200 and the cause in the page is not yet found); Tidy overlap was not reproduced on the Sample Office.
+a cold visit (fixed in 0.117.1); Tidy overlap was not reproduced on the Sample Office.
+
+**0.117.3 state.** Checked on the Sample Office: the replies come out in the order asked, and a question sent before a reload stays
+in the thread (an earlier 'vanishing' result was a test that closed the dock). Still open: a refusal written by the team (for example
+the password refusal) is in the server's thread, but the dock does not draw it after a reload; the cause is in the page, not the
+database, and is not yet found. Slow replies (one to several minutes) are model latency.
 
 Defects already found and fixed are in
 [`defects-fixed.md`](defects-fixed.md), kept because the shapes recur — and
