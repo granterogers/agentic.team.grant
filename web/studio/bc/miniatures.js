@@ -519,7 +519,11 @@ export const calendarMini = (p) => cal.block(p)
   passes its messages through this one filter: the person's own words and the office's plain notices, and Claire. The
   specialists work in the background and their findings reach the project as documents, tasks and the activity list.
 */
-const ROOM_VOICES = new Set(['', 'grant', 'you', 'office', 'chief-of-staff', 'claire'])
+/*
+  'the-office' is the office's own answer when no staff member wrote it: a refusal, a composed correction or a database reading. It
+  was missing, so every such answer was dropped from the room, and the refusal to a request for a password never showed (0.117.4).
+*/
+const ROOM_VOICES = new Set(['', 'grant', 'you', 'office', 'the-office', 'chief-of-staff', 'claire'])
 export const roomVoices = (list) =>
   list.filter((m) => ROOM_VOICES.has(String(m.who ?? m.from ?? '').toLowerCase()))
 

@@ -1834,6 +1834,8 @@ const dockVisible = (m) =>
   m.from === undefined ||
   m.from === null ||
   m.from === 'grant' ||
+  // The office's own answer (a refusal, a correction, a reading from the records) is the reply to what he asked, so it is not history (0.117.4).
+  m.from === 'the-office' ||
   (typeof m.waiting === 'string' && m.waiting !== '') ||
   CREW.find((c) => c.slug === m.from || c.staffSlug === m.from)?.role === 'Chief of Staff'
 /*
