@@ -78,8 +78,8 @@
       "note": "REMOVED 20 November 2026 in 0.60.0 (K2): no page has called it since 0.33.0. Recorded history follows. 26 October 2026: deploy:hq-api from baeae4acb (the first_load endpoint, which answers the nine secondary home-board sections in one request). v1012 was the first deploy, from 98c4a0f0e, which also carried studio and projects in the bundle and was narrowed in v1013. Live v1011 before the change. Liveness: an unauthenticated call is 401 and a signed-in call is 200; the nine sections answered 200 with a live session. No page uses the endpoint since the 0.33.0 rollback. ROLLBACK: deploy:hq-api from fe07473ab (the commit before first_load); the endpoint is additive, so the older code answers every existing section unchanged."
     },
     "worker": {
-      "version": "v1081",
-      "note": "24 November 2026, deploy:worker from 0bbcaa53 (0.113.0 code): v1081 is the live worker. Each earlier worker deploy is recorded under its own workerDeploy key. The earlier worker entries on main (v1049, 18 November) and on this branch (v1058, 21 November) are history."
+      "version": "v1097",
+      "note": "25 November 2026, deploy:worker from 1c2ed6ea (0.117.7 code): v1097 is the live worker, ACTIVE, liveness ok, unauthenticated kick 401, authenticated kick 200. It ships the findings-without-evidence disclosure (instruction handler, control T9). Before it, 24 November 2026, deploy:worker from 0bbcaa53 (0.113.0 code): v1081 was the live worker. Each earlier worker deploy is recorded under its own workerDeploy key. The earlier worker entries on main (v1049, 18 November) and on this branch (v1058, 21 November) are history."
     },
     "signin": {
       "version": "v146",
