@@ -7599,6 +7599,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               colleaguesAsked: Number(counted?.colleagues ?? 0) + (who.handoff === null ? 0 : 1),
             }
           : {}),
+        /*
+          FINDINGS WITHOUT EVIDENCE ARE DISCLOSED (#440, control T9). With nothing read this turn and no specialist's own
+          deliverable, a review in an empty project produced a finding nothing grounded. Counted as a request that asked for
+          nothing it read as "completed", so no sentence was owed and the unsupported finding went out undisclosed. Marking
+          the request as asked gives the class "not yet done, nothing changed". Grounded findings are untouched.
+        */
+        ...(findingsRequested && !findingsAreTheAnswer ? { asked: true } : {}),
         ...(draftIsTheAnswer ? { landed: outcome.landed + 1 } : {}),
       }
       // Findings that are the answer need no state sentence. The rows are NOT bumped: the permission to promise or to claim

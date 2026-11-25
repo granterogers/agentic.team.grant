@@ -1,6 +1,6 @@
 # Cowork stress test: brief (21 November 2026)
 
-Live office, version 0.81.0. Start at **https://ai-team-hq.vercel.app/** and sign in as the owner.
+Live office, version 0.117.6 (check the version shown in the top bar before you start). Start at **https://ai-team-hq.vercel.app/** and sign in as the owner.
 
 ## Ground rules
 
@@ -26,12 +26,16 @@ Live office, version 0.81.0. Start at **https://ai-team-hq.vercel.app/** and sig
 7. **Delete for good, on throwaway projects only.** Create a new empty project. Open its settings, then **Name, export and archive**, then **Delete for good**. Record that only one confirmation appears. Create a second project, add a to-do, then try the same. Record that it asks you to type the project's exact name, and that the button stays off until the name matches. Delete both. Do not delete any project you did not create in this session.
 8. **Edge freeze.** In Microsoft Edge, open https://ai-team-hq.vercel.app/ and drag three modules around on a canvas, then refresh. Record whether the layout comes back, whether anything freezes, and the Edge version (Settings › About).
 9. **Speed.** Note how long the first module takes to show on the Legacy Coaching Course page, and on the home page. Record the seconds. Do not optimise anything.
-10. **Overall.** Give a single verdict for each area above, and list anything you could not finish.
+10. **Narrow window (0.117.6).** Make the browser window about 1000px wide (or use a tablet size). On the Legacy Coaching Course page, record whether the modules stand in one column in reading order, at full width, with the arrange plus not covering the first module's controls. Try to drag a module header; record that nothing moves. Widen the window to 1440px and drag the same header; record that it moves.
+11. **Fit to screen (0.117.6).** At about 1440px, zoom in on the canvas or pan it so a module runs off an edge. Record whether a **Fit to screen** button appears at the bottom right. Press it. Record whether the module comes back into view and the button disappears.
+12. **Findings without evidence (0.117.6).** In a new empty project, ask: "Review the venue contract and give me a recommendation." Record whether the answer begins with "I have not done this yet, and nothing has been changed" before its finding. Then, in Legacy Coaching Course (which holds documents), ask the same. Record whether the finding appears without that opening sentence.
+13. **Overall.** Give a single verdict for each area above, and list anything you could not finish.
 
 ## Known, and not to be reported as new
 
 - Activity feed takes about 3 seconds.
 - The project page takes 2 to 3 seconds to show its first module.
+- Replies can take 17 seconds to several minutes. This is open (queue wait, see docs/known-problems.md). Record the seconds; do not report it as a new defect.
 - Fit shrinks whole boards on phones, so text is small there.
 - Messages labelled as checks sit in the Legacy and Conversations threads.
 - Google needs the owner's reconnect before the test starts.

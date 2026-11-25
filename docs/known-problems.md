@@ -27,6 +27,19 @@ in the thread (an earlier 'vanishing' result was a test that closed the dock). T
 in the dock: the dock hid every sender but the person and the Chief of Staff. Fixed in 0.117.4 and checked live, before and after a reload.
 Slow replies (one to several minutes) are model latency and remain open.
 
+**Closed in the 25 November work (not yet deployed to the worker):** a finding produced without any evidence (no document read, no
+specialist deliverable) went out with no disclosure, because a request that asks for nothing to change counted as completed. The
+critical proof `tg-chief-addressing` control T9 was red on this and on the commit before 0.117.0. It is now green (43 of 43), and the
+full critical tier is 75 of 75. The fix is in `src/handlers/instruction.ts` and needs a worker deploy to reach the live office.
+
+**Confirmed live (0.117.5):** the overdue and blocked corrections were checked against the Sample Office, so the entry above is no
+longer waiting for a live check.
+
+**Still open, and the next step is a production probe:** replies are slow. The gateway already kicks the worker on every write, and the
+worker queues a kick that arrives mid-pass. So the 46-second baseline in `supabase/functions/hq-api/index.ts` may be stale, or the
+kick may not be reaching the worker. The decisive test is `npx tsx scripts/scratch/kick-probe.ts <fixture project uuid>`
+(INTEGRATION-HANDOFF item 5). It writes a fixture instruction to production, so it needs an explicit go-ahead.
+
 Defects already found and fixed are in
 [`defects-fixed.md`](defects-fixed.md), kept because the shapes recur — and
 distilled into the seven habits at the end of
